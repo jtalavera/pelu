@@ -194,3 +194,18 @@ export async function openEditFromDetail(page: Page): Promise<void> {
   await openAppointmentActions(page);
   await page.getByTestId("calendar-action-edit").click();
 }
+
+/**
+ * Opens a service record (ficha) from the redesigned list: shows every status, filters by text and
+ * clicks the first matching row (which opens the detail dialog).
+ */
+export async function openFichaByText(page: import("@playwright/test").Page, text: string) {
+  await page.goto("/app/service-records");
+  await page.getByTestId("service-records-chip-all").click();
+  await page.locator("#service-record-history-text-filter").fill(text);
+  await page
+    .locator('[data-testid^="service-record-row-"]')
+    .filter({ hasText: new RegExp(text, "i") })
+    .first()
+    .click();
+}

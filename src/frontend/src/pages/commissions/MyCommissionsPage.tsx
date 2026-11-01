@@ -83,6 +83,7 @@ export default function MyCommissionsPage() {
                   <div className="text-sm text-ink-3">
                     {formatParaguayDateTime(e.accrualAt, dateLocale)} · {formatGuaraniesGs(e.baseAmount)} ×{" "}
                     {formatPercent(e.percentApplied)}
+                    {e.baseType ? ` · ${t(`femme.commissions.baseShort.${e.baseType}`)}` : ""}
                   </div>
                 </div>
                 <span className="text-right font-heading font-extrabold tabular-nums text-ink">

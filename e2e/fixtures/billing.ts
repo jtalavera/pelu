@@ -184,3 +184,10 @@ export async function openInvoiceSifenTab(page: Page) {
 export async function openInvoiceMainTab(page: Page) {
   await expect(page.getByTestId("invoice-detail-view")).toBeVisible();
 }
+
+/** Opens the per-service «More options» (professional, item discount) of a line of the new invoice. */
+export async function openLineMoreOptions(page: Page, idx: number) {
+  const toggle = page.getByTestId(`billing-line-more-${idx}`);
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await expect(page.locator(`#line-professional-${idx}`)).toBeVisible();
+}

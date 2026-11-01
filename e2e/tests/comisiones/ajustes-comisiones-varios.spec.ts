@@ -11,6 +11,8 @@ import {
   restoreCommissionsGlobal,
   todayYmd,
   type CommissionWorld,
+  openGenerateSettlements,
+  openCommissionsMore,
 } from "../../fixtures/commissions";
 
 /**
@@ -51,7 +53,10 @@ async function pickProfessionals(page: Page, inputId: string, names: string[]) {
   await page.locator(`#${inputId}`).click();
   const list = page.getByRole("listbox");
   for (const name of names) await list.getByRole("button", { name }).click();
-  await page.keyboard.press("Escape");
+  // Escape would also close a dialog: dismiss the list by clicking the dialog title instead.
+  const dialog = page.getByRole("dialog");
+  if (await dialog.count()) await dialog.getByRole("heading").first().click();
+  else await page.keyboard.press("Escape");
 }
 
 /** The secondary («con fondo») look every Cancel button now shares. */
@@ -99,6 +104,7 @@ test("exportaciones: columnas y valores del CSV y del PDF en el idioma elegido p
   // The UI (English in e2e) asks for its own language on every export.
   await loginAdminUi(page, w);
   await openTab(page, "Settlements");
+  await page.getByTestId("settlements-filters-toggle").click();
   const [settlementsCsv] = await Promise.all([
     page.waitForEvent("download"),
     page.getByRole("button", { name: "Export CSV" }).click(),
@@ -106,7 +112,7 @@ test("exportaciones: columnas y valores del CSV y del PDF en el idioma elegido p
   const settlementsText = await (await settlementsCsv.createReadStream()).toArray();
   expect(Buffer.concat(settlementsText).toString("utf8")).toContain("Settlement ID,Professional,Period from");
 
-  await page.getByRole("tab", { name: "Reports", exact: true }).click();
+  await openCommissionsMore(page, "Reports");
   const [entriesCsv] = await Promise.all([
     page.waitForEvent("download"),
     page.getByTestId("commission-export-entries").click(),
@@ -138,6 +144,7 @@ test("generar para todas con una liquidación Pagada: popup para generar las res
   await openTab(page, "Settlements");
   await expect(page.getByTestId("commission-settlement-row")).toHaveCount(1);
 
+  await openGenerateSettlements(page);
   await page.getByTestId("commission-generate-settlements").click();
   const popup = page.getByTestId("settlements-conflict");
   await expect(popup).toBeVisible();
@@ -156,6 +163,7 @@ test("generar para todas con una liquidación Pagada: popup para generar las res
   await expect(page.getByTestId("commission-settlement-row")).toHaveCount(1);
 
   // Again, now generating for the remaining one (Bea) only.
+  await openGenerateSettlements(page);
   await page.getByTestId("commission-generate-settlements").click();
   await expect(page.getByTestId("settlements-conflict-remaining")).toHaveText("Generate for the remaining one");
   await page.getByTestId("settlements-conflict-remaining").click();
@@ -176,6 +184,7 @@ test("Liquidaciones: varios profesionales a la vez (generar y filtrar) y «Limpi
   await openTab(page, "Settlements");
 
   // Generate for both selected professionals at once.
+  await openGenerateSettlements(page);
   await pickProfessionals(page, "settle-professional", [w.ana.name, w.bea.name]);
   await expect(page.locator("#settle-professional")).toHaveValue("2 selected");
   await page.getByTestId("commission-generate-settlements").click();
@@ -183,17 +192,18 @@ test("Liquidaciones: varios profesionales a la vez (generar y filtrar) y «Limpi
   await expect(page.getByTestId("commission-settlement-row")).toHaveCount(2);
 
   // Filter by one, then by both.
+  await page.getByTestId("settlements-filters-toggle").click();
   await pickProfessionals(page, "settle-filter-professional", [w.ana.name]);
   await expect(page.getByTestId("commission-settlement-row")).toHaveCount(1);
   await expect(page.getByTestId("commission-settlement-row")).toContainText(w.ana.name);
   await pickProfessionals(page, "settle-filter-professional", [w.bea.name]);
   await expect(page.getByTestId("commission-settlement-row")).toHaveCount(2);
-  await page.locator("#settle-filter-status").selectOption("PAID");
+  await page.getByTestId("settlements-chip-PAID").click();
   await expect(page.getByTestId("commission-settlement-row")).toHaveCount(0);
 
   await page.getByTestId("settlements-clear-filters").click();
   await expect(page.locator("#settle-filter-professional")).toHaveValue("");
-  await expect(page.locator("#settle-filter-status")).toHaveValue("");
+  await expect(page.getByTestId("settlements-chip-ALL")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("commission-settlement-row")).toHaveCount(2);
   await expect(page.getByTestId("settlements-clear-filters")).toBeDisabled();
 
@@ -213,6 +223,7 @@ test("Movimientos: filtro por varios profesionales y «Limpiar filtros»", async
   await openTab(page, "Movements");
   await expect(page.getByTestId("movement-row")).toHaveCount(2);
 
+  await page.getByTestId("movements-filters-toggle").click();
   await pickProfessionals(page, "mov-professional", [w.ana.name]);
   await page.getByTestId("movements-search").click();
   await expect(page.getByTestId("movement-row")).toHaveCount(1);
@@ -302,7 +313,7 @@ test("Reglas: un profesional puede quitarse de un servicio («No comisiona») y 
   await expect(excluded).toContainText("No commission (1)");
   await expect(panel.getByTestId(`rules-panel-excluded-${w.bea.id}`)).toContainText(w.bea.name);
   await expect(panel.getByTestId(`rules-panel-excluded-${w.bea.id}`)).toContainText("unsaved");
-  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText("no commission");
+  await expect(page.getByTestId(`rules-exceptions-${w.service.id}`)).toContainText("1 exception");
 
   await page.getByTestId("rules-panel-save").click();
   await page.getByTestId("commission-apply-mode-IMMEDIATE").check();
