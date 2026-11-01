@@ -216,6 +216,18 @@ export async function openFichaByText(page: import("@playwright/test").Page, tex
  * id is on the grid. Seeded slots can land in next week (e.g. on Sunday evening) because the helper
  * only guarantees "a future slot", not "inside the week shown on open".
  */
+export async function advanceWeekUntilAppointment(
+  page: import("@playwright/test").Page,
+  appointmentId: number,
+) {
+  const appt = page.getByTestId(`calendar-appt-${appointmentId}`);
+  for (let i = 0; i < 3; i++) {
+    if (await appt.isVisible().catch(() => false)) return;
+    await page.getByRole("button", { name: "Next week" }).click();
+    await page.waitForTimeout(500);
+  }
+}
+
 export async function openWeekWithAppointment(
   page: import("@playwright/test").Page,
   appointmentId: number,

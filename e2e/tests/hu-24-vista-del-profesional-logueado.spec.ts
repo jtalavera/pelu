@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAs } from "../fixtures/auth";
+import { advanceWeekUntilAppointment } from "../fixtures/ui";
 import {
   apiBaseUrl,
   apiGetJson,
@@ -124,6 +125,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await loginAs(page, email, "ValidPass1!");
     await page.goto("/app/calendar?view=week");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
+    await advanceWeekUntilAppointment(page, own.id);
     // The filter is there, preselected on her own agenda.
     const filter = page.locator("[data-tour='calendar-prof-filter']");
     await expect(filter).toBeVisible();
@@ -346,6 +348,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await loginAs(page, email, "ValidPass1!");
     await page.goto("/app/calendar?view=week");
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
+    await advanceWeekUntilAppointment(page, own.id);
     // Filter by the other professional (a crowded "all" grid can squeeze the block too thin to click).
     await pickCalendarFilter(page, salon.professionalFullName);
     await page.getByTestId(`calendar-appt-${other.id}`).click();
