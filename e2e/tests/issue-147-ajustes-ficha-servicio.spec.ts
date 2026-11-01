@@ -8,12 +8,12 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { openDashboardMore } from "../fixtures/dashboard";
-import { goToInvoiceHistory } from "../fixtures/billing";
+import { openFichaDialog, openNewFichaDialog } from "../fixtures/fichas";
 
 test.describe.configure({ mode: "serial" });
 
 test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
-  test("AC1a · desde Historial de fichas, Cerrar aparece junto y alineado a Anular ficha", async ({
+  test("AC1a · desde la lista de fichas, Anular ficha y Cerrar quedan en la misma fila de acciones", async ({
     page,
     request,
   }) => {
@@ -34,19 +34,7 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#service-record-history-text-filter").fill(client.fullName);
-    // Issue #186 · AC2 — the whole row opens the detail; there is no "View" button anymore.
-    const historyRow = page
-      .locator('tbody tr[role="button"]')
-      .filter({ hasText: client.fullName });
-    await expect(historyRow).toBeVisible({ timeout: 30_000 });
-    await expect(historyRow.getByRole("button", { name: "View" })).toHaveCount(0);
-    await historyRow.click();
-
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    const dialog = await openFichaDialog(page, client.fullName);
 
     const voidBtn = dialog.getByRole("button", { name: "Void record" });
     const closeBtn = dialog.getByTestId("service-record-close");
@@ -59,11 +47,11 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     expect(closeBox).not.toBeNull();
     // "aligned to" — both sit in the same action row, so their tops line up.
     expect(Math.abs(voidBox!.y - closeBox!.y)).toBeLessThan(5);
-    // Cancel-type buttons always go leftmost: Close now sits to the left of Anular ficha.
-    expect(closeBox!.x).toBeLessThan(voidBox!.x);
+    // Redesign: "Void record" sits at the left of the footer; Close / Save / Charge go right.
+    expect(voidBox!.x).toBeLessThan(closeBox!.x);
   });
 
-  test("AC1b · desde el Panel, Cerrar aparece junto y alineado a Anular ficha", async ({
+  test("AC1b · desde el Panel, Anular ficha y Cerrar quedan en la misma fila de acciones", async ({
     page,
     request,
   }) => {
@@ -107,7 +95,7 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     expect(voidBox).not.toBeNull();
     expect(closeBox).not.toBeNull();
     expect(Math.abs(voidBox!.y - closeBox!.y)).toBeLessThan(5);
-    expect(closeBox!.x).toBeLessThan(voidBox!.x);
+    expect(voidBox!.x).toBeLessThan(closeBox!.x);
   });
 
   test("AC2 · cliente inactivo no aparece en el buscador de clientes de Ficha de servicio", async ({
@@ -122,8 +110,10 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     expect(deactivateRes.ok()).toBeTruthy();
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
-    await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 10));
+    const dlg = await openNewFichaDialog(page);
+    await dlg.getByLabel("Search or select client").fill(client.fullName.slice(0, 10));
+    // Let the debounced search land before asserting the inactive client is absent.
+    await page.waitForTimeout(1_000);
     await expect(page.getByRole("button", { name: client.fullName })).toHaveCount(0);
   });
 });
