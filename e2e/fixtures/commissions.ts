@@ -315,7 +315,7 @@ export async function professionalWithAccess(
 
 /** Opens a section of the «More» menu (Preview / Reports / Settings) on the Comisiones screen. */
 export async function openCommissionsMore(page: Page, name: "Preview" | "Reports" | "Settings") {
-  await page.getByRole("button", { name: "More" }).click();
+  await page.getByTestId("commissions-more-trigger").click();
   await page.getByRole("menuitem", { name }).click();
 }
 

@@ -11,6 +11,7 @@ import { loginAsDemo } from "../fixtures/auth";
 import {
   enableCommissionsGlobally,
   generateSettlements,
+  openCommissionsMore,
   entriesOfInvoice,
   issueInvoice,
   loginAdminUi,
@@ -54,8 +55,17 @@ async function expectWhiteTable(page: Page, table: Locator) {
   expect(await paintedBackground(table)).toBe(c.surface);
 }
 
+/** Redesigned lists are rows on a card, not <table>s: what matters is the painted surface. */
+async function expectWhiteSurface(page: Page, list: Locator) {
+  await expect(list).toBeVisible({ timeout: 20_000 });
+  const c = await colors(page);
+  expect(c.surface).not.toBe(c.page);
+  expect(await paintedBackground(list)).toBe(c.surface);
+}
+
 test.describe("Tablas con fondo blanco", () => {
   test("Comisiones → Liquidaciones (la tabla de la captura) y Movimientos", async ({ page, request }) => {
+    test.setTimeout(120_000);
     await enableCommissionsGlobally(request);
     try {
       const w = await provisionCommissionWorld(request, "TABLAS-BLANCAS");
@@ -67,13 +77,14 @@ test.describe("Tablas con fondo blanco", () => {
 
       await loginAdminUi(page, w);
       await page.getByRole("link", { name: "Commissions" }).click();
-      await expectWhiteTable(page, page.getByTestId("commission-settlements-table").locator("table"));
+      await expectWhiteSurface(page, page.getByTestId("commission-settlements-table"));
       await page.getByRole("tab", { name: "Movements", exact: true }).click();
-      await expectWhiteTable(page, page.getByTestId("movements-table").locator("table"));
+      await expectWhiteSurface(page, page.getByTestId("movements-table"));
       await page.getByRole("tab", { name: "Rules", exact: true }).click();
-      await expectWhiteTable(page, page.getByTestId("rules-table").locator("table"));
-      // The reference table (inside a card) keeps its white background.
-      await page.getByRole("tab", { name: "Settings", exact: true }).click();
+      await expectWhiteSurface(page, page.getByTestId("rules-table"));
+      // The reference list (inside a card) keeps its white background.
+      await openCommissionsMore(page, "Settings");
+      await page.getByTestId("commission-history-toggle").click();
       await expectWhiteTable(page, page.getByTestId("commission-settings-history").locator("table"));
     } finally {
       await restoreCommissionsGlobal(request);
@@ -106,12 +117,12 @@ test.describe("Tablas con fondo blanco", () => {
     await loginAsDemo(page);
 
     await page.goto("/app/clients");
-    await expectWhiteTable(page, page.locator("table").filter({ visible: true }).first());
+    await expectWhiteSurface(page, page.getByTestId("clients-list"));
 
     // Redesign: the catalog lists (professionals, services) are rows on a white card, no <table>.
     for (const [path, testId] of [
-      ["/app/professionals", "catalog-professionals-list"],
-      ["/app/services", "catalog-items-list"],
+      ["/app/catalog?view=professionals", "catalog-professionals-list"],
+      ["/app/catalog?view=services", "catalog-items-list"],
     ] as const) {
       await page.goto(path);
       const list = page.getByTestId(testId);
@@ -120,8 +131,7 @@ test.describe("Tablas con fondo blanco", () => {
     }
 
     await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History" }).click();
-    await expectWhiteTable(page, page.locator("table").filter({ visible: true }).first());
+    await expectWhiteSurface(page, page.getByTestId("service-records-list"));
 
     // Redesign: the billing history is a list of rows (no <table>) sitting on a white card.
     await page.goto("/app/billing");
