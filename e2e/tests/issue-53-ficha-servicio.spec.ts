@@ -13,7 +13,16 @@ import { DEMO_EMAIL, DEMO_PASSWORD, loginAs, loginAsDemo } from "../fixtures/aut
 import { openDashboardMore } from "../fixtures/dashboard";
 import { setControlledInputValue } from "../fixtures/ui";
 import { ensurePaymentMethodChosen } from "../fixtures/invoice";
-import { goToInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
+import { showPaymentAmounts } from "../fixtures/billing";
+import {
+  addFichaLine,
+  expandFichaLine,
+  openFichaDialog,
+  openNewFichaDialog,
+  pickFichaClient,
+  pickLineProfessional,
+  pickLineService,
+} from "../fixtures/fichas";
 
 test.describe.configure({ mode: "serial" });
 
@@ -59,29 +68,6 @@ async function createServiceRecordApi(
     })),
     tips: body.tips ?? [],
   });
-}
-
-async function pickLineService(page: Page, idx: number, serviceFullName: string): Promise<void> {
-  await page.locator(`#service-record-line-svc-${idx}`).fill(serviceFullName.slice(0, 12));
-  await page.getByRole("button", { name: serviceFullName, exact: false }).click();
-}
-
-async function pickLineProfessional(page: Page, idx: number, fullName: string): Promise<void> {
-  const input = page.locator(`#service-record-line-prof-${idx}`);
-  await input.click();
-  await input.fill(fullName.slice(0, 10));
-  await page
-    .locator(`#service-record-line-prof-${idx}-listbox`)
-    .getByRole("button", { name: fullName, exact: false })
-    .click();
-}
-
-/** Opens the History tab and filters by free-text query; returns the matching row. */
-async function findHistoryRow(page: Page, query: string) {
-  await page.goto("/app/service-records");
-  await page.getByRole("tab", { name: "History" }).click();
-  await page.locator("#service-record-history-text-filter").fill(query);
-  return page.locator("tbody tr").filter({ hasText: query }).first();
 }
 
 /**
@@ -131,24 +117,21 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     const client = await seedClient(request, token, `E2E Ficha ${Date.now()}`);
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
-    await expect(page.getByRole("tab", { name: "New record", exact: true })).toBeVisible();
+    const dlg = await openNewFichaDialog(page);
+    await pickFichaClient(page, dlg, client.fullName);
 
-    await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 6));
-    await page.getByRole("button", { name: client.fullName }).click();
-
-    await page.getByRole("button", { name: "Add service" }).click();
+    // The new ficha starts with one blank line; add the second one.
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
-
-    await page.getByRole("button", { name: "Add service" }).click();
+    await addFichaLine(dlg);
     await pickLineService(page, 1, secondService.fullName);
     await pickLineProfessional(page, 1, secondProfessional.fullName);
 
     // Total = sum of both service prices (50.000 + 30.000), dot-separator, no decimals.
-    await expect(page.getByText(/^80\.000$/)).toBeVisible();
+    await expect(dlg.getByTestId("service-record-total")).toContainText("80.000");
 
-    // Tips section shows one row per distinct professional on the lines.
+    // Tips (folded) show one row per distinct professional on the lines.
+    await dlg.getByTestId("service-record-tips-toggle").click();
     const tipInput1 = page.locator(`#service-record-tip-${seed.professionalId}`);
     const tipInput2 = page.locator(`#service-record-tip-${secondProfessional.id}`);
     await setControlledInputValue(tipInput1, "5000");
@@ -156,50 +139,40 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await setControlledInputValue(tipInput2, "3000");
     await expect(tipInput2).toHaveValue("3.000");
 
-    await page.getByRole("button", { name: "Save record" }).click();
-    await expect(
-      page.getByRole("alert").filter({ hasText: "Service record created successfully." }),
-    ).toBeVisible({ timeout: 15_000 });
-
-    // Issue #119 AC3/AC5: the "New record" form resets to blank after a successful create —
-    // no more "+ New record" button, and the client field is cleared for the next ficha.
-    await expect(page.getByRole("button", { name: "+ New record" })).toHaveCount(0);
-    await expect(page.getByLabel("Search or select client")).toHaveValue("");
-
-    // AC3/AC9: the just-created record is still Open → reopen it from History and edit it there.
-    // The underlying page (History table row, hidden "New record" tab) stays mounted behind the
-    // modal, so all locators below are scoped to the dialog to avoid duplicate-match ambiguity.
-    const row = await findHistoryRow(page, client.fullName);
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.click();
-    const dialog = page.getByRole("dialog", { name: "Service record detail" });
-    await expect(dialog.getByTestId("service-record-status")).toHaveText("Open");
-    await expect(dialog.getByText(/^80\.000$/)).toBeVisible();
-
-    await dialog.getByRole("button", { name: "Add service" }).click();
-    await pickLineService(page, 2, seed.serviceFullName);
-    await pickLineProfessional(page, 2, seed.professionalFullName);
-    await dialog.getByRole("button", { name: "Save changes" }).click();
-    await expect(dialog.getByRole("alert").filter({ hasText: "Changes saved." })).toBeVisible({
+    await dlg.getByTestId("service-record-submit").click();
+    await expect(page.getByTestId("service-records-toast")).toContainText("Record saved.", {
       timeout: 15_000,
     });
-    // New total = 80.000 + 50.000 = 130.000
-    await expect(dialog.getByText(/^130\.000$/)).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
 
-    // Reload the detail view fresh (new GET) and confirm the added line truly persisted —
+    // AC3/AC9: the just-created record is still Open → reopen it from the list and edit it there.
+    const dialog = await openFichaDialog(page, client.fullName);
+    await expect(dialog.getByTestId("service-record-status")).toHaveText(/Open/);
+    await expect(dialog.getByTestId("service-record-total")).toContainText("80.000");
+
+    await addFichaLine(dialog);
+    await pickLineService(page, 2, seed.serviceFullName);
+    await pickLineProfessional(page, 2, seed.professionalFullName);
+    await dialog.getByTestId("service-record-submit").click();
+    await expect(page.getByTestId("service-records-toast")).toContainText("Changes saved.", {
+      timeout: 15_000,
+    });
+
+    // Reload the detail fresh (new GET) and confirm the added line truly persisted —
     // this is the issue #119 AC7 regression guard for edits to an OPEN record.
-    const row2 = await findHistoryRow(page, client.fullName);
-    await expect(row2).toBeVisible({ timeout: 15_000 });
-    await row2.click();
-    await expect(dialog.getByText(/^130\.000$/)).toBeVisible({ timeout: 15_000 });
+    const dialog2 = await openFichaDialog(page, client.fullName);
+    await expect(dialog2.getByTestId("service-record-total")).toContainText("130.000", {
+      timeout: 15_000,
+    });
+    await expect(dialog2.getByTestId("service-record-line")).toHaveCount(3);
   });
 
   test("AC2 · si el cliente no existe, se puede crear uno nuevo desde la ficha", async ({ page }) => {
     const newClientName = `E2E New Client ${Date.now()}`;
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
-    await page.getByLabel("Search or select client").fill(newClientName);
+    const dlg0 = await openNewFichaDialog(page);
+    await dlg0.getByLabel("Search or select client").fill(newClientName);
     await page.getByRole("button", { name: "+ Create new client" }).click();
 
     await expect(page).toHaveURL(/\/app\/clients/);
@@ -207,18 +180,18 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(dlg.getByLabel("Full name")).toHaveValue(newClientName);
     await dlg.getByRole("button", { name: "Save" }).click();
 
-    // Round trip back into the ficha's "New record" tab with the new client selected.
+    // Round trip back into the ficha dialog with the new client selected.
     await expect(page).toHaveURL(/\/app\/service-records/);
     // Names are stored in UPPERCASE (issue #155 AC3) once saved, regardless of the case typed above.
-    await expect(page.getByLabel("Search or select client")).toHaveValue(newClientName.toUpperCase());
+    const dlg2 = page.getByRole("dialog");
+    await expect(dlg2.getByLabel("Search or select client")).toHaveValue(newClientName.toUpperCase());
 
-    await page.getByRole("button", { name: "Add service" }).click();
     await pickLineService(page, 0, seed.serviceFullName);
     await pickLineProfessional(page, 0, seed.professionalFullName);
-    await page.getByRole("button", { name: "Save record" }).click();
-    await expect(
-      page.getByRole("alert").filter({ hasText: "Service record created successfully." }),
-    ).toBeVisible({ timeout: 15_000 });
+    await dlg2.getByTestId("service-record-submit").click();
+    await expect(page.getByTestId("service-records-toast")).toContainText("Record saved.", {
+      timeout: 15_000,
+    });
   });
 
   test("AC4+AC6 · generar comprobante prellena la factura, cierra la ficha y la vuelve inmutable", async ({
@@ -237,15 +210,10 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
 
     await loginAsDemo(page);
-    const row = await findHistoryRow(page, client.fullName);
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.click();
-
-    await expect(page.getByTestId("service-record-status")).toHaveText("Open");
-    // Issue #119 AC8: "Generate invoice" uses the dark-green design-system success variant.
-    const generateInvoiceButton = page.getByRole("button", { name: "Generate invoice" });
-    await expect(generateInvoiceButton).toHaveClass(/bg-success/);
-    await generateInvoiceButton.click();
+    const dialogOpen = await openFichaDialog(page, client.fullName);
+    await expect(dialogOpen.getByTestId("service-record-status")).toHaveText(/Open/);
+    // "Charge" is the dialog's primary action; it opens Billing with the ficha prefilled.
+    await dialogOpen.getByTestId("service-record-generate-invoice").click();
 
     // Lands on Billing → New Invoice, prefilled with the ficha's client, RUC, service and tips.
     await expect(page).toHaveURL(/\/app\/billing/);
@@ -278,13 +246,11 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
 
     // The ficha auto-closed and can no longer be modified.
-    const row2 = await findHistoryRow(page, client.fullName);
-    await expect(row2).toBeVisible({ timeout: 15_000 });
-    await row2.click();
-    await expect(page.getByTestId("service-record-status")).toHaveText("Closed");
-    await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Void record" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Generate invoice" })).toHaveCount(0);
+    const closed = await openFichaDialog(page, client.fullName);
+    await expect(closed.getByTestId("service-record-status")).toHaveText(/Paid/);
+    await expect(closed.getByTestId("service-record-submit")).toHaveCount(0);
+    await expect(closed.getByTestId("service-record-void-open")).toHaveCount(0);
+    await expect(closed.getByTestId("service-record-generate-invoice")).toHaveCount(0);
 
     // Backend also rejects a direct modification attempt.
     const putRes = await request.put(`${API_BASE}/api/service-records/${record.id}`, {
@@ -311,15 +277,18 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
 
     await loginAsDemo(page);
-    const row = await findHistoryRow(page, client.fullName);
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.click();
-    await page.getByRole("button", { name: "Void record" }).click();
-    await page.getByLabel("Reason").fill("Cliente se retiró antes de comenzar");
-    await page.getByRole("button", { name: "Confirm void" }).click();
-    await expect(page.getByTestId("service-record-status")).toHaveText("Voided", { timeout: 15_000 });
-    await expect(page.getByText(/Cliente se retiró antes de comenzar/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Save changes" })).toHaveCount(0);
+    const dialogV = await openFichaDialog(page, client.fullName);
+    await dialogV.getByTestId("service-record-void-open").click();
+    await dialogV.getByLabel("Reason").fill("Cliente se retiró antes de comenzar");
+    await dialogV.getByTestId("service-record-void-confirm").click();
+    // Voiding closes the dialog and a toast confirms it on the list.
+    await expect(page.getByTestId("service-records-toast")).toContainText("Record voided.", {
+      timeout: 15_000,
+    });
+    const voided = await openFichaDialog(page, client.fullName);
+    await expect(voided.getByTestId("service-record-status")).toHaveText(/Voided/, { timeout: 15_000 });
+    await expect(voided.getByText(/Cliente se retiró antes de comenzar/)).toBeVisible();
+    await expect(voided.getByTestId("service-record-submit")).toHaveCount(0);
 
     const putRes = await request.put(`${API_BASE}/api/service-records/${record.id}`, {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -353,13 +322,12 @@ test.describe("Issue #53 · Ficha de servicio", () => {
 
     await loginAsDemo(page);
     await page.goto("/app");
-    await expect(page.getByText("Today's service records")).toBeVisible();
-    await revealAllTodayRecords(page);
+        await revealAllTodayRecords(page);
     await expect(page.getByText(newerClient.fullName)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(olderClient.fullName)).toBeVisible();
 
     // Names are stored in UPPERCASE (issue #155 AC3) — match case-insensitively.
-    const cards = page.locator("button", { hasText: /E2E (Newer|Older)/i });
+    const cards = page.getByTestId("dashboard-service-record-card").filter({ hasText: /E2E (Newer|Older)/i });
     const firstCardText = await cards.first().innerText();
     expect(firstCardText).toContain(newerClient.fullName);
 
@@ -373,7 +341,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await revealAllTodayRecords(page);
     await expect(page.getByText(olderClient.fullName)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(newerClient.fullName)).toBeVisible();
-    const reorderedCards = page.locator("button", { hasText: /E2E (Newer|Older)/i });
+    const reorderedCards = page.getByTestId("dashboard-service-record-card").filter({ hasText: /E2E (Newer|Older)/i });
     const firstCardAfterVoid = await reorderedCards.first().innerText();
     expect(firstCardAfterVoid).toContain(olderClient.fullName);
   });
@@ -399,9 +367,9 @@ test.describe("Issue #53 · Ficha de servicio", () => {
       timeout: 15_000,
     });
 
-    const cards = page.locator("button", { hasText: capMarker });
-    await expect(cards).toHaveCount(12);
-    const moreButton = page.getByRole("button", { name: "More", exact: true });
+    const cards = page.getByTestId("dashboard-service-record-card").filter({ hasText: capMarker });
+    await expect(page.getByTestId("dashboard-service-record-card")).toHaveCount(12);
+    const moreButton = page.getByTestId("dashboard-service-records-more");
     await expect(moreButton).toBeVisible();
     await moreButton.click();
     await expect(cards).toHaveCount(15);
@@ -418,22 +386,23 @@ test.describe("Issue #53 · Ficha de servicio", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History" }).click();
+    await page.getByTestId("service-records-chip-all").click();
+    await page.locator("#service-record-history-text-filter").fill(client.fullName);
+    const row = page.locator('[data-testid^="service-record-row-"]').filter({ hasText: client.fullName });
+    await expect(row).toHaveCount(1, { timeout: 15_000 });
 
-    const row = page.locator("tbody tr").filter({ hasText: client.fullName });
-    await expect(row).toBeVisible({ timeout: 15_000 });
-
-    // Status filter to a non-matching status hides the row.
+    // Status filter (folded under "Filters") to a non-matching status hides the row.
+    await page.getByTestId("service-records-filters-toggle").click();
     await page.getByLabel("Status").selectOption("VOIDED");
     await expect(row).toHaveCount(0);
     await page.getByLabel("Status").selectOption("");
-    await expect(row).toBeVisible({ timeout: 15_000 });
+    await expect(row).toHaveCount(1, { timeout: 15_000 });
 
-    // Rows-per-page selector offers the 10/25/50 convention.
+    // Rows-per-page selector offers the 5/10/20-style paging of the design system.
     const pageSizeSelect = page.getByLabel("Rows per page:");
     await expect(pageSizeSelect.locator("option")).toHaveCount(3);
-    await pageSizeSelect.selectOption("25");
-    await expect(row).toBeVisible({ timeout: 15_000 });
+    await pageSizeSelect.selectOption({ index: 2 });
+    await expect(row).toHaveCount(1, { timeout: 15_000 });
   });
 
   test("Acceso restringido · el ítem de navegación no aparece para profesionales", async ({ page }) => {

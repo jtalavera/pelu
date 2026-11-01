@@ -21,9 +21,22 @@ export async function addFichaLine(dlg: Locator): Promise<void> {
   await dlg.getByTestId("service-record-add-line").click();
 }
 
+/** Lines can fold themselves (e.g. when another one is added): reopen the n-th line if needed. */
+async function ensureLineOpen(page: Page, idx: number): Promise<void> {
+  const field = page.locator(`#service-record-line-svc-${idx}`);
+  if (await field.isVisible().catch(() => false)) return;
+  await page.getByRole("dialog").getByTestId("service-record-line-toggle").nth(idx).click();
+  await expect(field).toBeVisible();
+}
+
 export async function pickLineService(page: Page, idx: number, serviceFullName: string): Promise<void> {
+  await ensureLineOpen(page, idx);
   await page.locator(`#service-record-line-svc-${idx}`).fill(serviceFullName.slice(0, 12));
-  await page.getByRole("button", { name: serviceFullName, exact: false }).first().click();
+  await page
+    .locator(`#service-record-line-svc-${idx}-listbox`)
+    .getByRole("button", { name: serviceFullName, exact: false })
+    .first()
+    .click();
   // A debounced search may still be in flight and re-open the suggestion list over the form;
   // let it land, then click the dialog title to close it (Escape would close the whole dialog).
   await page.waitForTimeout(700);
@@ -31,6 +44,7 @@ export async function pickLineService(page: Page, idx: number, serviceFullName: 
 }
 
 export async function pickLineProfessional(page: Page, idx: number, fullName: string): Promise<void> {
+  await ensureLineOpen(page, idx);
   const input = page.locator(`#service-record-line-prof-${idx}`);
   await input.click();
   await input.fill(fullName);
