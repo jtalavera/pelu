@@ -27,27 +27,46 @@ export async function clickExportPdf(page: Page): Promise<void> {
 }
 
 /**
- * Opens the withdraw dialog of one professional. Balances are sorted by amount and paged 5 at a
- * time, so the helper pages forward until the professional's row is on screen.
+ * Scrolls the (sorted, 5-per-page) balances card until the professional's row is on screen.
+ * Balances load after the list, which reorders it, so settle first and rescan from page 1.
  */
-export async function openWithdrawDialog(page: Page, professionalId: number): Promise<void> {
-  const button = page.getByTestId(`propinas-withdraw-${professionalId}`);
+async function revealBalanceRow(page: Page, professionalId: number): Promise<void> {
+  const row = page.getByTestId(`propinas-card-${professionalId}`);
   const next = page.getByTestId("propinas-balances-next");
-  for (let i = 0; i < 40 && !(await button.isVisible()); i++) {
-    if (!(await next.isVisible()) || (await next.isDisabled())) break;
-    await next.click();
+  const prev = page.getByTestId("propinas-balances-prev");
+  await page.waitForLoadState("networkidle");
+  for (let pass = 0; pass < 3; pass++) {
+    if (await row.isVisible()) return;
+    while ((await prev.isVisible()) && (await prev.isEnabled())) await prev.click();
+    for (let i = 0; i < 60; i++) {
+      if (await row.isVisible()) return;
+      if (!(await next.isVisible()) || (await next.isDisabled())) break;
+      await next.click();
+    }
+    await page.waitForTimeout(500);
   }
-  await button.click();
+  await expect(row).toBeVisible();
+}
+
+/** Opens the withdraw dialog of one professional. */
+export async function openWithdrawDialog(page: Page, professionalId: number): Promise<void> {
+  await revealBalanceRow(page, professionalId);
+  await page.getByTestId(`propinas-withdraw-${professionalId}`).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 }
 
-/** Balance shown for a professional in the balances card (pages forward like openWithdrawDialog). */
+/** Balance shown for a professional in the balances card. */
 export async function propinasBalanceOf(page: Page, professionalId: number) {
-  const balance = page.getByTestId(`propinas-balance-${professionalId}`);
-  const next = page.getByTestId("propinas-balances-next");
-  for (let i = 0; i < 40 && !(await balance.isVisible()); i++) {
-    if (!(await next.isVisible()) || (await next.isDisabled())) break;
-    await next.click();
-  }
-  return balance;
+  await revealBalanceRow(page, professionalId);
+  return page.getByTestId(`propinas-balance-${professionalId}`);
+}
+
+/** Asserts a professional's accumulated balance; retries because refreshes reorder the card. */
+export async function expectBalance(page: Page, professionalId: number, text: string): Promise<void> {
+  await expect(async () => {
+    await revealBalanceRow(page, professionalId);
+    await expect(page.getByTestId(`propinas-balance-${professionalId}`)).toHaveText(text, {
+      timeout: 2_000,
+    });
+  }).toPass({ timeout: 20_000 });
 }

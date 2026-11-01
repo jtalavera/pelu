@@ -14,7 +14,7 @@ import { openNewFichaDialog } from "../fixtures/fichas";
 import {
   filterPropinasByProfessional,
   openWithdrawDialog,
-  propinasBalanceOf,
+  expectBalance,
   propinasMovements,
 } from "../fixtures/propinas";
 
@@ -125,7 +125,7 @@ test.describe("Issue #133 · Ajustes varios", () => {
     await expect(page.getByTestId("propinas-tips-total")).toHaveText("Gs. 10.000");
 
     // Withdraw part of the balance.
-    await expect(await propinasBalanceOf(page, seed.professionalId)).toHaveText("Gs. 10.000");
+    await expectBalance(page, seed.professionalId, "Gs. 10.000");
     await openWithdrawDialog(page, seed.professionalId);
     const amountInput = page.locator("#propinas-withdrawal-amount");
     await setControlledInputValue(amountInput, "3000");
@@ -142,6 +142,6 @@ test.describe("Issue #133 · Ajustes varios", () => {
     await expect(withdrawal).toContainText("Gs. 3.000");
     await expect(page.getByTestId("propinas-withdrawn-total")).toHaveText("Gs. 3.000");
     await expect(page.getByTestId("propinas-tips-total")).toHaveText("Gs. 10.000");
-    await expect(await propinasBalanceOf(page, seed.professionalId)).toHaveText("Gs. 7.000");
+    await expectBalance(page, seed.professionalId, "Gs. 7.000");
   });
 });

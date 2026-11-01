@@ -15,7 +15,7 @@ import {
   clickExportPdf,
   filterPropinasByProfessional,
   openWithdrawDialog,
-  propinasBalanceOf,
+  expectBalance,
   propinasMovements,
 } from "../fixtures/propinas";
 
@@ -221,9 +221,7 @@ test.describe("Issue #120 · Propinas", () => {
     await page.goto("/app/propinas");
 
     // AC6: accumulated (CLOSED-only) balance for the professional, in the balances card.
-    await expect(await propinasBalanceOf(page, withdrawalProf.id)).toHaveText("Gs. 10.000", {
-      timeout: 15_000,
-    });
+    await expectBalance(page, withdrawalProf.id, "Gs. 10.000");
     await openWithdrawDialog(page, withdrawalProf.id);
     await expect(page.getByTestId("propinas-dialog-balance")).toHaveText("Gs. 10.000");
 
@@ -245,7 +243,7 @@ test.describe("Issue #120 · Propinas", () => {
       { timeout: 15_000 },
     );
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(await propinasBalanceOf(page, withdrawalProf.id)).toHaveText("Gs. 6.000");
+    await expectBalance(page, withdrawalProf.id, "Gs. 6.000");
 
     // AC10: the withdrawal shows up in the movements table (tagged "Withdrawal", minus sign) with
     // the standard paging (5/10/20 rows per page).

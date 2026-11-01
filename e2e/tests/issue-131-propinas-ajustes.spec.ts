@@ -13,7 +13,7 @@ import { setControlledInputValue } from "../fixtures/ui";
 import {
   filterPropinasByProfessional,
   openWithdrawDialog,
-  propinasBalanceOf,
+  expectBalance,
   propinasMovements,
 } from "../fixtures/propinas";
 
@@ -196,7 +196,7 @@ test.describe("Issue #131 · Ajustes en propinas", () => {
     await expect(page.getByTestId("propinas-withdrawn-total")).toHaveText("Gs. 0");
 
     // Withdraw part of the balance from the balances card.
-    await expect(await propinasBalanceOf(page, seed.professionalId)).toHaveText("Gs. 10.000");
+    await expectBalance(page, seed.professionalId, "Gs. 10.000");
     await openWithdrawDialog(page, seed.professionalId);
     const amountInput = page.locator("#propinas-withdrawal-amount");
     await setControlledInputValue(amountInput, "1000");
@@ -206,7 +206,7 @@ test.describe("Issue #131 · Ajustes en propinas", () => {
       "Withdrawal completed successfully.",
       { timeout: 15_000 },
     );
-    await expect(await propinasBalanceOf(page, seed.professionalId)).toHaveText("Gs. 9.000");
+    await expectBalance(page, seed.professionalId, "Gs. 9.000");
 
     // AC3: the movements summary (no manual refresh) shows the withdrawal.
     await expect(page.getByTestId("propinas-withdrawn-total")).toHaveText("Gs. 1.000", {
