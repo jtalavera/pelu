@@ -205,7 +205,7 @@ export async function openFichaByText(page: import("@playwright/test").Page, tex
   await page.locator("#service-record-history-text-filter").fill(text);
   await page
     .locator('[data-testid^="service-record-row-"]')
-    .filter({ hasText: new RegExp(text, "i") })
+    .filter({ hasText: text })
     .first()
     .click();
 }
