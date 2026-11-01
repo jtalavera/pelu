@@ -9,6 +9,8 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openFichaDialog } from "../fixtures/fichas";
+import { expectBalance, openWithdrawDialog, propinasMovements } from "../fixtures/propinas";
 import { addPaymentMethodRow, choosePaymentMethod, ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { pickSearchableOption, setControlledInputValue } from "../fixtures/ui";
@@ -35,14 +37,6 @@ async function createServiceRecordApi(
     })),
     tips: body.tips ?? [],
   });
-}
-
-/** Filters the ficha de servicio "History" tab and returns the first matching row. */
-async function findServiceRecordHistoryRow(page: Page, query: string) {
-  await page.goto("/app/service-records");
-  await page.getByRole("tab", { name: "History" }).click();
-  await page.locator("#service-record-history-text-filter").fill(query);
-  return page.locator("tbody tr").filter({ hasText: query }).first();
 }
 
 test.describe("Issue #139 · Cambios varios en sistema", () => {
@@ -75,6 +69,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     await page.getByRole("button", { name: "+ New client" }).first().click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(`E2E139 RUC Dup B ${Date.now()}`);
+    await dlg.getByTestId("client-more-toggle").click();
     await dlg.getByLabel("Document number").fill(ruc);
     await dlg.getByRole("button", { name: "Save" }).click();
     await expect(
@@ -89,9 +84,10 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(`E2E139 Success ${Date.now()}`);
     await dlg.getByRole("button", { name: "Save" }).click();
-    const alert = page.getByRole("alert").filter({ hasText: "Client created" });
-    await expect(alert).toBeVisible({ timeout: 10_000 });
-    await expect(alert).toHaveClass(/success/);
+    // Redesign: the creation result is a green (success) toast.
+    const toast = page.getByTestId("clients-toast");
+    await expect(toast).toContainText("created successfully", { timeout: 10_000 });
+    await expect(toast).toHaveClass(/success/);
   });
 
   test("AC4+AC5 · la propina se muestra en rojo y no se incluye en Pendiente ni en el Monto por defecto", async ({
@@ -110,10 +106,8 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     });
 
     await loginAsDemo(page);
-    const row = await findServiceRecordHistoryRow(page, client.fullName);
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.click();
-    await page.getByRole("button", { name: "Generate invoice" }).click();
+    const dialogAc4 = await openFichaDialog(page, client.fullName);
+    await dialogAc4.getByTestId("service-record-generate-invoice").click();
 
     await expect(page).toHaveURL(/\/app\/billing/);
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible();
@@ -266,27 +260,19 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/propinas");
-    await page.getByRole("tab", { name: "Tip withdrawal" }).click();
-    await expect(page.getByRole("tab", { name: "Tip withdrawal", selected: true })).toBeVisible();
+    await expectBalance(page, seed.professionalId, "Gs. 8.000");
 
-    await pickSearchableOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 8.000", { timeout: 15_000 });
-
+    await openWithdrawDialog(page, seed.professionalId);
     const amountInput = page.locator("#propinas-withdrawal-amount");
     await setControlledInputValue(amountInput, "8000");
-    await page.getByRole("button", { name: "Withdraw", exact: true }).click();
-    await expect(page.getByText("Withdrawal completed successfully.")).toBeVisible({
-      timeout: 15_000,
-    });
+    await page.getByTestId("propinas-withdraw-confirm").click();
+    await expect(page.getByTestId("propinas-toast")).toContainText(
+      "Withdrawal completed successfully.",
+      { timeout: 15_000 },
+    );
 
-    const historyRow = page
-      .getByTestId("propinas-withdrawal-history-table")
-      .locator("tbody tr")
+    const historyRow = propinasMovements(page)
+      .filter({ hasText: "Withdrawal" })
       .filter({ hasText: seed.professionalFullName })
       .first();
     await expect(historyRow).toBeVisible({ timeout: 15_000 });

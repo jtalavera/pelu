@@ -233,6 +233,14 @@ export default function PropinasPage() {
     }
   };
 
+  const fmtTime = (iso: string) => {
+    try {
+      return new Intl.DateTimeFormat(dateLocale, { hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+    } catch {
+      return "";
+    }
+  };
+
   async function handleExportPdf() {
     setExportError(null);
     try {
@@ -580,6 +588,7 @@ export default function PropinasPage() {
                     >
                       <td className="whitespace-nowrap px-2 font-heading font-extrabold text-ink">
                         {fmtDay(m.at)}
+                        <span className="ml-1.5 text-xs font-normal text-ink-3">{fmtTime(m.at)}</span>
                       </td>
                       <td className="whitespace-nowrap px-2 text-ink">
                         {m.kind === "tip" ? (
