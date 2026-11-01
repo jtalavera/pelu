@@ -233,7 +233,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     expect(body.error).toBe("CASH_SESSION_NOT_OPEN");
   });
 
-  test("AC10+AC11 · un retiro de propina afecta la caja solo si hay una abierta", async ({
+  test("AC10+AC11 · un retiro de propina se registra en la caja abierta; sin caja abierta, en la última cerrada como posterior al cierre", async ({
     request,
   }) => {
     const token = await loginAsDemoApi(request);
@@ -272,8 +272,8 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     // lives on) against this same open session, so expected cash = 45.000 (sales) - 3.000 (retiro).
     expect(Number(detailJsonAfterFirst.expectedCashAmount)).toBe(42_000);
 
-    // AC11: closing the session, then withdrawing again, must NOT add another movement to it —
-    // Propinas itself keeps working unaffected (its own 2xx response is enough evidence of that).
+    // AC11: closing the session, then withdrawing again, records the withdrawal on that last closed
+    // register flagged "after close": it is listed, but never changes its closing figures.
     await closeCurrentSessionIfOpenApi(request, token);
     const secondWithdrawRes = await request.post(`${API_BASE}/api/propinas/withdrawals`, {
       headers: authHeaders(token),
@@ -285,8 +285,19 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
       `${API_BASE}/api/cash-sessions/${session.id}/movements`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
-    const movementsAfterCloseJson = (await movementsAfterClose.json()) as unknown[];
-    expect(movementsAfterCloseJson.length).toBe(movements.length);
+    const movementsAfterCloseJson = (await movementsAfterClose.json()) as Array<{
+      type: string;
+      afterClose: boolean;
+    }>;
+    expect(movementsAfterCloseJson.length).toBe(movements.length + 1);
+    expect(movementsAfterCloseJson.filter((m) => m.afterClose)).toHaveLength(1);
+    const detailAfterClose = (await (
+      await request.get(`${API_BASE}/api/cash-sessions/${session.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).json()) as { expectedCashAmount: number | string };
+    // The closed register's expected cash is frozen: the after-close withdrawal does not change it.
+    expect(Number(detailAfterClose.expectedCashAmount)).toBe(42_000);
   });
 
   test("AC12+AC13 · el efectivo esperado al cerrar suma ventas y movimientos manuales y resta retiros de propina", async ({
@@ -370,7 +381,8 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     // AC1: the just-closed session is the most recent row (sorted newest-opened-first).
     const firstRow = page.locator('[data-testid^="cash-history-row-"]').first();
     await expect(firstRow).toBeVisible({ timeout: 15_000 });
-    await expect(firstRow.getByText("7.000")).toBeVisible();
+    // Expected cash = 12.000 opening + 7.000 manual cash in.
+    await expect(firstRow.getByText("19.000").first()).toBeVisible();
 
     // AC2: opening it shows the full breakdown, including the manual movement.
     await firstRow.click();
@@ -379,7 +391,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     await expect(dialog.getByText(reason)).toBeVisible();
     await expect(dialog.getByText("Manual cash in")).toBeVisible();
     await expect(dialog.getByText("Expected cash (system)")).toBeVisible();
-    await expect(dialog.getByText("19.000")).toBeVisible();
+    await expect(dialog.getByText("19.000").first()).toBeVisible();
   });
 
   test("AC14 · la paginación del historial de cajas ofrece 10/25/50 filas por página", async ({

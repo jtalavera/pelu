@@ -36,6 +36,7 @@ export function CashMovementRow({ movement, showUser = false }: { movement: Cash
             formatParaguayDateTime(movement.createdAt, dateLocale),
             movement.reason,
             showUser ? movement.createdByEmail : null,
+            movement.afterClose ? t("femme.billing.movements.afterClose") : null,
           ]
             .filter(Boolean)
             .join(" · ")}

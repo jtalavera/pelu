@@ -2011,6 +2011,7 @@
         "rangeErrorTooOld": "The start date cannot be more than 6 months in the past."
       },
       "movements": {
+        "afterClose": "After close",
         "title": "Cash movements",
         "emptyToday": "No cash movements recorded yet.",
         "colTime": "Time",
@@ -2377,6 +2378,7 @@
       }
     },
     "apiErrors": {
+      "CASH_SESSION_CLOSED_CANNOT_CORRECT": "This invoice belongs to a closed cash register: its payments can no longer change.",
       "INVALID_BIRTHDAY": "Enter a valid birthday, e.g. 15/08 or 15/08/1990.",
       "INVALID_ACQUISITION_CHANNEL": "The \"How did they find us?\" option is not valid.",
       "ACQUISITION_CHANNEL_OTHER_TOO_LONG": "The \"How did they find us?\" details can't be longer than 100 characters.",
@@ -3193,6 +3195,9 @@
         "grandTotalLabel": "Grand total"
       },
       "withdrawal": {
+        "afterCloseNote": "No cash register is open: the withdrawal will be recorded on the last closed register (#{{id}}, {{date}}) as made after close.",
+        "noRegisterNote": "There is no cash register yet: the withdrawal will not be recorded in any.",
+        "successAfterClose": "Withdrawal recorded on register #{{id}} as made after close.",
         "professionalLabel": "Professional",
         "professionalFilterPlaceholder": "Search professionals…",
         "professionalNoResults": "No professionals found.",

@@ -41,6 +41,10 @@ export type TipWithdrawalHistoryItem = {
 export type CreateTipWithdrawalResponse = {
   withdrawal: TipWithdrawalHistoryItem;
   newBalance: number;
+  /** Register the withdrawal was recorded on (null when the salon never had one). */
+  cashSessionId?: number | null;
+  /** True when that register was already closed. */
+  afterClose?: boolean;
 };
 
 export type TipsReportParams = {

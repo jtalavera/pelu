@@ -151,3 +151,8 @@ El diálogo muestra una línea con ícono ("Corregí lo que SIFEN rechazó y ree
 
 ## Ajuste: Compartir KuDE
 En "Compartir KuDE por mail o WhatsApp" el botón principal dice **✉ Enviar por correo** y queda junto al campo de correo (debajo en celular); "Enviar por WhatsApp" va aparte, bajo un separador "o", para que se vea que es independiente del correo. Los `data-testid` (`sifen-kude-send-email-button`, `sifen-kude-send-whatsapp-button`) no cambian.
+
+## Caja: efectivo esperado con apertura, retiros posteriores al cierre y pagos congelados
+- **Efectivo esperado** = `apertura + efectivo cobrado + ingresos manuales − egresos manuales − retiros de propina` (antes no sumaba la apertura). Los comprobantes anulados siguen fuera.
+- **Retiro de propina sin caja abierta**: se registra en la **última caja cerrada** como movimiento "Posterior al cierre" (`cash_movements.after_close`, migración V90). Aparece en el detalle de esa caja pero **no** cambia su esperado, contado ni diferencia (el cierre queda congelado). El diálogo de retiro avisa antes de confirmar en qué caja quedará; si nunca hubo una caja, no se registra en ninguna.
+- **Corregir y reenviar**: si cambian los pagos de un comprobante cuya caja ya está cerrada se rechaza con `CASH_SESSION_CLOSED_CANNOT_CORRECT` (409). Los demás cambios (cliente, ítems sin alterar pagos) siguen permitidos. La cancelación en SIFEN no se bloquea y no se registra devolución de efectivo.

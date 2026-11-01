@@ -168,6 +168,30 @@ describe("PropinasPage", () => {
     expect(within(screen.getByTestId("propinas-movements")).getByTestId("propinas-filters-toggle")).toBeTruthy();
   });
 
+  it("withdrawing with no open register tells the user it will be recorded on the last closed one", async () => {
+    const base = femmeJson.getMockImplementation()!;
+    femmeJson.mockImplementation((url: unknown) => {
+      const s = String(url);
+      if (s.startsWith("/api/cash-sessions/current")) return Promise.resolve(undefined);
+      if (s.startsWith("/api/cash-sessions?")) {
+        return Promise.resolve({
+          content: [{ id: 14, openedAt: "2026-10-30T10:00:00Z", closedAt: "2026-10-31T22:00:00Z" }],
+          page: 0,
+          size: 1,
+          totalElements: 1,
+          totalPages: 1,
+        });
+      }
+      return base(url);
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("propinas-balance-1").textContent).toMatch(/180\.000/));
+    await userEvent.click(screen.getByTestId("propinas-withdraw-1"));
+    const note = await screen.findByTestId("propinas-register-note");
+    expect(note.textContent).toMatch(/last closed register \(#14/i);
+    expect(note.textContent).toMatch(/after close/i);
+  });
+
   it("withdrawing: validates, 'withdraw all' fills the balance, and confirming posts and shows a toast", async () => {
     femmePostJson.mockResolvedValue({
       withdrawal: { id: 10, professionalName: "Laura", amount: 180000, withdrawnAt: new Date().toISOString() },

@@ -2,6 +2,7 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.CashMovement;
+import com.cursorpoc.backend.domain.CashSession;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ServiceRecordTip;
@@ -205,20 +206,31 @@ public class TipsService {
     withdrawal.setCreatedBy(createdBy);
     tipWithdrawalRepository.save(withdrawal);
 
-    cashSessionRepository
-        .findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(tenantId)
-        .ifPresent(
-            openSession -> {
-              CashMovement movement = new CashMovement();
-              movement.setTenant(tenant);
-              movement.setCashSession(openSession);
-              movement.setType(CashMovementType.TIP_WITHDRAWAL_OUT);
-              movement.setAmount(amount);
-              movement.setTipWithdrawalId(withdrawal.getId());
-              movement.setCreatedByUser(createdBy);
-              movement.setCreatedAt(Instant.now());
-              cashMovementRepository.save(movement);
-            });
+    // The withdrawal takes cash out of the drawer: record it on the open register; with none open,
+    // on the last closed one, flagged as "after close" so that register's figures stay frozen.
+    CashSession openSession =
+        cashSessionRepository
+            .findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(tenantId)
+            .orElse(null);
+    boolean afterClose = openSession == null;
+    CashSession target =
+        openSession != null
+            ? openSession
+            : cashSessionRepository
+                .findFirstByTenant_IdAndClosedAtIsNotNullOrderByClosedAtDesc(tenantId)
+                .orElse(null);
+    if (target != null) {
+      CashMovement movement = new CashMovement();
+      movement.setTenant(tenant);
+      movement.setCashSession(target);
+      movement.setType(CashMovementType.TIP_WITHDRAWAL_OUT);
+      movement.setAmount(amount);
+      movement.setTipWithdrawalId(withdrawal.getId());
+      movement.setAfterClose(afterClose);
+      movement.setCreatedByUser(createdBy);
+      movement.setCreatedAt(Instant.now());
+      cashMovementRepository.save(movement);
+    }
 
     BigDecimal newBalance = balance.subtract(amount);
     return new CreateTipWithdrawalResponse(
@@ -227,7 +239,9 @@ public class TipsService {
             professional.getFullName(),
             withdrawal.getAmount(),
             withdrawal.getWithdrawnAt()),
-        newBalance);
+        newBalance,
+        target != null ? target.getId() : null,
+        target != null && afterClose);
   }
 
   /**

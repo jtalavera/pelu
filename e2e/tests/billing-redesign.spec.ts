@@ -190,9 +190,9 @@ test.describe("Facturación rediseñada · inicio", () => {
       // Closing replaces any old message: no stale "opened" notice next to the closed register.
       await openCashPanel(page);
       await page.getByTestId("billing-open-close-form").click();
-      // The system's expected cash is the day's cash sales and movements (the opening amount is
-      // not part of it), so counting 0 against a fresh register balances.
-      await page.locator("#counted-cash").fill("0");
+      // The system's expected cash is the opening amount plus the day's cash sales and movements,
+      // so counting the 50.000 it was opened with balances a register with no sales.
+      await page.locator("#counted-cash").fill("50000");
       await expect(page.getByTestId("billing-close-live-verdict")).toHaveText("Matches");
       await page.getByRole("button", { name: "Confirm close" }).click();
       await expect(page.getByTestId("billing-notice")).toHaveText("Cash register closed");
@@ -381,14 +381,15 @@ test.describe("Facturación rediseñada · nueva factura", () => {
     const more = page.getByTestId("billing-more-options");
     await expect(more).not.toHaveAttribute("open", "");
     await expect(page.locator("#discount-type")).toBeHidden();
-    await expect(page.locator("#billing-issue-date")).toBeHidden();
+    // The issue date is a header control («Date: today · Change»), not part of «More options».
+    await expect(page.getByTestId("billing-issue-date-control")).toBeVisible();
     await expect(page.getByTestId("billing-tips-section")).toBeHidden();
 
     await openMoreOptions(page);
     await expect(page.locator("#discount-type")).toBeVisible();
-    await expect(page.locator("#billing-issue-date")).toBeVisible();
-    await expect(page.locator("#billing-issue-date")).toBeDisabled();
     await expect(page.getByTestId("billing-tips-section")).toBeVisible();
+    // Who served the service and the item's own discount live in each service's «More options».
+    await page.getByTestId("billing-line-more-0").click();
     await expect(page.locator("#line-professional-0")).toBeVisible();
     await expect(page.locator("#line-disc-toggle-0")).toBeVisible();
 

@@ -343,6 +343,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     sifenNumberVoidingService.requireVoidingStillPending(invoiceId);
 
     // Wipe the rejected content and re-derive it, on the same Invoice row.
+    List<String> paymentsBefore = paymentSignature(invoice);
     invoice.getLines().clear();
     invoice.getPaymentAllocations().clear();
     invoice.setClient(null);
@@ -361,6 +362,12 @@ public class InvoiceService implements ApplicationEventPublisherAware {
         applyGlobalDiscount(invoice, request.discountType(), request.discountValue(), subtotal);
     requireClientIdentificationForThreshold(invoice, total);
     rebuildPayments(invoice, request.payments(), total);
+    // A closed register's cash is frozen: the payments of its invoices can no longer change (the
+    // transaction rolls back, so nothing of the correction is kept).
+    if (invoice.getCashSession().getClosedAt() != null
+        && !paymentsBefore.equals(paymentSignature(invoice))) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "CASH_SESSION_CLOSED_CANNOT_CORRECT");
+    }
 
     // The number is reused, not abandoned — call off its pending inutilización and clear the
     // rejected SIFEN result so the resend runs through the normal pipeline.
@@ -980,6 +987,14 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     Hibernate.initialize(invoice.getLines());
     Hibernate.initialize(invoice.getPaymentAllocations());
     return toDetailDto(invoice);
+  }
+
+  /** Method + amount of every payment, order-independent: detects a change of the payments. */
+  private static List<String> paymentSignature(Invoice invoice) {
+    return invoice.getPaymentAllocations().stream()
+        .map(p -> p.getMethod() + ":" + p.getAmount().setScale(2, RoundingMode.HALF_UP))
+        .sorted()
+        .toList();
   }
 
   private InvoiceListItemResponse toListItemDto(Invoice i) {

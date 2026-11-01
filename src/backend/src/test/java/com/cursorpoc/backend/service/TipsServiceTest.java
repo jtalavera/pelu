@@ -110,14 +110,48 @@ class TipsServiceTest {
   }
 
   @Test
-  void createWithdrawal_withNoOpenSession_createsNoCashMovement() {
+  void createWithdrawal_withNoRegisterEver_createsNoCashMovement() {
     when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.empty());
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNotNullOrderByClosedAtDesc(1L))
         .thenReturn(Optional.empty());
 
     CreateTipWithdrawalResponse response =
         service.createWithdrawal(1L, 10L, 20L, new BigDecimal("5000.00"));
 
     assertThat(response.newBalance()).isEqualByComparingTo("45000.00");
+    assertThat(response.cashSessionId()).isNull();
+    assertThat(response.afterClose()).isFalse();
     verify(cashMovementRepository, never()).save(any());
+  }
+
+  @Test
+  void createWithdrawal_withNoOpenSession_isRecordedOnTheLastClosedOneAfterClose() {
+    CashSession closed = new CashSession();
+    closed.setId(5L);
+    closed.setTenant(tenant);
+    closed.setClosedAt(Instant.now());
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.empty());
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNotNullOrderByClosedAtDesc(1L))
+        .thenReturn(Optional.of(closed));
+    when(tipWithdrawalRepository.save(any(TipWithdrawal.class)))
+        .thenAnswer(
+            inv -> {
+              TipWithdrawal w = inv.getArgument(0);
+              w.setId(98L);
+              return w;
+            });
+
+    CreateTipWithdrawalResponse response =
+        service.createWithdrawal(1L, 10L, 20L, new BigDecimal("5000.00"));
+
+    assertThat(response.cashSessionId()).isEqualTo(5L);
+    assertThat(response.afterClose()).isTrue();
+    ArgumentCaptor<CashMovement> captor = ArgumentCaptor.forClass(CashMovement.class);
+    verify(cashMovementRepository).save(captor.capture());
+    assertThat(captor.getValue().getCashSession()).isEqualTo(closed);
+    assertThat(captor.getValue().isAfterClose()).isTrue();
+    assertThat(captor.getValue().getType()).isEqualTo(CashMovementType.TIP_WITHDRAWAL_OUT);
   }
 }

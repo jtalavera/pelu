@@ -2011,6 +2011,7 @@
         "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 6 meses."
       },
       "movements": {
+        "afterClose": "Posterior al cierre",
         "title": "Movimientos de caja",
         "emptyToday": "Todavía no hay movimientos registrados.",
         "colTime": "Hora",
@@ -2377,6 +2378,7 @@
       }
     },
     "apiErrors": {
+      "CASH_SESSION_CLOSED_CANNOT_CORRECT": "El comprobante pertenece a una caja cerrada: sus pagos ya no se pueden modificar.",
       "INVALID_BIRTHDAY": "Ingresá una fecha de cumpleaños válida, ej.: 15/08 o 15/08/1990.",
       "INVALID_ACQUISITION_CHANNEL": "La opción de \"¿Cómo nos conoció?\" no es válida.",
       "ACQUISITION_CHANNEL_OTHER_TOO_LONG": "El detalle de \"¿Cómo nos conoció?\" no puede superar los 100 caracteres.",
@@ -3193,6 +3195,9 @@
         "grandTotalLabel": "Total general"
       },
       "withdrawal": {
+        "afterCloseNote": "No hay caja abierta: el retiro quedará registrado en la última caja cerrada (#{{id}}, {{date}}) como posterior al cierre.",
+        "noRegisterNote": "Todavía no hay ninguna caja: el retiro no se registrará en ninguna.",
+        "successAfterClose": "Retiro registrado en la caja #{{id}} como posterior al cierre.",
         "professionalLabel": "Profesional",
         "professionalFilterPlaceholder": "Buscar profesionales…",
         "professionalNoResults": "No se encontraron profesionales.",

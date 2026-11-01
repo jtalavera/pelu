@@ -46,7 +46,7 @@ export function CashSessionSummaryCard({
 
   return (
     <div className="flex flex-col gap-3" data-testid="cash-session-summary">
-      {!hideHero &&
+      {(!hideHero || !detail.isOpen) &&
         (detail.isOpen ? (
           <div className="flex flex-col gap-0.5">
             <span className="text-sm text-ink-3">{t("femme.billing.session.liveExpectedCash")}</span>
@@ -84,7 +84,7 @@ export function CashSessionSummaryCard({
                 </b>
               </div>
             </div>
-            <span className="text-sm text-ink-3">{dayLine}</span>
+            {hideHero ? null : <span className="text-sm text-ink-3">{dayLine}</span>}
           </div>
         ))}
 

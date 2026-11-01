@@ -199,7 +199,7 @@ public class CashSessionService {
   }
 
   private CashSessionListItemResponse toListItem(CashSession session) {
-    ExpectedCash expected = computeExpectedCash(session.getId());
+    ExpectedCash expected = computeExpectedCash(session);
     BigDecimal countedCash = session.getCountedCashAmount();
     AppUser closedByUser = session.getClosedByUser();
 
@@ -228,7 +228,7 @@ public class CashSessionService {
     long invoiceCount =
         invoiceRepository.countByCashSessionAndStatus(sessionId, InvoiceStatus.ISSUED);
 
-    ExpectedCash expected = computeExpectedCash(sessionId);
+    ExpectedCash expected = computeExpectedCash(session);
 
     BigDecimal countedCash = session.getCountedCashAmount();
     BigDecimal cashDifference =
@@ -263,19 +263,22 @@ public class CashSessionService {
   }
 
   /**
-   * Cash-payment sales total (unchanged pre-feature calculation) adjusted by manual ingreso/egreso
-   * movements and auto-linked tip withdrawals for the session.
+   * Cash that should be in the drawer: the opening amount, plus the cash-payment sales, plus manual
+   * ingresos, minus manual egresos and auto-linked tip withdrawals. Movements recorded after the
+   * register closed are excluded, so a closed register's figures never change.
    */
-  private ExpectedCash computeExpectedCash(long sessionId) {
+  private ExpectedCash computeExpectedCash(CashSession session) {
+    long sessionId = session.getId();
     List<Object[]> paymentRows = cashSessionRepository.sumPaymentsByMethodForSession(sessionId);
     List<CashSessionDetailResponse.PaymentMethodSummary> paymentSummary = new ArrayList<>();
-    BigDecimal expectedCash = BigDecimal.ZERO;
+    BigDecimal expectedCash =
+        session.getOpeningCashAmount() != null ? session.getOpeningCashAmount() : BigDecimal.ZERO;
     for (Object[] row : paymentRows) {
       String method = String.valueOf(row[0]);
       BigDecimal amount = (BigDecimal) row[1];
       paymentSummary.add(new CashSessionDetailResponse.PaymentMethodSummary(method, amount));
       if ("CASH".equals(method)) {
-        expectedCash = amount;
+        expectedCash = expectedCash.add(amount);
       }
     }
 
@@ -306,7 +309,8 @@ public class CashSessionService {
         m.getReason(),
         createdBy != null ? createdBy.getEmail() : null,
         m.getCreatedAt(),
-        m.getTipWithdrawalId());
+        m.getTipWithdrawalId(),
+        m.isAfterClose());
   }
 
   private static CashSessionResponse toDto(CashSession s) {

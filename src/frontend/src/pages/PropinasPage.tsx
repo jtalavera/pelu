@@ -25,6 +25,7 @@ import {
   type TipReportResponse,
   type TipWithdrawalHistoryItem,
 } from "../api/propinas";
+import { getCurrentSession, listCashSessionsPaged } from "../api/cashSessions";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatGuaraniesGs } from "../lib/formatMoney";
@@ -95,6 +96,8 @@ export default function PropinasPage() {
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** Where the withdrawal will be recorded when no register is open (null = nothing to warn about). */
+  const [registerNote, setRegisterNote] = useState<string | null>(null);
 
   const activeProfessionals = useMemo(() => professionals.filter((p) => p.active), [professionals]);
   // Most to withdraw first; ties alphabetical.
@@ -248,6 +251,26 @@ export default function PropinasPage() {
     setAmount("");
     setFieldError(null);
     setSubmitError(null);
+    setRegisterNote(null);
+    // With no open register the withdrawal goes to the last closed one, flagged "after close":
+    // tell the user before they confirm.
+    void (async () => {
+      try {
+        if (await getCurrentSession()) return;
+        const closed = await listCashSessionsPaged({ status: "CLOSED", page: 0, size: 1 });
+        const last = closed.content[0];
+        setRegisterNote(
+          last
+            ? t("femme.propinas.withdrawal.afterCloseNote", {
+                id: last.id,
+                date: fmtDay(last.closedAt ?? last.openedAt),
+              })
+            : t("femme.propinas.withdrawal.noRegisterNote"),
+        );
+      } catch {
+        setRegisterNote(null);
+      }
+    })();
   }
 
   function closeWithdraw() {
@@ -271,9 +294,13 @@ export default function PropinasPage() {
     setFieldError(null);
     setSubmitting(true);
     try {
-      await createTipWithdrawal(withdrawFor.id, parsed);
+      const res = await createTipWithdrawal(withdrawFor.id, parsed);
       closeWithdraw();
-      setNotice(t("femme.propinas.withdrawal.success"));
+      setNotice(
+        res.afterClose && res.cashSessionId != null
+          ? t("femme.propinas.withdrawal.successAfterClose", { id: res.cashSessionId })
+          : t("femme.propinas.withdrawal.success"),
+      );
       setReloadTick((n) => n + 1);
     } catch (err) {
       setSubmitError(translateApiError(err, t, "femme.propinas.errorTitle"));
@@ -615,6 +642,11 @@ export default function PropinasPage() {
             {submitError ? (
               <Alert variant="destructive" title={t("femme.propinas.errorTitle")}>
                 {submitError}
+              </Alert>
+            ) : null}
+            {registerNote ? (
+              <Alert variant="info" data-testid="propinas-register-note">
+                {registerNote}
               </Alert>
             ) : null}
             <div>
