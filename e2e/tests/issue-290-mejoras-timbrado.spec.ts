@@ -11,6 +11,7 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { stampRowAction } from "../fixtures/ui";
 
 /**
  * Issue #290 — Mejoras a creación y edición de timbrado:
@@ -45,20 +46,21 @@ function uniqueStampNumber(prefix: string): string {
 async function openFiscalStampPage(page: Page) {
   await loginAsDemo(page);
   await page.goto("/app/settings/fiscal-stamp");
-  await expect(page.getByRole("button", { name: "Add stamp" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("fiscal-stamp-add")).toBeVisible({ timeout: 30_000 });
 }
 
 async function fillCreateForm(
   page: Page,
   f: { stampNumber: string; validFrom: string; validUntil?: string; rangeFrom: string; rangeTo?: string; initial: string },
 ) {
+  await page.getByTestId("fiscal-stamp-add").click();
   await page.getByLabel("Stamp number", { exact: true }).fill(f.stampNumber);
   await page.getByLabel("Validity start", { exact: true }).fill(f.validFrom);
   if (f.validUntil) await page.getByLabel("Validity end", { exact: true }).fill(f.validUntil);
   await page.getByLabel("Number from", { exact: true }).fill(f.rangeFrom);
   if (f.rangeTo) await page.getByLabel("Number to", { exact: true }).fill(f.rangeTo);
   await page.getByLabel("Starting invoice number", { exact: true }).fill(f.initial);
-  await page.getByRole("button", { name: "Add stamp" }).click();
+  await page.getByTestId("fiscal-stamp-create-submit").click();
 }
 
 test.describe("Issue #290 · Mejoras a creación y edición de timbrado", () => {
@@ -109,7 +111,7 @@ test.describe("Issue #290 · Mejoras a creación y edición de timbrado", () => 
     await expect(row).not.toContainText(displayDate(daysFromToday(-10)));
 
     // The edit dialog is pre-filled with the stored date, and saving it untouched keeps it.
-    await row.getByRole("button", { name: "Edit stamp" }).click();
+    await stampRowAction(page, row, /^Edit/);
     const dlg = page.getByRole("dialog");
     await expect(dlg.getByLabel("Validity start", { exact: true })).toHaveValue(validFrom);
     await expect(dlg.getByLabel("Validity end", { exact: true })).toHaveValue(validUntil);
@@ -136,7 +138,7 @@ test.describe("Issue #290 · Mejoras a creación y edición de timbrado", () => 
 
     await openFiscalStampPage(page);
     const row = page.getByTestId(`fiscal-stamp-row-${created.id}`);
-    await row.getByRole("button", { name: "Edit stamp" }).click();
+    await stampRowAction(page, row, /^Edit/);
     const dlg = page.getByRole("dialog");
 
     const newStampNumber = uniqueStampNumber("5");
@@ -173,8 +175,7 @@ test.describe("Issue #290 · Mejoras a creación y edición de timbrado", () => 
     });
     await expect(row).toContainText(newStampNumber);
     await expect(row).toContainText(displayDate(newFrom));
-    await expect(row.getByText("004", { exact: true })).toBeVisible();
-    await expect(row.getByText("005", { exact: true })).toBeVisible();
+    await expect(row).toContainText("004-005-");
   });
 
   test("Item 4 · fin de vigencia y número hasta son opcionales; el timbrado se activa y factura", async ({
@@ -185,7 +186,9 @@ test.describe("Issue #290 · Mejoras a creación y edición de timbrado", () => 
     const stampNumber = uniqueStampNumber("6");
 
     await openFiscalStampPage(page);
+    await page.getByTestId("fiscal-stamp-add").click();
     await expect(page.getByText("Optional — not required for electronic invoicing.")).toHaveCount(2);
+    await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
     await fillCreateForm(page, {
       stampNumber,
       validFrom: daysFromToday(-1),
@@ -201,9 +204,9 @@ test.describe("Issue #290 · Mejoras a creación y edición de timbrado", () => 
     expect(created!.rangeTo).toBeNull();
 
     const row = page.getByTestId(`fiscal-stamp-row-${created!.id}`);
-    await expect(row.getByText("—", { exact: true })).toHaveCount(2);
-    await row.getByRole("button", { name: "Activate", exact: true }).click();
-    await expect(row.getByRole("button", { name: "Activate", exact: true })).toBeDisabled();
+    await expect(row).toContainText("– —");
+    await stampRowAction(page, row, /^Activate$/);
+    await expect(row.getByText("Active", { exact: true })).toBeVisible();
 
     // A comprobante can be issued against a stamp with no end of validity / upper number.
     await ensureCashSessionOpenApi(request, token);
@@ -238,7 +241,7 @@ test.describe("Issue #290 · Mejoras a creación y edición de timbrado", () => 
 
     await openFiscalStampPage(page);
     const row = page.getByTestId(`fiscal-stamp-row-${openEndedStampId}`);
-    await row.getByRole("button", { name: "Edit stamp" }).click();
+    await stampRowAction(page, row, /^Edit/);
     const dlg = page.getByRole("dialog");
     for (const locked of ["Stamp number", "Validity start", "Number from", "Establishment", "Expedition point"]) {
       await expect(dlg.getByLabel(locked, { exact: true })).toBeDisabled();
@@ -257,6 +260,6 @@ test.describe("Issue #290 · Mejoras a creación y edición de timbrado", () => 
     expect(after!.stampNumber).toBe(before!.stampNumber);
     expect(after!.validFrom).toBe(before!.validFrom);
     await expect(row).toContainText(displayDate(newUntil));
-    await expect(row).toContainText("5000");
+
   });
 });

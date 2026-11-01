@@ -295,5 +295,6 @@ export async function stampRowAction(
 ) {
   await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await row.getByRole("button", { name: /actions|acciones/i }).click();
-  await page.getByRole("menuitem", { name: action }).click();
+  // dispatchEvent: the menu of the last row can open below the page end, out of the viewport.
+  await page.getByRole("menuitem", { name: action }).dispatchEvent("click");
 }
