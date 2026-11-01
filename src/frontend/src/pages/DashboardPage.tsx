@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Button, Card, Spinner, Text } from "@design-system";
+import { Alert, Button, Card, Spinner, Text, Toast } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { billingStateForAppointment } from "../lib/appointmentBilling";
 import { listAppointments, type Appointment } from "../api/appointments";
@@ -148,6 +148,7 @@ export default function DashboardPage() {
   const [todayAppts, setTodayAppts]   = useState<Appointment[]>([]);
   const [todayServiceRecords, setTodayServiceRecords] = useState<ServiceRecordListItem[]>([]);
   const [selectedServiceRecordId, setSelectedServiceRecordId] = useState<number | null>(null);
+  const [recordNotice, setRecordNotice] = useState<"updated" | "voided" | null>(null);
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [openMore, setOpenMore] = useState<MoreKey | null>(null);
   const [birthdaysCount, setBirthdaysCount] = useState<number | null>(0);
@@ -693,9 +694,25 @@ export default function DashboardPage() {
         <ServiceRecordDetailModal
           serviceRecordId={selectedServiceRecordId}
           onClose={() => setSelectedServiceRecordId(null)}
-          onChanged={loadTodayServiceRecords}
+          onChanged={(kind) => {
+            void loadTodayServiceRecords();
+            setRecordNotice(kind);
+          }}
         />
       )}
+      <Toast
+        open={recordNotice !== null}
+        onOpenChange={(o) => {
+          if (!o) setRecordNotice(null);
+        }}
+        variant="success"
+        duration={4000}
+        data-testid="dashboard-record-toast"
+      >
+        {recordNotice === "voided"
+          ? t("femme.serviceRecords.voidedSuccess")
+          : t("femme.serviceRecords.updatedSuccess")}
+      </Toast>
     </div>
   );
 }

@@ -207,7 +207,8 @@ export async function openFichaByText(page: import("@playwright/test").Page, tex
     .locator('[data-testid^="service-record-row-"]')
     .filter({ hasText: text })
     .first()
-    .click();
+    // Top-left of the row (name area): on narrow screens the centre can fall on "Charge".
+    .click({ position: { x: 70, y: 12 } });
 }
 
 /**
