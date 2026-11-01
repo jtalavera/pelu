@@ -18,7 +18,7 @@ import {
 import { DEMO_EMAIL, loginAs, loginAsDemo, loginAsPlatformAdmin } from "../fixtures/auth";
 import { addPaymentMethodRow, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import { pdfContainsText, pickServiceLine } from "../fixtures/invoice";
-import { openSummaryMore } from "../fixtures/ui";
+import { openSettingsMoreItem, openSummaryMore } from "../fixtures/ui";
 
 // Issue #284 "Ajustes 8-10-26". Ajuste 1 (la categoría del producto viaja a Stock) necesita un
 // control-stock real: vive en tests/stock/issue-284-categoria-del-producto-en-stock.spec.ts y en
@@ -333,13 +333,15 @@ test.describe("Issue #284 · ajuste 7 · auditoría", () => {
     // UI: Configuración → Auditoría shows it as a sentence, filterable by user and "what".
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
-    await page.getByRole("link", { name: "Audit" }).click();
+    await openSettingsMoreItem(page, "Audit");
     await expect(page).toHaveURL(/\/app\/settings\/audit$/);
     await expect(page.getByTestId("audit-table")).toBeVisible({ timeout: 20_000 });
 
+    // Redesign: the user search is the main field; "what" lives in the folded Filters.
     await page.locator("#audit-user").fill(DEMO_EMAIL);
+    await page.getByTestId("audit-filters-toggle").click();
     await page.locator("#audit-resource").selectOption("clients");
-    await page.getByRole("button", { name: "Search" }).click();
+    await page.getByTestId("audit-search").click();
     const rows = page.getByTestId("audit-row");
     await expect(rows.first()).toBeVisible();
     await expect(rows.first().getByTestId("audit-row-user")).toHaveText(DEMO_EMAIL);
@@ -351,7 +353,7 @@ test.describe("Issue #284 · ajuste 7 · auditoría", () => {
 
     // A user that matches nothing → empty state; clearing brings the list back.
     await page.locator("#audit-user").fill("nadie@nowhere.test");
-    await page.getByRole("button", { name: "Search" }).click();
+    await page.getByTestId("audit-search").click();
     await expect(page.getByTestId("audit-empty")).toBeVisible();
     await page.getByRole("button", { name: "Clear filters" }).click();
     await expect(page.getByTestId("audit-table")).toBeVisible();
@@ -449,9 +451,9 @@ test.describe("Issue #284 · ajuste 7 · auditoría", () => {
     await expect(page).toHaveURL(/\/platform\/audit$/);
     await expect(page.getByTestId("platform-audit")).toBeVisible();
     await expect(page.getByTestId("audit-table")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole("columnheader", { name: "Business" })).toBeVisible();
+    // Redesign: each row carries its business ("Business · user · date") instead of a column.
     await page.locator("#audit-user").fill("platform-admin");
-    await page.getByRole("button", { name: "Search" }).click();
+    await page.getByTestId("audit-search").click();
     const first = page.getByTestId("audit-row").first();
     await expect(first.getByTestId("audit-row-user")).toContainText("platform-admin");
     await expect(first).toContainText("Platform");
@@ -471,6 +473,12 @@ test.describe("Issue #284 · ajuste 7 · auditoría", () => {
     });
     await loginAs(page, email, "ValidPass1!");
     await page.goto("/app/settings/taxes");
+    // Other roles never get the Audit entry: no ⋯ menu item and the direct URL bounces away.
+    const more = page.getByRole("button", { name: "More", exact: true });
+    if (await more.isVisible().catch(() => false)) {
+      await more.click();
+      await expect(page.getByRole("menuitem", { name: "Audit" })).toHaveCount(0);
+    }
     await expect(page.getByRole("link", { name: "Audit" })).toHaveCount(0);
   });
 });

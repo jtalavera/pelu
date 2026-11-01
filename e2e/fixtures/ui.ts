@@ -306,3 +306,12 @@ export async function openSummaryMore(page: import("@playwright/test").Page) {
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
   await page.getByTestId("summary-more").waitFor({ state: "visible" });
 }
+
+/** Configuración: opens the "More" (⋯) menu and picks one of its items (Taxes | Audit | Shared devices). */
+export async function openSettingsMoreItem(
+  page: import("@playwright/test").Page,
+  name: RegExp | string,
+) {
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await page.getByRole("menuitem", { name }).click();
+}
