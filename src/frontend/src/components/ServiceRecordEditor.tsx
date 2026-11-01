@@ -233,6 +233,10 @@ export function ServiceRecordEditor({
     );
   }
 
+  /** A line nobody touched (no service, professional or price) is ignored: a ficha can be client-only. */
+  const isBlankLine = (l: (typeof lines)[number]) =>
+    !l.pickedService && l.professionalId === "" && !(l.unitPrice && parseMaskedMoney(l.unitPrice) > 0);
+
   function validate(): boolean {
     let ok = true;
     if (clientSelection?.type !== "client") {
@@ -243,7 +247,7 @@ export function ServiceRecordEditor({
     }
     const newLineErrors: Record<number, { service?: string }> = {};
     lines.forEach((l, idx) => {
-      if (!l.pickedService) newLineErrors[idx] = { service: t("femme.serviceRecords.lineServiceRequired") };
+      if (!l.pickedService && !isBlankLine(l)) newLineErrors[idx] = { service: t("femme.serviceRecords.lineServiceRequired") };
     });
     setLineErrors(newLineErrors);
     if (Object.keys(newLineErrors).length > 0) ok = false;
@@ -256,7 +260,7 @@ export function ServiceRecordEditor({
     if (!validate() || clientSelection?.type !== "client") return null;
     const payload = {
       clientId: clientSelection.client.id,
-      lines: lines.map((l) => ({
+      lines: lines.filter((l) => !isBlankLine(l)).map((l) => ({
         serviceId: l.pickedService!.id,
         professionalId: l.professionalId === "" ? null : l.professionalId,
         quantity: l.quantity || null,
