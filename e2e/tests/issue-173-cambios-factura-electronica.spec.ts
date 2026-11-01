@@ -19,6 +19,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openFichaByText } from "../fixtures/ui";
 import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
@@ -247,11 +248,8 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#service-record-history-text-filter").fill(name);
-    await page.locator("tbody tr").filter({ hasText: name }).first().click();
-    await page.getByRole("button", { name: "Generate invoice" }).click();
+    await openFichaByText(page, name);
+    await page.getByTestId("service-record-generate-invoice").click();
 
     await expect(page).toHaveURL(/\/app\/billing/);
     await expect(page.locator("#billing-client-email")).toHaveValue(email);
