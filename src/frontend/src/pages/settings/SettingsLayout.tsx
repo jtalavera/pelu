@@ -1,88 +1,84 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { KebabMenu } from "@design-system";
 import { useMe } from "../../hooks/useMe";
 import { useFeatureFlag } from "../../hooks/useFeatureFlags";
 
+/**
+ * Configuración: Negocio / Timbrado / SIFEN as segmented tabs; Impuestos, Auditoría and Dispositivos
+ * compartidos live under the «⋯» menu. The section's primary action (e.g. «Agregar timbrado») goes
+ * in the header slot via `SettingsHeaderAction`.
+ */
 export default function SettingsLayout() {
   const { t } = useTranslation();
   const { me } = useMe();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
   const isTenantAdmin = me?.role === "ADMIN";
   const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
 
-  const navClass = ({ isActive }: { isActive: boolean }) =>
+  const moreItems = [
+    { id: "taxes", path: "/app/settings/taxes", label: t("femme.settings.tabTaxes"), visible: true },
+    { id: "audit", path: "/app/settings/audit", label: t("femme.settings.tabAudit"), visible: isTenantAdmin },
+    {
+      id: "devices",
+      path: "/app/settings/devices",
+      label: t("femme.settings.tabSharedDevices"),
+      visible: isTenantAdmin,
+    },
+  ].filter((i) => i.visible);
+  const activeMore = moreItems.find((i) => pathname.startsWith(i.path));
+
+  const tabClass = ({ isActive }: { isActive: boolean }) =>
     [
-      "block rounded-[var(--radius-md)] px-2.5 py-2 text-xs mb-0.5 no-underline cursor-pointer transition-colors",
+      "flex min-h-11 min-w-0 flex-1 items-center justify-center truncate rounded-[10px] px-2 text-center font-bold no-underline sm:px-4",
       isActive
-        ? "font-medium bg-[var(--color-rose-lt)] text-[var(--color-rose-dk)]"
-        : "text-[var(--color-ink-2)] hover:bg-[var(--color-stone)]",
+        ? "bg-surface text-primary shadow-[0_1px_2px_rgba(10,31,51,0.12)]"
+        : "bg-transparent text-ink-2 hover:bg-transparent",
     ].join(" ");
 
   return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 16,
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-ink)" }}>
-            {t("femme.settings.pageTitle")}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
-            {t("femme.settings.pageSubtitle")}
-          </div>
-        </div>
+    <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-heading text-2xl font-extrabold text-ink sm:text-3xl">{t("femme.settings.pageTitle")}</h1>
+        <div ref={setActionSlot} className="empty:hidden" />
       </div>
-
-      <div
-        className="grid min-w-0 grid-cols-1 overflow-hidden md:grid-cols-[200px_1fr]"
-        style={{
-          background: "var(--color-white)",
-          borderRadius: "var(--radius-xl)",
-          border: "var(--border-default)",
-        }}
+      <nav
+        className="flex items-center gap-1 rounded-2xl bg-primary-lt p-1"
+        aria-label={t("femme.settings.sectionTitle")}
       >
-        <nav
-          style={{
-            borderRight: "var(--border-default)",
-            padding: "12px 8px",
-          }}
-          className="max-md:border-r-0 max-md:border-b max-md:border-[var(--color-stone-md)]"
-          aria-label={t("femme.settings.sectionTitle")}
-        >
-          {isTenantAdmin ? (
-            <NavLink to="/app/settings/business" className={navClass} end>
-              {t("femme.settings.tabBusiness")}
-            </NavLink>
-          ) : null}
-          <NavLink to="/app/settings/fiscal-stamp" className={navClass}>
-            {t("femme.settings.tabFiscalStamp")}
+        {isTenantAdmin ? (
+          <NavLink to="/app/settings/business" className={tabClass} end>
+            {t("femme.settings.tabBusiness")}
           </NavLink>
-          <NavLink to="/app/settings/taxes" className={navClass}>
-            {t("femme.settings.tabTaxes")}
+        ) : null}
+        <NavLink to="/app/settings/fiscal-stamp" className={tabClass}>
+          {t("femme.settings.tabFiscalStamp")}
+        </NavLink>
+        {isTenantAdmin && sifenEnabled ? (
+          <NavLink to="/app/settings/sifen" className={tabClass}>
+            {t("femme.settings.tabSifen")}
           </NavLink>
-          {isTenantAdmin && sifenEnabled ? (
-            <NavLink to="/app/settings/sifen" className={navClass}>
-              {t("femme.settings.tabSifen")}
-            </NavLink>
-          ) : null}
-          {isTenantAdmin ? (
-            <NavLink to="/app/settings/audit" className={navClass}>
-              {t("femme.settings.tabAudit")}
-            </NavLink>
-          ) : null}
-          {isTenantAdmin ? (
-            <NavLink to="/app/settings/devices" className={navClass} data-testid="settings-tab-devices">
-              {t("femme.settings.tabSharedDevices")}
-            </NavLink>
-          ) : null}
-        </nav>
-        <div style={{ padding: 20, minWidth: 0 }}>
-          <Outlet />
-        </div>
+        ) : null}
+        <KebabMenu
+          id="settings-more"
+          triggerAriaLabel={t("femme.settings.moreMenu")}
+          items={moreItems.map((i) => ({
+            id: i.id,
+            label: i.label,
+            onSelect: () => navigate(i.path),
+          }))}
+        />
+      </nav>
+      {activeMore ? (
+        <h2 className="font-heading text-lg font-extrabold text-ink" data-testid="settings-more-title">
+          {activeMore.label}
+        </h2>
+      ) : null}
+      <div className="min-w-0" data-testid="settings-content">
+        <Outlet context={{ actionSlot }} />
       </div>
     </div>
   );

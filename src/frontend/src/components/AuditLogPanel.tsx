@@ -4,13 +4,6 @@ import { Alert, Button, Input, Label, PageSizeSelect, Pagination, Select, Spinne
 import { listAuditLog, type AuditLogRow } from "../api/audit";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { useDateLocale } from "../i18n/dateLocale";
-import {
-  sectionCardStyle,
-  sectionTitleStyle,
-  tableWrapStyle,
-  tdStyle,
-  thStyle,
-} from "./sifenFormStyles";
 
 /** Resources the "Qué" filter offers (the first literal segment of the audited endpoints). */
 const SALON_RESOURCES = [
@@ -62,6 +55,7 @@ export function AuditLogPanel({ platform = false }: { platform?: boolean }) {
   const [applied, setApplied] = useState({ from: "", to: "", resource: "", q: "" });
   const [draft, setDraft] = useState({ from: "", to: "", resource: "", q: "" });
   const [rangeError, setRangeError] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,74 +120,93 @@ export function AuditLogPanel({ platform = false }: { platform?: boolean }) {
   const showingTo = Math.min(totalElements, (page + 1) * pageSize);
 
   return (
-    <div data-testid="audit-log-panel">
-      <form
-        role="search"
-        onSubmit={onSearch}
-        className="mb-4 flex flex-wrap items-end gap-3"
-        style={{ ...sectionCardStyle, marginBottom: 16 }}
-      >
-        <div className="min-w-[150px] flex-1">
-          <Label htmlFor="audit-from">{t("femme.audit.filterFrom")}</Label>
-          <Input
-            id="audit-from"
-            type="date"
-            value={draft.from}
-            onChange={(e) => setDraft((d) => ({ ...d, from: e.target.value }))}
-            aria-invalid={rangeError ? "true" : "false"}
-            aria-describedby={rangeError ? "audit-range-err" : undefined}
-          />
+    <div className="flex flex-col gap-3" data-testid="audit-log-panel">
+      <form role="search" onSubmit={onSearch} className="flex flex-col gap-3">
+        <div className="flex gap-2">
+          <div className="min-w-0 flex-1">
+            <Label htmlFor="audit-user" className="sr-only">
+              {t("femme.audit.filterUser")}
+            </Label>
+            <Input
+              id="audit-user"
+              type="search"
+              value={draft.q}
+              onChange={(e) => setDraft((d) => ({ ...d, q: e.target.value }))}
+              placeholder={t("femme.audit.filterUserPlaceholder")}
+            />
+          </div>
+          <Button type="submit" className="min-h-11" data-testid="audit-search">
+            {t("femme.audit.search")}
+          </Button>
         </div>
-        <div className="min-w-[150px] flex-1">
-          <Label htmlFor="audit-to">{t("femme.audit.filterTo")}</Label>
-          <Input
-            id="audit-to"
-            type="date"
-            value={draft.to}
-            onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))}
-            aria-invalid={rangeError ? "true" : "false"}
-            aria-describedby={rangeError ? "audit-range-err" : undefined}
-          />
-        </div>
-        <div className="min-w-[160px] flex-1">
-          <Label htmlFor="audit-resource">{t("femme.audit.filterResource")}</Label>
-          <Select
-            id="audit-resource"
-            value={draft.resource}
-            onChange={(e) => setDraft((d) => ({ ...d, resource: e.target.value }))}
-          >
-            <option value="">{t("femme.audit.filterResourceAll")}</option>
-            {resources.map((r) => (
-              <option key={r} value={r}>
-                {t(`femme.audit.resources.${r}`, { defaultValue: r })}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="min-w-[200px] flex-[2]">
-          <Label htmlFor="audit-user">{t("femme.audit.filterUser")}</Label>
-          <Input
-            id="audit-user"
-            type="search"
-            value={draft.q}
-            onChange={(e) => setDraft((d) => ({ ...d, q: e.target.value }))}
-            placeholder={t("femme.audit.filterUserPlaceholder")}
-          />
-        </div>
-        <Button type="submit" variant="secondary" className="min-h-11">
-          {t("femme.audit.search")}
-        </Button>
-        <Button type="button" variant="ghost" className="min-h-11" onClick={onClear}>
-          {t("femme.audit.clear")}
-        </Button>
-        {rangeError ? (
-          <p
-            id="audit-range-err"
-            role="alert"
-            className="w-full text-sm text-danger"
-          >
-            {rangeError}
-          </p>
+        <button
+          type="button"
+          aria-expanded={filtersOpen}
+          aria-controls="audit-filters"
+          data-testid="audit-filters-toggle"
+          onClick={() => setFiltersOpen((o) => !o)}
+          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink"
+        >
+          {t("femme.audit.filtersToggle")}
+          <span aria-hidden className={`text-ink-3 transition-transform ${filtersOpen ? "rotate-180" : ""}`}>
+            ⌄
+          </span>
+        </button>
+        {filtersOpen ? (
+          <div id="audit-filters" className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="audit-from">{t("femme.audit.filterFrom")}</Label>
+                <Input
+                  id="audit-from"
+                  type="date"
+                  value={draft.from}
+                  onChange={(e) => setDraft((d) => ({ ...d, from: e.target.value }))}
+                  invalid={!!rangeError}
+                  aria-describedby={rangeError ? "audit-range-err" : undefined}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="audit-to">{t("femme.audit.filterTo")}</Label>
+                <Input
+                  id="audit-to"
+                  type="date"
+                  value={draft.to}
+                  onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))}
+                  invalid={!!rangeError}
+                  aria-describedby={rangeError ? "audit-range-err" : undefined}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="audit-resource">{t("femme.audit.filterResource")}</Label>
+              <Select
+                id="audit-resource"
+                value={draft.resource}
+                onChange={(e) => setDraft((d) => ({ ...d, resource: e.target.value }))}
+              >
+                <option value="">{t("femme.audit.filterResourceAll")}</option>
+                {resources.map((r) => (
+                  <option key={r} value={r}>
+                    {t(`femme.audit.resources.${r}`, { defaultValue: r })}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {rangeError ? (
+              <p id="audit-range-err" role="alert" className="text-sm font-medium text-danger">
+                {rangeError}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" variant="secondary" className="min-h-11">
+                {t("femme.audit.search")}
+              </Button>
+              <Button type="button" variant="ghost" className="min-h-11" onClick={onClear}>
+                {t("femme.audit.clear")}
+              </Button>
+            </div>
+          </div>
         ) : null}
       </form>
 
@@ -203,58 +216,45 @@ export function AuditLogPanel({ platform = false }: { platform?: boolean }) {
         </Alert>
       ) : null}
 
-      <section style={sectionCardStyle}>
-        <div style={sectionTitleStyle}>{t("femme.audit.listTitle")}</div>
+      <div className="rounded-card border border-line bg-surface shadow-sm">
         {loading ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0" }}>
+          <div className="flex items-center gap-3 p-4">
             <Spinner size="md" />
             <Text>{t("femme.audit.loading")}</Text>
           </div>
         ) : rows.length === 0 ? (
-          <Text variant="muted" data-testid="audit-empty">
+          <Text variant="muted" className="p-4" data-testid="audit-empty">
             {t("femme.audit.empty")}
           </Text>
         ) : (
-          <div style={tableWrapStyle}>
-            <div className="overflow-x-auto">
-              <table className="min-w-full" style={{ borderCollapse: "collapse" }} data-testid="audit-table">
-                <thead>
-                  <tr>
-                    <th style={thStyle}>{t("femme.audit.colWhen")}</th>
-                    {platform ? <th style={thStyle}>{t("femme.audit.colTenant")}</th> : null}
-                    <th style={thStyle}>{t("femme.audit.colUser")}</th>
-                    <th style={thStyle}>{t("femme.audit.colAction")}</th>
-                    <th style={thStyle}>{t("femme.audit.colRecord")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id} data-testid="audit-row" data-resource={row.resource}>
-                      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{fmtDateTime(row.createdAt)}</td>
-                      {platform ? (
-                        <td style={tdStyle}>{row.tenantName ?? t("femme.audit.platformScope")}</td>
-                      ) : null}
-                      <td style={tdStyle}>
-                        <div data-testid="audit-row-user">{row.userEmail ?? "—"}</div>
-                        {row.userRole ? (
-                          <div style={{ fontSize: 10, color: "var(--color-ink-3)" }}>
-                            {t(`femme.audit.roles.${row.userRole}`, { defaultValue: row.userRole })}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td style={tdStyle} data-testid="audit-row-action">
-                        {actionLabel(row)}
-                      </td>
-                      <td style={tdStyle}>{row.entityId ? `#${row.entityId}` : "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <ul data-testid="audit-table">
+            {rows.map((row) => (
+              <li
+                key={row.id}
+                data-testid="audit-row"
+                data-resource={row.resource}
+                className="grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-t border-line px-4 py-2.5 first:border-t-0"
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold text-ink" data-testid="audit-row-action">
+                    {actionLabel(row)}
+                  </div>
+                  <div className="text-sm text-ink-3">
+                    {platform ? `${row.tenantName ?? t("femme.audit.platformScope")} · ` : ""}
+                    <span data-testid="audit-row-user">{row.userEmail ?? "—"}</span>
+                    {row.userRole
+                      ? ` (${t(`femme.audit.roles.${row.userRole}`, { defaultValue: row.userRole })})`
+                      : ""}
+                    {" · "}
+                    {fmtDateTime(row.createdAt)}
+                  </div>
+                </div>
+                <span className="text-sm tabular-nums text-ink-3">{row.entityId ? `#${row.entityId}` : ""}</span>
+              </li>
+            ))}
+          </ul>
         )}
-
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
           <PageSizeSelect
             value={pageSize}
             onChange={(s) => {
@@ -263,7 +263,7 @@ export function AuditLogPanel({ platform = false }: { platform?: boolean }) {
             }}
             label={t("femme.pagination.rowsPerPage")}
           />
-          <Text variant="small" className="text-[var(--color-ink-3)]">
+          <Text variant="small" className="text-ink-3">
             {t("femme.pagination.showingRange", {
               from: showingFrom,
               to: showingTo,
@@ -278,7 +278,7 @@ export function AuditLogPanel({ platform = false }: { platform?: boolean }) {
             nextLabel={t("femme.pagination.next")}
           />
         </div>
-      </section>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Heading, Input, Label, Spinner, Text } from "@design-system";
+import { Alert, Button, Input, KebabMenu, Label, Modal, Spinner, Text } from "@design-system";
 import { femmeDeleteJson, femmeJson, femmePostJson, femmePutJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -10,6 +10,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
+import { SettingsHeaderAction } from "./settings/settingsContext";
 import { useTour } from "../tour/useTour";
 import { fiscalStampSteps } from "../tour/steps/fiscalStamp";
 
@@ -67,70 +68,6 @@ function fmtDateShort(iso: string, locale: string): string {
   }
 }
 
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 11,
-  fontWeight: 500,
-  color: "var(--color-ink-2)",
-  marginBottom: 4,
-};
-
-const hintStyle: React.CSSProperties = {
-  fontSize: 10,
-  color: "var(--color-ink-3)",
-  marginTop: 3,
-};
-
-/** Compact row buttons: keep the 44px touch target on mobile, shrink on desktop. */
-const ROW_ACTION_CLASS = "sm:h-7 sm:px-2.5 text-[11px]";
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 500,
-  letterSpacing: "0.06em",
-  color: "var(--color-ink-3)",
-  textTransform: "uppercase",
-  margin: "14px 0 10px",
-  paddingBottom: 6,
-  borderBottom: "var(--border-default)",
-};
-
-// HU-29 AC9: visually separate the "current stamp" info from the "new stamp"
-// form by enclosing each in its own bordered card.
-const sectionCardStyle: React.CSSProperties = {
-  border: "var(--border-default)",
-  borderRadius: "var(--radius-xl)",
-  padding: 16,
-  marginBottom: 16,
-  background: "var(--color-white)",
-};
-
-const createSectionCardStyle: React.CSSProperties = {
-  ...sectionCardStyle,
-  background: "var(--color-stone)",
-};
-
-function buildInputStyle(hasError: boolean, focused: boolean): React.CSSProperties {
-  const base: React.CSSProperties = {
-    padding: "8px 11px",
-    border: hasError ? "1px solid var(--color-danger)" : "1px solid var(--color-stone-md)",
-    borderRadius: "var(--radius-md)",
-    fontSize: 12,
-    color: "var(--color-ink)",
-    background: "var(--color-white)",
-    width: "100%",
-    outline: "none",
-    boxSizing: "border-box",
-  };
-  if (focused) {
-    base.boxShadow = hasError
-      ? "0 0 0 3px var(--color-danger-lt)"
-      : "0 0 0 3px var(--color-rose-lt)";
-    if (!hasError) base.borderColor = "var(--color-rose)";
-  }
-  return base;
-}
-
 export default function FiscalStampSettingsPage() {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
@@ -155,7 +92,7 @@ export default function FiscalStampSettingsPage() {
   const [expeditionPoint, setExpeditionPoint] = useState("");
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
-  const [focusField, setFocusField] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editStampNumber, setEditStampNumber] = useState("");
@@ -287,6 +224,7 @@ export default function FiscalStampSettingsPage() {
         expeditionPoint: exp,
       });
       setSuccessMessage(t("femme.fiscalStamp.savedBody"));
+      setCreateOpen(false);
       setStampNumber("");
       setValidFrom("");
       setValidUntil("");
@@ -472,7 +410,7 @@ export default function FiscalStampSettingsPage() {
         />
         <FieldValidationError id={`${f.id}-err`}>{error}</FieldValidationError>
         {!error && hint ? (
-          <p id={`${f.id}-hint`} style={hintStyle}>
+          <p id={`${f.id}-hint`} className="mt-1 text-sm text-ink-3">
             {hint}
           </p>
         ) : null}
@@ -498,48 +436,79 @@ export default function FiscalStampSettingsPage() {
     [sortedRows, stampListQuery],
   );
 
-  const primaryBtn: React.CSSProperties = {
-    background: "var(--color-rose)",
-    color: "var(--color-on-primary)",
-    border: "none",
-    borderRadius: "var(--radius-md)",
-    padding: "8px 16px",
-    fontSize: 12,
-    fontWeight: 500,
-    cursor: "pointer",
-  };
-
-  const thStyle: React.CSSProperties = {
-    padding: "9px 12px",
-    fontSize: 10,
-    fontWeight: 500,
-    color: "var(--color-ink-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    textAlign: "left",
-    background: "var(--color-stone)",
-    whiteSpace: "nowrap",
-  };
+  /** Create-form field: label, input and the validation error / hint. */
+  function createField(f: {
+    id: string;
+    errorKey: string;
+    label: string;
+    value: string;
+    onChange: (v: string) => void;
+    type?: "date";
+    inputMode?: "numeric";
+    placeholder?: string;
+    hint?: string;
+  }) {
+    const error = fieldErrors[f.errorKey];
+    return (
+      <div className="flex min-w-0 flex-col gap-1">
+        <Label htmlFor={f.id}>{f.label}</Label>
+        <Input
+          id={f.id}
+          type={f.type}
+          inputMode={f.inputMode}
+          value={f.value}
+          placeholder={f.placeholder}
+          onChange={(e) => {
+            f.onChange(e.target.value);
+            clearCreateErrors();
+          }}
+          invalid={!!error}
+          aria-describedby={error ? `${f.id}-err` : f.hint ? `${f.id}-hint` : undefined}
+        />
+        <FieldValidationError id={`${f.id}-err`}>{error}</FieldValidationError>
+        {!error && f.hint ? (
+          <p id={`${f.id}-hint`} className="text-sm text-ink-3">
+            {f.hint}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
 
   if (loading) {
     return (
-      <div style={{ display: "flex", minHeight: "40vh", alignItems: "center", justifyContent: "center", gap: 12 }}>
+      <div className="flex min-h-[40vh] items-center justify-center gap-3">
         <Spinner size="lg" />
         <Text>{t("femme.fiscalStamp.loading")}</Text>
       </div>
     );
   }
 
-  const hasMessage = Boolean(loadError || saveError || successMessage);
+  const stampLabel = (row: FiscalStampRow) =>
+    `${String(row.establishment).padStart(3, "0")}-${String(row.expeditionPoint).padStart(3, "0")}-${String(row.nextEmissionNumber).padStart(7, "0")}`;
 
   return (
-    <div>
+    <div className="flex flex-col gap-3">
+      <SettingsHeaderAction>
+        <Button
+          type="button"
+          className="min-h-11"
+          data-tour="fiscal-stamp-form"
+          data-testid="fiscal-stamp-add"
+          onClick={() => {
+            clearCreateErrors();
+            setCreateOpen(true);
+          }}
+        >
+          {t("femme.fiscalStamp.addNew")}
+        </Button>
+      </SettingsHeaderAction>
       {loadError ? (
         <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
           {loadError}
         </Alert>
       ) : null}
-      {saveError ? (
+      {saveError && !createOpen && editingId === null ? (
         <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
           {saveError}
         </Alert>
@@ -550,368 +519,179 @@ export default function FiscalStampSettingsPage() {
         </Alert>
       ) : null}
 
+      <p className="px-0.5 text-sm text-ink-3">{t("femme.fiscalStamp.intro")}</p>
+
       {rows.length === 0 ? (
-        <section data-testid="fiscal-stamp-current-section" style={sectionCardStyle}>
-          <div style={{ ...sectionTitleStyle, marginTop: hasMessage ? 24 : 0 }}>
-            {t("femme.fiscalStamp.registeredTitle")}
-          </div>
+        <section data-testid="fiscal-stamp-current-section" className="rounded-card border border-line bg-surface p-4">
           <Text variant="muted">{t("femme.fiscalStamp.empty")}</Text>
         </section>
       ) : (
-        <div data-tour="fiscal-stamp-list" style={{ marginBottom: 16 }}>
-          <div style={{ ...sectionTitleStyle, marginTop: hasMessage ? 24 : 0 }}>
-            {t("femme.fiscalStamp.registeredTitle")}
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <ListSearchField
-              id="fiscal-stamp-list-filter"
-              value={stampListQuery}
-              onChange={setStampListQuery}
-              label={t("femme.listFilter.label")}
-              placeholder={t("femme.listFilter.placeholder")}
-            />
-          </div>
+        <div data-tour="fiscal-stamp-list" className="flex flex-col gap-3">
+          <ListSearchField
+            id="fiscal-stamp-list-filter"
+            value={stampListQuery}
+            onChange={setStampListQuery}
+            label={t("femme.listFilter.label")}
+            placeholder={t("femme.listFilter.placeholder")}
+          />
           <div
             data-testid="fiscal-stamp-current-section"
-            style={{
-              background: "var(--color-white)",
-              borderRadius: "var(--radius-xl)",
-              border: "var(--border-default)",
-              overflow: "hidden",
-            }}
+            className="rounded-card border border-line bg-surface shadow-sm"
           >
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>{t("femme.fiscalStamp.tableStampNumber")}</th>
-                    <th style={thStyle}>{t("femme.fiscalStamp.tableStatus")}</th>
-                    <th style={thStyle}>{t("femme.fiscalStamp.tableValidFrom")}</th>
-                    <th style={thStyle}>{t("femme.fiscalStamp.tableValidUntil")}</th>
-                    <th style={thStyle}>{t("femme.fiscalStamp.tableRangeFrom")}</th>
-                    <th style={thStyle}>{t("femme.fiscalStamp.tableRangeTo")}</th>
-                    <th style={thStyle}>{t("femme.fiscalStamp.tableNextEmission")}</th>
-                    <th style={thStyle}>{t("femme.fiscalStamp.tableEstablishment")}</th>
-                    <th style={thStyle}>{t("femme.fiscalStamp.tableExpeditionPoint")}</th>
-                    <th style={thStyle}>{t("femme.fiscalStamp.tableActions")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={10}
-                        style={{ padding: "24px 12px", textAlign: "center", fontSize: 12, color: "var(--color-ink-3)" }}
-                      >
-                        {t("femme.listFilter.noMatches")}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredRows.map((row) => {
-                      const tdStyle: React.CSSProperties = {
-                        padding: "10px 12px",
-                        fontSize: 12,
-                        color: "var(--color-ink)",
-                        verticalAlign: "middle",
-                        borderBottom: "0.5px solid var(--color-stone)",
-                      };
-                      return (
-                        <tr key={row.id} data-testid={`fiscal-stamp-row-${row.id}`}>
-                          <td style={{ ...tdStyle, fontWeight: 500 }}>{row.stampNumber}</td>
-                          <td style={tdStyle}>
-                            <StatusBadge status={row.active ? "ACTIVE" : "INACTIVE"} />
-                          </td>
-                          <td style={tdStyle}>{fmtDateShort(row.validFrom, dateLocale)}</td>
-                          <td style={tdStyle}>
-                            {row.validUntil
-                              ? fmtDateShort(row.validUntil, dateLocale)
-                              : t("femme.fiscalStamp.notSet")}
-                          </td>
-                          <td style={tdStyle}>{row.rangeFrom}</td>
-                          <td style={tdStyle}>{row.rangeTo ?? t("femme.fiscalStamp.notSet")}</td>
-                          <td style={tdStyle}>{row.nextEmissionNumber}</td>
-                          <td style={tdStyle}>{String(row.establishment).padStart(3, "0")}</td>
-                          <td style={tdStyle}>{String(row.expeditionPoint).padStart(3, "0")}</td>
-                          <td style={tdStyle}>
-                            <div className="grid w-max grid-cols-2 gap-1">
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                className={ROW_ACTION_CLASS}
-                                aria-label={t("femme.fiscalStamp.edit")}
-                                onClick={() => openEdit(row)}
-                              >
-                                {t("femme.fiscalStamp.editShort")}
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                className={ROW_ACTION_CLASS}
-                                disabled={!row.active}
-                                onClick={() => void onDeactivate(row.id)}
-                              >
-                                {t("femme.fiscalStamp.deactivate")}
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="primary"
-                                size="sm"
-                                className={ROW_ACTION_CLASS}
-                                disabled={row.active}
-                                onClick={() => void onActivate(row.id)}
-                              >
-                                {t("femme.fiscalStamp.activate")}
-                              </Button>
-                              {!row.hasInvoices ? (
-                                <Button
-                                  type="button"
-                                  variant="danger"
-                                  size="sm"
-                                  className={ROW_ACTION_CLASS}
-                                  disabled={deleting}
-                                  onClick={() => setDeleteTarget(row)}
-                                >
-                                  {t("femme.fiscalStamp.delete")}
-                                </Button>
-                              ) : null}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+            {filteredRows.length === 0 ? (
+              <p className="p-4 text-center text-sm text-ink-3">{t("femme.listFilter.noMatches")}</p>
+            ) : (
+              <ul>
+                {filteredRows.map((row) => (
+                  <li
+                    key={row.id}
+                    data-testid={`fiscal-stamp-row-${row.id}`}
+                    className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-line px-4 py-2 first:border-t-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-semibold text-ink">
+                          {t("femme.fiscalStamp.stampRowTitle", { number: row.stampNumber })}
+                        </span>
+                        <StatusBadge status={row.active ? "ACTIVE" : "INACTIVE"} />
+                      </div>
+                      <div className="text-sm text-ink-3">
+                        {t("femme.fiscalStamp.stampRowLine", {
+                          from: fmtDateShort(row.validFrom, dateLocale),
+                          until: row.validUntil ? fmtDateShort(row.validUntil, dateLocale) : t("femme.fiscalStamp.notSet"),
+                          next: stampLabel(row),
+                        })}
+                      </div>
+                    </div>
+                    <KebabMenu
+                      id={`fiscal-stamp-${row.id}`}
+                      triggerAriaLabel={t("femme.fiscalStamp.rowActions", { number: row.stampNumber })}
+                      items={[
+                        { id: "edit", label: t("femme.fiscalStamp.edit"), onSelect: () => openEdit(row) },
+                        row.active
+                          ? {
+                              id: "deactivate",
+                              label: t("femme.fiscalStamp.deactivate"),
+                              onSelect: () => void onDeactivate(row.id),
+                            }
+                          : {
+                              id: "activate",
+                              label: t("femme.fiscalStamp.activate"),
+                              onSelect: () => void onActivate(row.id),
+                            },
+                        ...(!row.hasInvoices
+                          ? [
+                              {
+                                id: "delete",
+                                label: t("femme.fiscalStamp.delete"),
+                                destructive: true,
+                                disabled: deleting,
+                                onSelect: () => setDeleteTarget(row),
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       )}
 
-      <section data-testid="fiscal-stamp-create-section" style={createSectionCardStyle}>
-      <div style={{ ...sectionTitleStyle, marginTop: 0 }}>{t("femme.fiscalStamp.addTitle")}</div>
-      <form
-        data-tour="fiscal-stamp-form"
-        onSubmit={onCreate}
-        noValidate
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 12,
-        }}
+      <Modal
+        open={createOpen}
+        onClose={() => !creating && setCreateOpen(false)}
+        title={t("femme.fiscalStamp.addTitle")}
+        className="max-w-lg"
+        footer={
+          <>
+            <Button type="button" variant="secondary" className="min-h-11 w-full sm:w-auto" disabled={creating} onClick={() => setCreateOpen(false)}>
+              {t("femme.fiscalStamp.cancel")}
+            </Button>
+            <Button
+              type="submit"
+              form="fiscal-stamp-create-form"
+              className="min-h-11 w-full sm:w-auto"
+              disabled={creating}
+              data-testid="fiscal-stamp-create-submit"
+            >
+              {creating ? t("femme.fiscalStamp.saving") : t("femme.fiscalStamp.add")}
+            </Button>
+          </>
+        }
       >
-        <div style={{ gridColumn: "1 / -1" }}>
-          <label htmlFor="fs-stamp" style={labelStyle}>
-            {t("femme.fiscalStamp.stampNumber")}
-          </label>
-          <input
-            id="fs-stamp"
-            inputMode="numeric"
-            value={stampNumber}
-            onChange={(e) => {
-              setStampNumber(e.target.value);
-              clearCreateErrors();
-            }}
-            placeholder="12345678"
-            aria-invalid={!!fieldErrors.stampNumber}
-            aria-describedby={fieldErrors.stampNumber ? "fs-stamp-err" : "fs-stamp-hint"}
-            onFocus={() => setFocusField("fs-stamp")}
-            onBlur={() => setFocusField(null)}
-            style={buildInputStyle(!!fieldErrors.stampNumber, focusField === "fs-stamp")}
-          />
-          <FieldValidationError id="fs-stamp-err">{fieldErrors.stampNumber}</FieldValidationError>
-          <p id="fs-stamp-hint" style={hintStyle}>
-            {t("femme.fiscalStamp.stampNumberHint")}
-          </p>
-        </div>
-        <div>
-          <label htmlFor="fs-vf" style={labelStyle}>
-            {t("femme.fiscalStamp.validFrom")}
-          </label>
-          <input
-            id="fs-vf"
-            type="date"
-            value={validFrom}
-            onChange={(e) => {
-              setValidFrom(e.target.value);
-              clearCreateErrors();
-            }}
-            aria-invalid={!!fieldErrors.validFrom}
-            aria-describedby={fieldErrors.validFrom ? "fs-vf-err" : undefined}
-            onFocus={() => setFocusField("fs-vf")}
-            onBlur={() => setFocusField(null)}
-            style={buildInputStyle(!!fieldErrors.validFrom, focusField === "fs-vf")}
-          />
-          <FieldValidationError id="fs-vf-err">{fieldErrors.validFrom}</FieldValidationError>
-        </div>
-        <div>
-          <label htmlFor="fs-vu" style={labelStyle}>
-            {t("femme.fiscalStamp.validUntil")}
-          </label>
-          <input
-            id="fs-vu"
-            type="date"
-            value={validUntil}
-            onChange={(e) => {
-              setValidUntil(e.target.value);
-              clearCreateErrors();
-            }}
-            aria-invalid={!!fieldErrors.validUntil}
-            aria-describedby={fieldErrors.validUntil ? "fs-vu-err" : "fs-vu-hint"}
-            onFocus={() => setFocusField("fs-vu")}
-            onBlur={() => setFocusField(null)}
-            style={buildInputStyle(!!fieldErrors.validUntil, focusField === "fs-vu")}
-          />
-          <FieldValidationError id="fs-vu-err">{fieldErrors.validUntil}</FieldValidationError>
-          <p id="fs-vu-hint" style={hintStyle}>
-            {t("femme.fiscalStamp.optionalHint")}
-          </p>
-        </div>
-        <div>
-          <label htmlFor="fs-rf" style={labelStyle}>
-            {t("femme.fiscalStamp.rangeFrom")}
-          </label>
-          <input
-            id="fs-rf"
-            inputMode="numeric"
-            value={rangeFrom}
-            onChange={(e) => {
-              setRangeFrom(e.target.value);
-              clearCreateErrors();
-            }}
-            aria-invalid={!!fieldErrors.rangeFrom}
-            aria-describedby={fieldErrors.rangeFrom ? "fs-rf-err" : undefined}
-            onFocus={() => setFocusField("fs-rf")}
-            onBlur={() => setFocusField(null)}
-            style={buildInputStyle(!!fieldErrors.rangeFrom, focusField === "fs-rf")}
-          />
-          <FieldValidationError id="fs-rf-err">{fieldErrors.rangeFrom}</FieldValidationError>
-        </div>
-        <div>
-          <label htmlFor="fs-rt" style={labelStyle}>
-            {t("femme.fiscalStamp.rangeTo")}
-          </label>
-          <input
-            id="fs-rt"
-            inputMode="numeric"
-            value={rangeTo}
-            onChange={(e) => {
-              setRangeTo(e.target.value);
-              clearCreateErrors();
-            }}
-            aria-invalid={!!fieldErrors.rangeTo}
-            aria-describedby={fieldErrors.rangeTo ? "fs-rt-err" : "fs-rt-hint"}
-            onFocus={() => setFocusField("fs-rt")}
-            onBlur={() => setFocusField(null)}
-            style={buildInputStyle(!!fieldErrors.rangeTo, focusField === "fs-rt")}
-          />
-          <FieldValidationError id="fs-rt-err">{fieldErrors.rangeTo}</FieldValidationError>
-          <p id="fs-rt-hint" style={hintStyle}>
-            {t("femme.fiscalStamp.optionalHint")}
-          </p>
-        </div>
-        <div style={{ gridColumn: "1 / -1" }}>
-          <label htmlFor="fs-ie" style={labelStyle}>
-            {t("femme.fiscalStamp.initialEmission")}
-          </label>
-          <input
-            id="fs-ie"
-            inputMode="numeric"
-            value={initialEmission}
-            onChange={(e) => {
-              setInitialEmission(e.target.value);
-              clearCreateErrors();
-            }}
-            placeholder="1"
-            aria-invalid={!!fieldErrors.initialEmission}
-            aria-describedby={fieldErrors.initialEmission ? "fs-ie-err" : "fs-ie-hint"}
-            onFocus={() => setFocusField("fs-ie")}
-            onBlur={() => setFocusField(null)}
-            style={buildInputStyle(!!fieldErrors.initialEmission, focusField === "fs-ie")}
-          />
-          <FieldValidationError id="fs-ie-err">{fieldErrors.initialEmission}</FieldValidationError>
-          <p id="fs-ie-hint" style={hintStyle}>
-            {t("femme.fiscalStamp.initialEmissionHintLegacy")}
-          </p>
-        </div>
-        <div>
-          <label htmlFor="fs-est" style={labelStyle}>
-            {t("femme.fiscalStamp.establishment")}
-          </label>
-          <input
-            id="fs-est"
-            inputMode="numeric"
-            value={establishment}
-            onChange={(e) => {
-              setEstablishment(e.target.value);
-              clearCreateErrors();
-            }}
-            placeholder="1"
-            aria-invalid={!!fieldErrors.establishment}
-            aria-describedby={fieldErrors.establishment ? "fs-est-err" : "fs-est-hint"}
-            onFocus={() => setFocusField("fs-est")}
-            onBlur={() => setFocusField(null)}
-            style={buildInputStyle(!!fieldErrors.establishment, focusField === "fs-est")}
-          />
-          <FieldValidationError id="fs-est-err">{fieldErrors.establishment}</FieldValidationError>
-          <p id="fs-est-hint" style={hintStyle}>
-            {t("femme.fiscalStamp.establishmentHint")}
-          </p>
-        </div>
-        <div>
-          <label htmlFor="fs-exp" style={labelStyle}>
-            {t("femme.fiscalStamp.expeditionPoint")}
-          </label>
-          <input
-            id="fs-exp"
-            inputMode="numeric"
-            value={expeditionPoint}
-            onChange={(e) => {
-              setExpeditionPoint(e.target.value);
-              clearCreateErrors();
-            }}
-            placeholder="1"
-            aria-invalid={!!fieldErrors.expeditionPoint}
-            aria-describedby={fieldErrors.expeditionPoint ? "fs-exp-err" : "fs-exp-hint"}
-            onFocus={() => setFocusField("fs-exp")}
-            onBlur={() => setFocusField(null)}
-            style={buildInputStyle(!!fieldErrors.expeditionPoint, focusField === "fs-exp")}
-          />
-          <FieldValidationError id="fs-exp-err">{fieldErrors.expeditionPoint}</FieldValidationError>
-          <p id="fs-exp-hint" style={hintStyle}>
-            {t("femme.fiscalStamp.expeditionPointHint")}
-          </p>
-        </div>
-        <div style={{ gridColumn: "1 / -1", marginTop: 4 }}>
-          <button type="submit" style={primaryBtn} disabled={creating}>
-            {creating ? t("femme.fiscalStamp.saving") : t("femme.fiscalStamp.add")}
-          </button>
-        </div>
-      </form>
-      </section>
+        <section data-testid="fiscal-stamp-create-section">
+          <form id="fiscal-stamp-create-form" onSubmit={onCreate} noValidate className="flex flex-col gap-3">
+            {saveError ? (
+              <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
+                {saveError}
+              </Alert>
+            ) : null}
+            {createField({
+              id: "fs-stamp",
+              errorKey: "stampNumber",
+              label: t("femme.fiscalStamp.stampNumber"),
+              value: stampNumber,
+              onChange: setStampNumber,
+              inputMode: "numeric",
+              placeholder: "12345678",
+              hint: t("femme.fiscalStamp.stampNumberHint"),
+            })}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {createField({ id: "fs-vf", errorKey: "validFrom", label: t("femme.fiscalStamp.validFrom"), value: validFrom, onChange: setValidFrom, type: "date" })}
+              {createField({ id: "fs-vu", errorKey: "validUntil", label: t("femme.fiscalStamp.validUntil"), value: validUntil, onChange: setValidUntil, type: "date", hint: t("femme.fiscalStamp.optionalHint") })}
+              {createField({ id: "fs-rf", errorKey: "rangeFrom", label: t("femme.fiscalStamp.rangeFrom"), value: rangeFrom, onChange: setRangeFrom, inputMode: "numeric" })}
+              {createField({ id: "fs-rt", errorKey: "rangeTo", label: t("femme.fiscalStamp.rangeTo"), value: rangeTo, onChange: setRangeTo, inputMode: "numeric", hint: t("femme.fiscalStamp.optionalHint") })}
+            </div>
+            {createField({
+              id: "fs-ie",
+              errorKey: "initialEmission",
+              label: t("femme.fiscalStamp.initialEmission"),
+              value: initialEmission,
+              onChange: setInitialEmission,
+              inputMode: "numeric",
+              placeholder: "1",
+              hint: t("femme.fiscalStamp.initialEmissionHintLegacy"),
+            })}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {createField({ id: "fs-est", errorKey: "establishment", label: t("femme.fiscalStamp.establishment"), value: establishment, onChange: setEstablishment, inputMode: "numeric", placeholder: "1", hint: t("femme.fiscalStamp.establishmentHint") })}
+              {createField({ id: "fs-exp", errorKey: "expeditionPoint", label: t("femme.fiscalStamp.expeditionPoint"), value: expeditionPoint, onChange: setExpeditionPoint, inputMode: "numeric", placeholder: "1", hint: t("femme.fiscalStamp.expeditionPointHint") })}
+            </div>
+          </form>
+        </section>
+      </Modal>
 
-      {editingId !== null ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center"
-          role="presentation"
-          onClick={() => !editSaving && closeEdit()}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="fiscal-edit-title"
-            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[var(--radius-xl)] border bg-[var(--color-white)] p-5 shadow-lg"
-            style={{ border: "var(--border-default)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Heading as="h2" id="fiscal-edit-title" className="text-lg">
-              {t("femme.fiscalStamp.editTitle")}
-            </Heading>
-            <Text variant="small" className="mt-1 text-[var(--color-ink-3)]">
-              {t("femme.fiscalStamp.editLead")}
-            </Text>
-            <form className="mt-4 flex flex-col gap-4" onSubmit={onSaveEdit} noValidate>
+      <Modal
+        open={editingId !== null}
+        onClose={() => !editSaving && closeEdit()}
+        title={t("femme.fiscalStamp.editTitle")}
+        description={t("femme.fiscalStamp.editLead")}
+        className="max-w-lg"
+        footer={
+          <>
+            <Button type="button" variant="secondary" className="min-h-11 w-full sm:w-auto" disabled={editSaving} onClick={closeEdit}>
+              {t("femme.fiscalStamp.cancel")}
+            </Button>
+            <Button
+              type="submit"
+              form="fiscal-stamp-edit-form"
+              variant="primary"
+              className="min-h-11 w-full sm:w-auto"
+              disabled={editSaving}
+            >
+              {editSaving ? t("femme.fiscalStamp.saving") : t("femme.fiscalStamp.save")}
+            </Button>
+          </>
+        }
+      >
+        <form id="fiscal-stamp-edit-form" className="flex flex-col gap-3" onSubmit={onSaveEdit} noValidate>
+          {saveError ? (
+            <Alert variant="destructive" title={t("femme.businessSettings.errorTitle")}>
+              {saveError}
+            </Alert>
+          ) : null}
               {renderEditField({
                 id: "edit-stamp-number",
                 errorKey: "editStampNumber",
@@ -979,7 +759,7 @@ export default function FiscalStampSettingsPage() {
                   {fieldErrors.editStartingEmission}
                 </FieldValidationError>
                 {!fieldErrors.editStartingEmission ? (
-                  <p id="edit-start-hint" style={hintStyle}>
+                  <p id="edit-start-hint" className="mt-1 text-sm text-ink-3">
                     {editingRow?.lockedAfterInvoice
                       ? t("femme.fiscalStamp.initialEmissionHintLocked")
                       : t("femme.fiscalStamp.initialEmissionHint")}
@@ -1004,7 +784,7 @@ export default function FiscalStampSettingsPage() {
                   {fieldErrors.editEstablishment}
                 </FieldValidationError>
                 {!fieldErrors.editEstablishment ? (
-                  <p id="edit-establishment-hint" style={hintStyle}>
+                  <p id="edit-establishment-hint" className="mt-1 text-sm text-ink-3">
                     {editingRow?.hasInvoices
                       ? t("femme.fiscalStamp.establishmentEditLockedHint")
                       : t("femme.fiscalStamp.establishmentHint")}
@@ -1033,25 +813,15 @@ export default function FiscalStampSettingsPage() {
                   {fieldErrors.editExpeditionPoint}
                 </FieldValidationError>
                 {!fieldErrors.editExpeditionPoint ? (
-                  <p id="edit-expedition-point-hint" style={hintStyle}>
+                  <p id="edit-expedition-point-hint" className="mt-1 text-sm text-ink-3">
                     {editingRow?.hasInvoices
                       ? t("femme.fiscalStamp.establishmentEditLockedHint")
                       : t("femme.fiscalStamp.expeditionPointHint")}
                   </p>
                 ) : null}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="secondary" className="min-h-11" disabled={editSaving} onClick={closeEdit}>
-                  {t("femme.fiscalStamp.cancel")}
-                </Button>
-                <Button type="submit" variant="primary" className="min-h-11" disabled={editSaving}>
-                  {editSaving ? t("femme.fiscalStamp.saving") : t("femme.fiscalStamp.save")}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
+        </form>
+      </Modal>
 
       {deleteTarget ? (
         <ConfirmDialog
@@ -1069,4 +839,3 @@ export default function FiscalStampSettingsPage() {
     </div>
   );
 }
-

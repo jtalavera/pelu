@@ -1146,6 +1146,7 @@
       "SUSPENDED": "Suspended"
     },
     "settings": {
+      "moreMenu": "More",
       "sectionTitle": "Settings",
       "pageTitle": "Settings",
       "pageSubtitle": "Business data, fiscal stamp (timbrado), and preferences",
@@ -1158,6 +1159,7 @@
       "tabSharedDevices": "Shared devices"
     },
     "sifenSettings": {
+      "intro": "The certificate signs your electronic invoices; the CSC and number voiding keep them valid with the tax authority.",
       "tablistLabel": "SIFEN settings sections",
       "tab": {
         "certificate": "Certificate",
@@ -1274,6 +1276,7 @@
       "manualCreated": "Voiding registered. You can now submit it to SIFEN."
     },
     "taxes": {
+      "activeSwitch": "Active: {{name}}",
       "pageTitle": "Taxes",
       "pageSubtitle": "Configure tax types applied to services.",
       "loading": "Loading taxes…",
@@ -1356,6 +1359,8 @@
       "toggleAria": "Turn {{key}} on or off globally"
     },
     "businessSettings": {
+      "intro": "This data appears on your invoices and in messages to clients.",
+      "unsaved": "You have unsaved changes",
       "title": "Business settings",
       "lead": "Name, tax ID (RUC), contact details, and logo used on invoices and PDFs. Changes apply only when you save.",
       "loading": "Loading…",
@@ -1401,6 +1406,11 @@
       "saving": "Saving…"
     },
     "fiscalStamp": {
+      "addNew": "+ Add stamp",
+      "intro": "Only one stamp is active and issues invoices; the previous ones stay for reference.",
+      "stampRowTitle": "Stamp {{number}}",
+      "stampRowLine": "Valid {{from}} – {{until}} · next {{next}}",
+      "rowActions": "Actions for stamp {{number}}",
       "title": "Fiscal stamp (timbrado)",
       "lead": "Register the stamp authorized by the tax office (SET), validity dates, and the invoice number range. Only one stamp can be active at a time.",
       "loading": "Loading…",
@@ -2267,6 +2277,7 @@
       }
     },
     "audit": {
+      "filtersToggle": "Filters",
       "lead": "Who did what in your business, newest first. Only operations that change data are recorded; their content is never stored.",
       "platformTitle": "Audit",
       "platformLead": "Who did what across every business and the platform, newest first.",
@@ -3338,6 +3349,7 @@
       "switchProfessional": "Switch professional",
       "backToPicker": "Back to the professional picker",
       "settings": {
+        "rowActions": "Actions for {{name}}",
         "lead": "A shared device (for example the reception tablet) lets each professional open their calendar with their PIN, without email and password.",
         "activateTitle": "Use this device as a shared device",
         "activateHint": "Confirm your password to enable it. Only professionals that are active and have a PIN can sign in on it, and they only see the calendar.",

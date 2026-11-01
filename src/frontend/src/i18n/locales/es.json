@@ -1146,6 +1146,7 @@
       "SUSPENDED": "Suspendido"
     },
     "settings": {
+      "moreMenu": "Más",
       "sectionTitle": "Configuración",
       "pageTitle": "Configuración",
       "pageSubtitle": "Datos del negocio, timbrado fiscal y preferencias",
@@ -1158,6 +1159,7 @@
       "tabSharedDevices": "Dispositivos compartidos"
     },
     "sifenSettings": {
+      "intro": "El certificado firma tus facturas electrónicas; el CSC y la inutilización de numeración las mantienen válidas ante la SET.",
       "tablistLabel": "Secciones de configuración SIFEN",
       "tab": {
         "certificate": "Certificado",
@@ -1274,6 +1276,7 @@
       "manualCreated": "Inutilización registrada. Ahora podés enviarla a SIFEN."
     },
     "taxes": {
+      "activeSwitch": "Activo: {{name}}",
       "pageTitle": "Impuestos",
       "pageSubtitle": "Configurá los tipos de impuestos aplicados a los servicios.",
       "loading": "Cargando impuestos…",
@@ -1356,6 +1359,8 @@
       "toggleAria": "Activar o desactivar {{key}} a nivel global"
     },
     "businessSettings": {
+      "intro": "Estos datos aparecen en tus comprobantes y en los mensajes a clientes.",
+      "unsaved": "Hay cambios sin guardar",
       "title": "Configuración del negocio",
       "lead": "Nombre, RUC, datos de contacto y logo que aparecen en facturas y PDF. Los cambios se guardan solo al pulsar Guardar.",
       "loading": "Cargando…",
@@ -1401,6 +1406,11 @@
       "saving": "Guardando…"
     },
     "fiscalStamp": {
+      "addNew": "+ Agregar timbrado",
+      "intro": "Un solo timbrado activo emite los comprobantes; los anteriores quedan de consulta.",
+      "stampRowTitle": "Timbrado {{number}}",
+      "stampRowLine": "Vigente {{from}} – {{until}} · próximo {{next}}",
+      "rowActions": "Acciones del timbrado {{number}}",
       "title": "Timbrado fiscal",
       "lead": "Registrá el timbrado habilitado por la SET, las fechas de vigencia y el rango de numeración. Solo puede haber un timbrado activo a la vez.",
       "loading": "Cargando…",
@@ -2267,6 +2277,7 @@
       }
     },
     "audit": {
+      "filtersToggle": "Filtros",
       "lead": "Quién hizo qué en tu negocio, de lo más reciente a lo más antiguo. Solo se registran las operaciones que modifican datos; nunca se guarda su contenido.",
       "platformTitle": "Auditoría",
       "platformLead": "Quién hizo qué en todos los negocios y en la plataforma, de lo más reciente a lo más antiguo.",
@@ -3338,6 +3349,7 @@
       "switchProfessional": "Cambiar de profesional",
       "backToPicker": "Volver a la selección de profesional",
       "settings": {
+        "rowActions": "Acciones de {{name}}",
         "lead": "Un dispositivo compartido (por ejemplo, la tablet de recepción) permite que cada profesional abra su calendario con su PIN, sin email ni contraseña.",
         "activateTitle": "Usar este dispositivo como dispositivo compartido",
         "activateHint": "Confirmá tu contraseña para habilitarlo. Solo pueden ingresar las profesionales activas con PIN, y solo ven el calendario.",
