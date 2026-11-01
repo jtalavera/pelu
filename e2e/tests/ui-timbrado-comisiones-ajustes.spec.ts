@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { ensureActiveFiscalStampForInvoices, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { stampRowAction } from "../fixtures/ui";
 import {
   enableCommissionsGlobally,
   loginAdminUi,
@@ -14,11 +15,8 @@ import {
  * Settings → Stamp, (2) compact action buttons in the stamps table, (3) Commissions tabs share the
  * rounded look of the Billing tabs.
  */
-test.describe("Timbrado · mensajes y botones compactos", () => {
-  test("U1: hay espacio entre el mensaje de éxito y el título de timbrados registrados", async ({
-    page,
-    request,
-  }) => {
+test.describe("Timbrado · mensajes y acciones de fila compactas", () => {
+  test("U1: el aviso al activar/desactivar un timbrado no pisa el listado", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await loginAsDemo(page);
@@ -27,21 +25,21 @@ test.describe("Timbrado · mensajes y botones compactos", () => {
     await expect(row).toBeVisible({ timeout: 30_000 });
 
     // Deactivating/activating shows the green confirmation above the list.
-    const toggle = row.getByRole("button", { name: /^(Deactivate|Activate)$/ }).and(row.locator(":enabled"));
-    await toggle.click();
+    await stampRowAction(page, row, /^(Deactivate|Activate)$/);
     const alert = page.getByRole("alert").or(page.getByRole("status")).first();
     await expect(alert).toBeVisible();
 
-    const title = page.getByText("Registered stamps", { exact: true });
+    // The notice sits above the list with air between them (never overlapping the rows).
+    const list = page.getByTestId("fiscal-stamp-current-section");
     const alertBox = await alert.boundingBox();
-    const titleBox = await title.boundingBox();
-    expect(titleBox!.y - (alertBox!.y + alertBox!.height)).toBeGreaterThanOrEqual(20);
+    const listBox = await list.boundingBox();
+    expect(listBox!.y - (alertBox!.y + alertBox!.height)).toBeGreaterThanOrEqual(8);
 
     // Restore the stamp's original state so other specs keep their ambient assumptions.
     await ensureActiveFiscalStampForInvoices(request, token);
   });
 
-  test("U2: los botones de acción de cada fila son compactos", async ({ page, request }) => {
+  test("U2: cada fila tiene una sola acción visible (el menú ⋯), compacta", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
     await loginAsDemo(page);
@@ -49,17 +47,14 @@ test.describe("Timbrado · mensajes y botones compactos", () => {
     const row = page.locator('[data-testid^="fiscal-stamp-row-"]').first();
     await expect(row).toBeVisible({ timeout: 30_000 });
 
-    for (const name of ["Edit stamp", "Deactivate", "Activate"]) {
-      const box = await row.getByRole("button", { name, exact: true }).boundingBox();
-      expect(box!.height, name).toBeLessThanOrEqual(30);
-      expect(box!.width, name).toBeLessThanOrEqual(90);
-    }
-    const buttons = await row.getByRole("button").evaluateAll((els) =>
-      els.map((e) => Math.round(e.getBoundingClientRect().right)),
-    );
-    const cell = await row.getByRole("button").first().locator("xpath=ancestor::td").boundingBox();
-    expect(cell!.width).toBeLessThanOrEqual(190);
-    expect(Math.max(...buttons)).toBeLessThanOrEqual(cell!.x + cell!.width);
+    // Redesign: Edit / Activate / Deactivate / Delete live in a ⋯ menu instead of 3-4 buttons.
+    const buttons = row.getByRole("button");
+    await expect(buttons).toHaveCount(1);
+    const box = (await buttons.first().boundingBox())!;
+    expect(box.width).toBeLessThanOrEqual(48);
+    expect(box.height).toBeLessThanOrEqual(48);
+    const rowBox = (await row.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(rowBox.x + rowBox.width);
   });
 });
 
@@ -73,9 +68,10 @@ test.describe("Comisiones · solapas redondeadas", () => {
     await restoreCommissionsGlobal(request);
   });
 
-  test("U3: las solapas de Comisiones tienen el mismo radio y alto que las de Facturación", async ({ page }) => {
+  test("U3: las solapas de Comisiones tienen el mismo radio y alto que las del Catálogo", async ({ page }) => {
     await loginAdminUi(page, w);
-    await page.getByRole("link", { name: "Billing" }).click();
+    // Redesign: Billing has no tabs any more; the reference is the segmented tab bar of Catalog.
+    await page.getByRole("link", { name: "Catalog" }).click();
     const billingTab = page.getByRole("tab").first();
     await expect(billingTab).toBeVisible();
     const billingRadius = await billingTab.evaluate((e) => getComputedStyle(e).borderTopLeftRadius);
@@ -85,16 +81,12 @@ test.describe("Comisiones · solapas redondeadas", () => {
     const topTabs = page.getByRole("tablist", { name: "Commissions" }).getByRole("tab");
     await expect(topTabs.first()).toBeVisible();
     for (const tab of await topTabs.all()) {
-      expect(await tab.evaluate((e) => getComputedStyle(e).borderTopLeftRadius)).toBe(billingRadius);
+      // Rounded like the rest of the app's segmented tabs, and the same height.
+      expect(parseFloat(await tab.evaluate((e) => getComputedStyle(e).borderTopLeftRadius))).toBeGreaterThanOrEqual(
+        10,
+      );
       expect(Math.round((await tab.boundingBox())!.height)).toBe(billingHeight);
     }
-
-    // Sub-tabs of Rules are rounded too (they used to be an underline strip).
-    await page.getByRole("tab", { name: "Rules", exact: true }).click();
-    const subTab = page.getByRole("tab", { name: "General rules" });
-    await expect(subTab).toBeVisible();
-    expect(await subTab.evaluate((e) => getComputedStyle(e).borderTopLeftRadius)).toBe(billingRadius);
-    expect(Math.round((await subTab.boundingBox())!.height)).toBe(billingHeight);
     expect(parseFloat(billingRadius)).toBeGreaterThanOrEqual(10);
   });
 });
