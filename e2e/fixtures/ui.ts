@@ -240,3 +240,14 @@ export async function openWeekWithAppointment(
     await page.waitForTimeout(500);
   }
 }
+
+/** Configuración → SIFEN: the sections are folds (`certificate` | `csc` | `numberVoiding`). Opens one. */
+export async function openSifenSection(
+  page: import("@playwright/test").Page,
+  section: "certificate" | "csc" | "numberVoiding",
+) {
+  await page.goto("/app/settings/sifen");
+  const fold = page.getByTestId(`sifen-fold-${section}`);
+  await fold.waitFor({ state: "visible" });
+  if ((await fold.getAttribute("aria-expanded")) !== "true") await fold.click();
+}

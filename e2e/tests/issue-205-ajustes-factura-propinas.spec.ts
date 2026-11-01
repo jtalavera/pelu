@@ -12,6 +12,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { filterPropinasByProfessional, propinasMovements } from "../fixtures/propinas";
+import { openSifenSection } from "../fixtures/ui";
 
 // DEMO_TENANT_ID=1 has SIFEN_ELECTRONIC_INVOICING OFF by default in the e2e profile (see
 // hu-33-ajustes-facturacion-electronica.spec.ts's own note) — the "Numeración inutilizada" tab
@@ -66,8 +67,8 @@ async function openInvoiceDetail(page: Page, clientFullName: string) {
 }
 
 async function openVoidingTab(page: Page) {
-  await page.goto("/app/settings/sifen");
-  await page.getByRole("tab", { name: "Voided numbering" }).click();
+  // Redesign: SIFEN settings are folds; "Voided numbering" is one of them.
+  await openSifenSection(page, "numberVoiding");
 }
 
 /**
