@@ -18,7 +18,7 @@ import { useMe } from "../hooks/useMe";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
-import { formatParaguayDateTime } from "../lib/paraguayDateTime";
+import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
 import { ProfessionalServiceLines, ServicePickerScreen } from "./ProfessionalServiceLines";
 
@@ -375,11 +375,44 @@ export function ServiceRecordEditor({
     </section>
   ) : null;
 
+  /** The turno this ficha belongs to, with a way to jump to it (only when it has one). */
+  const appointmentRow =
+    record?.appointmentId && record.appointmentStartAt ? (
+      <div
+        data-testid="service-record-appointment"
+        className="flex items-center justify-between gap-3 rounded-card border-[1.5px] border-primary bg-primary-lt px-3 py-2"
+      >
+        <b className="min-w-0 break-words font-heading text-ink">
+          {t("femme.appointmentFicha.goToAppointment", {
+            time: formatParaguayTime(record.appointmentStartAt, dateLocale),
+          })}
+        </b>
+        <button
+          type="button"
+          data-testid="service-record-view-appointment"
+          className="min-h-11 shrink-0 rounded-full bg-primary px-4 text-sm font-extrabold text-primary-fg"
+          onClick={() => {
+            const appointmentId = record.appointmentId;
+            onClose();
+            navigate("/app/calendar", {
+              state: {
+                selectedDate: new Date(record.appointmentStartAt as string).toLocaleDateString("sv-SE"),
+                openAppointmentId: appointmentId,
+              },
+            });
+          }}
+        >
+          {t("femme.appointmentFicha.viewAppointment")}
+        </button>
+      </div>
+    ) : null;
+
   if (isReadOnly && record) {
     const tipRows = record.tips.filter((tp) => Number(tp.amount) > 0);
     return (
       <div ref={topRef} className="flex flex-col gap-3" data-testid="service-record-readonly">
         {clientRow}
+        {appointmentRow}
         {record.status === "VOIDED" && record.voidReason ? (
           <Text variant="small" className="text-ink-3">
             {t("femme.serviceRecords.voidedReasonLabel")}: {record.voidReason}
@@ -463,7 +496,10 @@ export function ServiceRecordEditor({
         className="flex flex-col gap-3"
       >
         {record ? (
-          clientRow
+          <>
+            {clientRow}
+            {appointmentRow}
+          </>
         ) : (
           <section className="flex flex-col gap-2" aria-labelledby="sr-client-h">
             <h3 id="sr-client-h" className={SECTION_TITLE}>

@@ -37,6 +37,11 @@ public class ServiceRecord {
   @JoinColumn(name = "client_id", nullable = false)
   private Client client;
 
+  /** The turno this ficha belongs to (at most one each way); null for walk-ins without a turno. */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "appointment_id")
+  private Appointment appointment;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
   private ServiceRecordStatus status;
@@ -91,6 +96,14 @@ public class ServiceRecord {
 
   public void setClient(Client client) {
     this.client = client;
+  }
+
+  public Appointment getAppointment() {
+    return appointment;
+  }
+
+  public void setAppointment(Appointment appointment) {
+    this.appointment = appointment;
   }
 
   public ServiceRecordStatus getStatus() {

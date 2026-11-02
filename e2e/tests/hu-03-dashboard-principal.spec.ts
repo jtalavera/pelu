@@ -66,7 +66,7 @@ test.describe("HU-03 · Dashboard principal", () => {
     await expect(page.getByTestId("dashboard-more-occupancy")).toHaveAttribute("aria-expanded", "false");
   });
 
-  test("HU-03 · 7 cada turno muestra estado y botón «Charge», que abre la factura con cliente y servicio cargados", async ({
+  test("HU-03 · 7 cada turno muestra estado y «Crear o asignar ficha»; la ficha creada se cobra y abre la factura con cliente y servicio cargados", async ({
     page,
     request,
   }) => {
@@ -87,7 +87,9 @@ test.describe("HU-03 · Dashboard principal", () => {
     await loginAsDemo(page);
     const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: new RegExp(clientName, "i") });
     await expect(row).toContainText("Pending");
-    await row.getByTestId("dashboard-appointment-charge").click();
+    await row.getByTestId("dashboard-appointment-ficha-create-or-assign").click();
+    await page.getByTestId("appointment-ficha-create").click();
+    await page.getByRole("dialog").getByTestId("service-record-generate-invoice").click();
     await expect(page).toHaveURL(/\/app\/billing/);
     await expect(page.locator("#billing-client-search")).toHaveValue(new RegExp(clientName, "i"));
     await expect(page.getByText(seed.serviceFullName).first()).toBeVisible();

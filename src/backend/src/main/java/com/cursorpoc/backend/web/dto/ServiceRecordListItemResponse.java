@@ -13,4 +13,7 @@ public record ServiceRecordListItemResponse(
     /** Distinct service names on the record, in line order, comma-separated (list subtitle). */
     String servicesSummary,
     /** Distinct professional names on the record, in line order, comma-separated. */
-    String professionalsSummary) {}
+    String professionalsSummary,
+    /** The turno this ficha belongs to, if any. */
+    Long appointmentId,
+    Instant appointmentStartAt) {}

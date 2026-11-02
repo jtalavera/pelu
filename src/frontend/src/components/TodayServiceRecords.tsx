@@ -44,7 +44,14 @@ function todayRangeIso(): { from: string; to: string } {
  *   show who is in the salon and the services; tapping opens the ficha to add, change or remove
  *   services and quantities (never prices or tips).
  */
-export function TodayServiceRecords({ professionalMode = false }: { professionalMode?: boolean }) {
+export function TodayServiceRecords({
+  professionalMode = false,
+  refreshKey = 0,
+}: {
+  professionalMode?: boolean;
+  /** Bumped by the host when something outside changed (a ficha was created / assigned). */
+  refreshKey?: number;
+}) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const locale = getDateLocale(i18n);
@@ -68,7 +75,8 @@ export function TodayServiceRecords({ professionalMode = false }: { professional
     load();
     const id = window.setInterval(load, POLL_MS);
     return () => window.clearInterval(id);
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load, refreshKey]);
 
   const sorted = useMemo(
     () =>
@@ -176,6 +184,21 @@ export function TodayServiceRecords({ professionalMode = false }: { professional
                     </span>
                   ) : null}
                 </div>
+
+                <span
+                  data-testid="dashboard-service-record-appointment-tag"
+                  className={`pointer-events-none self-start rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                    r.appointmentId
+                      ? "bg-primary-lt text-primary"
+                      : "border border-line bg-bg text-ink-3"
+                  }`}
+                >
+                  {r.appointmentId && r.appointmentStartAt
+                    ? t("femme.appointmentFicha.appointmentTag", {
+                        time: formatParaguayTime(r.appointmentStartAt, locale),
+                      })
+                    : t("femme.appointmentFicha.noAppointmentTag")}
+                </span>
 
                 {isOpen ? (
                   <div className="pointer-events-none flex flex-wrap gap-1.5">

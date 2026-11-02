@@ -18,4 +18,7 @@ public record AppointmentResponse(
     String reminderSentAt,
     // HU-69: the client's birthday falls on this appointment's day (server zone). Shown as a cake
     // icon to admins and professionals alike — it never reveals the date or the age.
-    boolean clientBirthdayOnDay) {}
+    boolean clientBirthdayOnDay,
+    // The ficha de servicio of this turno (null while it has none): the Inicio and the Agenda show
+    // "Crear o asignar ficha" or "Ir a la ficha" from it.
+    Long serviceRecordId) {}

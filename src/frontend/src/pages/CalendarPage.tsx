@@ -37,6 +37,10 @@ import { useMe } from "../hooks/useMe";
 import { isPinSession } from "../auth/sharedDevice";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { billingStateForAppointment } from "../lib/appointmentBilling";
+import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
+import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
+import { billServiceRecord } from "../lib/serviceRecordBilling";
+import { createServiceRecordFromAppointment, getServiceRecord } from "../api/serviceRecords";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
 const HOUR_START = 7;
@@ -195,6 +199,7 @@ export default function CalendarPage() {
 
   // Detail modal
   const [detailAppt, setDetailAppt] = useState<Appointment | null>(null);
+  const [openRecordId, setOpenRecordId] = useState<number | null>(null);
   /** HU-68 AC6–8: client whose technical sheet is open on top of the detail / form modal. */
   const [technicalSheetClientId, setTechnicalSheetClientId] = useState<number | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -363,6 +368,11 @@ export default function CalendarPage() {
     setMoreOpen(false);
   };
 
+  // After the turno's ficha is created / assigned the list reloads: keep the open detail in sync.
+  useEffect(() => {
+    setDetailAppt((prev) => (prev ? (appointments.find((a) => a.id === prev.id) ?? prev) : prev));
+  }, [appointments]);
+
   const closeDetail = () => {
     setDetailAppt(null);
     setDetailError(null);
@@ -406,13 +416,22 @@ export default function CalendarPage() {
 
   const saveStatus = () => applyStatus("CANCELLED", cancelReason);
 
-  /** "Cobrar": Facturación opens with the client and the booked service already loaded. */
+  /**
+   * "Cobrar" always goes through the turno's ficha: its own, or one created right now. (An old
+   * Atendido turno with no ficha keeps the previous behaviour: the booked service as the only line.)
+   */
   const chargeAppointment = async () => {
     if (!detailAppt) return;
     setActionBusy(true);
     setDetailError(null);
     try {
-      navigate("/app/billing", { state: await billingStateForAppointment(detailAppt) });
+      if (detailAppt.serviceRecordId) {
+        await billServiceRecord(navigate, await getServiceRecord(detailAppt.serviceRecordId));
+      } else if (detailAppt.clientId != null && detailAppt.status === "IN_PROGRESS") {
+        await billServiceRecord(navigate, await createServiceRecordFromAppointment(detailAppt.id));
+      } else {
+        navigate("/app/billing", { state: await billingStateForAppointment(detailAppt) });
+      }
     } catch {
       setDetailError(t("femme.calendar.chargeError"));
     } finally {
@@ -1291,6 +1310,17 @@ export default function CalendarPage() {
                 </span>
               </Row>
             )}
+            {canModify(detailAppt) ? (
+              <div className="flex">
+                <AppointmentFichaAction
+                  appt={detailAppt}
+                  testIdPrefix="calendar-appointment-ficha"
+                  className="w-full"
+                  onOpenRecord={setOpenRecordId}
+                  onChanged={() => void fetchAppointments()}
+                />
+              </div>
+            ) : null}
             {detailAppt.cancelReason && (
               <Row label={t("femme.calendar.detail.cancelReason")}>
                 {detailAppt.cancelReason}
@@ -1316,6 +1346,15 @@ export default function CalendarPage() {
           </div>
         )}
       </Modal>
+
+      {openRecordId !== null ? (
+        <ServiceRecordDetailModal
+          serviceRecordId={openRecordId}
+          professionalMode={isProfessional}
+          onClose={() => setOpenRecordId(null)}
+          onChanged={() => void fetchAppointments()}
+        />
+      ) : null}
 
       {/* ── Cancel appointment (asks for a reason) ── */}
       <Modal

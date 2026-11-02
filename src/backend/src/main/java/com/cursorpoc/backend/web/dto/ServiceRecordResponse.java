@@ -18,4 +18,7 @@ public record ServiceRecordResponse(
     Long invoiceId,
     String invoiceNumberFormatted,
     List<ServiceRecordLineResponse> lines,
-    List<ServiceRecordTipResponse> tips) {}
+    List<ServiceRecordTipResponse> tips,
+    /** The turno this ficha belongs to, if any (id and start), shown on the ficha. */
+    Long appointmentId,
+    Instant appointmentStartAt) {}
