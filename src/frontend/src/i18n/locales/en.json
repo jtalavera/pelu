@@ -517,6 +517,10 @@
       "stock": "Stock",
       "stockAria": "Open Stock in a new tab",
       "openMenu": "Open menu",
+      "bottomLabel": "Main navigation (quick access)",
+      "bottomHome": "Home",
+      "bottomCalendar": "Calendar",
+      "bottomMore": "More",
       "closeMenu": "Close menu"
     },
     "activate": {
@@ -3124,6 +3128,15 @@
         "rangeErrorIncomplete": "Select both a start and end date.",
         "rangeErrorInvalidOrder": "The start date must be before the end date.",
         "rangeErrorTooOld": "The start date cannot be more than 6 months in the past."
+      },
+      "pro": {
+        "empty": "No services yet.",
+        "addService": "Add service",
+        "pickTitle": "Pick a service",
+        "searchPlaceholder": "Search by name…",
+        "back": "Back",
+        "increase": "One more {{name}}",
+        "decrease": "One less {{name}}"
       },
       "today": {
         "title": "Today's service records",

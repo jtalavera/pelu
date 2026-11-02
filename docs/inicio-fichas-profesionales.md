@@ -26,6 +26,18 @@
     nuevo toma el precio del catálogo y una propina solo se descarta si su profesional ya no figura en ninguna línea.
 - Las demás rutas (facturación, caja, propinas, resumen…) siguen vedadas.
 
+## Ventana de la ficha para profesionales (celular)
+- Lista simple: una fila por servicio con **−** y **+** (bajar de 1 quita el servicio) y un botón grande
+  «+ Agregar servicio» que abre una pantalla completa «Elegí un servicio» (filas de 52 px, sin precios).
+  Elegir uno vuelve a la ficha con el servicio sumado (cantidad 1; si ya estaba, +1).
+- No hay selector de profesional: la línea nueva es de quien inició sesión (el backend completa
+  `professionalId` con el de la sesión cuando viene vacío).
+- Componentes: `ProfessionalServiceLines.tsx` (`ProfessionalServiceLines`, `ServicePickerScreen`).
+
+## Barra inferior en celular (todos los roles)
+En pantallas < 640 px, `AppShell` muestra una barra fija con **Inicio**, **Agenda** y **Más** (abre el menú
+lateral). Botones de 56 px; se oculta mientras el menú está abierto. Spec: `barra-inferior-celular.spec.ts`.
+
 ## Tests
 JUnit: `ServiceRecordServiceTest`, `ProfessionalAccessPolicyTest`, `PinSessionSecurityTest`. Vitest:
 `TodayServiceRecords.test.tsx`, `ServiceRecordEditor.test.tsx`. Playwright: `inicio-fichas-profesional.spec.ts` (admin,

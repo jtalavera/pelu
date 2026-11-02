@@ -20,6 +20,7 @@ import { formatAmountDecimal } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
 import { formatParaguayDateTime } from "../lib/paraguayDateTime";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
+import { ProfessionalServiceLines, ServicePickerScreen } from "./ProfessionalServiceLines";
 
 type Professional = { id: number; fullName: string; active: boolean };
 
@@ -146,6 +147,7 @@ export function ServiceRecordEditor({
   const [lineErrors, setLineErrors] = useState<Record<number, { service?: string }>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const [showVoidForm, setShowVoidForm] = useState(false);
   const [voidReason, setVoidReason] = useState("");
@@ -201,6 +203,29 @@ export function ServiceRecordEditor({
   function professionalName(id: number | ""): string {
     if (id === "") return "—";
     return professionals.find((p) => p.id === id)?.fullName ?? String(id);
+  }
+
+  /** Professional mode: a service tapped in the picker joins the ficha (same service again adds one). */
+  function pickServiceAsProfessional(service: SalonServiceOption) {
+    setLines((prev) => {
+      const existing = prev.find((l) => l.pickedService?.id === service.id);
+      if (existing) {
+        return prev.map((l) => (l === existing ? { ...l, quantity: (l.quantity || 0) + 1 } : l));
+      }
+      const withoutBlank = prev.filter((l) => !isBlankLine(l));
+      return [
+        ...withoutBlank,
+        { ...emptyLine(), pickedService: service, quantity: 1, unitPrice: maskMoneyInput(String(Math.round(Number(service.priceMinor)))) },
+      ];
+    });
+    setPickerOpen(false);
+  }
+
+  function decrementLine(key: string) {
+    const line = lines.find((l) => l.key === key);
+    if (!line) return;
+    if ((line.quantity || 0) <= 1) removeLine(key);
+    else updateLineQuantity(key, line.quantity - 1);
   }
 
   function addLine() {
@@ -417,6 +442,10 @@ export function ServiceRecordEditor({
 
   const CAPTION = "text-xs font-semibold text-ink-3";
 
+  if (professionalMode && pickerOpen) {
+    return <ServicePickerScreen onPick={pickServiceAsProfessional} onBack={() => setPickerOpen(false)} />;
+  }
+
   return (
     <div ref={topRef} className="flex flex-col gap-3">
       {saveError ? (
@@ -473,6 +502,17 @@ export function ServiceRecordEditor({
           <h3 id="sr-lines-h" className={SECTION_TITLE}>
             {t("femme.serviceRecords.linesSection")}
           </h3>
+          {professionalMode ? (
+            <ProfessionalServiceLines
+              items={lines
+                .filter((l) => !isBlankLine(l))
+                .map((l) => ({ key: l.key, name: l.pickedService?.name ?? "", quantity: l.quantity }))}
+              onIncrement={(key) => updateLineQuantity(key, (lines.find((l) => l.key === key)?.quantity ?? 0) + 1)}
+              onDecrement={decrementLine}
+              onAdd={() => setPickerOpen(true)}
+            />
+          ) : (
+            <>
           {lines.map((line, idx) => {
             const professionalName =
               professionals.find((p) => p.id === line.professionalId)?.fullName ??
@@ -633,6 +673,8 @@ export function ServiceRecordEditor({
           >
             + {t("femme.serviceRecords.addLine")}
           </button>
+            </>
+          )}
           {professionalMode ? null : (
             <div className="flex justify-between font-heading text-lg font-extrabold" data-testid="service-record-total">
               <span>{t("femme.serviceRecords.total")}</span>

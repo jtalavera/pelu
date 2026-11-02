@@ -301,5 +301,47 @@ describe("ServiceRecordEditor", () => {
       expect(body.lines.every((l) => l.unitPrice === null)).toBe(true);
       expect(body.tips).toEqual([]);
     });
+
+    it("is a simple list: − / + per service (below 1 removes it) and a big button to add one", async () => {
+      renderEditor(proRecord, { professionalMode: true });
+      await screen.findByText("Marta Benítez");
+      expect(screen.getAllByTestId("service-record-line")).toHaveLength(2);
+
+      await userEvent.click(screen.getByRole("button", { name: "One more Brushing" }));
+      expect(screen.getAllByTestId("service-record-line-qty").map((e) => e.textContent)).toEqual(["1", "2"]);
+      await userEvent.click(screen.getByRole("button", { name: "One less Brushing" }));
+      await userEvent.click(screen.getByRole("button", { name: "One less Brushing" }));
+      expect(screen.getAllByTestId("service-record-line")).toHaveLength(1);
+      expect(screen.queryByText("Brushing")).toBeNull();
+    });
+
+    it("opens a full-screen picker without prices; picking returns to the ficha with the service added", async () => {
+      femmeJson.mockImplementation((url: unknown) => {
+        const s = String(url);
+        if (s.startsWith("/api/services")) {
+          return Promise.resolve([
+            { id: 21, categoryId: 1, categoryName: "Hair", categoryAccentKey: "a", name: "Corte", priceMinor: "90000", durationMinutes: 30, active: true },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+      femmePutJson.mockResolvedValue(proRecord);
+      renderEditor(proRecord, { professionalMode: true });
+      await screen.findByText("Marta Benítez");
+
+      await userEvent.click(screen.getByTestId("service-record-add-line"));
+      const option = await screen.findByTestId("service-picker-option");
+      expect(option.textContent).toContain("Corte");
+      expect(option.textContent).not.toMatch(/90|Gs/);
+      await userEvent.click(option);
+
+      expect(screen.queryByTestId("service-picker")).toBeNull();
+      expect(screen.getAllByTestId("service-record-line")).toHaveLength(3);
+
+      await userEvent.click(screen.getByTestId("service-record-submit"));
+      await waitFor(() => expect(femmePutJson).toHaveBeenCalled());
+      const body = femmePutJson.mock.calls[0][1] as { lines: Array<{ serviceId: number; quantity: number }> };
+      expect(body.lines.find((l) => l.serviceId === 21)?.quantity).toBe(1);
+    });
   });
 });

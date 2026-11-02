@@ -12,7 +12,6 @@ import {
 } from "../fixtures/api";
 import { DEMO_PASSWORD, loginAs, loginAsDemo } from "../fixtures/auth";
 import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
-import { pickLineService, expandFichaLine } from "../fixtures/fichas";
 
 /**
  * Inicio · fichas de servicio de hoy como tarjetas.
@@ -193,7 +192,8 @@ test.describe("Inicio de la profesional (con clave)", () => {
     // Open the ficha: services and quantities only.
     await own.click({ position: { x: 40, y: 20 } });
     const dialog = page.getByRole("dialog");
-    await expect(dialog.locator("#service-record-line-svc-0")).toBeVisible();
+    await expect(dialog.getByTestId("service-record-line")).toHaveCount(1);
+    await expect(dialog.locator("#service-record-line-svc-0")).toHaveCount(0);
     await expect(dialog.getByTestId("service-record-total")).toHaveCount(0);
     await expect(dialog.getByTestId("service-record-tips-toggle")).toHaveCount(0);
     await expect(dialog.getByTestId("service-record-void-open")).toHaveCount(0);
@@ -203,10 +203,14 @@ test.describe("Inicio de la profesional (con clave)", () => {
     expect(dialogText).not.toMatch(/Gs\.|\d{1,3}(\.\d{3})+/);
 
     // Change the quantity of the existing service to 2 and add another service.
-    await dialog.locator("#service-record-line-qty-0").fill("2");
+    await dialog.getByTestId("service-record-line-inc").first().click();
+    await expect(dialog.getByTestId("service-record-line-qty").first()).toHaveText("2");
     await dialog.getByTestId("service-record-add-line").click();
-    await pickLineService(page, 1, extra.name);
-    await expect(dialog.locator("#service-record-line-prof-1")).toHaveCount(0);
+    await expect(page.getByTestId("service-picker")).toBeVisible();
+    await page.getByTestId("service-picker-search").fill(extra.name);
+    await page.getByTestId("service-picker-option").filter({ hasText: extra.name }).first().click();
+    await expect(page.getByTestId("service-picker")).toHaveCount(0);
+    await expect(dialog.getByTestId("service-record-line")).toHaveCount(2);
     await dialog.getByTestId("service-record-submit").click();
     await expect(page.getByTestId("dashboard-record-toast")).toContainText("Changes saved.", { timeout: 15_000 });
 
@@ -225,8 +229,9 @@ test.describe("Inicio de la profesional (con clave)", () => {
 
     // Remove the extra service again.
     await own.click({ position: { x: 40, y: 20 } });
-    await expandFichaLine(dialog, 1);
-    await dialog.getByTestId("service-record-line-remove").last().click();
+    await expect(dialog.getByTestId("service-record-line")).toHaveCount(2);
+    await dialog.getByTestId("service-record-line-dec").last().click(); // quantity 1 → 0 removes it
+    await expect(dialog.getByTestId("service-record-line")).toHaveCount(1);
     await dialog.getByTestId("service-record-submit").click();
     await expect(page.getByTestId("dashboard-record-toast")).toContainText("Changes saved.", { timeout: 15_000 });
     const after = await apiGetJson<Ficha>(request, admin, `/api/service-records/${ficha.id}`);
@@ -362,8 +367,11 @@ test.describe("Dispositivo compartido con PIN", () => {
     await expect(dialog.getByTestId("service-record-tips-toggle")).toHaveCount(0);
     await expect(dialog.getByTestId("service-record-total")).toHaveCount(0);
     await dialog.getByTestId("service-record-add-line").click();
-    await pickLineService(page, 1, extra.name);
-    await expect(dialog.locator("#service-record-line-prof-1")).toHaveCount(0);
+    await expect(page.getByTestId("service-picker")).toBeVisible();
+    await page.getByTestId("service-picker-search").fill(extra.name);
+    await page.getByTestId("service-picker-option").filter({ hasText: extra.name }).first().click();
+    await expect(page.getByTestId("service-picker")).toHaveCount(0);
+    await expect(dialog.getByTestId("service-record-line")).toHaveCount(2);
     await dialog.getByTestId("service-record-submit").click();
     await expect(page.getByTestId("dashboard-record-toast")).toContainText("Changes saved.", { timeout: 15_000 });
 

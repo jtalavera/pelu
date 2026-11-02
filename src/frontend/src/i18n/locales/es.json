@@ -517,6 +517,10 @@
       "stock": "Stock",
       "stockAria": "Abrir Stock en una pestaña nueva",
       "openMenu": "Abrir menú",
+      "bottomLabel": "Navegación rápida",
+      "bottomHome": "Inicio",
+      "bottomCalendar": "Agenda",
+      "bottomMore": "Más",
       "closeMenu": "Cerrar menú"
     },
     "activate": {
@@ -3124,6 +3128,15 @@
         "rangeErrorIncomplete": "Elegí fecha desde y hasta.",
         "rangeErrorInvalidOrder": "La fecha desde tiene que ser anterior a la fecha hasta.",
         "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 6 meses."
+      },
+      "pro": {
+        "empty": "Todavía no hay servicios.",
+        "addService": "Agregar servicio",
+        "pickTitle": "Elegí un servicio",
+        "searchPlaceholder": "Buscar por nombre…",
+        "back": "Volver",
+        "increase": "Uno más de {{name}}",
+        "decrease": "Uno menos de {{name}}"
       },
       "today": {
         "title": "Fichas de servicio de hoy",

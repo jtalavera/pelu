@@ -111,6 +111,26 @@ function SideNavItem({
   );
 }
 
+/** Phone-only bottom bar: Home and Calendar one tap away, "More" opens the full menu drawer. */
+function BottomNavLink({ to, end, label, icon }: { to: string; end?: boolean; label: string; icon: React.ReactNode }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        `flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-bold no-underline ${
+          isActive ? "bg-primary-lt text-primary" : "text-ink-3"
+        }`
+      }
+    >
+      <span aria-hidden="true" className="flex h-5 items-center [&>svg]:size-5">
+        {icon}
+      </span>
+      {label}
+    </NavLink>
+  );
+}
+
 const DashboardIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
@@ -1111,7 +1131,7 @@ function AppShellInner() {
         style={{
           marginLeft: isDesktop ? 220 : 0,
           marginTop: TOPBAR_HEIGHT,
-          padding: isPhone ? 12 : isDesktop ? 24 : 16,
+          padding: isPhone ? "12px 12px calc(80px + env(safe-area-inset-bottom))" : isDesktop ? 24 : 16,
           minWidth: 0,
           minHeight: `calc(100vh - ${TOPBAR_HEIGHT}px)`,
           background: "var(--color-stone)",
@@ -1145,6 +1165,28 @@ function AppShellInner() {
         )}
         <Outlet />
       </main>
+
+      {isPhone && !navOpen && (
+        <nav
+          data-testid="bottom-nav"
+          aria-label={t("femme.nav.bottomLabel")}
+          className="fixed inset-x-0 bottom-0 z-[80] grid grid-cols-3 gap-1 border-t border-line bg-surface px-2 pt-1"
+          style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
+        >
+          <BottomNavLink to="/app" end label={t("femme.nav.bottomHome")} icon={<DashboardIcon />} />
+          <BottomNavLink to="/app/calendar" label={t("femme.nav.bottomCalendar")} icon={<CalendarIcon />} />
+          <button
+            type="button"
+            data-testid="bottom-nav-more"
+            onClick={() => setNavOpen(true)}
+            aria-controls="app-sidebar"
+            className="flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-xs font-bold text-ink-3"
+          >
+            <span aria-hidden="true" className="flex h-5 items-center text-xl leading-none">☰</span>
+            {t("femme.nav.bottomMore")}
+          </button>
+        </nav>
+      )}
 
       {profileModalOpen && me && (
         <UserProfileModal
