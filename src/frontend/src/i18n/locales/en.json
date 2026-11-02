@@ -3148,6 +3148,8 @@
         "rangeErrorTooOld": "The start date cannot be more than 6 months in the past."
       },
       "pro": {
+        "myAppointments": "My appointments today",
+        "noAppointments": "You have no appointments left today.",
         "empty": "No services yet.",
         "addService": "Add service",
         "pickTitle": "Pick a service",

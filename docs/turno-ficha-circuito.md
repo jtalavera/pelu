@@ -24,6 +24,12 @@ nullable, índice único filtrado; migración `V91`). Las fichas sin turno (clie
 - Anular una ficha cobrada no reabre el turno.
 - Una profesional solo opera los turnos propios y nunca recibe montos.
 
+## Turno de clienta ocasional (sin cliente)
+Sin clienta registrada no hay ficha (siempre necesita una). La fila del turno en el Inicio muestra **«Cobrar»** (Pendiente,
+Confirmado o En curso) y lleva a Facturación con el servicio agendado; el turno viaja en el estado de navegación
+(`prefillServiceRecord.appointmentId`) y pasa a **Completado** al emitir la factura. Lo mismo vale para «Cobrar» en el
+detalle del turno de la Agenda.
+
 ## Facturar sin ficha (mostrador)
 En «Nueva factura», al elegir una clienta que no tiene ficha abierta pero sí un turno de hoy sin ficha (Pendiente,
 Confirmado o En curso; el más temprano), aparece un aviso con la casilla «Marcar como completado el turno de las HH:MM
@@ -41,9 +47,12 @@ Errores: `APPOINTMENT_ALREADY_HAS_SERVICE_RECORD`, `APPOINTMENT_NOT_ACTIVE`, `AP
 `SERVICE_RECORD_CLIENT_MISMATCH`, `SERVICE_RECORD_NOT_OPEN`, `SERVICE_RECORD_ALREADY_LINKED`.
 `AppointmentResponse.serviceRecordId`, `ServiceRecordResponse/ListItem.appointmentId + appointmentStartAt`.
 
-## Pendiente
-El Inicio de la profesional (login normal y dispositivo con PIN) no lista turnos: sus turnos se operan desde la Agenda.
+## Inicio de la profesional
+Con clave o en el dispositivo compartido con PIN, su Inicio muestra primero «Mis turnos de hoy»: solo los propios y por
+atender (Pendiente, Confirmado, En curso), por hora, con «Crear o asignar ficha» / «Ir a la ficha» (la ficha se abre sin
+montos). Debajo siguen las tarjetas de fichas abiertas del día. Los turnos Completados ya no se listan (su ficha está
+cobrada y ella no la ve).
 
 ## Tests
 JUnit `AppointmentServiceRecordServiceTest`, `ProfessionalAccessPolicyTest`; Vitest `AppointmentFichaAction.test.tsx`;
-Playwright `turno-ficha-circuito.spec.ts` (incluye facturar sin ficha) y `hu-03-dashboard-principal.spec.ts` (test 7).
+Playwright `inicio-profesional-turnos.spec.ts`, `turno-ficha-circuito.spec.ts` (incluye facturar sin ficha) y `hu-03-dashboard-principal.spec.ts` (test 7).
