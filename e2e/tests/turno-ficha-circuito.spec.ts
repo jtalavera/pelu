@@ -41,9 +41,9 @@ async function seedTurno(
   seed: SeededSalon,
   clientId: number,
 ): Promise<{ id: number }> {
-  // Later today (local time), so the turno shows up in Inicio's list.
-  const slot = new Date();
-  slot.setHours(Math.min(23, slot.getHours() + 1), 0, 0, 0);
+  // A few minutes from now (still today), so the turno shows up in Inicio's list at any hour.
+  const slot = new Date(Date.now() + 5 * 60_000);
+  slot.setSeconds(0, 0);
   return createAppointmentApi(request, token, {
     clientId,
     professionalId: seed.professionalId,
@@ -304,6 +304,52 @@ test.describe("Turno y ficha de servicio", () => {
     expect((await getAppt(request, admin, turno.id)).status).toBe("PENDING");
   });
 
+  test("asignar una ficha agrega el servicio del turno si no lo tiene, o pasa la línea a la profesional del turno si ya lo tiene", async ({
+    request,
+  }) => {
+    const admin = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const other = await seedCategoryServiceProfessional(request, admin);
+    const svc2 = await apiPostJson<{ id: number }>(request, admin, "/api/services", {
+      name: `E2E TF Otro ${Date.now()}`,
+      categoryId: seed.categoryId,
+      priceMinor: 30_000,
+      durationMinutes: 30,
+    });
+    const client = await seedClient(request, admin, `E2E TF Servicio ${Date.now()}`);
+
+    // 1) The ficha has a different service: the turno's service is added, the existing line is untouched.
+    const turnoA = await seedTurno(request, admin, seed, client.id);
+    const fichaA = await apiPostJson<Ficha>(request, admin, "/api/service-records", {
+      clientId: client.id,
+      lines: [{ serviceId: svc2.id, professionalId: other.professionalId, quantity: 2, unitPrice: 30_000 }],
+      tips: [],
+    });
+    await apiPostJson(request, admin, `/api/appointments/${turnoA.id}/service-record/assign`, { serviceRecordId: fichaA.id });
+    const a = await apiGetJson<Ficha>(request, admin, `/api/service-records/${fichaA.id}`);
+    expect(a.lines).toHaveLength(2);
+    const kept = a.lines.find((l) => l.serviceId === svc2.id)!;
+    expect(kept.quantity).toBe(2);
+    expect(kept.professionalId).toBe(other.professionalId);
+    const added = a.lines.find((l) => l.serviceId === seed.serviceId)!;
+    expect(added.quantity).toBe(1);
+    expect(added.professionalId).toBe(seed.professionalId);
+
+    // 2) The ficha already has the turno's service (under another professional): no duplicate, now hers.
+    const turnoB = await seedTurno(request, admin, other, client.id);
+    const fichaB = await apiPostJson<Ficha>(request, admin, "/api/service-records", {
+      clientId: client.id,
+      lines: [{ serviceId: other.serviceId, professionalId: seed.professionalId, quantity: 3, unitPrice: 50_000 }],
+      tips: [],
+    });
+    await apiPostJson(request, admin, `/api/appointments/${turnoB.id}/service-record/assign`, { serviceRecordId: fichaB.id });
+    const b = await apiGetJson<Ficha>(request, admin, `/api/service-records/${fichaB.id}`);
+    expect(b.lines).toHaveLength(1);
+    expect(b.lines[0].serviceId).toBe(other.serviceId);
+    expect(b.lines[0].quantity).toBe(3);
+    expect(b.lines[0].professionalId).toBe(other.professionalId);
+  });
+
   test("turno de clienta ocasional (sin cliente): la fila ofrece «Cobrar», sin ficha, y el turno se completa al cobrar", async ({
     page,
     request,
@@ -312,7 +358,8 @@ test.describe("Turno y ficha de servicio", () => {
     await ensureActiveFiscalStampForInvoices(request, admin);
     const seed = await seedCategoryServiceProfessional(request, admin);
     const slot = new Date();
-    slot.setHours(Math.min(23, slot.getHours() + 1), 0, 0, 0);
+    slot.setTime(Date.now() + 5 * 60_000);
+    slot.setSeconds(0, 0);
     const turno = await createAppointmentApi(request, admin, {
       clientId: null,
       professionalId: seed.professionalId,
@@ -377,7 +424,8 @@ test.describe("Turno y ficha de servicio", () => {
 
     // A turno of the logged-in professional herself.
     const slot = new Date();
-    slot.setHours(Math.min(23, slot.getHours() + 1), 0, 0, 0);
+    slot.setTime(Date.now() + 5 * 60_000);
+    slot.setSeconds(0, 0);
     const own = await createAppointmentApi(request, admin, {
       clientId: client.id,
       professionalId: pro.id,

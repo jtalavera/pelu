@@ -2,7 +2,9 @@ package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Appointment;
+import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.ServiceRecord;
+import com.cursorpoc.backend.domain.ServiceRecordLine;
 import com.cursorpoc.backend.domain.enums.AppointmentStatus;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.AppointmentRepository;
@@ -11,11 +13,15 @@ import com.cursorpoc.backend.web.dto.ServiceRecordLineRequest;
 import com.cursorpoc.backend.web.dto.ServiceRecordListItemResponse;
 import com.cursorpoc.backend.web.dto.ServiceRecordRequest;
 import com.cursorpoc.backend.web.dto.ServiceRecordResponse;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
+import org.hibernate.Hibernate;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,7 +93,50 @@ public class AppointmentServiceRecordService {
     if (record.getAppointment() != null) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "SERVICE_RECORD_ALREADY_LINKED");
     }
+    ensureTurnoService(record, appointment);
     return link(tenantId, appointment, record);
+  }
+
+  /**
+   * The turno's service must be on the ficha it is assigned to: a line with that service takes the
+   * turno's professional; without one, the service is added (quantity 1, catalog price, turno's
+   * professional). Existing lines and quantities are left alone.
+   */
+  private void ensureTurnoService(ServiceRecord record, Appointment appointment) {
+    Hibernate.initialize(record.getLines());
+    Hibernate.initialize(record.getTips());
+    SalonService turnoService = appointment.getSalonService();
+    ServiceRecordLine match =
+        record.getLines().stream()
+            .filter(l -> l.getSalonService().getId().equals(turnoService.getId()))
+            .findFirst()
+            .orElse(null);
+    if (match != null) {
+      match.setProfessional(appointment.getProfessional());
+    } else {
+      ServiceRecordLine line = new ServiceRecordLine();
+      line.setServiceRecord(record);
+      line.setSalonService(turnoService);
+      line.setProfessional(appointment.getProfessional());
+      line.setDescription(turnoService.getName());
+      line.setUnitPrice(
+          (turnoService.getPriceMinor() != null ? turnoService.getPriceMinor() : BigDecimal.ZERO)
+              .setScale(2, RoundingMode.HALF_UP));
+      line.setQuantity(1);
+      record.getLines().add(line);
+    }
+    record.setTotalAmount(
+        record.getLines().stream()
+            .map(l -> l.getUnitPrice().multiply(BigDecimal.valueOf(l.getQuantity())))
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP));
+    // A tip stays only while its professional is still on some line.
+    Set<Long> onLines =
+        record.getLines().stream()
+            .filter(l -> l.getProfessional() != null)
+            .map(l -> l.getProfessional().getId())
+            .collect(Collectors.toSet());
+    record.getTips().removeIf(t -> !onLines.contains(t.getProfessional().getId()));
   }
 
   /** Open fichas of today, of the turno's client, that no turno has taken yet. */

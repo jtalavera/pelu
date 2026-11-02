@@ -15,6 +15,9 @@ nullable, índice único filtrado; migración `V91`). Las fichas sin turno (clie
 ## Reglas
 - **Crear**: copia cliente, servicio y profesional del turno (precio del catálogo). Requiere cliente.
 - **Asignar**: solo fichas abiertas, de hoy, de la misma clienta y sin turno.
+  Al asignar, el servicio del turno queda en la ficha: si ya tiene una línea con ese servicio, la primera pasa a la
+  profesional del turno (sin duplicar ni tocar cantidades); si no, se agrega (cantidad 1, precio del catálogo, profesional
+  del turno). Las demás líneas no se tocan. Una propina solo se conserva mientras su profesional siga en alguna línea.
 - Crear o asignar pasa un turno Pendiente / Confirmado a **En curso**.
 - **Cobrar la ficha** (emitir la factura con `serviceRecordId`) cierra la ficha y marca el turno **Completado**.
 - **Cancelar / No vino**: la ficha abierta se suelta (queda abierta, sin turno). Una ficha cobrada conserva su turno.
