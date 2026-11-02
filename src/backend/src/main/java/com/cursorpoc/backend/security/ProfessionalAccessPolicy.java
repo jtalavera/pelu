@@ -51,6 +51,10 @@ public final class ProfessionalAccessPolicy
           // HU-68: the client's technical sheet (notes + color formula) — never the full profile.
           PATHS.matcher(HttpMethod.GET, "/api/clients/{id:\\d+}/technical-sheet"),
           PATHS.matcher(HttpMethod.PUT, "/api/clients/{id:\\d+}/technical-sheet"),
+          // Inicio: open fichas of today, no money (the controller trims what she may see/change).
+          PATHS.matcher(HttpMethod.GET, "/api/service-records"),
+          PATHS.matcher(HttpMethod.GET, "/api/service-records/{id:\\d+}"),
+          PATHS.matcher(HttpMethod.PUT, "/api/service-records/{id:\\d+}"),
           // HU-COM-07: own commissions (CommissionAccess still enforces own-data-only).
           PATHS.matcher(HttpMethod.GET, "/api/commissions/me"),
           PATHS.matcher(HttpMethod.GET, "/api/commissions/me/settlements/{id:\\d+}"));
@@ -71,6 +75,10 @@ public final class ProfessionalAccessPolicy
           PATHS.matcher(HttpMethod.GET, "/api/professionals"),
           PATHS.matcher(HttpMethod.GET, "/api/services"),
           PATHS.matcher(HttpMethod.GET, "/api/clients"),
+          // Inicio of the shared device: the same open fichas of today, without money.
+          PATHS.matcher(HttpMethod.GET, "/api/service-records"),
+          PATHS.matcher(HttpMethod.GET, "/api/service-records/{id:\\d+}"),
+          PATHS.matcher(HttpMethod.PUT, "/api/service-records/{id:\\d+}"),
           // HU-68: the client's technical sheet (notes + color formula) — never the full profile.
           PATHS.matcher(HttpMethod.GET, "/api/clients/{id:\\d+}/technical-sheet"),
           PATHS.matcher(HttpMethod.PUT, "/api/clients/{id:\\d+}/technical-sheet"));

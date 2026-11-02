@@ -70,9 +70,15 @@ export function ServiceRecordEditor({
   onSaved,
   onVoided,
   onClose,
+  professionalMode = false,
 }: {
   initial: ServiceRecordDetail | null;
   allowClientCreateNew: boolean;
+  /**
+   * A professional (regular or shared-device session) edits services and quantities only: no
+   * prices or totals, no tips, no void and no "Cobrar". The server enforces the same rules.
+   */
+  professionalMode?: boolean;
   /** Client selected after returning from the "create new client" round trip. */
   initialClientOverride?: ClientOverride | null;
   onInitialClientOverrideConsumed?: () => void;
@@ -112,20 +118,20 @@ export function ServiceRecordEditor({
             categoryName: "",
             categoryAccentKey: "",
             name: l.description,
-            priceMinor: l.unitPrice,
+            priceMinor: l.unitPrice ?? "0",
             durationMinutes: 0,
             active: true,
           },
           professionalId: l.professionalId ?? "",
           quantity: l.quantity,
-          unitPrice: maskMoneyInput(String(Math.round(Number(l.unitPrice)))),
+          unitPrice: maskMoneyInput(String(Math.round(Number(l.unitPrice ?? 0)))),
         }))
       : [emptyLine()],
   );
   const [tips, setTips] = useState<Record<number, string>>(() => {
     const map: Record<number, string> = {};
     initial?.tips.forEach((tp) => {
-      map[tp.professionalId] = maskMoneyInput(String(Math.round(Number(tp.amount))));
+      map[tp.professionalId] = maskMoneyInput(String(Math.round(Number(tp.amount ?? 0))));
     });
     return map;
   });
@@ -199,7 +205,11 @@ export function ServiceRecordEditor({
   }
 
   function removeLine(key: string) {
-    setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== key) : prev));
+    setLines((prev) => {
+      if (prev.length > 1) return prev.filter((l) => l.key !== key);
+      // The last service can be removed too (professional mode): it leaves the blank placeholder.
+      return professionalMode ? [emptyLine()] : prev;
+    });
   }
 
   function updateLineService(key: string, service: SalonServiceOption | null) {
@@ -265,12 +275,16 @@ export function ServiceRecordEditor({
         professionalId: l.professionalId === "" ? null : l.professionalId,
         quantity: l.quantity || null,
         unitPrice:
-          l.unitPrice && parseMaskedMoney(l.unitPrice) > 0 ? parseMaskedMoney(l.unitPrice) : null,
+          !professionalMode && l.unitPrice && parseMaskedMoney(l.unitPrice) > 0
+            ? parseMaskedMoney(l.unitPrice)
+            : null,
       })),
-      tips: distinctProfessionalIds.map((id) => ({
-        professionalId: id,
-        amount: parseMaskedMoney(tips[id] ?? ""),
-      })),
+      tips: professionalMode
+        ? []
+        : distinctProfessionalIds.map((id) => ({
+            professionalId: id,
+            amount: parseMaskedMoney(tips[id] ?? ""),
+          })),
     };
     setSaving(true);
     try {
@@ -465,7 +479,14 @@ export function ServiceRecordEditor({
             const bodyId = `service-record-line-body-${idx}`;
             const summaryName = line.pickedService?.name ?? t("femme.serviceRecords.newServiceLine");
             const summarySub =
-              [professionalName, line.quantity > 1 ? `${line.quantity} × ${line.unitPrice || "0"}` : ""]
+              [
+                professionalName,
+                line.quantity > 1
+                  ? professionalMode
+                    ? `×${line.quantity}`
+                    : `${line.quantity} × ${line.unitPrice || "0"}`
+                  : "",
+              ]
                 .filter(Boolean)
                 .join(" · ") || t("femme.serviceRecords.lineFillIn");
             return (
@@ -492,12 +513,16 @@ export function ServiceRecordEditor({
                     <b className="truncate text-ink">{summaryName}</b>
                     <span className="truncate text-sm text-ink-3">{summarySub}</span>
                   </span>
-                  <b
-                    className="whitespace-nowrap font-heading text-ink"
-                    data-testid="service-record-line-subtotal"
-                  >
-                    {formatAmountDecimal(lineSubtotal(line).toFixed(2))}
-                  </b>
+                  {professionalMode ? (
+                    <span aria-hidden="true" />
+                  ) : (
+                    <b
+                      className="whitespace-nowrap font-heading text-ink"
+                      data-testid="service-record-line-subtotal"
+                    >
+                      {formatAmountDecimal(lineSubtotal(line).toFixed(2))}
+                    </b>
+                  )}
                   <span
                     aria-hidden="true"
                     className={`text-ink-3 transition-transform ${expanded ? "rotate-180" : ""}`}
@@ -511,6 +536,7 @@ export function ServiceRecordEditor({
                       id={`service-record-line-svc-${idx}`}
                       label={t("femme.serviceRecords.lineServiceAria", { n: idx + 1 })}
                       labelSrOnly
+                      hidePrices={professionalMode}
                       value={line.pickedService}
                       onChange={(svc) => updateLineService(line.key, svc)}
                       invalid={!!lineErrors[idx]?.service}
@@ -519,7 +545,11 @@ export function ServiceRecordEditor({
                     <FieldValidationError id={`service-record-line-svc-err-${idx}`}>
                       {lineErrors[idx]?.service}
                     </FieldValidationError>
-                    <div className="grid grid-cols-[4rem_minmax(0,1fr)] items-end gap-x-2 gap-y-2 sm:grid-cols-[minmax(0,1fr)_4rem_7rem]">
+                    <div
+                      className={`grid grid-cols-[4rem_minmax(0,1fr)] items-end gap-x-2 gap-y-2 ${
+                        professionalMode ? "sm:grid-cols-[minmax(0,1fr)_4rem]" : "sm:grid-cols-[minmax(0,1fr)_4rem_7rem]"
+                      }`}
+                    >
                       <div className="order-last col-span-2 flex min-w-0 flex-col gap-1 sm:order-none sm:col-span-1">
                         <span aria-hidden="true" className={CAPTION}>
                           {t("femme.serviceRecords.lineProfessionalLabel")}
@@ -555,6 +585,7 @@ export function ServiceRecordEditor({
                           }
                         />
                       </div>
+                      {professionalMode ? null : (
                       <div className="flex flex-col gap-1">
                         <span aria-hidden="true" className={CAPTION}>
                           {t("femme.serviceRecords.colPrice")}
@@ -570,8 +601,9 @@ export function ServiceRecordEditor({
                           onChange={(e) => updateLineUnitPrice(line.key, e.target.value)}
                         />
                       </div>
+                      )}
                     </div>
-                    {lines.length > 1 ? (
+                    {lines.length > 1 || (professionalMode && line.pickedService) ? (
                       <button
                         type="button"
                         onClick={() => removeLine(line.key)}
@@ -594,12 +626,15 @@ export function ServiceRecordEditor({
           >
             + {t("femme.serviceRecords.addLine")}
           </button>
-          <div className="flex justify-between font-heading text-lg font-extrabold" data-testid="service-record-total">
-            <span>{t("femme.serviceRecords.total")}</span>
-            <span>{formatAmountDecimal(total.toFixed(2))}</span>
-          </div>
+          {professionalMode ? null : (
+            <div className="flex justify-between font-heading text-lg font-extrabold" data-testid="service-record-total">
+              <span>{t("femme.serviceRecords.total")}</span>
+              <span>{formatAmountDecimal(total.toFixed(2))}</span>
+            </div>
+          )}
         </section>
 
+        {professionalMode ? null : (
         <section className="border-t border-line" aria-label={t("femme.serviceRecords.tipsSection")}>
           <button
             type="button"
@@ -650,8 +685,9 @@ export function ServiceRecordEditor({
             </div>
           ) : null}
         </section>
+        )}
 
-        {record && isOpen && showVoidForm ? (
+        {!professionalMode && record && isOpen && showVoidForm ? (
           <div
             className="flex flex-col gap-3 rounded-xl border border-line p-3"
             data-testid="service-record-void-form"
@@ -705,7 +741,7 @@ export function ServiceRecordEditor({
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            {record && isOpen && !showVoidForm ? (
+            {!professionalMode && record && isOpen && !showVoidForm ? (
               <Button
                 type="button"
                 variant="secondary"
@@ -729,14 +765,14 @@ export function ServiceRecordEditor({
             </Button>
             <Button
               type="submit"
-              variant={record ? "secondary" : "primary"}
+              variant={record && !professionalMode ? "secondary" : "primary"}
               className="min-h-11"
               disabled={saving || clientSelection?.type !== "client"}
               data-testid="service-record-submit"
             >
               {saving ? t("femme.serviceRecords.saving") : t("femme.serviceRecords.saveShort")}
             </Button>
-            {record && isOpen ? (
+            {!professionalMode && record && isOpen ? (
               <Button
                 type="button"
                 variant="primary"

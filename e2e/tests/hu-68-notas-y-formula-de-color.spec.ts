@@ -364,9 +364,12 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     const pad = page.getByTestId("pin-pad");
     for (const d of pin) await pad.getByRole("button", { name: d, exact: true }).click();
     await page.getByTestId("pin-submit").click();
+    // The PIN session starts on the Inicio (open fichas of the day); the calendar is next.
+    await expect(page).toHaveURL(/\/app\/?$/);
+    await page.goto("/app/calendar");
     await expect(page).toHaveURL(/\/app\/calendar/);
 
-    // No "Clients" menu in a PIN session, and the URL bounces to the calendar.
+    // No "Clients" menu in a PIN session, and the URL bounces to the Inicio.
     await expect(page.getByRole("link", { name: "Clients", exact: true })).toHaveCount(0);
 
     // The Agenda opens on the Day view: the seeded turno may be on another day of the week.
@@ -386,7 +389,7 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     await expect(sheet.getByTestId("technical-sheet-notes-edited")).toContainText(`Edited by ${pro.fullName} · `);
 
     await page.goto("/app/clients");
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    await expect(page).toHaveURL(/\/app\/?$/);
   });
 
   test("AC14, AC15 · cliente inexistente en el tenant (404) y cliente inactiva solo lectura (409)", async ({

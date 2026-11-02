@@ -5,7 +5,7 @@ import { useMe } from "../hooks/useMe";
 
 /**
  * HU-24 AC-12/13: guards the salon's administrative screens. A `PROFESSIONAL` who reaches one by
- * URL is sent to her calendar (the backend answers 403 on those APIs anyway). Every other role
+ * URL is sent to her Inicio (the open fichas of today) (the backend answers 403 on those APIs anyway). Every other role
  * passes through; authentication itself is `ProtectedRoute`'s job.
  */
 export function AdminOnlyRoute() {
@@ -21,7 +21,7 @@ export function AdminOnlyRoute() {
   }
 
   if (me?.role === "PROFESSIONAL") {
-    return <Navigate to="/app/calendar" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   return <Outlet />;

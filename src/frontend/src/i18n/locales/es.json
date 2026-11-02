@@ -3125,6 +3125,13 @@
         "rangeErrorInvalidOrder": "La fecha desde tiene que ser anterior a la fecha hasta.",
         "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 6 meses."
       },
+      "today": {
+        "title": "Fichas de servicio de hoy",
+        "openCount_one": "{{count}} abierta",
+        "openCount_other": "{{count}} abiertas",
+        "emptyOpen": "Hoy no hay fichas de servicio abiertas.",
+        "proHint": "Fichas abiertas del día. Tocá una para agregar, cambiar o quitar servicios."
+      },
       "dashboard": {
         "title": "Fichas de servicio de hoy",
         "empty": "No hay fichas de servicio hoy.",

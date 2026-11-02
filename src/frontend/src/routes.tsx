@@ -7,6 +7,7 @@ import { AdminOnlyRoute } from "./auth/AdminOnlyRoute";
 import { ProfessionalOrAdminRoute, RedirectToTechnicalSheet } from "./auth/ProfessionalOrAdminRoute";
 import DesignSystemShowcasePage from "./pages/DesignSystemShowcasePage";
 import DashboardPage from "./pages/DashboardPage";
+import ProfessionalHomePage from "./pages/ProfessionalHomePage";
 import DashboardsPage from "./pages/DashboardsPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import LoginPage from "./pages/LoginPage";
@@ -65,6 +66,14 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       >
+        {/* Inicio: the admin's dashboard, or the professional's open fichas of today (also in a
+            shared-device PIN session, where it is the first screen). */}
+        <Route
+          path="/app"
+          element={
+            <ProfessionalOrAdminRoute admin={<DashboardPage />} professional={<ProfessionalHomePage />} />
+          }
+        />
         <Route path="/app/calendar" element={<CalendarPage />} />
         <Route element={<NotInPinSessionRoute />}>
           <Route path="/app/my-commissions" element={<MyCommissionsPage />} />
@@ -92,7 +101,6 @@ export function AppRoutes() {
         </Route>
         {/* HU-24 AC-12/13: everything below is admin-only — professionals go to their calendar. */}
         <Route element={<AdminOnlyRoute />}>
-          <Route path="/app" element={<DashboardPage />} />
           <Route path="/app/dashboards" element={<DashboardsPage />} />
           {/* Catalog redesign: Servicios, Productos and Profesionales are views of one screen. */}
           <Route path="/app/catalog" element={<CatalogPage />} />

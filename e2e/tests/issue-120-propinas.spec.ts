@@ -285,7 +285,7 @@ test.describe("Issue #120 · Propinas", () => {
     });
 
     await loginAs(page, email, password);
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    await expect(page).toHaveURL(/\/app\/?$/);
     await expect(page.getByRole("link", { name: "Tips" })).toHaveCount(0);
   });
 });

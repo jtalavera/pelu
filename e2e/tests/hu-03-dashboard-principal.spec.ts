@@ -47,17 +47,18 @@ test.describe("HU-03 · Dashboard principal", () => {
     await expect(page.getByTestId("summary-kpi-clients")).toHaveText(/^\d+$/);
   });
 
-  test("HU-03 · 6 «Más del día» está plegado y en el orden Fichas, Ocupación, Cumpleaños, Inactivos", async ({
+  test("HU-03 · 6 «Más del día» está plegado y en el orden Ocupación, Cumpleaños, Inactivos (las fichas son tarjetas siempre visibles)", async ({
     page,
   }) => {
     await loginAsDemo(page);
     const toggles = page.getByTestId("dashboard-more").getByRole("button");
-    await expect(toggles).toHaveCount(4);
-    await expect(toggles.nth(0)).toContainText("Today's service records");
-    await expect(toggles.nth(1)).toContainText("Occupancy by professional");
-    await expect(toggles.nth(2)).toContainText("Birthdays");
-    await expect(toggles.nth(3)).toContainText("Inactive clients");
-    for (let i = 0; i < 4; i++) await expect(toggles.nth(i)).toHaveAttribute("aria-expanded", "false");
+    await expect(toggles).toHaveCount(3);
+    await expect(toggles.nth(0)).toContainText("Occupancy by professional");
+    await expect(toggles.nth(1)).toContainText("Birthdays");
+    await expect(toggles.nth(2)).toContainText("Inactive clients");
+    for (let i = 0; i < 3; i++) await expect(toggles.nth(i)).toHaveAttribute("aria-expanded", "false");
+    // The fichas of the day are not folded: they are cards right on the Inicio.
+    await expect(page.getByTestId("dashboard-today-records")).toBeVisible();
     await expect(page.getByTestId("dashboard-inactive-clients")).toHaveCount(0);
 
     await openDashboardMore(page, "occupancy");

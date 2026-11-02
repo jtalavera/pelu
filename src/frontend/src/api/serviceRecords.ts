@@ -4,9 +4,10 @@ export type ServiceRecordLine = {
   id: number;
   serviceId: number;
   description: string;
-  unitPrice: string;
+  /** `null` for a professional: she never receives amounts. */
+  unitPrice: string | null;
   quantity: number;
-  lineTotal: string;
+  lineTotal: string | null;
   professionalId: number | null;
   professionalName: string | null;
 };
@@ -14,7 +15,7 @@ export type ServiceRecordLine = {
 export type ServiceRecordTip = {
   professionalId: number;
   professionalName: string;
-  amount: string;
+  amount: string | null;
 };
 
 export type ServiceRecordDetail = {
@@ -23,8 +24,8 @@ export type ServiceRecordDetail = {
   clientFullName: string;
   clientRuc: string | null;
   status: "OPEN" | "CLOSED" | "VOIDED";
-  totalAmount: string;
-  tipsTotal: string;
+  totalAmount: string | null;
+  tipsTotal: string | null;
   voidReason: string | null;
   createdAt: string;
   closedAt: string | null;
@@ -39,7 +40,7 @@ export type ServiceRecordListItem = {
   clientId: number;
   clientFullName: string;
   status: "OPEN" | "CLOSED" | "VOIDED";
-  totalAmount: string;
+  totalAmount: string | null;
   createdAt: string;
   /** Distinct service names on the record, comma-separated. */
   servicesSummary?: string | null;

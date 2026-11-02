@@ -432,7 +432,8 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
 
     await loginAs(page, email, password);
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    // She lands on the Inicio (open fichas of the day); the full "Service records" screen stays admin-only.
+    await expect(page).toHaveURL(/\/app\/?$/);
     await expect(page.getByRole("link", { name: "Service records" })).toHaveCount(0);
   });
 });

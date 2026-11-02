@@ -182,6 +182,9 @@ class PinSessionSecurityTest {
     "GET, /api/professionals",
     "GET, /api/services",
     "GET, /api/clients",
+    "GET, /api/service-records",
+    "GET, /api/service-records/4",
+    "PUT, /api/service-records/4",
   })
   void pinSession_reachesTheCalendar(String method, String uri) {
     assertThat(allowed(method, uri)).isTrue();
@@ -196,6 +199,8 @@ class PinSessionSecurityTest {
     "GET, /api/me/tour-state",
     "POST, /api/me/tour-state/calendar",
     "GET, /api/invoices",
+    "POST, /api/service-records",
+    "POST, /api/service-records/4/void",
     "POST, /api/professionals/9/unlock-pin",
     "GET, /api/shared-devices",
   })

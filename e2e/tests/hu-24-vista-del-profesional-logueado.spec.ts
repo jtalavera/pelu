@@ -81,7 +81,10 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await setupProfessionalWithAccess(base, `E2E Login ${Date.now()}`, email, "ValidPass1!");
 
     await loginAs(page, email, "ValidPass1!");
-    // Professional role redirects to /app/calendar
+    // A professional lands on the Inicio (open fichas of the day); her calendar is in the menu.
+    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page.getByTestId("professional-home")).toBeVisible();
+    await page.getByRole("link", { name: "Calendar" }).click();
     await expect(page).toHaveURL(/\/app\/calendar/);
   });
 
@@ -171,13 +174,14 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     const profId = await setupProfessionalWithAccess(base, `E2E NoProf ${Date.now()}`, email, "ValidPass1!");
 
     await loginAs(page, email, "ValidPass1!");
-    // Wait for AppShell to render with role loaded
+    // She lands on the Inicio; open her calendar (AppShell rendered with the role loaded).
+    await page.getByRole("link", { name: "Calendar" }).click();
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
     // Professionals nav link should not be in the DOM for professional role
     await expect(page.getByRole("link", { name: /^professionals$/i })).not.toBeVisible();
-    // Typing the URL sends her back to the calendar.
+    // Typing the URL sends her back to her Inicio.
     await page.goto("/app/professionals");
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    await expect(page).toHaveURL(/\/app\/?$/);
 
     // The API refuses the management endpoints (PIN, access, ABM) to a professional token.
     const profToken = await professionalToken(request, email);
@@ -203,21 +207,27 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await setupProfessionalWithAccess(base, `E2E NoAdmin ${Date.now()}`, email, "ValidPass1!");
 
     await loginAs(page, email, "ValidPass1!");
-    // Wait for AppShell to render with role loaded
+    // She lands on the Inicio; open her calendar (AppShell rendered with the role loaded).
+    await page.getByRole("link", { name: "Calendar" }).click();
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
-    // Dashboard and Settings nav items should not be in the DOM for professional role
-    await expect(page.getByRole("link", { name: /^dashboard$/i })).not.toBeVisible();
+    // The Inicio (the "Dashboard" item) is hers; Summary, Settings and Billing are not.
+    await expect(page.getByRole("link", { name: /^dashboard$/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^summary$/i })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /^(settings|business settings)$/i })).not.toBeVisible();
     await expect(page.getByRole("link", { name: /^billing$/i })).not.toBeVisible();
     // Issue #38 follow-up: no Stock for professionals.
     await expect(page.getByTestId("nav-stock")).toHaveCount(0);
 
-    // Typing an admin URL redirects to the calendar. (/app/clients is no longer one: since HU-68
+    // Typing an admin URL redirects to her Inicio. (/app/clients is no longer one: since HU-68
     // professionals get a restricted name list there — covered by hu-68's spec.)
-    for (const path of ["/app", "/app/billing", "/app/settings/business", "/app/dashboards", "/app/inactive-clients"]) {
+    for (const path of ["/app/billing", "/app/settings/business", "/app/dashboards", "/app/inactive-clients"]) {
       await page.goto(path);
-      await expect(page).toHaveURL(/\/app\/calendar/);
+      await expect(page).toHaveURL(/\/app\/?$/);
     }
+    // /app itself is her Inicio (not the admin dashboard).
+    await page.goto("/app");
+    await expect(page.getByTestId("professional-home")).toBeVisible();
+    await expect(page.getByTestId("dashboard-more")).toHaveCount(0);
 
     // And the API answers 403 for business settings, cash, invoices, dashboards, tips and Stock.
     const profToken = await professionalToken(request, email);
@@ -228,11 +238,14 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
       "/api/invoices",
       "/api/dashboard",
       "/api/propinas/balance",
-      "/api/service-records",
       "/api/fiscal-stamps",
     ]) {
       expect((await request.get(`${base}${path}`, { headers })).status(), path).toBe(403);
     }
+    // Fichas: she reads / edits the open ones of today (see inicio-fichas-profesional), but cannot
+    // create or void them.
+    expect((await request.post(`${base}/api/service-records`, { headers, data: {} })).status()).toBe(403);
+    expect((await request.post(`${base}/api/service-records/1/void`, { headers, data: {} })).status()).toBe(403);
     expect((await request.post(`${base}/api/cash-sessions/open`, { headers, data: {} })).status()).toBe(403);
     expect((await request.post(`${base}/api/sso/stock`, { headers })).status()).toBe(403);
   });

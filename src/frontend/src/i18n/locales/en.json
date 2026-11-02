@@ -3125,6 +3125,13 @@
         "rangeErrorInvalidOrder": "The start date must be before the end date.",
         "rangeErrorTooOld": "The start date cannot be more than 6 months in the past."
       },
+      "today": {
+        "title": "Today's service records",
+        "openCount_one": "{{count}} open",
+        "openCount_other": "{{count}} open",
+        "emptyOpen": "There are no open service records today.",
+        "proHint": "Open service records of the day. Tap one to add, change or remove services."
+      },
       "dashboard": {
         "title": "Today's service records",
         "empty": "No service records today.",

@@ -969,9 +969,7 @@ function AppShellInner() {
         }}
       >
         <SectionLabel label={t("femme.nav.sectionMain")} />
-        {!isProfessional && (
-          <SideNavItem to="/app" end label={t("femme.nav.dashboard")} icon={<DashboardIcon />} tourId="nav-dashboard" />
-        )}
+        <SideNavItem to="/app" end label={t("femme.nav.dashboard")} icon={<DashboardIcon />} tourId="nav-dashboard" />
         <SideNavItem to="/app/calendar" label={t("femme.nav.calendar")} icon={<CalendarIcon />} tourId="nav-calendar" />
         {!isProfessional && (
           <SideNavItem

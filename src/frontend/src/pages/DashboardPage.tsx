@@ -1,20 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Button, Card, Spinner, Text, Toast } from "@design-system";
+import { Alert, Button, Card, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { billingStateForAppointment } from "../lib/appointmentBilling";
 import { listAppointments, type Appointment } from "../api/appointments";
-import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
-import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
+import { TodayServiceRecords } from "../components/TodayServiceRecords";
 import { BirthdaysCard } from "../components/BirthdaysCard";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
-import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
-import { formatGuaraniesGs, formatAmountDecimal } from "../lib/formatMoney";
-import { formatParaguayDateTime } from "../lib/paraguayDateTime";
+import { formatGuaraniesGs } from "../lib/formatMoney";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useTour } from "../tour/useTour";
 import { dashboardSteps } from "../tour/steps/dashboard";
@@ -99,7 +96,7 @@ function fmtTime(iso: string, locale: string): string {
 
 const POLL_MS = 60_000;
 
-type MoreKey = "records" | "occupancy" | "birthdays" | "inactive";
+type MoreKey = "occupancy" | "birthdays" | "inactive";
 
 const APPT_STATUS_TEXT: Record<string, string> = {
   PENDING: "text-warning",
@@ -146,9 +143,6 @@ export default function DashboardPage() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
   const [todayAppts, setTodayAppts]   = useState<Appointment[]>([]);
-  const [todayServiceRecords, setTodayServiceRecords] = useState<ServiceRecordListItem[]>([]);
-  const [selectedServiceRecordId, setSelectedServiceRecordId] = useState<number | null>(null);
-  const [recordNotice, setRecordNotice] = useState<"updated" | "voided" | null>(null);
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [openMore, setOpenMore] = useState<MoreKey | null>(null);
   const [birthdaysCount, setBirthdaysCount] = useState<number | null>(0);
@@ -199,43 +193,6 @@ export default function DashboardPage() {
       .then(setTodayAppts)
       .catch(() => setTodayAppts([]));
   }, [todayRangeIso.from, todayRangeIso.to]);
-
-  // ── Today's fichas de servicio (any status), newest first ─────────────────
-  const loadTodayServiceRecords = useCallback(() => {
-    listServiceRecordsPaged({ from: todayRangeIso.from, to: todayRangeIso.to, size: 100 })
-      .then((page) => setTodayServiceRecords(Array.isArray(page?.content) ? page.content : []))
-      .catch(() => setTodayServiceRecords([]));
-  }, [todayRangeIso.from, todayRangeIso.to]);
-
-  useEffect(() => {
-    loadTodayServiceRecords();
-    const id = window.setInterval(loadTodayServiceRecords, POLL_MS);
-    return () => window.clearInterval(id);
-  }, [loadTodayServiceRecords]);
-
-  // Grouped by status (Open, Closed, Voided), newest first within each group, shown in a grid
-  // capped at 12 with a "Más" button that reveals more of the already-fetched records in place.
-  const SERVICE_RECORD_STATUS_RANK: Record<string, number> = { OPEN: 0, CLOSED: 1, VOIDED: 2 };
-  const DASHBOARD_SERVICE_RECORDS_CAP = 12;
-  const [visibleServiceRecordCount, setVisibleServiceRecordCount] = useState(
-    DASHBOARD_SERVICE_RECORDS_CAP,
-  );
-  useEffect(() => {
-    setVisibleServiceRecordCount(DASHBOARD_SERVICE_RECORDS_CAP);
-  }, [todayRangeIso.from]);
-  const sortedTodayServiceRecords = useMemo(() => {
-    return [...todayServiceRecords].sort((a, b) => {
-      const rankDiff =
-        (SERVICE_RECORD_STATUS_RANK[a.status] ?? 99) - (SERVICE_RECORD_STATUS_RANK[b.status] ?? 99);
-      if (rankDiff !== 0) return rankDiff;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-  }, [todayServiceRecords]);
-  const visibleTodayServiceRecords = sortedTodayServiceRecords.slice(
-    0,
-    visibleServiceRecordCount,
-  );
-  const hasMoreTodayServiceRecords = sortedTodayServiceRecords.length > visibleServiceRecordCount;
 
   // ── Occupancy by professional ─────────────────────────────────────────────
   const occupancy = useMemo(() => {
@@ -341,56 +298,6 @@ export default function DashboardPage() {
 
   const occupancyOpenKey = openMore;
   const moreSections: Array<{ key: MoreKey; label: string; count: number | null; body: React.ReactNode }> = [
-    {
-      key: "records",
-      label: t("femme.dashboard.home.moreRecords"),
-      count: todayServiceRecords.length,
-      body: (
-        <div>
-          {todayServiceRecords.length === 0 ? (
-            <div className="py-2 text-sm text-ink-3">{t("femme.serviceRecords.dashboard.empty")}</div>
-          ) : (
-            <div
-              data-testid="dashboard-service-records-grid"
-              className="grid grid-cols-1 gap-2 py-2 sm:grid-cols-2"
-            >
-              {visibleTodayServiceRecords.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  data-testid="dashboard-service-record-card"
-                  onClick={() => setSelectedServiceRecordId(r.id)}
-                  className="flex min-h-11 flex-col items-start gap-1 rounded-card border border-line bg-surface p-3 text-left"
-                >
-                  <span className="w-full truncate text-sm font-semibold text-ink">{r.clientFullName}</span>
-                  <span className="text-xs text-ink-3">
-                    {formatParaguayDateTime(r.createdAt, locale)} · {formatAmountDecimal(r.totalAmount)}
-                  </span>
-                  <StatusBadge status={r.status} />
-                </button>
-              ))}
-              {hasMoreTodayServiceRecords && (
-                <button
-                  type="button"
-                  data-testid="dashboard-service-records-more"
-                  onClick={() => setVisibleServiceRecordCount((c) => c + DASHBOARD_SERVICE_RECORDS_CAP)}
-                  className="min-h-11 rounded-card border border-line bg-surface p-3 text-sm font-semibold text-primary"
-                >
-                  {t("femme.serviceRecords.dashboard.showMore")}
-                </button>
-              )}
-            </div>
-          )}
-          <Link
-            to="/app/service-records"
-            state={{ activeTab: "history" }}
-            className="inline-flex min-h-11 items-center text-sm font-semibold text-primary"
-          >
-            {t("femme.serviceRecords.dashboard.viewHistory")}
-          </Link>
-        </div>
-      ),
-    },
     {
       key: "occupancy",
       label: t("femme.dashboard.home.moreOccupancy"),
@@ -646,7 +553,10 @@ export default function DashboardPage() {
         )}
       </Card>
 
-      {/* ── 5. MORE FOR TODAY (collapsed) ── */}
+      {/* ── 5. FICHAS DE HOY: eye-catching cards, the open ones first ── */}
+      <TodayServiceRecords />
+
+      {/* ── 6. MORE FOR TODAY (collapsed) ── */}
       <Card className="p-0" data-testid="dashboard-more">
         <h2 className="px-4 pb-1 pt-4 font-heading text-[15px] font-extrabold text-ink-2 sm:px-5">
           {t("femme.dashboard.home.moreTitle")}
@@ -690,29 +600,6 @@ export default function DashboardPage() {
         })}
       </Card>
 
-      {selectedServiceRecordId !== null && (
-        <ServiceRecordDetailModal
-          serviceRecordId={selectedServiceRecordId}
-          onClose={() => setSelectedServiceRecordId(null)}
-          onChanged={(kind) => {
-            void loadTodayServiceRecords();
-            setRecordNotice(kind);
-          }}
-        />
-      )}
-      <Toast
-        open={recordNotice !== null}
-        onOpenChange={(o) => {
-          if (!o) setRecordNotice(null);
-        }}
-        variant="success"
-        duration={4000}
-        data-testid="dashboard-record-toast"
-      >
-        {recordNotice === "voided"
-          ? t("femme.serviceRecords.voidedSuccess")
-          : t("femme.serviceRecords.updatedSuccess")}
-      </Toast>
     </div>
   );
 }

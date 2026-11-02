@@ -115,6 +115,8 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await clickSaveAndCloseModal(page, dlg);
 
     // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case typed here.
+    // (Search first: the list is long on a shared demo tenant and the new one may not be on page 1.)
+    await page.locator("#professionals-inline-search").fill(name1);
     await expect(page.getByText(name1.toUpperCase(), { exact: true }).first()).toBeVisible();
 
     const name2 = `E2E DupPin2 ${Date.now()}`;
@@ -151,6 +153,7 @@ test.describe("HU-22 · Asignar PIN a profesional", () => {
     await clickSaveAndCloseModal(page, dlg);
 
     // Names are stored in UPPERCASE (issue #155 AC3), regardless of the case typed here.
+    await page.locator("#professionals-inline-search").fill(name);
     await expect(page.getByText(name.toUpperCase(), { exact: true }).first()).toBeVisible();
 
     const row = page.locator('[data-testid^="prof-row-"]').filter({ hasText: name }).first();

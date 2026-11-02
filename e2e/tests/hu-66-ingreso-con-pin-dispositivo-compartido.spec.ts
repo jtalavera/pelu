@@ -204,8 +204,11 @@ test.describe("HU-66 · Ingreso con PIN en un dispositivo compartido", () => {
         await page.getByRole("button", { name: "Delete last digit" }).click();
         await page.getByRole("button", { name: "Delete last digit" }).click();
 
-        // 6 · right PIN → calendar.
+        // 6 · right PIN → Inicio (the open fichas of the day as cards); the calendar is one click away.
         await typePin(page, pin);
+        await expect(page).toHaveURL(/\/app\/?$/);
+        await expect(page.getByTestId("professional-home")).toBeVisible();
+        await page.goto("/app/calendar");
         await expect(page).toHaveURL(/\/app\/calendar/);
         await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
         const scroll = await page.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
@@ -218,9 +221,9 @@ test.describe("HU-66 · Ingreso con PIN en un dispositivo compartido", () => {
         // 7 · calendar only: no "Mis comisiones", no profile / password menu; URLs bounce.
         await expect(page.getByRole("button", { name: /user menu/i })).toHaveCount(0);
         await page.goto("/app/my-commissions");
-        await expect(page).toHaveURL(/\/app\/calendar/);
+        await expect(page).toHaveURL(/\/app\/?$/);
         await page.goto("/app/billing");
-        await expect(page).toHaveURL(/\/app\/calendar/);
+        await expect(page).toHaveURL(/\/app\/?$/);
 
         // 7 + 17 · the backend agrees; and the session is useless off this device.
         const token = await page.evaluate(() => sessionStorage.getItem("accessToken"));
@@ -310,7 +313,7 @@ test.describe("HU-66 · Ingreso con PIN en un dispositivo compartido", () => {
         await page.reload();
         await page.getByTestId(`shared-device-professional-${pro.id}`).click();
         await typePin(page, pin);
-        await expect(page).toHaveURL(/\/app\/calendar/);
+        await expect(page).toHaveURL(/\/app\/?$/);
       });
     });
   }
@@ -376,15 +379,17 @@ test.describe("HU-66 · Ingreso con PIN en un dispositivo compartido", () => {
     await page.goto("/device");
     await page.getByTestId(`shared-device-professional-${pro.id}`).click();
     await typePin(page, pin);
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    await expect(page).toHaveURL(/\/app\/?$/);
     await page.clock.fastForward("04:30");
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    await expect(page).toHaveURL(/\/app\/?$/);
     await page.clock.fastForward("00:40");
     await expect(page).toHaveURL(/\/device$/);
   });
 
   /** Triggers an API call from the calendar; a background refresh may already have redirected. */
   async function nudgeCalendar(page: Page) {
+    // The session starts on the Inicio: open the calendar so there is an API call to make.
+    await page.goto("/app/calendar").catch(() => undefined);
     await page
       .getByRole("button", { name: /next/i })
       .first()
@@ -408,7 +413,7 @@ test.describe("HU-66 · Ingreso con PIN en un dispositivo compartido", () => {
     await page.goto("/device");
     await page.getByTestId(`shared-device-professional-${pro.id}`).click();
     await typePin(page, pin);
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    await expect(page).toHaveURL(/\/app\/?$/);
 
     // The admin changes her PIN → her next action takes the device back to the picker.
     const put = await request.put(`${base}/api/professionals/${pro.id}`, {
@@ -425,7 +430,7 @@ test.describe("HU-66 · Ingreso con PIN en un dispositivo compartido", () => {
     await page.reload();
     await page.getByTestId(`shared-device-professional-${pro2.id}`).click();
     await typePin(page, pin2);
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    await expect(page).toHaveURL(/\/app\/?$/);
     await request.post(`${base}/api/professionals/${pro2.id}/deactivate`, { headers: authHeaders(admin) });
     await nudgeCalendar(page);
     await expect(page).toHaveURL(/\/device$/);

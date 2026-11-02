@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Professional;
@@ -30,11 +31,14 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import org.hibernate.Hibernate;
 import org.springframework.data.domain.Page;
@@ -57,6 +61,7 @@ public class ServiceRecordService {
   private final SalonServiceRepository salonServiceRepository;
   private final TenantRepository tenantRepository;
   private final InvoiceRepository invoiceRepository;
+  private final FemmeTimeProperties timeProperties;
 
   public ServiceRecordService(
       ServiceRecordRepository serviceRecordRepository,
@@ -64,13 +69,15 @@ public class ServiceRecordService {
       ProfessionalRepository professionalRepository,
       SalonServiceRepository salonServiceRepository,
       TenantRepository tenantRepository,
-      InvoiceRepository invoiceRepository) {
+      InvoiceRepository invoiceRepository,
+      FemmeTimeProperties timeProperties) {
     this.serviceRecordRepository = serviceRecordRepository;
     this.clientRepository = clientRepository;
     this.professionalRepository = professionalRepository;
     this.salonServiceRepository = salonServiceRepository;
     this.tenantRepository = tenantRepository;
     this.invoiceRepository = invoiceRepository;
+    this.timeProperties = timeProperties;
   }
 
   @Transactional
@@ -168,6 +175,137 @@ public class ServiceRecordService {
         recordPage.getTotalPages());
   }
 
+  // ── Professional view (Inicio de la profesional / dispositivo compartido) ──────────────────
+  //
+  // A professional sees every OPEN ficha of today (the salon's business day) and may add, change
+  // and remove services and quantities. She never sees or sets money: amounts come back null, new
+  // lines take the catalog price (a kept service keeps the price it already had) and tips are not
+  // touched.
+
+  /** Every OPEN ficha created today, newest first, without amounts. */
+  @Transactional(readOnly = true)
+  public List<ServiceRecordListItemResponse> listOpenTodayForProfessional(long tenantId) {
+    Instant[] today = businessDayRange();
+    Page<ServiceRecord> recordPage =
+        serviceRecordRepository.findByTenantWithFiltersPaged(
+            tenantId,
+            today[0],
+            today[1],
+            null,
+            ServiceRecordStatus.OPEN,
+            null,
+            PageRequest.of(0, 200));
+    return recordPage.getContent().stream()
+        .map(ServiceRecordService::toListItemDto)
+        .map(ServiceRecordService::withoutAmounts)
+        .collect(Collectors.toList());
+  }
+
+  /** An OPEN ficha of today, without amounts; anything else is "not found" for a professional. */
+  @Transactional(readOnly = true)
+  public ServiceRecordResponse getOpenTodayForProfessional(long tenantId, long id) {
+    ServiceRecord record = requireOpenTodayRecord(tenantId, id);
+    Hibernate.initialize(record.getLines());
+    Hibernate.initialize(record.getTips());
+    return withoutAmounts(toDetailDto(record, null));
+  }
+
+  /**
+   * Replaces the ficha's services (service, professional, quantity). The client, prices and tips
+   * sent in the request are ignored: a kept service keeps its price, a new one takes the catalog
+   * price, and a tip is dropped only when its professional no longer appears in any line.
+   */
+  @Transactional
+  public ServiceRecordResponse updateServicesAsProfessional(
+      long tenantId, long id, ServiceRecordRequest request) {
+    ServiceRecord record = requireOpenTodayRecord(tenantId, id);
+    Hibernate.initialize(record.getLines());
+    Hibernate.initialize(record.getTips());
+
+    Map<Long, Deque<BigDecimal>> keptPrices = new LinkedHashMap<>();
+    for (ServiceRecordLine existing : record.getLines()) {
+      keptPrices
+          .computeIfAbsent(existing.getSalonService().getId(), k -> new ArrayDeque<>())
+          .add(existing.getUnitPrice());
+    }
+    BiFunction<ServiceRecordLineRequest, SalonService, BigDecimal> priceFor =
+        (lr, service) -> {
+          Deque<BigDecimal> kept = keptPrices.get(service.getId());
+          if (kept != null && !kept.isEmpty()) {
+            return kept.poll();
+          }
+          return service.getPriceMinor() != null ? service.getPriceMinor() : BigDecimal.ZERO;
+        };
+
+    record.getLines().clear();
+    Set<Long> lineProfessionalIds = applyLines(record, request.lines(), tenantId, priceFor);
+    record.getTips().removeIf(t -> !lineProfessionalIds.contains(t.getProfessional().getId()));
+    return withoutAmounts(toDetailDto(record, null));
+  }
+
+  private ServiceRecord requireOpenTodayRecord(long tenantId, long id) {
+    ServiceRecord record = requireOpenServiceRecord(tenantId, id);
+    Instant[] today = businessDayRange();
+    if (record.getCreatedAt().isBefore(today[0]) || record.getCreatedAt().isAfter(today[1])) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "SERVICE_RECORD_NOT_FOUND");
+    }
+    return record;
+  }
+
+  /** [start, end] of today in the salon's business time zone. */
+  private Instant[] businessDayRange() {
+    ZoneId zone = timeProperties.zoneId();
+    LocalDate today = LocalDate.now(zone);
+    return new Instant[] {
+      today.atStartOfDay(zone).toInstant(),
+      today.plusDays(1).atStartOfDay(zone).toInstant().minusMillis(1)
+    };
+  }
+
+  private static ServiceRecordListItemResponse withoutAmounts(ServiceRecordListItemResponse r) {
+    return new ServiceRecordListItemResponse(
+        r.id(),
+        r.clientId(),
+        r.clientFullName(),
+        r.status(),
+        null,
+        r.createdAt(),
+        r.servicesSummary(),
+        r.professionalsSummary());
+  }
+
+  private static ServiceRecordResponse withoutAmounts(ServiceRecordResponse r) {
+    List<ServiceRecordLineResponse> lines =
+        r.lines().stream()
+            .map(
+                l ->
+                    new ServiceRecordLineResponse(
+                        l.id(),
+                        l.serviceId(),
+                        l.description(),
+                        null,
+                        l.quantity(),
+                        null,
+                        l.professionalId(),
+                        l.professionalName()))
+            .collect(Collectors.toList());
+    return new ServiceRecordResponse(
+        r.id(),
+        r.clientId(),
+        r.clientFullName(),
+        null,
+        r.status(),
+        null,
+        null,
+        r.voidReason(),
+        r.createdAt(),
+        r.closedAt(),
+        r.invoiceId(),
+        r.invoiceNumberFormatted(),
+        lines,
+        List.of());
+  }
+
   static Instant[] resolveListRange(Instant from, Instant to) {
     ZoneId zone = ZoneId.systemDefault();
     if (from == null && to == null) {
@@ -214,10 +352,35 @@ public class ServiceRecordService {
 
   private void applyLinesAndTips(
       ServiceRecord record, ServiceRecordRequest request, long tenantId) {
+    Map<Long, Professional> professionalsById = new LinkedHashMap<>();
+    Set<Long> lineProfessionalIds =
+        applyLines(
+            record,
+            request.lines(),
+            tenantId,
+            (lr, service) -> lr.unitPrice() != null ? lr.unitPrice() : BigDecimal.ZERO,
+            professionalsById);
+    reconcileTips(record, request, lineProfessionalIds, professionalsById);
+  }
+
+  private Set<Long> applyLines(
+      ServiceRecord record,
+      List<ServiceRecordLineRequest> lines,
+      long tenantId,
+      BiFunction<ServiceRecordLineRequest, SalonService, BigDecimal> priceFor) {
+    return applyLines(record, lines, tenantId, priceFor, new LinkedHashMap<>());
+  }
+
+  /** Builds the ficha's lines and total; returns the ids of the professionals on its lines. */
+  private Set<Long> applyLines(
+      ServiceRecord record,
+      List<ServiceRecordLineRequest> lines,
+      long tenantId,
+      BiFunction<ServiceRecordLineRequest, SalonService, BigDecimal> priceFor,
+      Map<Long, Professional> professionalsById) {
     BigDecimal total = BigDecimal.ZERO;
     Set<Long> lineProfessionalIds = new LinkedHashSet<>();
-    Map<Long, Professional> professionalsById = new LinkedHashMap<>();
-    for (ServiceRecordLineRequest lr : request.lines()) {
+    for (ServiceRecordLineRequest lr : lines) {
       if (lr.quantity() != null && lr.quantity() < 1) {
         throw new ResponseStatusException(
             HttpStatus.BAD_REQUEST, "SERVICE_RECORD_LINE_QUANTITY_INVALID");
@@ -247,9 +410,7 @@ public class ServiceRecordService {
       line.setProfessional(professional);
       line.setDescription(salonService.getName());
       int quantity = lr.quantity() != null ? lr.quantity() : 1;
-      BigDecimal unitPrice =
-          (lr.unitPrice() != null ? lr.unitPrice() : BigDecimal.ZERO)
-              .setScale(2, RoundingMode.HALF_UP);
+      BigDecimal unitPrice = priceFor.apply(lr, salonService).setScale(2, RoundingMode.HALF_UP);
       line.setUnitPrice(unitPrice);
       line.setQuantity(quantity);
       record.getLines().add(line);
@@ -261,8 +422,7 @@ public class ServiceRecordService {
       }
     }
     record.setTotalAmount(total.setScale(2, RoundingMode.HALF_UP));
-
-    reconcileTips(record, request, lineProfessionalIds, professionalsById);
+    return lineProfessionalIds;
   }
 
   /**

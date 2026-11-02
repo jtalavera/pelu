@@ -74,6 +74,9 @@ for (const vp of VIEWPORTS) {
       const { email } = await setupProfessional(request);
 
       await loginAs(page, email, PASSWORD);
+      // She lands on the Inicio; the calendar is the next screen.
+      await expect(page).toHaveURL(/\/app\/?$/);
+      await page.goto("/app/calendar");
       await expect(page).toHaveURL(/\/app\/calendar/);
       await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
       await expectNoHorizontalScroll(page);
@@ -208,6 +211,8 @@ test.describe("Sin zoom automático de iPhone al tocar campos", () => {
       await expectAllAtLeast16px(page, "login");
 
       await loginAs(page, email, PASSWORD);
+      await expectAllAtLeast16px(page, "inicio", { allowEmpty: true });
+      await page.goto("/app/calendar");
       await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
       await expectAllAtLeast16px(page, "calendar", { allowEmpty: true });
 

@@ -28,6 +28,8 @@ type Props = {
   /** When set with `invalid`, links the input to a `FieldValidationError` id for accessibility. */
   errorDescribedById?: string;
   invalid?: boolean;
+  /** Hide catalog prices in the suggestions (professionals never see money). */
+  hidePrices?: boolean;
 };
 
 const DEBOUNCE_MS = 300;
@@ -56,6 +58,7 @@ export function ServiceSearchField({
   placeholder,
   errorDescribedById,
   invalid,
+  hidePrices = false,
 }: Props) {
   const { t } = useTranslation();
   const inputId = id ?? "service-search-field";
@@ -202,9 +205,11 @@ export function ServiceSearchField({
           {results.map((service) => {
             const metaParts = [
               service.categoryName,
-              t("femme.billing.invoice.lineServicePriceGs", {
-                amount: formatPriceGs(service.priceMinor),
-              }),
+              hidePrices
+                ? null
+                : t("femme.billing.invoice.lineServicePriceGs", {
+                    amount: formatPriceGs(service.priceMinor),
+                  }),
               t("femme.billing.invoice.lineServiceDuration", {
                 minutes: service.durationMinutes,
               }),

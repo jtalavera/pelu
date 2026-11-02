@@ -71,11 +71,7 @@ export default function LoginPage() {
       const destination =
         role === "PLATFORM_ADMIN"
           ? "/platform"
-          : from !== "/app"
-            ? from
-            : role === "PROFESSIONAL"
-              ? "/app/calendar"
-              : "/app";
+          : from;
       navigate(destination, { replace: true });
     } catch {
       setError(t("femme.login.errorNetwork"));

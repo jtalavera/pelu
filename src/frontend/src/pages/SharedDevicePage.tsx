@@ -103,7 +103,7 @@ export default function SharedDevicePage() {
       const result = await pinLogin(device.token, selected.id, pin);
       if ("accessToken" in result) {
         startPinSession(result.accessToken);
-        navigate("/app/calendar", { replace: true });
+        navigate("/app", { replace: true });
         return;
       }
       setPin("");

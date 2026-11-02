@@ -10,7 +10,10 @@ export function ServiceRecordDetailModal({
   serviceRecordId,
   onClose,
   onChanged,
+  professionalMode = false,
 }: {
+  /** A professional edits services and quantities only (no money, tips, void or "Cobrar"). */
+  professionalMode?: boolean;
   serviceRecordId: number;
   onClose: () => void;
   /** Called after the record was saved or voided; the dialog closes itself right after. */
@@ -75,6 +78,7 @@ export function ServiceRecordDetailModal({
           <ServiceRecordEditor
             initial={record}
             allowClientCreateNew={false}
+            professionalMode={professionalMode}
             onSaved={() => {
               onChanged?.("updated");
               onClose();

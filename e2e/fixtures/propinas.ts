@@ -5,13 +5,16 @@ export async function filterPropinasByProfessional(page: Page, fullName: string)
   const toggle = page.getByTestId("propinas-filters-toggle");
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
   const select = page.locator("#propinas-filter-professional");
-  const value = await select.evaluate((el, name) => {
-    const opt = Array.from((el as HTMLSelectElement).options).find(
-      (o) => o.text.trim().toLowerCase() === String(name).trim().toLowerCase(),
-    );
-    return opt ? opt.value : null;
-  }, fullName);
-  expect(value, `professional "${fullName}" in the Propinas filter`).not.toBeNull();
+  // The professionals load after the page: wait until the option is there.
+  const findValue = () =>
+    select.evaluate((el, name) => {
+      const opt = Array.from((el as HTMLSelectElement).options).find(
+        (o) => o.text.trim().toLowerCase() === String(name).trim().toLowerCase(),
+      );
+      return opt ? opt.value : null;
+    }, fullName);
+  await expect.poll(findValue, { timeout: 15_000, message: `professional "${fullName}" in the Propinas filter` }).not.toBeNull();
+  const value = await findValue();
   await select.selectOption(value!);
 }
 

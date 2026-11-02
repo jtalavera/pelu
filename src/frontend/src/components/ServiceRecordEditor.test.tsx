@@ -268,4 +268,36 @@ describe("ServiceRecordEditor", () => {
     expect(screen.getByText(/Left early/)).toBeTruthy();
     expect(screen.queryByTestId("service-record-submit")).toBeNull();
   });
+
+  describe("professional mode (no money, tips, void or charge)", () => {
+    const proRecord: ServiceRecordDetail = {
+      ...openRecord,
+      totalAmount: null,
+      tipsTotal: null,
+      clientRuc: null,
+      lines: openRecord.lines.map((l) => ({ ...l, unitPrice: null, lineTotal: null })),
+      tips: [],
+    };
+
+    it("hides prices, totals, tips, void and charge, and saves services without prices or tips", async () => {
+      femmePutJson.mockResolvedValue(proRecord);
+      renderEditor(proRecord, { professionalMode: true });
+      await screen.findByText("Marta Benítez");
+
+      expect(screen.queryByTestId("service-record-total")).toBeNull();
+      expect(screen.queryByTestId("service-record-tips-toggle")).toBeNull();
+      expect(screen.queryByTestId("service-record-void-open")).toBeNull();
+      expect(screen.queryByTestId("service-record-generate-invoice")).toBeNull();
+      expect(screen.queryAllByTestId("service-record-line-subtotal")).toHaveLength(0);
+
+      await userEvent.click(screen.getByTestId("service-record-submit"));
+      await waitFor(() => expect(femmePutJson).toHaveBeenCalled());
+      const body = femmePutJson.mock.calls[0][1] as {
+        lines: Array<{ unitPrice: number | null; quantity: number }>;
+        tips: unknown[];
+      };
+      expect(body.lines.every((l) => l.unitPrice === null)).toBe(true);
+      expect(body.tips).toEqual([]);
+    });
+  });
 });

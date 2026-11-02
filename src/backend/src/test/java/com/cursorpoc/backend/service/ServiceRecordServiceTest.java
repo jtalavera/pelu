@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.SalonService;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -45,6 +47,7 @@ class ServiceRecordServiceTest {
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private TenantRepository tenantRepository;
   @Mock private InvoiceRepository invoiceRepository;
+  @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   @InjectMocks private ServiceRecordService serviceRecordService;
 
@@ -462,5 +465,123 @@ class ServiceRecordServiceTest {
         .isInstanceOf(ResponseStatusException.class)
         .hasFieldOrPropertyWithValue("statusCode", HttpStatus.CONFLICT)
         .hasMessageContaining("SERVICE_RECORD_NOT_OPEN");
+  }
+
+  // ── Professional view: open fichas of today, no money ─────────────────────────────────────
+
+  private ServiceRecord openRecordToday(long id) {
+    ServiceRecord r = new ServiceRecord();
+    r.setId(id);
+    r.setTenant(tenant);
+    r.setClient(client);
+    r.setStatus(ServiceRecordStatus.OPEN);
+    r.setCreatedAt(Instant.now());
+    r.setTotalAmount(new BigDecimal("50000"));
+    ServiceRecordLine line = new ServiceRecordLine();
+    line.setServiceRecord(r);
+    line.setSalonService(salonService);
+    line.setProfessional(professional);
+    line.setDescription("Corte");
+    line.setQuantity(1);
+    line.setUnitPrice(new BigDecimal("40000"));
+    r.getLines().add(line);
+    ServiceRecordTip tip = new ServiceRecordTip();
+    tip.setServiceRecord(r);
+    tip.setProfessional(professional);
+    tip.setAmount(new BigDecimal("5000"));
+    r.getTips().add(tip);
+    return r;
+  }
+
+  @Test
+  void professionalGet_returnsOpenRecordOfTodayWithoutAnyAmount() {
+    ServiceRecord open = openRecordToday(60L);
+    when(serviceRecordRepository.findByIdAndTenant_Id(60L, 1L)).thenReturn(Optional.of(open));
+
+    ServiceRecordResponse result = serviceRecordService.getOpenTodayForProfessional(1L, 60L);
+
+    assertThat(result.totalAmount()).isNull();
+    assertThat(result.tipsTotal()).isNull();
+    assertThat(result.clientRuc()).isNull();
+    assertThat(result.tips()).isEmpty();
+    assertThat(result.lines()).hasSize(1);
+    assertThat(result.lines().get(0).unitPrice()).isNull();
+    assertThat(result.lines().get(0).lineTotal()).isNull();
+    assertThat(result.lines().get(0).quantity()).isEqualTo(1);
+  }
+
+  @Test
+  void professionalGet_recordFromAnotherDay_isNotFound() {
+    ServiceRecord old = openRecordToday(61L);
+    old.setCreatedAt(Instant.now().minus(java.time.Duration.ofDays(2)));
+    when(serviceRecordRepository.findByIdAndTenant_Id(61L, 1L)).thenReturn(Optional.of(old));
+
+    assertThatThrownBy(() -> serviceRecordService.getOpenTodayForProfessional(1L, 61L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasFieldOrPropertyWithValue("statusCode", HttpStatus.NOT_FOUND);
+  }
+
+  @Test
+  void professionalGet_closedRecord_isRejected() {
+    ServiceRecord closed = openRecordToday(62L);
+    closed.setStatus(ServiceRecordStatus.CLOSED);
+    when(serviceRecordRepository.findByIdAndTenant_Id(62L, 1L)).thenReturn(Optional.of(closed));
+
+    assertThatThrownBy(() -> serviceRecordService.getOpenTodayForProfessional(1L, 62L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SERVICE_RECORD_NOT_OPEN");
+  }
+
+  @Test
+  void professionalUpdate_ignoresPricesAndTips_keepsPriceOfKeptServiceAndUsesCatalogForNew() {
+    SalonService color = new SalonService();
+    color.setId(10L);
+    color.setTenant(tenant);
+    color.setName("Color");
+    color.setPriceMinor(new BigDecimal("30000"));
+
+    ServiceRecord open = openRecordToday(63L);
+    when(serviceRecordRepository.findByIdAndTenant_Id(63L, 1L)).thenReturn(Optional.of(open));
+    when(salonServiceRepository.findByIdAndTenant_Id(9L, 1L)).thenReturn(Optional.of(salonService));
+    when(salonServiceRepository.findByIdAndTenant_Id(10L, 1L)).thenReturn(Optional.of(color));
+    when(professionalRepository.findByIdAndTenant_Id(3L, 1L)).thenReturn(Optional.of(professional));
+
+    // The request tries to set a price (999) and a tip: both must be ignored.
+    var kept = new ServiceRecordLineRequest(9L, 3L, 2, new BigDecimal("999"));
+    var added = new ServiceRecordLineRequest(10L, 3L, 1, new BigDecimal("999"));
+    var tip = new ServiceRecordTipRequest(3L, new BigDecimal("999"));
+    var request = new ServiceRecordRequest(99L, List.of(kept, added), List.of(tip));
+
+    ServiceRecordResponse result =
+        serviceRecordService.updateServicesAsProfessional(1L, 63L, request);
+
+    // The response carries no money…
+    assertThat(result.totalAmount()).isNull();
+    assertThat(result.lines()).hasSize(2);
+    // …but the stored record: kept service keeps 40.000, the new one takes the catalog 30.000.
+    assertThat(open.getLines().get(0).getUnitPrice()).isEqualByComparingTo("40000");
+    assertThat(open.getLines().get(0).getQuantity()).isEqualTo(2);
+    assertThat(open.getLines().get(1).getUnitPrice()).isEqualByComparingTo("30000");
+    assertThat(open.getTotalAmount()).isEqualByComparingTo("110000");
+    // The client is untouched and the existing tip keeps its amount.
+    assertThat(open.getClient().getId()).isEqualTo(7L);
+    assertThat(open.getTips()).hasSize(1);
+    assertThat(open.getTips().get(0).getAmount()).isEqualByComparingTo("5000");
+  }
+
+  @Test
+  void professionalUpdate_removingTheTippedProfessionalsLines_dropsHerTip() {
+    ServiceRecord open = openRecordToday(64L);
+    when(serviceRecordRepository.findByIdAndTenant_Id(64L, 1L)).thenReturn(Optional.of(open));
+    when(salonServiceRepository.findByIdAndTenant_Id(9L, 1L)).thenReturn(Optional.of(salonService));
+
+    // The only line is re-saved without a professional: nobody is left to hold the tip.
+    var line = new ServiceRecordLineRequest(9L, null, 1, null);
+    var request = new ServiceRecordRequest(7L, List.of(line), null);
+
+    serviceRecordService.updateServicesAsProfessional(1L, 64L, request);
+
+    assertThat(open.getTips()).isEmpty();
+    assertThat(open.getLines()).hasSize(1);
   }
 }

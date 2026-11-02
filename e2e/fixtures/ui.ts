@@ -222,7 +222,8 @@ export async function advanceWeekUntilAppointment(
 ) {
   const appt = page.getByTestId(`calendar-appt-${appointmentId}`);
   for (let i = 0; i < 3; i++) {
-    if (await appt.isVisible().catch(() => false)) return;
+    // Give the grid a moment to load its appointments before deciding it is not in this week.
+    if (await appt.waitFor({ state: "visible", timeout: 4_000 }).then(() => true).catch(() => false)) return;
     await page.getByRole("button", { name: "Next week" }).click();
     await page.waitForTimeout(500);
   }
@@ -235,7 +236,8 @@ export async function openWeekWithAppointment(
   await page.goto("/app/calendar?view=week");
   const appt = page.getByTestId(`calendar-appt-${appointmentId}`);
   for (let i = 0; i < 3; i++) {
-    if (await appt.isVisible().catch(() => false)) return;
+    // Give the grid a moment to load its appointments before deciding it is not in this week.
+    if (await appt.waitFor({ state: "visible", timeout: 4_000 }).then(() => true).catch(() => false)) return;
     await page.getByRole("button", { name: "Next week" }).click();
     await page.waitForTimeout(500);
   }
