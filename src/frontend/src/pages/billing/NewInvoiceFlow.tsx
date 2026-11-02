@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Card, Checkbox, Heading, Input, Label, Select, Text } from "@design-system";
 import { femmeJson, femmePostJson } from "../../api/femmeClient";
+import { listAppointments, updateAppointmentStatus, type Appointment } from "../../api/appointments";
+import { formatParaguayTime } from "../../lib/paraguayDateTime";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { downloadInvoicePdf } from "../../api/downloadInvoicePdf";
@@ -141,7 +143,6 @@ export function NewInvoiceFlow({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const dateLocale = useDateLocale();
   /** HU-33 AC-01: once SIFEN is active, "Download PDF" always downloads the KuDE format. */
   const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
   // HU-COM-10: professional / seller per line. The commission only accrues when the commissions
@@ -202,6 +203,10 @@ export function NewInvoiceFlow({
   const [recordLinked, setRecordLinked] = useState(true);
   const [recordImported, setRecordImported] = useState(false);
   const [recordAskDismissed, setRecordAskDismissed] = useState(false);
+  /** Today's active turno of the picked client that has no ficha: offered to be completed on paying. */
+  const [openTurno, setOpenTurno] = useState<Appointment | null>(null);
+  const [completeTurno, setCompleteTurno] = useState(true);
+  const dateLocale = useDateLocale();
   const detectSeq = useRef(0);
   // Tips per professional ("Propinas" section), keyed by professional id. Prefilled from the ficha.
   const [tips, setTips] = useState<Record<string, string>>(() => {
@@ -342,9 +347,32 @@ export function NewInvoiceFlow({
     setClientTaxpayerType(client.taxpayerType ?? "PERSONA_FISICA");
   }
 
+  /** Looks for today's PENDING / CONFIRMED / IN_PROGRESS turno of the client that has no ficha. */
+  async function detectOpenTurno(clientId: number, seq: number) {
+    try {
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const list = await listAppointments(from.toISOString(), to.toISOString(), null, clientId);
+      if (seq !== detectSeq.current) return;
+      const found = list
+        .filter(
+          (a) =>
+            !a.serviceRecordId &&
+            (a.status === "PENDING" || a.status === "CONFIRMED" || a.status === "IN_PROGRESS"),
+        )
+        .sort((a, b) => a.startAt.localeCompare(b.startAt))[0];
+      setOpenTurno(found ?? null);
+      setCompleteTurno(true);
+    } catch {
+      // Best effort: the invoice can still be issued.
+    }
+  }
+
   /** Drops a ficha found by detection (the prefill from "Cobrar" is left alone). */
   function clearDetectedRecord() {
     detectSeq.current += 1;
+    setOpenTurno(null);
     setOpenRecord((prev) => {
       if (prev && serviceRecordId === prev.id) setServiceRecordId(null);
       return null;
@@ -440,6 +468,7 @@ export function NewInvoiceFlow({
     if (sel?.type === "client") {
       clearDetectedRecord();
       void detectOpenRecord(sel.client.id);
+      void detectOpenTurno(sel.client.id, detectSeq.current);
     } else {
       clearDetectedRecord();
     }
@@ -983,6 +1012,11 @@ export function NewInvoiceFlow({
         "/api/invoices",
         payload,
       );
+      // Billed with no ficha: the client's turno of today is completed here, if the user left it ticked.
+      if (serviceRecordId == null && openTurno && completeTurno) {
+        void updateAppointmentStatus(openTurno.id, { status: "COMPLETED", cancelReason: null }).catch(() => {});
+      }
+      setOpenTurno(null);
       setSuccessInvoiceNumber(result.invoiceNumberFormatted);
       setLastInvoiceId(result.id);
       setIssuedInvoice(null);
@@ -1450,6 +1484,24 @@ export function NewInvoiceFlow({
                       : t("femme.billing.invoice.openRecord.relink")}
                   </button>
                 </div>
+              </Alert>
+            ) : null}
+            {openTurno && serviceRecordId == null ? (
+              <Alert variant="info" data-testid="billing-open-turno-notice" title={t("femme.billing.invoice.openTurno.title")}>
+                <label className="flex min-h-11 items-center gap-2">
+                  <Checkbox
+                    id="billing-open-turno-complete"
+                    data-testid="billing-open-turno-complete"
+                    checked={completeTurno}
+                    onChange={() => setCompleteTurno((v) => !v)}
+                  />
+                  <span>
+                    {t("femme.billing.invoice.openTurno.complete", {
+                      time: formatParaguayTime(openTurno.startAt, dateLocale),
+                      service: openTurno.serviceName,
+                    })}
+                  </span>
+                </label>
               </Alert>
             ) : null}
             {!identified && (

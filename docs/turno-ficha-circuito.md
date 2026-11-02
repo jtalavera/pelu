@@ -21,6 +21,12 @@ nullable, índice único filtrado; migración `V91`). Las fichas sin turno (clie
 - Anular una ficha cobrada no reabre el turno.
 - Una profesional solo opera los turnos propios y nunca recibe montos.
 
+## Facturar sin ficha (mostrador)
+En «Nueva factura», al elegir una clienta que no tiene ficha abierta pero sí un turno de hoy sin ficha (Pendiente,
+Confirmado o En curso; el más temprano), aparece un aviso con la casilla «Marcar como completado el turno de las HH:MM
+al cobrar», tildada por defecto. Si sigue tildada, al emitir la factura el turno pasa a Completado (el frontend usa
+`PATCH /api/appointments/{id}/status`). No se crea ficha.
+
 ## API
 | Método | Ruta | Qué hace |
 |---|---|---|
@@ -37,4 +43,4 @@ El Inicio de la profesional (login normal y dispositivo con PIN) no lista turnos
 
 ## Tests
 JUnit `AppointmentServiceRecordServiceTest`, `ProfessionalAccessPolicyTest`; Vitest `AppointmentFichaAction.test.tsx`;
-Playwright `turno-ficha-circuito.spec.ts` y `hu-03-dashboard-principal.spec.ts` (test 7).
+Playwright `turno-ficha-circuito.spec.ts` (incluye facturar sin ficha) y `hu-03-dashboard-principal.spec.ts` (test 7).

@@ -1606,6 +1606,10 @@
         "noName": "No name",
         "noNameHint": "Final consumer. Search a client above to identify them on the invoice.",
         "stepItems": "Which services or products are we billing?",
+        "openTurno": {
+          "title": "This client has an appointment today without a service record",
+          "complete": "Mark the {{time}} appointment ({{service}}) as completed when paid"
+        },
         "openRecord": {
           "title": "This client already has an open service record today",
           "summary_one": "{{count}} service loaded · {{amount}}",

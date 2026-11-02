@@ -1606,6 +1606,10 @@
         "noName": "Sin nombre",
         "noNameHint": "Consumidor final. Buscá un cliente arriba para identificarlo en la factura.",
         "stepItems": "¿Qué servicios o productos facturamos?",
+        "openTurno": {
+          "title": "Esta clienta tiene un turno hoy sin ficha",
+          "complete": "Marcar como completado el turno de las {{time}} ({{service}}) al cobrar"
+        },
         "openRecord": {
           "title": "Este cliente ya tiene una ficha de servicio abierta hoy",
           "summary_one": "{{count}} servicio cargado · {{amount}}",

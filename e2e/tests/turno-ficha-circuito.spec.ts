@@ -14,6 +14,8 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome } from "../fixtures/billing";
+import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 /**
  * Circuito turno ↔ ficha de servicio.
@@ -247,6 +249,59 @@ test.describe("Turno y ficha de servicio", () => {
     expect(ficha.status).toBe("OPEN");
     expect(ficha.appointmentId).toBeNull();
     expect((await getAppt(request, admin, turno.id)).serviceRecordId).toBeNull();
+  });
+
+  test("Facturación sin ficha: se ofrece completar el turno de hoy de la clienta y se completa al cobrar", async ({
+    page,
+    request,
+  }) => {
+    const admin = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, admin);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const client = await seedClient(request, admin, `E2E TF Mostrador ${Date.now()}`);
+    const turno = await seedTurno(request, admin, seed, client.id);
+    const keep = await seedTurno(request, admin, await seedCategoryServiceProfessional(request, admin), client.id);
+
+    await loginAsDemo(page);
+    await ensureCashSessionOpen(page);
+    await goToBillingHome(page);
+    await page.getByRole("button", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 12));
+    await page.getByRole("button", { name: client.fullName }).click();
+
+    const notice = page.getByTestId("billing-open-turno-notice");
+    await expect(notice).toBeVisible();
+    await expect(page.getByTestId("billing-open-turno-complete")).toBeChecked();
+    await pickServiceLine(page, seed.serviceFullName, 0);
+    await page.locator("#line-price-0").fill("50000");
+    await fillPaymentAmount(page, "50000");
+    await clickIssueInvoiceAndExpectSuccess(page);
+
+    await expect.poll(async () => (await getAppt(request, admin, turno.id)).status).toBe("COMPLETED");
+    // Only the earliest turno was offered: the other one is untouched.
+    expect((await getAppt(request, admin, keep.id)).status).toBe("PENDING");
+  });
+
+  test("Facturación sin ficha: si se destilda la casilla, el turno no se toca", async ({ page, request }) => {
+    const admin = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, admin);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const client = await seedClient(request, admin, `E2E TF Mostrador2 ${Date.now()}`);
+    const turno = await seedTurno(request, admin, seed, client.id);
+
+    await loginAsDemo(page);
+    await ensureCashSessionOpen(page);
+    await goToBillingHome(page);
+    await page.getByRole("button", { name: "New Invoice" }).click();
+    await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 12));
+    await page.getByRole("button", { name: client.fullName }).click();
+    await page.getByTestId("billing-open-turno-complete").uncheck();
+    await pickServiceLine(page, seed.serviceFullName, 0);
+    await page.locator("#line-price-0").fill("50000");
+    await fillPaymentAmount(page, "50000");
+    await clickIssueInvoiceAndExpectSuccess(page);
+
+    expect((await getAppt(request, admin, turno.id)).status).toBe("PENDING");
   });
 
   test("API: una sola ficha por turno, solo fichas abiertas, de la misma clienta y sin turno", async ({ request }) => {
