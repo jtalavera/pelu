@@ -107,6 +107,8 @@ export type PrefillServiceRecord = {
   tipsAmount: string | number;
   /** Per-professional tips of the ficha — prefill the comprobante's "Propinas" section. */
   tips?: { professionalId: number; amount: string | number }[];
+  /** The turno the user charged from (Inicio / Agenda): it is completed when the invoice is issued. */
+  appointmentId?: number | null;
 };
 
 function emptyLine(): InvoiceLineForm {
@@ -205,6 +207,8 @@ export function NewInvoiceFlow({
   const [recordAskDismissed, setRecordAskDismissed] = useState(false);
   /** Today's active turno of the picked client that has no ficha: offered to be completed on paying. */
   const [openTurno, setOpenTurno] = useState<Appointment | null>(null);
+  /** Turno of the "Cobrar" that opened this form (turno without a ficha, e.g. an occasional client). */
+  const [prefillTurnoId] = useState<number | null>(() => initialPrefillServiceRecord?.appointmentId ?? null);
   const [completeTurno, setCompleteTurno] = useState(true);
   const dateLocale = useDateLocale();
   const detectSeq = useRef(0);
@@ -1013,8 +1017,10 @@ export function NewInvoiceFlow({
         payload,
       );
       // Billed with no ficha: the client's turno of today is completed here, if the user left it ticked.
-      if (serviceRecordId == null && openTurno && completeTurno) {
-        void updateAppointmentStatus(openTurno.id, { status: "COMPLETED", cancelReason: null }).catch(() => {});
+      const turnoToComplete =
+        serviceRecordId != null ? null : (prefillTurnoId ?? (openTurno && completeTurno ? openTurno.id : null));
+      if (turnoToComplete != null) {
+        void updateAppointmentStatus(turnoToComplete, { status: "COMPLETED", cancelReason: null }).catch(() => {});
       }
       setOpenTurno(null);
       setSuccessInvoiceNumber(result.invoiceNumberFormatted);
