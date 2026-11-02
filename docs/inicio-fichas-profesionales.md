@@ -26,6 +26,8 @@
     nuevo toma el precio del catálogo y una propina solo se descarta si su profesional ya no figura en ninguna línea.
 - Las demás rutas (facturación, caja, propinas, resumen…) siguen vedadas.
 
+El Inicio de la profesional también lista sus turnos de hoy (ver `docs/turno-ficha-circuito.md`).
+
 ## Ventana de la ficha para profesionales (celular)
 - Lista simple: una fila por servicio con **−** y **+** (bajar de 1 quita el servicio) y un botón grande
   «+ Agregar servicio» que abre una pantalla completa «Elegí un servicio» (filas de 52 px, sin precios).

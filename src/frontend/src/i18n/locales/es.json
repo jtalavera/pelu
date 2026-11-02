@@ -3148,6 +3148,8 @@
         "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 6 meses."
       },
       "pro": {
+        "myAppointments": "Mis turnos de hoy",
+        "noAppointments": "No te quedan turnos hoy.",
         "empty": "Todavía no hay servicios.",
         "addService": "Agregar servicio",
         "pickTitle": "Elegí un servicio",
