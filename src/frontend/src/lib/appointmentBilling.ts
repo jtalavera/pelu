@@ -9,7 +9,7 @@ import type { PrefillServiceRecord } from "../pages/billing/NewInvoiceFlow";
  * Shared by Inicio and Agenda.
  */
 export async function billingStateForAppointment(
-  appt: Pick<Appointment, "clientId" | "clientName" | "serviceId" | "serviceName" | "professionalId">,
+  appt: Pick<Appointment, "id" | "clientId" | "clientName" | "serviceId" | "serviceName" | "professionalId">,
 ): Promise<{ activeTab: "invoice"; prefillServiceRecord: PrefillServiceRecord }> {
   let client: Record<string, unknown> | null = null;
   if (appt.clientId != null) {
@@ -51,6 +51,8 @@ export async function billingStateForAppointment(
         },
       ],
       tipsAmount: 0,
+      // Charging a turno with no ficha completes the turno once the invoice is issued.
+      appointmentId: appt.id,
     },
   };
 }

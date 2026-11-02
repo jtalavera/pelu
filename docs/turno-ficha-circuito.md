@@ -21,6 +21,12 @@ nullable, índice único filtrado; migración `V91`). Las fichas sin turno (clie
 - Anular una ficha cobrada no reabre el turno.
 - Una profesional solo opera los turnos propios y nunca recibe montos.
 
+## Turno de clienta ocasional (sin cliente)
+Sin clienta registrada no hay ficha (siempre necesita una). La fila del turno en el Inicio muestra **«Cobrar»** (Pendiente,
+Confirmado o En curso) y lleva a Facturación con el servicio agendado; el turno viaja en el estado de navegación
+(`prefillServiceRecord.appointmentId`) y pasa a **Completado** al emitir la factura. Lo mismo vale para «Cobrar» en el
+detalle del turno de la Agenda.
+
 ## Facturar sin ficha (mostrador)
 En «Nueva factura», al elegir una clienta que no tiene ficha abierta pero sí un turno de hoy sin ficha (Pendiente,
 Confirmado o En curso; el más temprano), aparece un aviso con la casilla «Marcar como completado el turno de las HH:MM

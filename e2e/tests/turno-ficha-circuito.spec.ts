@@ -304,6 +304,42 @@ test.describe("Turno y ficha de servicio", () => {
     expect((await getAppt(request, admin, turno.id)).status).toBe("PENDING");
   });
 
+  test("turno de clienta ocasional (sin cliente): la fila ofrece «Cobrar», sin ficha, y el turno se completa al cobrar", async ({
+    page,
+    request,
+  }) => {
+    const admin = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, admin);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const slot = new Date();
+    slot.setHours(Math.min(23, slot.getHours() + 1), 0, 0, 0);
+    const turno = await createAppointmentApi(request, admin, {
+      clientId: null,
+      professionalId: seed.professionalId,
+      serviceId: seed.serviceId,
+      startAt: slot.toISOString(),
+    });
+
+    await loginAsDemo(page);
+    await ensureCashSessionOpen(page);
+    await page.goto("/app");
+    const row = page
+      .getByTestId("dashboard-appointment-row")
+      .filter({ hasText: seed.professionalFullName })
+      .filter({ hasText: "Occasional" });
+    await expect(row.getByTestId("dashboard-appointment-charge")).toBeVisible({ timeout: 20_000 });
+    // No registered client: no ficha to create or assign.
+    await expect(row.getByTestId("dashboard-appointment-ficha-create-or-assign")).toHaveCount(0);
+    await row.getByTestId("dashboard-appointment-charge").click();
+
+    await expect(page).toHaveURL(/\/app\/billing/);
+    await page.locator("#line-price-0").fill("50000");
+    await fillPaymentAmount(page, "50000");
+    await clickIssueInvoiceAndExpectSuccess(page);
+
+    await expect.poll(async () => (await getAppt(request, admin, turno.id)).status).toBe("COMPLETED");
+  });
+
   test("API: una sola ficha por turno, solo fichas abiertas, de la misma clienta y sin turno", async ({ request }) => {
     const admin = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, admin);
