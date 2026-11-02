@@ -196,7 +196,7 @@ test.describe("Issue #310 · Impersonar un tenant admin", () => {
     await loginAsPlatformAdmin(page);
     const platformToken = await loginPlatformAdminApi(request);
     const demoTenant = (await (
-      await request.get(`${apiBaseUrl()}/api/platform/tenants?q=&size=100`, {
+      await request.get(`${apiBaseUrl()}/api/platform/tenants?q=&size=1000`, {
         headers: authHeaders(platformToken),
       })
     ).json()) as { content: Tenant[] };
