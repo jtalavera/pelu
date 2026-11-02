@@ -52,7 +52,8 @@ public class ServiceRecordController {
     requirePrincipal(principal);
     if (isProfessional(principal)) {
       return ResponseEntity.ok(
-          serviceRecordService.updateServicesAsProfessional(principal.getTenantId(), id, request));
+          serviceRecordService.updateServicesAsProfessional(
+              principal.getTenantId(), id, request, principal.getProfessionalId()));
     }
     ServiceRecordResponse response =
         serviceRecordService.updateServiceRecord(principal.getTenantId(), id, request);

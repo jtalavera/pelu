@@ -553,7 +553,7 @@ class ServiceRecordServiceTest {
     var request = new ServiceRecordRequest(99L, List.of(kept, added), List.of(tip));
 
     ServiceRecordResponse result =
-        serviceRecordService.updateServicesAsProfessional(1L, 63L, request);
+        serviceRecordService.updateServicesAsProfessional(1L, 63L, request, 3L);
 
     // The response carries no money…
     assertThat(result.totalAmount()).isNull();
@@ -579,9 +579,27 @@ class ServiceRecordServiceTest {
     var line = new ServiceRecordLineRequest(9L, null, 1, null);
     var request = new ServiceRecordRequest(7L, List.of(line), null);
 
-    serviceRecordService.updateServicesAsProfessional(1L, 64L, request);
+    serviceRecordService.updateServicesAsProfessional(1L, 64L, request, null);
 
     assertThat(open.getTips()).isEmpty();
     assertThat(open.getLines()).hasSize(1);
+  }
+
+  @Test
+  void professionalUpdate_lineWithoutProfessional_belongsToTheProfessionalWhoEdits() {
+    ServiceRecord open = openRecordToday(65L);
+    when(serviceRecordRepository.findByIdAndTenant_Id(65L, 1L)).thenReturn(Optional.of(open));
+    when(salonServiceRepository.findByIdAndTenant_Id(9L, 1L)).thenReturn(Optional.of(salonService));
+    when(professionalRepository.findByIdAndTenant_Id(3L, 1L)).thenReturn(Optional.of(professional));
+
+    var line = new ServiceRecordLineRequest(9L, null, 1, null);
+    var request = new ServiceRecordRequest(7L, List.of(line), null);
+
+    serviceRecordService.updateServicesAsProfessional(1L, 65L, request, 3L);
+
+    assertThat(open.getLines()).hasSize(1);
+    assertThat(open.getLines().get(0).getProfessional().getId()).isEqualTo(3L);
+    // Her tip survives because she is still on a line.
+    assertThat(open.getTips()).hasSize(1);
   }
 }

@@ -14,6 +14,7 @@ import { ClientSearchField, type ClientSelection } from "./ClientSearchField";
 import { ServiceSearchField, type SalonServiceOption } from "./ServiceSearchField";
 import { SearchableSelect } from "./SearchableSelect";
 import { FieldValidationError } from "./FieldValidationError";
+import { useMe } from "../hooks/useMe";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
@@ -89,6 +90,8 @@ export function ServiceRecordEditor({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const dateLocale = useDateLocale();
+  const { me } = useMe();
+  const myProfessionalId = me?.professionalId ?? null;
   const topRef = useRef<HTMLDivElement>(null);
 
   const [record, setRecord] = useState<ServiceRecordDetail | null>(initial);
@@ -272,7 +275,9 @@ export function ServiceRecordEditor({
       clientId: clientSelection.client.id,
       lines: lines.filter((l) => !isBlankLine(l)).map((l) => ({
         serviceId: l.pickedService!.id,
-        professionalId: l.professionalId === "" ? null : l.professionalId,
+        // A professional never picks the professional: a line without one is hers.
+        professionalId:
+          l.professionalId === "" ? (professionalMode ? myProfessionalId : null) : l.professionalId,
         quantity: l.quantity || null,
         unitPrice:
           !professionalMode && l.unitPrice && parseMaskedMoney(l.unitPrice) > 0
@@ -550,6 +555,7 @@ export function ServiceRecordEditor({
                         professionalMode ? "sm:grid-cols-[minmax(0,1fr)_4rem]" : "sm:grid-cols-[minmax(0,1fr)_4rem_7rem]"
                       }`}
                     >
+                      {professionalMode ? null : (
                       <div className="order-last col-span-2 flex min-w-0 flex-col gap-1 sm:order-none sm:col-span-1">
                         <span aria-hidden="true" className={CAPTION}>
                           {t("femme.serviceRecords.lineProfessionalLabel")}
@@ -565,6 +571,7 @@ export function ServiceRecordEditor({
                           noResultsText={t("femme.serviceRecords.lineProfessionalNoResults")}
                         />
                       </div>
+                      )}
                       <div className="flex flex-col gap-1">
                         <span aria-hidden="true" className={CAPTION}>
                           {t("femme.serviceRecords.colQty")}

@@ -213,11 +213,12 @@ public class ServiceRecordService {
   /**
    * Replaces the ficha's services (service, professional, quantity). The client, prices and tips
    * sent in the request are ignored: a kept service keeps its price, a new one takes the catalog
-   * price, and a tip is dropped only when its professional no longer appears in any line.
+   * price, and a tip is dropped only when its professional no longer appears in any line. A line
+   * sent without a professional belongs to the professional who is editing.
    */
   @Transactional
   public ServiceRecordResponse updateServicesAsProfessional(
-      long tenantId, long id, ServiceRecordRequest request) {
+      long tenantId, long id, ServiceRecordRequest request, Long professionalId) {
     ServiceRecord record = requireOpenTodayRecord(tenantId, id);
     Hibernate.initialize(record.getLines());
     Hibernate.initialize(record.getTips());
@@ -237,8 +238,19 @@ public class ServiceRecordService {
           return service.getPriceMinor() != null ? service.getPriceMinor() : BigDecimal.ZERO;
         };
 
+    // A line without a professional is hers (she never has to pick one).
+    List<ServiceRecordLineRequest> requested =
+        request.lines().stream()
+            .map(
+                lr ->
+                    lr.professionalId() == null && professionalId != null
+                        ? new ServiceRecordLineRequest(
+                            lr.serviceId(), professionalId, lr.quantity(), lr.unitPrice())
+                        : lr)
+            .collect(Collectors.toList());
+
     record.getLines().clear();
-    Set<Long> lineProfessionalIds = applyLines(record, request.lines(), tenantId, priceFor);
+    Set<Long> lineProfessionalIds = applyLines(record, requested, tenantId, priceFor);
     record.getTips().removeIf(t -> !lineProfessionalIds.contains(t.getProfessional().getId()));
     return withoutAmounts(toDetailDto(record, null));
   }

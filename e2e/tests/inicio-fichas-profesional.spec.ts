@@ -12,7 +12,7 @@ import {
 } from "../fixtures/api";
 import { DEMO_PASSWORD, loginAs, loginAsDemo } from "../fixtures/auth";
 import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
-import { pickLineProfessional, pickLineService, expandFichaLine } from "../fixtures/fichas";
+import { pickLineService, expandFichaLine } from "../fixtures/fichas";
 
 /**
  * Inicio · fichas de servicio de hoy como tarjetas.
@@ -206,7 +206,7 @@ test.describe("Inicio de la profesional (con clave)", () => {
     await dialog.locator("#service-record-line-qty-0").fill("2");
     await dialog.getByTestId("service-record-add-line").click();
     await pickLineService(page, 1, extra.name);
-    await pickLineProfessional(page, 1, seed.professionalFullName);
+    await expect(dialog.locator("#service-record-line-prof-1")).toHaveCount(0);
     await dialog.getByTestId("service-record-submit").click();
     await expect(page.getByTestId("dashboard-record-toast")).toContainText("Changes saved.", { timeout: 15_000 });
 
@@ -363,7 +363,7 @@ test.describe("Dispositivo compartido con PIN", () => {
     await expect(dialog.getByTestId("service-record-total")).toHaveCount(0);
     await dialog.getByTestId("service-record-add-line").click();
     await pickLineService(page, 1, extra.name);
-    await pickLineProfessional(page, 1, seed.professionalFullName);
+    await expect(dialog.locator("#service-record-line-prof-1")).toHaveCount(0);
     await dialog.getByTestId("service-record-submit").click();
     await expect(page.getByTestId("dashboard-record-toast")).toContainText("Changes saved.", { timeout: 15_000 });
 

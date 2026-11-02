@@ -289,6 +289,8 @@ describe("ServiceRecordEditor", () => {
       expect(screen.queryByTestId("service-record-void-open")).toBeNull();
       expect(screen.queryByTestId("service-record-generate-invoice")).toBeNull();
       expect(screen.queryAllByTestId("service-record-line-subtotal")).toHaveLength(0);
+      // She never picks the professional: no professional field on any line.
+      expect(screen.queryByLabelText(/^Professional \d/)).toBeNull();
 
       await userEvent.click(screen.getByTestId("service-record-submit"));
       await waitFor(() => expect(femmePutJson).toHaveBeenCalled());
