@@ -13,6 +13,7 @@ import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.ServiceRecord;
+import com.cursorpoc.backend.domain.ServiceRecordLine;
 import com.cursorpoc.backend.domain.enums.AppointmentStatus;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.AppointmentRepository;
@@ -157,5 +158,70 @@ class AppointmentServiceRecordServiceTest {
     appointment.setClient(null);
     assertThatThrownBy(() -> service.createFromAppointment(TENANT, 100L))
         .hasMessageContaining("APPOINTMENT_WITHOUT_CLIENT");
+  }
+
+  private ServiceRecordLine line(long serviceId, long professionalId, int qty, String price) {
+    SalonService svc = new SalonService();
+    svc.setId(serviceId);
+    svc.setName("S" + serviceId);
+    Professional p = new Professional();
+    p.setId(professionalId);
+    ServiceRecordLine l = new ServiceRecordLine();
+    l.setSalonService(svc);
+    l.setProfessional(p);
+    l.setQuantity(qty);
+    l.setUnitPrice(new java.math.BigDecimal(price));
+    return l;
+  }
+
+  @Test
+  void assign_addsTheTurnoServiceWhenTheFichaDoesNotHaveIt() {
+    appointment.getSalonService().setName("Color");
+    appointment.getSalonService().setPriceMinor(new java.math.BigDecimal("90000"));
+    ServiceRecord record = openRecord(9L, 5L);
+    record.getLines().add(line(77L, 8L, 2, "30000"));
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.assign(TENANT, 100L, 9L);
+
+    assertThat(record.getLines()).hasSize(2);
+    ServiceRecordLine added = record.getLines().get(1);
+    assertThat(added.getSalonService().getId()).isEqualTo(11L);
+    assertThat(added.getProfessional().getId()).isEqualTo(3L);
+    assertThat(added.getQuantity()).isEqualTo(1);
+    assertThat(added.getUnitPrice()).isEqualByComparingTo("90000");
+    // The line that was already there is untouched.
+    assertThat(record.getLines().get(0).getQuantity()).isEqualTo(2);
+    assertThat(record.getLines().get(0).getProfessional().getId()).isEqualTo(8L);
+    assertThat(record.getTotalAmount()).isEqualByComparingTo("150000");
+  }
+
+  @Test
+  void assign_withTheSameServiceAssignsTheTurnoProfessionalWithoutDuplicating() {
+    ServiceRecord record = openRecord(9L, 5L);
+    record.getLines().add(line(11L, 8L, 2, "40000"));
+    record.getLines().add(line(11L, 8L, 1, "40000"));
+    record.setTotalAmount(new java.math.BigDecimal("120000"));
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.assign(TENANT, 100L, 9L);
+
+    assertThat(record.getLines()).hasSize(2);
+    assertThat(record.getLines().get(0).getProfessional().getId()).isEqualTo(3L);
+    assertThat(record.getLines().get(1).getProfessional().getId()).isEqualTo(8L);
+    assertThat(record.getLines().get(0).getQuantity()).isEqualTo(2);
+    assertThat(record.getTotalAmount()).isEqualByComparingTo("120000");
+  }
+
+  @Test
+  void assign_toAnEmptyFichaAddsTheTurnoService() {
+    ServiceRecord record = openRecord(9L, 5L);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.assign(TENANT, 100L, 9L);
+
+    assertThat(record.getLines()).hasSize(1);
+    assertThat(record.getLines().get(0).getSalonService().getId()).isEqualTo(11L);
+    assertThat(record.getLines().get(0).getProfessional().getId()).isEqualTo(3L);
   }
 }

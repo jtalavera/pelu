@@ -77,7 +77,8 @@ test.describe("HU-03 · Dashboard principal", () => {
     const client = await seedClient(request, token, clientName);
     // Later today (local time), so the turno shows up in Inicio's list.
     const slot = new Date();
-    slot.setHours(Math.min(23, slot.getHours() + 1), 0, 0, 0);
+    slot.setTime(Date.now() + 5 * 60_000);
+    slot.setSeconds(0, 0);
     await createAppointmentApi(request, token, {
       clientId: client.id,
       professionalId: seed.professionalId,
