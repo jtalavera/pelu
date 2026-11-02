@@ -36,3 +36,12 @@ https://claude.ai/artifact/Mn9xkyUNEwjyzz8ognp7Ur
 - Vitest: `CalendarPage.test.tsx`.
 - Playwright: los specs del calendario abren `?view=week`; helpers nuevos en `e2e/fixtures/ui.ts`
   (`filterAgendaByProfessional`, `completeAppointmentFromDetail`, `cancelAppointmentFromDetail`).
+
+## Duración del turno y fecha seleccionada
+- **Duración editable**: al crear o editar un turno hay un campo «Duración» (− / + de 5 en 5, botones 30/45/60/90/120 y
+  «Termina a las HH:MM»). Arranca con la duración del servicio y se puede cambiar (5–480 min). La API recibe
+  `durationMinutes` (opcional; sin él vale la del servicio) y devuelve la duración real del turno
+  (`endAt − startAt`); los choques de horario usan ese fin. Error: `APPOINTMENT_DURATION_INVALID`. Los turnos existentes
+  no cambian.
+- **Día elegido en la tira**: letras blancas sobre el verde (la clase `text-on-primary` no existía en Tailwind; ahora
+  `text-primary-fg`).

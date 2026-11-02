@@ -8,4 +8,17 @@ public record ProfessionalUpsertRequest(
     String email,
     String photoDataUrl,
     String pin,
-    Boolean systemAccessAllowed) {}
+    Boolean systemAccessAllowed,
+    /** Optional nickname (max 60 chars); blank clears it. */
+    String nickname) {
+
+  public ProfessionalUpsertRequest(
+      String fullName,
+      String phone,
+      String email,
+      String photoDataUrl,
+      String pin,
+      Boolean systemAccessAllowed) {
+    this(fullName, phone, email, photoDataUrl, pin, systemAccessAllowed, null);
+  }
+}

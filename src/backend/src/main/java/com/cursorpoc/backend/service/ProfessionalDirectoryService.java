@@ -201,6 +201,11 @@ public class ProfessionalDirectoryService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PROFESSIONAL_NAME_REQUIRED");
     }
     p.setFullName(name);
+    String nickname = blankToNull(request.nickname());
+    if (nickname != null && nickname.length() > MAX_NICKNAME_LENGTH) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PROFESSIONAL_NICKNAME_TOO_LONG");
+    }
+    p.setNickname(nickname);
     p.setPhone(blankToNull(request.phone()));
     String email = blankToNull(request.email());
     if (email != null) {
@@ -336,6 +341,8 @@ public class ProfessionalDirectoryService {
             () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
   }
 
+  static final int MAX_NICKNAME_LENGTH = 60;
+
   private ProfessionalResponse toResponse(Professional p, List<ProfessionalSchedule> schedules) {
     ProfessionalAccessService.AccessInfo access = professionalAccessService.info(p);
     return new ProfessionalResponse(
@@ -354,7 +361,9 @@ public class ProfessionalDirectoryService {
         access.invitationSentAt(),
         access.invitationExpiresAt(),
         access.resendAvailableAt(),
-        p.getId() == null ? List.of() : sharedDeviceService.activeLocks(p.getId()));
+        p.getId() == null ? List.of() : sharedDeviceService.activeLocks(p.getId()),
+        p.getNickname(),
+        p.getDisplayName());
   }
 
   private static ProfessionalResponse toDirectoryResponse(
@@ -375,7 +384,9 @@ public class ProfessionalDirectoryService {
         null,
         null,
         null,
-        List.of());
+        List.of(),
+        p.getNickname(),
+        p.getDisplayName());
   }
 
   private static List<ProfessionalResponse.Schedule> toScheduleResponses(

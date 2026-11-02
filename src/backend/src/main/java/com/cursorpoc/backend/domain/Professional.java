@@ -25,6 +25,10 @@ public class Professional {
   @Column(name = "full_name", nullable = false)
   private String fullName;
 
+  /** Optional nickname: lists show it instead of the full name when present. */
+  @Column(length = 60)
+  private String nickname;
+
   @Column(length = 64)
   private String phone;
 
@@ -82,6 +86,19 @@ public class Professional {
 
   public void setFullName(String fullName) {
     this.fullName = fullName;
+  }
+
+  public String getNickname() {
+    return nickname;
+  }
+
+  public void setNickname(String nickname) {
+    this.nickname = nickname;
+  }
+
+  /** What lists show: the nickname when there is one, otherwise the full name. */
+  public String getDisplayName() {
+    return nickname != null && !nickname.isBlank() ? nickname : fullName;
   }
 
   public String getPhone() {

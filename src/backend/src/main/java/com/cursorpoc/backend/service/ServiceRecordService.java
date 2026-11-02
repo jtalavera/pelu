@@ -506,7 +506,9 @@ public class ServiceRecordService {
         distinctJoined(r.getLines().stream().map(l -> l.getSalonService().getName())),
         distinctJoined(
             r.getLines().stream()
-                .map(l -> l.getProfessional() == null ? null : l.getProfessional().getFullName())),
+                .map(
+                    l ->
+                        l.getProfessional() == null ? null : l.getProfessional().getDisplayName())),
         r.getAppointment() != null ? r.getAppointment().getId() : null,
         r.getAppointment() != null ? r.getAppointment().getStartAt() : null);
   }
@@ -533,7 +535,7 @@ public class ServiceRecordService {
                             .multiply(BigDecimal.valueOf(l.getQuantity()))
                             .setScale(2, RoundingMode.HALF_UP),
                         l.getProfessional() != null ? l.getProfessional().getId() : null,
-                        l.getProfessional() != null ? l.getProfessional().getFullName() : null))
+                        l.getProfessional() != null ? l.getProfessional().getDisplayName() : null))
             .collect(Collectors.toList());
 
     List<ServiceRecordTipResponse> tips =
@@ -542,7 +544,7 @@ public class ServiceRecordService {
                 t ->
                     new ServiceRecordTipResponse(
                         t.getProfessional().getId(),
-                        t.getProfessional().getFullName(),
+                        t.getProfessional().getDisplayName(),
                         t.getAmount()))
             .collect(Collectors.toList());
 

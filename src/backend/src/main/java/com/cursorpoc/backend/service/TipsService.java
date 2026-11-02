@@ -92,7 +92,7 @@ public class TipsService {
                 t ->
                     new TipReportRowResponse(
                         t.getProfessional().getId(),
-                        t.getProfessional().getFullName(),
+                        t.getProfessional().getDisplayName(),
                         t.getAmount(),
                         t.getServiceRecord().getClient().getFullName(),
                         t.getServiceRecord().getClosedAt()))
@@ -106,7 +106,7 @@ public class TipsService {
                 rows.add(
                     new TipReportRowResponse(
                         t.getProfessional().getId(),
-                        t.getProfessional().getFullName(),
+                        t.getProfessional().getDisplayName(),
                         t.getAmount(),
                         invoiceClientName(t.getInvoice()),
                         t.getInvoice().getIssuedAt())));
@@ -144,7 +144,7 @@ public class TipsService {
       withdrawalsByProfessional.put(
           professionalId,
           new TipReportProfessionalTotalResponse(
-              professionalId, withdrawal.getProfessional().getFullName(), newTotal));
+              professionalId, withdrawal.getProfessional().getDisplayName(), newTotal));
     }
     BigDecimal withdrawalsTotal = BigDecimal.ZERO;
     for (TipReportProfessionalTotalResponse withdrawalTotal : withdrawalsByProfessional.values()) {
@@ -236,7 +236,7 @@ public class TipsService {
     return new CreateTipWithdrawalResponse(
         new TipWithdrawalHistoryItemResponse(
             withdrawal.getId(),
-            professional.getFullName(),
+            professional.getDisplayName(),
             withdrawal.getAmount(),
             withdrawal.getWithdrawnAt()),
         newBalance,
@@ -271,7 +271,7 @@ public class TipsService {
                 w ->
                     new TipWithdrawalHistoryItemResponse(
                         w.getId(),
-                        w.getProfessional().getFullName(),
+                        w.getProfessional().getDisplayName(),
                         w.getAmount(),
                         w.getWithdrawnAt()))
             .toList();

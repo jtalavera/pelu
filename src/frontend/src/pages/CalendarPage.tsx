@@ -1,8 +1,10 @@
+import { withDisplayNames } from "../lib/professionalDisplay";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
+  Input,
   Label,
   Modal,
   Spinner,
@@ -99,6 +101,18 @@ function appointmentTopPx(startAt: string): number {
   return Math.max(0, (hours - HOUR_START) * PX_PER_HOUR);
 }
 
+const MIN_DURATION = 5;
+const MAX_DURATION = 480;
+const DURATION_STEP = 5;
+const DURATION_PRESETS = [30, 45, 60, 90, 120];
+
+/** One step up / down, rounded to the step grid and kept inside the allowed range. */
+function stepDuration(current: number | "", delta: number): number {
+  const base = current === "" ? 0 : current;
+  const next = delta > 0 ? Math.floor(base / DURATION_STEP) * DURATION_STEP + DURATION_STEP : Math.ceil(base / DURATION_STEP) * DURATION_STEP - DURATION_STEP;
+  return Math.min(MAX_DURATION, Math.max(MIN_DURATION, next));
+}
+
 function appointmentHeightPx(durationMinutes: number): number {
   return Math.max(20, (durationMinutes / 60) * PX_PER_HOUR);
 }
@@ -140,7 +154,7 @@ function profColor(professionalId: number, professionals: Professional[]): ProfC
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ProfSchedule = { dayOfWeek: number; startTime: string; endTime: string; active: boolean };
-type Professional = { id: number; fullName: string; active: boolean; schedules?: ProfSchedule[] };
+type Professional = { id: number; fullName: string; displayName?: string | null; active: boolean; schedules?: ProfSchedule[] };
 type SalonService = { id: number; name: string; durationMinutes: number; active: boolean };
 type Client = { id: number; fullName: string };
 
@@ -150,6 +164,7 @@ type FormErrors = {
   startInPast?: string;
   professionalId?: string;
   serviceId?: string;
+  duration?: string;
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -211,6 +226,8 @@ export default function CalendarPage() {
   const [formTime, setFormTime] = useState("");
   const [formProfessionalId, setFormProfessionalId] = useState<number | "">("");
   const [formServiceId, setFormServiceId] = useState<number | "">("");
+  /** Length of the turno being created / edited, in minutes (starts as the service's own). */
+  const [formDuration, setFormDuration] = useState<number | "">("");
   const [formClientId, setFormClientId] = useState<number | "">("");
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [formSaving, setFormSaving] = useState(false);
@@ -277,7 +294,7 @@ export default function CalendarPage() {
       femmeJson<SalonService[]>("/api/services?kind=SERVICE"),
     ])
       .then(([profs, svcs]) => {
-        const active = profs.filter((p) => p.active);
+        const active = withDisplayNames(profs).filter((p) => p.active);
         setProfessionals(active);
         setServices(svcs.filter((s) => s.active));
         if (me?.role === "PROFESSIONAL" && me.professionalId != null) {
@@ -450,6 +467,7 @@ export default function CalendarPage() {
         : (selectedProfessionalId ?? "")
     );
     setFormServiceId("");
+    setFormDuration("");
     setFormClientId("");
     setFormErrors({});
     setFormApiError(null);
@@ -467,6 +485,7 @@ export default function CalendarPage() {
     );
     setFormProfessionalId(detailAppt.professionalId);
     setFormServiceId(detailAppt.serviceId);
+    setFormDuration(detailAppt.durationMinutes);
     setFormClientId(detailAppt.clientId ?? "");
     setFormErrors({});
     setFormApiError(null);
@@ -482,6 +501,14 @@ export default function CalendarPage() {
     if (!formProfessionalId)
       errors.professionalId = t("femme.calendar.form.errors.professionalRequired");
     if (!formServiceId) errors.serviceId = t("femme.calendar.form.errors.serviceRequired");
+    if (
+      formDuration === "" ||
+      !Number.isInteger(formDuration) ||
+      formDuration < MIN_DURATION ||
+      formDuration > MAX_DURATION
+    ) {
+      errors.duration = t("femme.calendar.form.errors.duration", { min: MIN_DURATION, max: MAX_DURATION });
+    }
     if (formDate && formTime) {
       const localDt = toLocalDatetimeString(new Date(formDate), formTime);
       const startMs = new Date(localDt).getTime();
@@ -510,6 +537,7 @@ export default function CalendarPage() {
           professionalId: formProfessionalId as number,
           serviceId: formServiceId as number,
           startAt,
+          durationMinutes: formDuration as number,
         };
         updated = await updateAppointment(editAppt.id, req);
         setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
@@ -519,6 +547,7 @@ export default function CalendarPage() {
           professionalId: formProfessionalId as number,
           serviceId: formServiceId as number,
           startAt,
+          durationMinutes: formDuration as number,
         };
         updated = await createAppointment(req);
         setAppointments((prev) => [...prev, updated]);
@@ -534,6 +563,24 @@ export default function CalendarPage() {
       setFormSaving(false);
     }
   };
+
+  // "Termina a las 11:15" under the duration field (start time + duration), plus the service's own length.
+  const endsAtText = (() => {
+    const svc = services.find((s) => s.id === formServiceId);
+    const parts: string[] = [];
+    if (formTime && formDuration !== "" && formDuration >= MIN_DURATION) {
+      const [hh, mm] = formTime.split(":").map(Number);
+      if (!Number.isNaN(hh) && !Number.isNaN(mm)) {
+        const total = hh * 60 + mm + formDuration;
+        const end = `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+        parts.push(t("femme.calendar.form.durationEnds", { time: end }));
+      }
+    }
+    if (svc && formDuration !== "" && formDuration !== svc.durationMinutes) {
+      parts.push(t("femme.calendar.form.durationServiceNote", { minutes: svc.durationMinutes }));
+    }
+    return parts.join(" ");
+  })();
 
   // ── Render ──────────────────────────────────────────────────────────────────
   const longDateLabel = (() => {
@@ -732,7 +779,7 @@ export default function CalendarPage() {
                 data-testid={`calendar-strip-${key}`}
                 onClick={() => setCursor(new Date(date.getFullYear(), date.getMonth(), date.getDate()))}
                 className={`flex min-h-16 flex-col items-center gap-0.5 rounded-2xl border px-0.5 py-2 ${
-                  selected ? "border-primary bg-primary text-on-primary" : "border-line bg-surface text-ink"
+                  selected ? "border-primary bg-primary text-primary-fg" : "border-line bg-surface text-ink"
                 }`}
               >
                 <small className={`text-[11px] font-bold uppercase tracking-wider ${selected ? "opacity-85" : "text-ink-3"}`}>
@@ -740,7 +787,7 @@ export default function CalendarPage() {
                 </small>
                 <b className="font-heading text-lg tabular-nums">{date.getDate()}</b>
                 {isToday(date) && (
-                  <span aria-hidden className={`h-[3px] w-4 rounded ${selected ? "bg-on-primary" : "bg-primary"}`} />
+                  <span aria-hidden className={`h-[3px] w-4 rounded ${selected ? "bg-primary-fg" : "bg-primary"}`} />
                 )}
                 <i className={`text-[11px] not-italic ${selected ? "opacity-85" : "text-ink-3"}`}>
                   {n > 0 ? t("femme.calendar.count", { count: n }) : t("femme.calendar.free")}
@@ -1468,7 +1515,12 @@ export default function CalendarPage() {
               id="form-service"
               label={t("femme.calendar.form.service")}
               value={formServiceId}
-              onChange={(v) => setFormServiceId(v)}
+              onChange={(v) => {
+                setFormServiceId(v);
+                // The turno starts with the service's own duration; she can change it below.
+                const svc = services.find((s) => s.id === v);
+                if (svc) setFormDuration(svc.durationMinutes);
+              }}
               emptyOption={{ value: "", label: t("femme.calendar.form.selectService") }}
               options={services.map((s) => ({
                 value: s.id,
@@ -1569,6 +1621,67 @@ export default function CalendarPage() {
             )}
             {formErrors.startInPast && (
               <FieldValidationError id="form-start-past-err">{formErrors.startInPast}</FieldValidationError>
+            )}
+          </div>
+          {/* Duration: starts as the service's, adjustable (a turno can run long) */}
+          <div className="space-y-2" data-testid="appointment-duration">
+            <Label htmlFor="form-duration">{t("femme.calendar.form.duration")}</Label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label={t("femme.calendar.form.durationDecrease")}
+                data-testid="appointment-duration-minus"
+                onClick={() => setFormDuration(stepDuration(formDuration, -DURATION_STEP))}
+                className="flex size-11 shrink-0 items-center justify-center rounded-full border-[1.5px] border-primary font-heading text-xl font-extrabold leading-none text-primary"
+              >
+                −
+              </button>
+              <Input
+                id="form-duration"
+                type="number"
+                inputMode="numeric"
+                min={MIN_DURATION}
+                max={MAX_DURATION}
+                step={DURATION_STEP}
+                value={formDuration}
+                onChange={(e) => setFormDuration(e.target.value === "" ? "" : Math.floor(Number(e.target.value)))}
+                aria-invalid={!!formErrors.duration}
+                aria-describedby={formErrors.duration ? "form-duration-err" : "form-duration-hint"}
+                data-testid="appointment-duration-input"
+                className="w-24 text-center tabular-nums"
+              />
+              <span className="text-sm text-ink-3">{t("femme.calendar.form.durationUnit")}</span>
+              <button
+                type="button"
+                aria-label={t("femme.calendar.form.durationIncrease")}
+                data-testid="appointment-duration-plus"
+                onClick={() => setFormDuration(stepDuration(formDuration, DURATION_STEP))}
+                className="flex size-11 shrink-0 items-center justify-center rounded-full border-[1.5px] border-primary font-heading text-xl font-extrabold leading-none text-primary"
+              >
+                +
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2" data-testid="appointment-duration-presets">
+              {DURATION_PRESETS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setFormDuration(m)}
+                  aria-pressed={formDuration === m}
+                  className={`min-h-10 rounded-full border px-3 text-sm font-bold ${
+                    formDuration === m ? "border-primary bg-primary-lt text-primary" : "border-line bg-surface text-ink"
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            {formErrors.duration ? (
+              <FieldValidationError id="form-duration-err">{formErrors.duration}</FieldValidationError>
+            ) : (
+              <p id="form-duration-hint" className="text-xs text-ink-3" data-testid="appointment-duration-hint">
+                {endsAtText}
+              </p>
             )}
           </div>
           {/* Quick times */}

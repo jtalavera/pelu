@@ -1,3 +1,4 @@
+import { withDisplayNames } from "../../lib/professionalDisplay";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -271,8 +272,8 @@ export function NewInvoiceFlow({
   const needsLineProfessionals = commissionsEnabled || lines.some((l) => l.pickedService != null);
   useEffect(() => {
     if (!needsLineProfessionals || lineProfessionals.length > 0) return;
-    femmeJson<{ id: number; fullName: string; active: boolean }[]>("/api/professionals")
-      .then((list) => setLineProfessionals(Array.isArray(list) ? list.filter((p) => p.active) : []))
+    femmeJson<{ id: number; fullName: string; displayName?: string | null; active: boolean }[]>("/api/professionals")
+      .then((list) => setLineProfessionals(Array.isArray(list) ? withDisplayNames(list).filter((p) => p.active) : []))
       .catch(() => setLineProfessionals([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needsLineProfessionals]);

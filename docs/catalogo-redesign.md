@@ -45,3 +45,11 @@ https://claude.ai/artifact/SccBti8kzhxPJ2AweQhzee
 - Playwright: helpers en `e2e/fixtures/catalog.ts` (`goToCatalog`, `openCategoriesDialog`,
   `openCatalogMenuItem`, `openItemMoreOptions`, `setCatalogRowActive`) y los specs de servicios,
   productos, profesionales, comisiones y lista de precios adaptados.
+
+## Apodo de la profesional
+Campo opcional «Apodo» en la ficha de la profesional (`professionals.nickname`, migración `V92`, máx. 60). Si lo tiene, las
+listas muestran el apodo **en lugar** del nombre completo: Agenda (chips, selector y detalle del turno), fichas de
+servicio, Facturación, Propinas, Comisiones, Resumen, Inicio y reportes en pantalla / PDF / Excel. El nombre completo se
+mantiene en el Catálogo (donde se edita; ahí el apodo se ve entre «»), el perfil y los comprobantes fiscales.
+Backend: `Professional.getDisplayName()`; `ProfessionalResponse` trae `nickname` y `displayName`. Frontend:
+`lib/professionalDisplay.ts` (`withDisplayNames`) pone el nombre a mostrar en `fullName` de los selectores al cargarlos.

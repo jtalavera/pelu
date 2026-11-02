@@ -228,7 +228,7 @@ public class SharedDeviceService {
                   Instant lockedUntil =
                       lock != null && lock.isLockedAt(now) ? lock.getLockedUntil() : null;
                   return new PickerProfessional(
-                      p.getId(), p.getFullName(), p.getPhotoDataUrl(), lockedUntil);
+                      p.getId(), p.getDisplayName(), p.getPhotoDataUrl(), lockedUntil);
                 })
             .toList();
     return new PickerResponse(

@@ -2882,6 +2882,9 @@
       "form": {
         "fullName": "Full name",
         "fullNameRequired": "Enter the professional's full name (e.g. Ana García).",
+        "nickname": "Nickname (optional)",
+        "nicknamePlaceholder": "e.g. Ani",
+        "nicknameHint": "If you add one, lists show the nickname instead of the full name.",
         "fullNamePlaceholder": "e.g. Ana García",
         "phone": "Phone",
         "phonePlaceholder": "(0981) 123-456",
@@ -3014,6 +3017,12 @@
         "readOnlyOtherProfessional": "This appointment belongs to another professional. You can view it, but only the appointments assigned to you can be edited or have their status changed."
       },
       "form": {
+        "duration": "Duration",
+        "durationUnit": "min",
+        "durationDecrease": "Less duration",
+        "durationIncrease": "More duration",
+        "durationEnds": "Ends at {{time}}.",
+        "durationServiceNote": "The service lasts {{minutes}} min; you adjusted it.",
         "title": "New appointment",
         "editTitle": "Edit appointment",
         "date": "Date",
@@ -3032,6 +3041,7 @@
         "timeAriaLabel": "Time",
         "datePlaceholder": "MM/DD/YYYY",
         "errors": {
+          "duration": "Duration must be a whole number of minutes between {{min}} and {{max}}.",
           "dateRequired": "Date is required.",
           "timeRequired": "Time is required.",
           "professionalRequired": "Professional is required.",

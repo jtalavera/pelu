@@ -121,7 +121,7 @@ public class CommissionSettlementService {
         String name =
             professionalRepository
                 .findByIdAndTenant_Id(pid, tenantId)
-                .map(pr -> pr.getFullName())
+                .map(pr -> pr.getDisplayName())
                 .orElse(null);
         conflicts.add(
             new SettlementConflict(

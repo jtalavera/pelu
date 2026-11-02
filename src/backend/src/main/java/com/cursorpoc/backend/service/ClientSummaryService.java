@@ -155,12 +155,13 @@ public class ClientSummaryService {
             Comparator.comparing((Map.Entry<Long, Integer> e) -> e.getValue())
                 .reversed()
                 .thenComparing(
-                    e -> byId.get(e.getKey()).getFullName(), String.CASE_INSENSITIVE_ORDER))
+                    e -> byId.get(e.getKey()).getDisplayName(), String.CASE_INSENSITIVE_ORDER))
         .limit(RANKING_LIMIT)
         .map(
             e -> {
               Professional p = byId.get(e.getKey());
-              return new ProfessionalRank(p.getId(), p.getFullName(), p.isActive(), e.getValue());
+              return new ProfessionalRank(
+                  p.getId(), p.getDisplayName(), p.isActive(), e.getValue());
             })
         .toList();
   }
@@ -182,8 +183,8 @@ public class ClientSummaryService {
     return counts.entrySet().stream()
         .filter(e -> e.getValue() == max)
         .map(e -> byId.get(e.getKey()))
-        .sorted(Comparator.comparing(Professional::getFullName, String.CASE_INSENSITIVE_ORDER))
-        .map(p -> new UsualProfessional(p.getId(), p.getFullName(), p.isActive(), max))
+        .sorted(Comparator.comparing(Professional::getDisplayName, String.CASE_INSENSITIVE_ORDER))
+        .map(p -> new UsualProfessional(p.getId(), p.getDisplayName(), p.isActive(), max))
         .toList();
   }
 
@@ -197,7 +198,7 @@ public class ClientSummaryService {
         performedAt(line.getServiceRecord()),
         line.getSalonService().getName(),
         p == null ? null : p.getId(),
-        p == null ? null : p.getFullName(),
+        p == null ? null : p.getDisplayName(),
         line.getUnitPrice().multiply(BigDecimal.valueOf(quantity(line))));
   }
 
