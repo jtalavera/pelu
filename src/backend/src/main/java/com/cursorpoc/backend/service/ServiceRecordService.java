@@ -274,6 +274,15 @@ public class ServiceRecordService {
     };
   }
 
+  /** What a professional may see of a ficha / list item: no money. */
+  public static ServiceRecordResponse maskAmounts(ServiceRecordResponse r) {
+    return withoutAmounts(r);
+  }
+
+  public static ServiceRecordListItemResponse maskAmounts(ServiceRecordListItemResponse r) {
+    return withoutAmounts(r);
+  }
+
   private static ServiceRecordListItemResponse withoutAmounts(ServiceRecordListItemResponse r) {
     return new ServiceRecordListItemResponse(
         r.id(),
@@ -283,7 +292,9 @@ public class ServiceRecordService {
         null,
         r.createdAt(),
         r.servicesSummary(),
-        r.professionalsSummary());
+        r.professionalsSummary(),
+        r.appointmentId(),
+        r.appointmentStartAt());
   }
 
   private static ServiceRecordResponse withoutAmounts(ServiceRecordResponse r) {
@@ -315,7 +326,9 @@ public class ServiceRecordService {
         r.invoiceId(),
         r.invoiceNumberFormatted(),
         lines,
-        List.of());
+        List.of(),
+        r.appointmentId(),
+        r.appointmentStartAt());
   }
 
   static Instant[] resolveListRange(Instant from, Instant to) {
@@ -477,6 +490,11 @@ public class ServiceRecordService {
     record.getTips().removeIf(t -> !requestedProfessionalIds.contains(t.getProfessional().getId()));
   }
 
+  /** List-item view of a ficha (used by the turno's "assign a ficha" picker). */
+  ServiceRecordListItemResponse toListItem(ServiceRecord r) {
+    return toListItemDto(r);
+  }
+
   private static ServiceRecordListItemResponse toListItemDto(ServiceRecord r) {
     return new ServiceRecordListItemResponse(
         r.getId(),
@@ -488,7 +506,9 @@ public class ServiceRecordService {
         distinctJoined(r.getLines().stream().map(l -> l.getSalonService().getName())),
         distinctJoined(
             r.getLines().stream()
-                .map(l -> l.getProfessional() == null ? null : l.getProfessional().getFullName())));
+                .map(l -> l.getProfessional() == null ? null : l.getProfessional().getFullName())),
+        r.getAppointment() != null ? r.getAppointment().getId() : null,
+        r.getAppointment() != null ? r.getAppointment().getStartAt() : null);
   }
 
   private static String distinctJoined(java.util.stream.Stream<String> names) {
@@ -545,7 +565,9 @@ public class ServiceRecordService {
         linkedInvoice != null ? linkedInvoice.getId() : null,
         linkedInvoice != null ? formatInvoiceNumber(linkedInvoice.getInvoiceNumber()) : null,
         lines,
-        tips);
+        tips,
+        r.getAppointment() != null ? r.getAppointment().getId() : null,
+        r.getAppointment() != null ? r.getAppointment().getStartAt() : null);
   }
 
   private static String formatInvoiceNumber(int number) {

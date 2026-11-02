@@ -33,6 +33,8 @@ export type Appointment = {
   reminderSentAt: string | null;
   /** HU-69: the client's birthday falls on this appointment's day (never reveals date or age). */
   clientBirthdayOnDay?: boolean;
+  /** The ficha de servicio of this turno; null while it has none. */
+  serviceRecordId?: number | null;
 };
 
 export type AppointmentCreateRequest = {

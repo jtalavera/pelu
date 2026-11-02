@@ -25,7 +25,7 @@ import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal
 import { SearchInput } from "../components/ui/SearchInput";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
-import { formatParaguayDateTime } from "../lib/paraguayDateTime";
+import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
 
 type InitialClientForRecord = {
@@ -404,6 +404,11 @@ export default function ServiceRecordsPage() {
                       formatParaguayDateTime(r.createdAt, dateLocale),
                       r.servicesSummary || t("femme.serviceRecords.noServices"),
                       r.professionalsSummary,
+                      r.appointmentId && r.appointmentStartAt
+                        ? t("femme.appointmentFicha.appointmentTag", {
+                            time: formatParaguayTime(r.appointmentStartAt, dateLocale),
+                          })
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}

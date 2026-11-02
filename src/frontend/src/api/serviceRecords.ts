@@ -33,6 +33,9 @@ export type ServiceRecordDetail = {
   invoiceNumberFormatted: string | null;
   lines: ServiceRecordLine[];
   tips: ServiceRecordTip[];
+  /** The turno this ficha belongs to (null for a ficha without turno). */
+  appointmentId?: number | null;
+  appointmentStartAt?: string | null;
 };
 
 export type ServiceRecordListItem = {
@@ -46,6 +49,8 @@ export type ServiceRecordListItem = {
   servicesSummary?: string | null;
   /** Distinct professional names on the record, comma-separated. */
   professionalsSummary?: string | null;
+  appointmentId?: number | null;
+  appointmentStartAt?: string | null;
 };
 
 export type PagedServiceRecordsResponse = {
@@ -113,4 +118,24 @@ export function updateServiceRecord(
 
 export function voidServiceRecord(id: number, voidReason: string): Promise<ServiceRecordDetail> {
   return femmePostJson<ServiceRecordDetail>(`/api/service-records/${id}/void`, { voidReason });
+}
+
+/** Creates the ficha of a turno (client, service and professional of the turno); starts the turno. */
+export function createServiceRecordFromAppointment(appointmentId: number): Promise<ServiceRecordDetail> {
+  return femmePostJson<ServiceRecordDetail>(`/api/appointments/${appointmentId}/service-record`, {});
+}
+
+/** Assigns an open ficha of the turno's client to the turno; starts the turno. */
+export function assignServiceRecordToAppointment(
+  appointmentId: number,
+  serviceRecordId: number,
+): Promise<ServiceRecordDetail> {
+  return femmePostJson<ServiceRecordDetail>(`/api/appointments/${appointmentId}/service-record/assign`, {
+    serviceRecordId,
+  });
+}
+
+/** Open fichas of today, of the turno's client, that no turno has taken yet. */
+export function listAssignableServiceRecords(appointmentId: number): Promise<ServiceRecordListItem[]> {
+  return femmeJson<ServiceRecordListItem[]>(`/api/appointments/${appointmentId}/service-record/candidates`);
 }

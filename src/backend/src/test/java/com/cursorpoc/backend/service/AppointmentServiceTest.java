@@ -48,6 +48,7 @@ class AppointmentServiceTest {
   @Mock private ProfessionalRepository professionalRepository;
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private ClientRepository clientRepository;
+  @Mock private com.cursorpoc.backend.repository.ServiceRecordRepository serviceRecordRepository;
   @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   private final InMemoryTelemetry telemetry = new InMemoryTelemetry();

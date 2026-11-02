@@ -6,12 +6,15 @@ import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.ClientBirthday;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.SalonService;
+import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.AppointmentStatus;
+import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.AppointmentCreateRequest;
 import com.cursorpoc.backend.web.dto.AppointmentResponse;
@@ -21,9 +24,10 @@ import com.cursorpoc.backend.web.dto.PageResponse;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -43,6 +47,7 @@ public class AppointmentService {
   private final SalonServiceRepository salonServiceRepository;
   private final ClientRepository clientRepository;
   private final BusinessMetrics businessMetrics;
+  private final ServiceRecordRepository serviceRecordRepository;
 
   private final FemmeTimeProperties timeProperties;
 
@@ -53,7 +58,9 @@ public class AppointmentService {
       SalonServiceRepository salonServiceRepository,
       ClientRepository clientRepository,
       BusinessMetrics businessMetrics,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      ServiceRecordRepository serviceRecordRepository) {
+    this.serviceRecordRepository = serviceRecordRepository;
     this.timeProperties = timeProperties;
     this.appointmentRepository = appointmentRepository;
     this.tenantRepository = tenantRepository;
@@ -69,11 +76,9 @@ public class AppointmentService {
   @Transactional(readOnly = true)
   public List<AppointmentResponse> list(
       long tenantId, Instant from, Instant to, Long professionalId, Long clientId) {
-    return appointmentRepository
-        .findInRangeFiltered(tenantId, from, to, professionalId, clientId)
-        .stream()
-        .map(this::toResponse)
-        .toList();
+    return toResponses(
+        tenantId,
+        appointmentRepository.findInRangeFiltered(tenantId, from, to, professionalId, clientId));
   }
 
   /**
@@ -91,8 +96,7 @@ public class AppointmentService {
     Page<Appointment> apptPage =
         appointmentRepository.findClientHistoryPaged(
             tenantId, clientId, sixMonthsAgo, now, pageable);
-    List<AppointmentResponse> content =
-        apptPage.getContent().stream().map(this::toResponse).collect(Collectors.toList());
+    List<AppointmentResponse> content = toResponses(tenantId, apptPage.getContent());
     return new PageResponse<>(
         content,
         apptPage.getNumber(),
@@ -155,8 +159,22 @@ public class AppointmentService {
     appointmentRepository.save(appointment);
     if (newStatus != previousStatus) {
       recordStatusTransition(tenantId, appointment, newStatus);
+      if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.NO_SHOW) {
+        releaseOpenServiceRecord(tenantId, appointmentId);
+      }
     }
     return toResponse(appointment);
+  }
+
+  /**
+   * A cancelled / no-show turno lets go of its ficha when it is still open: the ficha stays open
+   * (it is not voided) and can be assigned to another turno. A charged ficha keeps its link.
+   */
+  private void releaseOpenServiceRecord(long tenantId, long appointmentId) {
+    serviceRecordRepository
+        .findByTenant_IdAndAppointment_Id(tenantId, appointmentId)
+        .filter(r -> r.getStatus() == ServiceRecordStatus.OPEN)
+        .ifPresent(r -> r.setAppointment(null));
   }
 
   /** Issue #268: counts only transitions into CANCELLED / NO_SHOW (re-saving is not counted). */
@@ -279,7 +297,28 @@ public class AppointmentService {
     }
   }
 
+  private List<AppointmentResponse> toResponses(long tenantId, List<Appointment> appointments) {
+    Map<Long, Long> recordIds = new HashMap<>();
+    if (!appointments.isEmpty()) {
+      for (Object[] row :
+          serviceRecordRepository.findIdsByAppointmentIds(
+              tenantId, appointments.stream().map(Appointment::getId).toList())) {
+        recordIds.put((Long) row[0], (Long) row[1]);
+      }
+    }
+    return appointments.stream().map(a -> toResponse(a, recordIds.get(a.getId()))).toList();
+  }
+
   private AppointmentResponse toResponse(Appointment a) {
+    Long recordId =
+        serviceRecordRepository
+            .findByTenant_IdAndAppointment_Id(a.getTenant().getId(), a.getId())
+            .map(ServiceRecord::getId)
+            .orElse(null);
+    return toResponse(a, recordId);
+  }
+
+  private AppointmentResponse toResponse(Appointment a, Long serviceRecordId) {
     String clientName = null;
     Long clientId = null;
     if (a.getClient() != null) {
@@ -304,6 +343,7 @@ public class AppointmentService {
             && ClientBirthday.isBirthdayOn(
                 a.getClient().getBirthdayDay(),
                 a.getClient().getBirthdayMonth(),
-                a.getStartAt().atZone(timeProperties.zoneId()).toLocalDate()));
+                a.getStartAt().atZone(timeProperties.zoneId()).toLocalDate()),
+        serviceRecordId);
   }
 }

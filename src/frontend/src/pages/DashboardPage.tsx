@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { Alert, Button, Card, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
-import { billingStateForAppointment } from "../lib/appointmentBilling";
+import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
+import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { listAppointments, type Appointment } from "../api/appointments";
 import { TodayServiceRecords } from "../components/TodayServiceRecords";
 import { BirthdaysCard } from "../components/BirthdaysCard";
@@ -146,8 +147,8 @@ export default function DashboardPage() {
   const [alertDismissed, setAlertDismissed] = useState(false);
   const [openMore, setOpenMore] = useState<MoreKey | null>(null);
   const [birthdaysCount, setBirthdaysCount] = useState<number | null>(0);
-  const [chargingId, setChargingId] = useState<number | null>(null);
-  const [chargeError, setChargeError] = useState<string | null>(null);
+  const [openRecordId, setOpenRecordId] = useState<number | null>(null);
+  const [fichasKey, setFichasKey] = useState(0);
   const [now, setNow]                 = useState(() => new Date());
   const [apptListQuery, setApptListQuery] = useState("");
 
@@ -188,11 +189,19 @@ export default function DashboardPage() {
   }, []);
 
   // ── Today's appointments (for list + occupancy) ───────────────────────────
-  useEffect(() => {
+  const refreshAppointments = useCallback(() => {
     listAppointments(todayRangeIso.from, todayRangeIso.to)
-      .then(setTodayAppts)
+      .then((list) => {
+        setTodayAppts(list);
+        setFichasKey((k) => k + 1);
+      })
       .catch(() => setTodayAppts([]));
   }, [todayRangeIso.from, todayRangeIso.to]);
+  useEffect(() => {
+    refreshAppointments();
+    const id = window.setInterval(refreshAppointments, POLL_MS);
+    return () => window.clearInterval(id);
+  }, [refreshAppointments]);
 
   // ── Occupancy by professional ─────────────────────────────────────────────
   const occupancy = useMemo(() => {
@@ -224,22 +233,6 @@ export default function DashboardPage() {
   );
 
   const locale = getDateLocale(i18n);
-
-  /**
-   * "Cobrar" on a turno: opens Facturación with the client and the booked service already loaded
-   * (the same prefill channel the fichas use), so the only thing left is "¿Cómo paga?".
-   */
-  async function chargeAppointment(appt: Appointment) {
-    setChargingId(appt.id);
-    setChargeError(null);
-    try {
-      navigate("/app/billing", { state: await billingStateForAppointment(appt) });
-    } catch {
-      setChargeError(t("femme.dashboard.home.chargeError"));
-    } finally {
-      setChargingId(null);
-    }
-  }
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   const hour = now.getHours();
@@ -495,12 +488,11 @@ export default function DashboardPage() {
                 navigate("/app/calendar", {
                   state: { selectedDate: toLocalDateStr(new Date(appt.startAt)), openAppointmentId: appt.id },
                 });
-              const canCharge = appt.status !== "CANCELLED" && appt.status !== "NO_SHOW";
               return (
                 <li
                   key={appt.id}
                   data-testid="dashboard-appointment-row"
-                  className="grid grid-cols-[44px_minmax(0,1fr)_100px] items-center gap-x-2.5 gap-y-0.5 border-t border-line px-1 py-3 first:border-t-0 sm:grid-cols-[52px_minmax(0,1fr)_116px] sm:gap-x-3 sm:px-3"
+                  className="grid grid-cols-[44px_minmax(0,1fr)] items-center gap-x-2.5 gap-y-0.5 border-t border-line px-1 py-3 first:border-t-0 sm:grid-cols-[52px_minmax(0,1fr)_auto] sm:gap-x-3 sm:px-3"
                 >
                   <span className="col-start-1 row-span-2 row-start-1 font-heading text-[17px] font-extrabold tabular-nums text-ink">
                     {fmtTime(appt.startAt, locale)}
@@ -526,35 +518,34 @@ export default function DashboardPage() {
                     </span>{" "}
                     · {appt.serviceName} · {appt.professionalName}
                   </div>
-                  <div className="col-start-3 row-span-2 row-start-1">
-                    {canCharge && (
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        className="min-h-11 w-full px-2"
-                        data-testid="dashboard-appointment-charge"
-                        disabled={chargingId === appt.id}
-                        onClick={() => void chargeAppointment(appt)}
-                      >
-                        {t("femme.dashboard.home.charge")}
-                      </Button>
-                    )}
+                  <div className="col-start-2 row-start-3 mt-2 sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:mt-0">
+                    <AppointmentFichaAction
+                      appt={appt}
+                      testIdPrefix="dashboard-appointment-ficha"
+                      className="w-full whitespace-nowrap px-3"
+                      onOpenRecord={setOpenRecordId}
+                      onChanged={refreshAppointments}
+                    />
                   </div>
                 </li>
               );
             })}
           </ul>
         )}
-        {chargeError && (
-          <div role="alert" className="px-5 pb-4 text-sm text-danger">
-            {chargeError}
-          </div>
-        )}
       </Card>
 
       {/* ── 5. FICHAS DE HOY: eye-catching cards, the open ones first ── */}
-      <TodayServiceRecords />
+      <TodayServiceRecords refreshKey={fichasKey} />
+      {openRecordId !== null ? (
+        <ServiceRecordDetailModal
+          serviceRecordId={openRecordId}
+          onClose={() => setOpenRecordId(null)}
+          onChanged={() => {
+            setFichasKey((k) => k + 1);
+            refreshAppointments();
+          }}
+        />
+      ) : null}
 
       {/* ── 6. MORE FOR TODAY (collapsed) ── */}
       <Card className="p-0" data-testid="dashboard-more">

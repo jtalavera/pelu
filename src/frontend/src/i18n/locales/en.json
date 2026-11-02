@@ -490,6 +490,20 @@
       "sent": "If an account with that email exists, we've sent a link to reset your password. Check your inbox.",
       "backToLogin": "Back to sign in"
     },
+    "appointmentFicha": {
+      "go": "Go to the service record",
+      "createOrAssign": "Create or assign service record",
+      "modalTitle": "Service record for {{client}}",
+      "createNew": "Create new service record",
+      "createNewHint": "With {{service}} and {{professional]}, like the appointment",
+      "assignTitle": "Or assign an open one from today",
+      "noCandidates": "{{client}} has no open service records today without an appointment.",
+      "candidateTitle": "Service record from {{time}}",
+      "appointmentTag": "Appointment {{time}}",
+      "noAppointmentTag": "No appointment",
+      "viewAppointment": "View appointment",
+      "goToAppointment": "Appointment at {{time}}"
+    },
     "nav": {
       "commissions": "Commissions",
       "myCommissions": "My commissions",

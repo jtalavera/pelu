@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
+import com.cursorpoc.backend.domain.Appointment;
 import com.cursorpoc.backend.domain.CashSession;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FiscalStamp;
@@ -12,6 +13,7 @@ import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.ServiceRecordTip;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.AppointmentStatus;
 import com.cursorpoc.backend.domain.enums.CardBrand;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
@@ -297,6 +299,13 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     if (serviceRecord != null) {
       serviceRecord.setStatus(ServiceRecordStatus.CLOSED);
       serviceRecord.setClosedAt(Instant.now());
+      // The linked turno is completed together with its ficha, whatever step it was on.
+      Appointment linked = serviceRecord.getAppointment();
+      if (linked != null
+          && linked.getStatus() != AppointmentStatus.CANCELLED
+          && linked.getStatus() != AppointmentStatus.NO_SHOW) {
+        linked.setStatus(AppointmentStatus.COMPLETED);
+      }
     }
 
     // 11. Stock (HU-63): product lines leave stock — an outbox event in this same transaction,
