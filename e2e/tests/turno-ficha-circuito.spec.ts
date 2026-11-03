@@ -389,6 +389,18 @@ test.describe("Turno y ficha de servicio", () => {
 
     await expect.poll(async () => (await getAppt(request, admin, turno.id)).status).toBe("COMPLETED");
     expect((await getAppt(request, admin, turno.id)).invoiceId).not.toBeNull();
+
+    // Back on the Inicio: no ficha to go to, so the row offers «Ver comprobante» (and no «Cobrar»).
+    await page.goto("/app");
+    const paidRow = page
+      .getByTestId("dashboard-appointment-row")
+      .filter({ hasText: seed.professionalFullName })
+      .filter({ hasText: "Occasional" });
+    await expect(paidRow.getByTestId("dashboard-appointment-invoice")).toHaveText("View invoice", { timeout: 20_000 });
+    await expect(paidRow.getByTestId("dashboard-appointment-charge")).toHaveCount(0);
+    await paidRow.getByTestId("dashboard-appointment-invoice").click();
+    await expect(page).toHaveURL(/\/app\/billing/);
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 20_000 });
   });
 
   test("un turno ya cobrado no vuelve a ofrecer «Cobrar»: muestra «Ver comprobante» y abre la factura", async ({
