@@ -751,7 +751,7 @@ export function ServiceRecordEditor({
                 </Text>
               ) : (
                 <div
-                  className="flex flex-col rounded-card border border-line bg-bg px-3"
+                  className="flex flex-col rounded-card border border-line bg-page px-3"
                   data-testid="service-record-tips"
                 >
                   {distinctProfessionalIds.map((id) => (

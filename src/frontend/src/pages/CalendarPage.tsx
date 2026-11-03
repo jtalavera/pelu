@@ -1643,7 +1643,7 @@ export default function CalendarPage() {
             ))}
           </div>
           {/* Duration: starts as the service's, adjustable (a turno can run long) */}
-          <div className="space-y-2 rounded-card border border-line bg-bg p-3" data-testid="appointment-duration">
+          <div className="space-y-2 rounded-card border border-line bg-page p-3" data-testid="appointment-duration">
             <Label htmlFor="form-duration">{t("femme.calendar.form.duration")}</Label>
             <div className="flex flex-wrap items-center gap-2">
               <button

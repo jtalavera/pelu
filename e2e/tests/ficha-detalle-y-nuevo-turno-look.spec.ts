@@ -57,6 +57,11 @@ test("detalle de la ficha: agregar servicio punteado al final y propinas una deb
   await expect(dialog.getByTestId("service-record-tips")).toContainText(seed.professionalFullName);
   await expect(dialog.getByTestId("service-record-tips")).toContainText(second.professionalFullName);
 
+  // The tips card has the beige background (not transparent / white like the dialog).
+  const tipsBg = await dialog.getByTestId("service-record-tips").evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(tipsBg).not.toBe("rgba(0, 0, 0, 0)");
+  expect(tipsBg).not.toBe("rgb(255, 255, 255)");
+
   // The header shows the tips total once there is one.
   await expect(dialog.getByTestId("service-record-tips-total")).toHaveCount(0);
   await tip1.fill("5000");
@@ -88,6 +93,10 @@ test("Nuevo turno: horarios rápidos bajo la hora y la duración al final, en su
   // Servicio and Profesional share a row on a wide screen.
   const [sb, pb] = await Promise.all([dlg.locator("#form-service").boundingBox(), dlg.locator("#form-professional").boundingBox()]);
   expect(Math.abs(sb!.y - pb!.y)).toBeLessThan(6);
+  // The duration card has the beige background too.
+  const durBg = await duration.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(durBg).not.toBe("rgba(0, 0, 0, 0)");
+  expect(durBg).not.toBe("rgb(255, 255, 255)");
   await expect(dlg.getByText("Who and what")).toBeVisible();
   await expect(dlg.getByText("When", { exact: true })).toBeVisible();
   await page.screenshot({ path: process.env.SHOT_TURNO ?? "test-results/turno.png" });
