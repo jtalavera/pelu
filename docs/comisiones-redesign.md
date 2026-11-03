@@ -24,3 +24,10 @@ períodos anteriores que quedaron pendientes. Para que se vea de dónde sale cad
   «Anterior al período»;
 - sin arrastre se ve como antes (lista plana, sin recuadro).
 El total no cambia. Texto de ayuda actualizado.
+
+## Reglas: lista paginada
+La lista de Servicios y de Productos de la pestaña «Reglas» va **paginada en el cliente** (la vista ya se carga completa):
+20 filas por página por defecto (10, 20 o 50), con «1–20 de 143», Anterior / Siguiente con «1 / 8» y «Filas por página»
+(los mismos componentes del paginador de Auditoría). Buscar, activar «Solo con excepciones» o cambiar entre Servicios y
+Productos vuelve a la página 1; editar una regla mantiene la página. En celular el pie se apila. Spec:
+`e2e/tests/comisiones/reglas-paginadas.spec.ts`.
