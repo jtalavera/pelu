@@ -558,6 +558,21 @@ export default function DashboardPage() {
                         {t("femme.dashboard.home.charge")}
                       </Button>
                     ) : null}
+                    {!appt.serviceRecordId && appt.invoiceId != null ? (
+                      // Charged with no ficha (e.g. occasional client): the comprobante is the only link.
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="min-h-11 w-full whitespace-nowrap px-3"
+                        data-testid="dashboard-appointment-invoice"
+                        onClick={() =>
+                          navigate("/app/billing", { state: { openInvoiceId: appt.invoiceId } })
+                        }
+                      >
+                        {t("femme.calendar.action.viewInvoice")}
+                      </Button>
+                    ) : null}
                     <AppointmentFichaAction
                       appt={appt}
                       testIdPrefix="dashboard-appointment-ficha"
