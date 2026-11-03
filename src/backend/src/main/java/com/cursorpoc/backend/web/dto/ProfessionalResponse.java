@@ -24,6 +24,9 @@ public record ProfessionalResponse(
     Instant invitationExpiresAt,
     Instant resendAvailableAt,
     // HU-66: shared devices where her PIN login is locked right now (empty in the directory view).
-    List<SharedDeviceService.PinLockResponse> pinLocks) {
+    List<SharedDeviceService.PinLockResponse> pinLocks,
+    // Optional nickname and what lists show (the nickname when set, otherwise the full name).
+    String nickname,
+    String displayName) {
   public record Schedule(short dayOfWeek, LocalTime startTime, LocalTime endTime) {}
 }

@@ -1,3 +1,4 @@
+import { withDisplayNames } from "../lib/professionalDisplay";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -22,7 +23,7 @@ import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateT
 import { billServiceRecord } from "../lib/serviceRecordBilling";
 import { ProfessionalServiceLines, ServicePickerScreen } from "./ProfessionalServiceLines";
 
-type Professional = { id: number; fullName: string; active: boolean };
+type Professional = { id: number; fullName: string; displayName?: string | null; active: boolean };
 
 type LineForm = {
   key: string;
@@ -157,7 +158,7 @@ export function ServiceRecordEditor({
 
   useEffect(() => {
     femmeJson<Professional[]>("/api/professionals")
-      .then((list) => setProfessionals((Array.isArray(list) ? list : []).filter((p) => p.active)))
+      .then((list) => setProfessionals(withDisplayNames(Array.isArray(list) ? list : []).filter((p) => p.active)))
       .catch(() => setProfessionals([]));
   }, []);
 

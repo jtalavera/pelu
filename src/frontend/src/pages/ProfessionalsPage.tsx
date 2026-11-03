@@ -53,6 +53,8 @@ type Schedule = {
 type Professional = {
   id: number;
   fullName: string;
+  /** Optional nickname: lists elsewhere show it instead of the full name. */
+  nickname?: string | null;
   phone: string | null;
   email: string | null;
   photoDataUrl: string | null;
@@ -171,6 +173,7 @@ export default function ProfessionalsPage({ actionsSlot }: { actionsSlot?: HTMLE
 
   // form
   const [fullName, setFullName] = useState("");
+  const [nickname, setNickname] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [photoDataUrl, setPhotoDataUrl] = useState("");
@@ -258,6 +261,7 @@ export default function ProfessionalsPage({ actionsSlot }: { actionsSlot?: HTMLE
 
   function resetDetailForm(p: Professional | null) {
     setFullName(p?.fullName ?? "");
+    setNickname(p?.nickname ?? "");
     setPhone(p?.phone ?? "");
     setEmail(p?.email ?? "");
     setPhotoDataUrl(p?.photoDataUrl ?? "");
@@ -406,6 +410,7 @@ export default function ProfessionalsPage({ actionsSlot }: { actionsSlot?: HTMLE
       const previousEmail = (savedProfessional?.email ?? "").trim().toLowerCase();
       const payload = {
         fullName: nameTrim,
+        nickname: nickname.trim() || null,
         phone: phone.trim() || null,
         email: email.trim() || null,
         photoDataUrl: photoDataUrl.trim(),
@@ -707,7 +712,10 @@ export default function ProfessionalsPage({ actionsSlot }: { actionsSlot?: HTMLE
                   {getInitials(p.fullName)}
                 </span>
                 <div className={`min-w-0 flex-1 ${p.active ? "" : "opacity-60"}`}>
-                  <div className="break-words font-semibold text-ink">{p.fullName}</div>
+                  <div className="break-words font-semibold text-ink">
+                    {p.fullName}
+                    {p.nickname ? <span className="ml-1.5 font-normal text-ink-3">«{p.nickname}»</span> : null}
+                  </div>
                   <div className="break-words text-sm text-ink-3">
                     {[p.phone || t("femme.catalog.noPhone"), p.active ? null : t("femme.status.INACTIVE")]
                       .filter(Boolean)
@@ -792,6 +800,21 @@ export default function ProfessionalsPage({ actionsSlot }: { actionsSlot?: HTMLE
             </FieldValidationError>
           </div>
 
+
+          <div>
+            <Label htmlFor="prof-nickname">{t("femme.professionals.form.nickname")}</Label>
+            <Input
+              id="prof-nickname"
+              value={nickname}
+              maxLength={60}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder={t("femme.professionals.form.nicknamePlaceholder")}
+              aria-describedby="prof-nickname-hint"
+            />
+            <p id="prof-nickname-hint" className="mt-1 text-xs text-ink-3">
+              {t("femme.professionals.form.nicknameHint")}
+            </p>
+          </div>
 
           <div>
             <Label htmlFor="prof-phone">{t("femme.professionals.form.phone")}</Label>

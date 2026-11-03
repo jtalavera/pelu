@@ -1,3 +1,4 @@
+import { withDisplayNames } from "../../lib/professionalDisplay";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Label, Modal, Select, Text, Textarea } from "@design-system";
@@ -7,7 +8,7 @@ import { translateApiError } from "../../api/parseApiErrorMessage";
 import { formatAmountDecimal } from "../../lib/formatMoney";
 import type { InvoiceLine } from "../InvoiceDetailModal";
 
-type ProfessionalOption = { id: number; fullName: string; active: boolean };
+type ProfessionalOption = { id: number; fullName: string; displayName?: string | null; active: boolean };
 
 /**
  * "Asignar profesional" from the comprobante detail: sets or changes the professional who served
@@ -41,7 +42,7 @@ export function AssignInvoiceProfessionalsDialog({
 
   useEffect(() => {
     femmeJson<ProfessionalOption[]>("/api/professionals")
-      .then((list) => setProfessionals(Array.isArray(list) ? list.filter((p) => p.active) : []))
+      .then((list) => setProfessionals(Array.isArray(list) ? withDisplayNames(list).filter((p) => p.active) : []))
       .catch(() => setProfessionals([]));
   }, []);
 

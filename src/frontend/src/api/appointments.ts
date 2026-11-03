@@ -42,6 +42,8 @@ export type AppointmentCreateRequest = {
   professionalId: number;
   serviceId: number;
   startAt: string;
+  /** Length of the turno in minutes (5–480); omitted = the service's own duration. */
+  durationMinutes?: number;
 };
 
 export type AppointmentUpdateRequest = {
@@ -49,6 +51,8 @@ export type AppointmentUpdateRequest = {
   professionalId: number;
   serviceId: number;
   startAt: string;
+  /** Length of the turno in minutes (5–480); omitted = the service's own duration. */
+  durationMinutes?: number;
 };
 
 export type AppointmentStatusUpdateRequest = {

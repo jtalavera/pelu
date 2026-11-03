@@ -73,6 +73,9 @@ public class AppointmentService {
   /** Maximum months of history returned by the client history endpoint. */
   public static final int CLIENT_HISTORY_MONTHS = 6;
 
+  public static final int MIN_DURATION_MINUTES = 5;
+  public static final int MAX_DURATION_MINUTES = 480;
+
   @Transactional(readOnly = true)
   public List<AppointmentResponse> list(
       long tenantId, Instant from, Instant to, Long professionalId, Long clientId) {
@@ -119,7 +122,8 @@ public class AppointmentService {
 
     Instant startAt = parseInstant(request.startAt());
     validateStartNotInPast(startAt);
-    Instant endAt = startAt.plusSeconds((long) service.getDurationMinutes() * 60);
+    Instant endAt =
+        startAt.plusSeconds(resolveDurationMinutes(request.durationMinutes(), service) * 60L);
 
     validateNoOverlap(tenantId, professional.getId(), startAt, endAt, null);
 
@@ -205,7 +209,8 @@ public class AppointmentService {
 
     Instant startAt = parseInstant(request.startAt());
     validateStartNotInPast(startAt);
-    Instant endAt = startAt.plusSeconds((long) service.getDurationMinutes() * 60);
+    Instant endAt =
+        startAt.plusSeconds(resolveDurationMinutes(request.durationMinutes(), service) * 60L);
 
     validateNoOverlap(tenantId, professional.getId(), startAt, endAt, appointmentId);
 
@@ -231,6 +236,17 @@ public class AppointmentService {
 
     appointmentRepository.save(appointment);
     return toResponse(appointment);
+  }
+
+  /** The turno's own length (5–480 min) or, when none is given, the service's duration. */
+  static int resolveDurationMinutes(Integer requested, SalonService service) {
+    if (requested == null) {
+      return service.getDurationMinutes();
+    }
+    if (requested < MIN_DURATION_MINUTES || requested > MAX_DURATION_MINUTES) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "APPOINTMENT_DURATION_INVALID");
+    }
+    return requested;
   }
 
   private void validateStartNotInPast(Instant startAt) {
@@ -330,10 +346,10 @@ public class AppointmentService {
         clientId,
         clientName,
         a.getProfessional().getId(),
-        a.getProfessional().getFullName(),
+        a.getProfessional().getDisplayName(),
         a.getSalonService().getId(),
         a.getSalonService().getName(),
-        a.getSalonService().getDurationMinutes(),
+        (int) java.time.Duration.between(a.getStartAt(), a.getEndAt()).toMinutes(),
         a.getStartAt().toString(),
         a.getEndAt().toString(),
         a.getStatus().name(),

@@ -1,3 +1,4 @@
+import { withDisplayNames } from "../lib/professionalDisplay";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -31,7 +32,7 @@ import { useDateLocale } from "../i18n/dateLocale";
 import { formatGuaraniesGs } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
 
-type Professional = { id: number; fullName: string; active: boolean };
+type Professional = { id: number; fullName: string; displayName?: string | null; active: boolean };
 type Period = 7 | 30 | 90;
 const PERIODS: Period[] = [7, 30, 90];
 const BALANCES_PAGE = 5;
@@ -118,7 +119,7 @@ export default function PropinasPage() {
 
   useEffect(() => {
     femmeJson<Professional[]>("/api/professionals")
-      .then((list) => setProfessionals(Array.isArray(list) ? list : []))
+      .then((list) => setProfessionals(Array.isArray(list) ? withDisplayNames(list) : []))
       .catch(() => setProfessionals([]));
   }, []);
 

@@ -2882,6 +2882,9 @@
       "form": {
         "fullName": "Nombre completo",
         "fullNameRequired": "Ingresá el nombre completo (ej.: Ana García).",
+        "nickname": "Apodo (opcional)",
+        "nicknamePlaceholder": "Ej.: Ani",
+        "nicknameHint": "Si lo completás, las listas muestran el apodo en lugar del nombre completo.",
         "fullNamePlaceholder": "ej.: Ana García",
         "phone": "Teléfono",
         "phonePlaceholder": "(0981) 123-456",
@@ -3014,6 +3017,12 @@
         "readOnlyOtherProfessional": "Este turno pertenece a otra profesional. Podés verlo, pero solo podés editar o cambiar el estado de los turnos asignados a vos."
       },
       "form": {
+        "duration": "Duración",
+        "durationUnit": "min",
+        "durationDecrease": "Menos duración",
+        "durationIncrease": "Más duración",
+        "durationEnds": "Termina a las {{time}}.",
+        "durationServiceNote": "El servicio dura {{minutes}} min; ya la ajustaste.",
         "title": "Nuevo turno",
         "editTitle": "Editar turno",
         "date": "Fecha",
@@ -3032,6 +3041,7 @@
         "timeAriaLabel": "Hora",
         "datePlaceholder": "DD/MM/AAAA",
         "errors": {
+          "duration": "La duración debe ser un número entero de minutos entre {{min}} y {{max}}.",
           "dateRequired": "La fecha es obligatoria.",
           "timeRequired": "La hora es obligatoria.",
           "professionalRequired": "La profesional es obligatoria.",

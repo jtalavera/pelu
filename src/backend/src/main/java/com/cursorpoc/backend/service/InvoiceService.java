@@ -1071,7 +1071,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
                         l.getTaxRate(),
                         l.getTaxAmount(),
                         l.getProfessional() != null ? l.getProfessional().getId() : null,
-                        l.getProfessional() != null ? l.getProfessional().getFullName() : null))
+                        l.getProfessional() != null ? l.getProfessional().getDisplayName() : null))
             .collect(Collectors.toList());
 
     List<InvoicePaymentAllocationResponse> payments =
