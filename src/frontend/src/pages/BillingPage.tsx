@@ -6,6 +6,7 @@ import { getCurrentSession as fetchCurrentSession, type CashSession } from "../a
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { billingSteps, registerBillingTabSwitcher } from "../tour/steps/billing";
+import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { BillingHome } from "./billing/BillingHome";
 import { BillingHistory, type HistoryView } from "./billing/InvoiceHistory";
 import {
@@ -35,6 +36,8 @@ export default function BillingPage() {
         activeTab?: NavTab;
         selectedClient?: InitialClientForBilling;
         prefillServiceRecord?: PrefillServiceRecord;
+        /** Opens this invoice's detail right away (the Agenda's "Ver comprobante"). */
+        openInvoiceId?: number;
       }
     | null;
   const [loading, setLoading] = useState(true);
@@ -53,10 +56,14 @@ export default function BillingPage() {
   );
   const [pendingPrefillServiceRecord, setPendingPrefillServiceRecord] =
     useState<PrefillServiceRecord | null>(navState?.prefillServiceRecord ?? null);
+  const [viewInvoiceId, setViewInvoiceId] = useState<number | null>(navState?.openInvoiceId ?? null);
   const firstLoadDone = useRef(false);
 
   useEffect(() => {
-    if (navState && (navState.activeTab || navState.selectedClient || navState.prefillServiceRecord)) {
+    if (
+      navState &&
+      (navState.activeTab || navState.selectedClient || navState.prefillServiceRecord || navState.openInvoiceId)
+    ) {
       navigate(location.pathname, { replace: true, state: {} });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,6 +166,17 @@ export default function BillingPage() {
           isActive={screen === "history"}
         />
       </div>
+
+      {viewInvoiceId !== null ? (
+        <InvoiceDetailModal
+          invoiceId={viewInvoiceId}
+          onClose={() => setViewInvoiceId(null)}
+          onVoided={() => {
+            setViewInvoiceId(null);
+            void loadCurrentSession();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

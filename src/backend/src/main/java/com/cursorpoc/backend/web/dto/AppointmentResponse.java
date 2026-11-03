@@ -21,4 +21,7 @@ public record AppointmentResponse(
     boolean clientBirthdayOnDay,
     // The ficha de servicio of this turno (null while it has none): the Inicio and the Agenda show
     // "Crear o asignar ficha" or "Ir a la ficha" from it.
-    Long serviceRecordId) {}
+    Long serviceRecordId,
+    // The issued invoice that charged this turno (through its ficha or directly); null while it is
+    // not charged. The Agenda offers "Cobrar" only without it and "Ver comprobante" with it.
+    Long invoiceId) {}

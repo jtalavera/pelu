@@ -9,9 +9,11 @@ import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.AppointmentStatus;
+import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
+import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
@@ -48,6 +50,7 @@ public class AppointmentService {
   private final ClientRepository clientRepository;
   private final BusinessMetrics businessMetrics;
   private final ServiceRecordRepository serviceRecordRepository;
+  private final InvoiceRepository invoiceRepository;
 
   private final FemmeTimeProperties timeProperties;
 
@@ -59,8 +62,10 @@ public class AppointmentService {
       ClientRepository clientRepository,
       BusinessMetrics businessMetrics,
       FemmeTimeProperties timeProperties,
-      ServiceRecordRepository serviceRecordRepository) {
+      ServiceRecordRepository serviceRecordRepository,
+      InvoiceRepository invoiceRepository) {
     this.serviceRecordRepository = serviceRecordRepository;
+    this.invoiceRepository = invoiceRepository;
     this.timeProperties = timeProperties;
     this.appointmentRepository = appointmentRepository;
     this.tenantRepository = tenantRepository;
@@ -315,14 +320,20 @@ public class AppointmentService {
 
   private List<AppointmentResponse> toResponses(long tenantId, List<Appointment> appointments) {
     Map<Long, Long> recordIds = new HashMap<>();
+    Map<Long, Long> invoiceIds = new HashMap<>();
     if (!appointments.isEmpty()) {
-      for (Object[] row :
-          serviceRecordRepository.findIdsByAppointmentIds(
-              tenantId, appointments.stream().map(Appointment::getId).toList())) {
+      List<Long> ids = appointments.stream().map(Appointment::getId).toList();
+      for (Object[] row : serviceRecordRepository.findIdsByAppointmentIds(tenantId, ids)) {
         recordIds.put((Long) row[0], (Long) row[1]);
       }
+      for (Object[] row :
+          invoiceRepository.findInvoiceIdsByAppointmentIds(tenantId, ids, InvoiceStatus.ISSUED)) {
+        invoiceIds.put((Long) row[0], (Long) row[1]);
+      }
     }
-    return appointments.stream().map(a -> toResponse(a, recordIds.get(a.getId()))).toList();
+    return appointments.stream()
+        .map(a -> toResponse(a, recordIds.get(a.getId()), invoiceIds.get(a.getId())))
+        .toList();
   }
 
   private AppointmentResponse toResponse(Appointment a) {
@@ -331,10 +342,16 @@ public class AppointmentService {
             .findByTenant_IdAndAppointment_Id(a.getTenant().getId(), a.getId())
             .map(ServiceRecord::getId)
             .orElse(null);
-    return toResponse(a, recordId);
+    Long invoiceId = null;
+    for (Object[] row :
+        invoiceRepository.findInvoiceIdsByAppointmentIds(
+            a.getTenant().getId(), List.of(a.getId()), InvoiceStatus.ISSUED)) {
+      invoiceId = (Long) row[1];
+    }
+    return toResponse(a, recordId, invoiceId);
   }
 
-  private AppointmentResponse toResponse(Appointment a, Long serviceRecordId) {
+  private AppointmentResponse toResponse(Appointment a, Long serviceRecordId, Long invoiceId) {
     String clientName = null;
     Long clientId = null;
     if (a.getClient() != null) {
@@ -360,6 +377,7 @@ public class AppointmentService {
                 a.getClient().getBirthdayDay(),
                 a.getClient().getBirthdayMonth(),
                 a.getStartAt().atZone(timeProperties.zoneId()).toLocalDate()),
-        serviceRecordId);
+        serviceRecordId,
+        invoiceId);
   }
 }

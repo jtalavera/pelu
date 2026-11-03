@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Card, Checkbox, Heading, Input, Label, Select, Text } from "@design-system";
 import { femmeJson, femmePostJson } from "../../api/femmeClient";
-import { listAppointments, updateAppointmentStatus, type Appointment } from "../../api/appointments";
+import { listAppointments, type Appointment } from "../../api/appointments";
 import { formatParaguayTime } from "../../lib/paraguayDateTime";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { translateApiError } from "../../api/parseApiErrorMessage";
@@ -1005,6 +1005,12 @@ export function NewInvoiceFlow({
             : null,
       })),
       serviceRecordId: serviceRecordId,
+      // Billed with no ficha: the turno the user charged from (or the client's turno of today, if
+      // left ticked) is linked to the invoice and completed with it by the server.
+      appointmentId:
+        serviceRecordId != null
+          ? null
+          : (prefillTurnoId ?? (openTurno && completeTurno ? openTurno.id : null)),
       tipsAmount: tipsTotal,
       tips: tipProfessionalIds
         .map((id) => ({ professionalId: Number(id), amount: parseMaskedMoney(tips[id] ?? "") }))
@@ -1017,12 +1023,6 @@ export function NewInvoiceFlow({
         "/api/invoices",
         payload,
       );
-      // Billed with no ficha: the client's turno of today is completed here, if the user left it ticked.
-      const turnoToComplete =
-        serviceRecordId != null ? null : (prefillTurnoId ?? (openTurno && completeTurno ? openTurno.id : null));
-      if (turnoToComplete != null) {
-        void updateAppointmentStatus(turnoToComplete, { status: "COMPLETED", cancelReason: null }).catch(() => {});
-      }
       setOpenTurno(null);
       setSuccessInvoiceNumber(result.invoiceNumberFormatted);
       setLastInvoiceId(result.id);

@@ -64,6 +64,7 @@ class AppointmentControllerOwnershipTest {
         null,
         null,
         false,
+        null,
         null);
   }
 

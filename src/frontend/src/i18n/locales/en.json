@@ -2954,6 +2954,7 @@
       "action": {
         "confirm": "Confirm",
         "start": "Start",
+        "viewInvoice": "View invoice",
         "charge": "Charge",
         "complete": "Mark as completed",
         "noShow": "No show",

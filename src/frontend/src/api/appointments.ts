@@ -35,6 +35,8 @@ export type Appointment = {
   clientBirthdayOnDay?: boolean;
   /** The ficha de servicio of this turno; null while it has none. */
   serviceRecordId?: number | null;
+  /** The issued invoice that charged this turno; null while it is not charged. */
+  invoiceId?: number | null;
 };
 
 export type AppointmentCreateRequest = {
