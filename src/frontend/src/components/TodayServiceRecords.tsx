@@ -13,6 +13,7 @@ import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayTime } from "../lib/paraguayDateTime";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
 import { initialsOf } from "../lib/initials";
+import { SectionTitle } from "./SectionTitle";
 import { ServiceRecordDetailModal } from "./ServiceRecordDetailModal";
 
 const POLL_MS = 30_000;
@@ -94,21 +95,14 @@ export function TodayServiceRecords({
   }
 
   return (
-    <Card className="p-4 sm:p-5" data-testid="dashboard-today-records">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-heading text-lg font-extrabold text-ink">
-          {t("femme.serviceRecords.today.title")}
-        </h2>
-        {openCount > 0 ? (
-          <span
-            className="rounded-full bg-warning-lt px-3 py-0.5 text-sm font-extrabold text-warning"
-            data-testid="dashboard-today-records-open-count"
-          >
-            {t("femme.serviceRecords.today.openCount", { count: openCount })}
-          </span>
-        ) : null}
-      </div>
-
+    <section className="flex flex-col gap-2.5" data-testid="dashboard-today-records">
+      <SectionTitle
+        title={t("femme.serviceRecords.today.title")}
+        badge={openCount > 0 ? t("femme.serviceRecords.today.openCount", { count: openCount }) : undefined}
+        badgeTone="amber"
+        badgeTestId="dashboard-today-records-open-count"
+      />
+      <Card className="p-4 sm:p-5">
       {loaded && sorted.length === 0 ? (
         <p className="py-2 text-ink-3" data-testid="dashboard-service-records-empty">
           {professionalMode
@@ -289,6 +283,7 @@ export function TodayServiceRecords({
           ? t("femme.serviceRecords.voidedSuccess")
           : t("femme.serviceRecords.updatedSuccess")}
       </Toast>
-    </Card>
+      </Card>
+    </section>
   );
 }

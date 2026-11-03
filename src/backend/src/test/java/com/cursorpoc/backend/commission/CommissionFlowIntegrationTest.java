@@ -551,6 +551,33 @@ class CommissionFlowIntegrationTest {
   }
 
   @Test
+  void settlementPreviewSeparatesWhatIsCarriedFromEarlierPeriods() {
+    change(
+        "IMMEDIATE",
+        rule(corte, null, "40"),
+        new ConfigChange("DEFAULT_PRODUCT", null, null, "10", null));
+    accrue(invoice(corte, ana, "110000", shampoo, ana, "110000"));
+    java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("America/Asuncion"));
+
+    // The period starts after the commissions accrued: everything is carried over, but the total
+    // is the same (the period only labels what comes from before it).
+    var later =
+        queryService.settlementPreview(
+            tenant.getId(), ana.getId(), today.plusDays(2), today.plusDays(30));
+    assertThat(later.total()).isEqualByComparingTo("50000");
+    assertThat(later.carriedAmount()).isEqualByComparingTo("50000");
+    assertThat(later.carriedEntryIds()).hasSize(2);
+
+    // The period includes the day they accrued: nothing is carried.
+    var current =
+        queryService.settlementPreview(
+            tenant.getId(), ana.getId(), today.minusDays(3), today.plusDays(3));
+    assertThat(current.total()).isEqualByComparingTo("50000");
+    assertThat(current.carriedAmount()).isEqualByComparingTo("0");
+    assertThat(current.carriedEntryIds()).isEmpty();
+  }
+
+  @Test
   void rulesViewGroupsByCategoryWithStandardAndExceptions() {
     change(
         "IMMEDIATE",

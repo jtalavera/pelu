@@ -15,6 +15,15 @@ Parte del rediseño general. Sin cambios de backend ni de API.
 ## Tests
 Vitest: `pages/commissions/CommissionsPage.test.tsx`. Los specs de Playwright de comisiones (`e2e/tests/comisiones/*`) se adaptan en la pasada final tras Configuración; `mt-comisiones.spec.ts` solo usa la API y no cambia.
 
+## Vista previa: lo arrastrado de períodos anteriores
+La vista previa suma **todas las comisiones sin liquidar hasta «Hasta»** (igual que generar la liquidación), incluidas las de
+períodos anteriores que quedaron pendientes. Para que se vea de dónde sale cada monto, la respuesta trae `carriedAmount` y
+`carriedEntryIds` (lo devengado antes de «Desde») y la pantalla:
+- parte el total en «Del período» y «Arrastrado de períodos anteriores» (ámbar);
+- agrupa las líneas (primero lo arrastrado, con su subtotal, y después las del período) y marca cada línea de antes con
+  «Anterior al período»;
+- sin arrastre se ve como antes (lista plana, sin recuadro).
+El total no cambia. Texto de ayuda actualizado.
 ## Reglas: lista paginada
 La lista de Servicios y de Productos de la pestaña «Reglas» va **paginada en el cliente** (la vista ya se carga completa):
 20 filas por página por defecto (10, 20 o 50), con «1–20 de 143», Anterior / Siguiente con «1 / 8» y «Filas por página»

@@ -97,7 +97,15 @@ public class CommissionQueryService {
     BigDecimal products = BigDecimal.ZERO;
     BigDecimal adjustments = BigDecimal.ZERO;
     int lines = 0;
+    // Unsettled commissions accrued before the period start are carried over from earlier periods.
+    java.time.Instant periodStart = f.atStartOfDay(zone).toInstant();
+    BigDecimal carried = BigDecimal.ZERO;
+    List<Long> carriedIds = new java.util.ArrayList<>();
     for (CommissionEntry e : entries) {
+      if (e.getAccrualAt().isBefore(periodStart)) {
+        carried = carried.add(e.getCommissionAmount());
+        carriedIds.add(e.getId());
+      }
       if (e.getSourceType() == CommissionEntrySource.ADJUSTMENT) {
         adjustments = adjustments.add(e.getCommissionAmount());
       } else if (e.getItemKind() == ServiceKind.PRODUCT) {
@@ -127,7 +135,9 @@ public class CommissionQueryService {
         adjustments,
         lines,
         entries.stream().map(e -> entryView(e, names, null, reversed)).toList(),
-        drafts);
+        drafts,
+        carried,
+        carriedIds);
   }
 
   // ── Settlements ───────────────────────────────────────────────────────────────────────────

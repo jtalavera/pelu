@@ -184,7 +184,12 @@ public final class CommissionDtos {
       BigDecimal adjustmentsTotal,
       int lines,
       List<EntryView> entries,
-      List<SettlementView> draftSettlements) {}
+      List<SettlementView> draftSettlements,
+      // Part of {@code total} accrued BEFORE {@code periodFrom} (unsettled commissions carried from
+      // earlier periods), and the ids of those entries; {@code total - carriedAmount} is the part
+      // of the period itself.
+      BigDecimal carriedAmount,
+      List<Long> carriedEntryIds) {}
 
   /**
    * {@code skipOverlapping}: professionals that already have a (non-voided) settlement overlapping

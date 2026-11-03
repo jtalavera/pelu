@@ -55,7 +55,14 @@
         }
       },
       "preview": {
-        "hint": "Calculá cuánto cobraría un profesional en un periodo abierto con las comisiones registradas hasta hoy. No se guarda nada.",
+        "hint": "Suma todas las comisiones sin liquidar hasta la fecha «Hasta», incluidas las de períodos anteriores que quedaron pendientes. No se guarda nada.",
+        "periodTotal": "Del período {{from}} – {{to}}",
+        "carriedTotal": "Arrastrado de períodos anteriores",
+        "carriedGroup": "Arrastrado: antes del {{date}}",
+        "periodGroup": "Del período {{from}} – {{to}}",
+        "groupLines_one": "{{count}} línea · {{amount}}",
+        "groupLines_other": "{{count}} líneas · {{amount}}",
+        "beforePeriod": "Anterior al período",
         "run": "Calcular",
         "total": "Total a liquidar",
         "empty": "No hay comisiones pendientes de liquidar para ese profesional en el periodo.",
