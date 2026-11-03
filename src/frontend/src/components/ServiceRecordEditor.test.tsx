@@ -257,12 +257,29 @@ describe("ServiceRecordEditor", () => {
     expect(screen.getByTestId("service-record-tips-total").textContent).toContain("5.000");
   });
 
-  it("adding a service is a thin dashed row at the end of the list", async () => {
+  it("adding a service is a plain text link, with one-tap chips for the frequent services", async () => {
+    femmeJson.mockImplementation((path: string) =>
+      String(path).includes("frequent-services")
+        ? Promise.resolve([
+            { id: 12, categoryId: 1, categoryName: "", categoryAccentKey: "", name: "Brushing", priceMinor: "60000", durationMinutes: 30, active: true },
+            { id: 21, categoryId: 1, categoryName: "", categoryAccentKey: "", name: "Corte", priceMinor: "80000", durationMinutes: 30, active: true },
+          ])
+        : Promise.resolve([]),
+    );
     renderEditor(openRecord);
     const add = screen.getByTestId("service-record-add-line");
-    expect(add.className).toMatch(/border-dashed/);
+    expect(add.className).not.toMatch(/border-dashed/);
     const lines = screen.getAllByTestId("service-record-line");
     await userEvent.click(add);
+    expect(screen.getAllByTestId("service-record-line")).toHaveLength(lines.length + 1);
+
+    const chips = await screen.findAllByTestId("service-record-frequent-chip");
+    expect(chips).toHaveLength(2);
+    // «Corte» is new: it fills the blank line just added (no extra line).
+    await userEvent.click(chips[1]);
+    expect(screen.getAllByTestId("service-record-line")).toHaveLength(lines.length + 1);
+    // «Brushing» is already in the ficha: quantity +1, no new line.
+    await userEvent.click(chips[0]);
     expect(screen.getAllByTestId("service-record-line")).toHaveLength(lines.length + 1);
   });
 

@@ -25,6 +25,7 @@ import com.cursorpoc.backend.web.dto.ServiceRecordResponse;
 import com.cursorpoc.backend.web.dto.ServiceRecordTipRequest;
 import com.cursorpoc.backend.web.dto.ServiceRecordTipResponse;
 import com.cursorpoc.backend.web.dto.ServiceRecordVoidRequest;
+import com.cursorpoc.backend.web.dto.ServiceResponse;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -173,6 +174,41 @@ public class ServiceRecordService {
         recordPage.getSize(),
         recordPage.getTotalElements(),
         recordPage.getTotalPages());
+  }
+
+  /** How far back "frequent services" looks, and how many are offered on the ficha. */
+  public static final int FREQUENT_SERVICES_DAYS = 90;
+
+  public static final int FREQUENT_SERVICES_LIMIT = 3;
+
+  /**
+   * The salon's most used services on its fichas over the last {@value #FREQUENT_SERVICES_DAYS}
+   * days (active services only, no products, voided fichas excluded), most used first: the one-tap
+   * buttons of the ficha editor. Empty for a salon with no history.
+   */
+  @Transactional(readOnly = true)
+  public List<ServiceResponse> frequentServices(long tenantId, int limit) {
+    int n = Math.max(1, Math.min(limit, 10));
+    Instant since = Instant.now().minus(java.time.Duration.ofDays(FREQUENT_SERVICES_DAYS));
+    List<Long> ids =
+        serviceRecordRepository.findFrequentServiceIds(
+            tenantId,
+            since,
+            ServiceRecordStatus.VOIDED,
+            com.cursorpoc.backend.domain.enums.ServiceKind.SERVICE,
+            PageRequest.of(0, n));
+    if (ids.isEmpty()) {
+      return List.of();
+    }
+    Map<Long, SalonService> byId =
+        salonServiceRepository.findAllById(ids).stream()
+            .filter(s -> s.getTenant().getId() == tenantId)
+            .collect(Collectors.toMap(SalonService::getId, s -> s));
+    return ids.stream()
+        .map(byId::get)
+        .filter(java.util.Objects::nonNull)
+        .map(ServiceCatalogService::toServiceResponse)
+        .toList();
   }
 
   // ── Professional view (Inicio de la profesional / dispositivo compartido) ──────────────────

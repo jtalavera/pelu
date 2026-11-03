@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  apiGetJson,
   apiPostJson,
   createAppointmentApi,
   loginAsDemoApi,
@@ -10,8 +11,8 @@ import { loginAsDemo } from "../fixtures/auth";
 import { bookingAppointmentDialog } from "../fixtures/ui";
 
 /**
- * Look and feel: (1) detalle de la ficha: «+ Agregar servicio» es una fila punteada al final de la
- * lista y las propinas son una lista vertical (una profesional por línea, nombre completo, total
+ * Look and feel: (1) detalle de la ficha: «+ Agregar otro servicio» es un enlace de texto al final de la
+ * lista (con chips de servicios frecuentes) y las propinas son una lista vertical (una profesional por línea, nombre completo, total
  * en el encabezado); (2) «Nuevo turno»: los horarios rápidos van justo bajo la Hora y la duración,
  * en su tarjeta, al final.
  */
@@ -38,9 +39,10 @@ test("detalle de la ficha: agregar servicio punteado al final y propinas una deb
   await card.click({ position: { x: 40, y: 20 } });
   const dialog = page.getByRole("dialog");
 
-  // «+ Agregar servicio»: a dashed row after the last service, before the total.
+  // «+ Agregar otro servicio»: a plain text link after the last service, before the total.
   const add = dialog.getByTestId("service-record-add-line");
-  await expect(add).toHaveClass(/border-dashed/);
+  await expect(add).not.toHaveClass(/border-dashed/);
+  await expect(add).toContainText(/Agregar otro servicio|Add another service/i);
   const lastLine = dialog.getByTestId("service-record-line").last();
   const total = dialog.getByTestId("service-record-total");
   const [lastBox, addBox, totalBox] = await Promise.all([lastLine.boundingBox(), add.boundingBox(), total.boundingBox()]);
@@ -68,6 +70,37 @@ test("detalle de la ficha: agregar servicio punteado al final y propinas una deb
   await tip1.fill("5000");
   await expect(dialog.getByTestId("service-record-tips-total")).toContainText("5.000");
   await page.screenshot({ path: process.env.SHOT_FICHA ?? "test-results/ficha.png" });
+});
+
+test("detalle de la ficha: chips de servicios frecuentes (máx. 3) agregan el servicio con un toque", async ({ page, request }) => {
+  const admin = await loginAsDemoApi(request);
+  const seed = await seedCategoryServiceProfessional(request, admin);
+  const client = await seedClient(request, admin, `E2E Frecuentes ${Date.now()}`);
+  // The salon already has fichas (other specs + this one): make sure there is at least one.
+  const ficha = await apiPostJson<{ id: number }>(request, admin, "/api/service-records", {
+    clientId: client.id,
+    lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId, quantity: 1, unitPrice: 30_000 }],
+    tips: [],
+  });
+  const frequent = await apiGetJson<{ id: number; name: string }[]>(request, admin, "/api/service-records/frequent-services?limit=3");
+  expect(frequent.length).toBeGreaterThan(0);
+  expect(frequent.length).toBeLessThanOrEqual(3);
+
+  await loginAsDemo(page);
+  const card = page.getByTestId("dashboard-service-record-card").filter({ hasText: client.fullName });
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await card.click({ position: { x: 40, y: 20 } });
+  const dialog = page.getByRole("dialog");
+
+  const chips = dialog.getByTestId("service-record-frequent-chip");
+  await expect(chips).toHaveCount(frequent.length);
+  await expect(chips.first()).toContainText(frequent[0].name);
+  const before = await dialog.getByTestId("service-record-line").count();
+  await chips.first().click();
+  // New service → one more line; already in the ficha → quantity +1 (same count).
+  const after = await dialog.getByTestId("service-record-line").count();
+  expect([before, before + 1]).toContain(after);
+  expect(ficha.id).toBeGreaterThan(0);
 });
 
 test("Nuevo turno: horarios rápidos bajo la hora y la duración al final, en su tarjeta", async ({ page, request }) => {

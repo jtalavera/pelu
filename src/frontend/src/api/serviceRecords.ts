@@ -1,4 +1,5 @@
 import { femmeJson, femmePostJson, femmePutJson } from "./femmeClient";
+import type { SalonServiceOption } from "../components/ServiceSearchField";
 
 export type ServiceRecordLine = {
   id: number;
@@ -138,4 +139,9 @@ export function assignServiceRecordToAppointment(
 /** Open fichas of today, of the turno's client, that no turno has taken yet. */
 export function listAssignableServiceRecords(appointmentId: number): Promise<ServiceRecordListItem[]> {
   return femmeJson<ServiceRecordListItem[]>(`/api/appointments/${appointmentId}/service-record/candidates`);
+}
+
+/** The salon's most-used services (last 90 days) for one-tap adding to a ficha. */
+export function getFrequentServices(limit = 3): Promise<SalonServiceOption[]> {
+  return femmeJson<SalonServiceOption[]>(`/api/service-records/frequent-services?limit=${limit}`);
 }
