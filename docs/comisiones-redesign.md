@@ -14,3 +14,10 @@ Parte del rediseño general. Sin cambios de backend ni de API.
 
 ## Tests
 Vitest: `pages/commissions/CommissionsPage.test.tsx`. Los specs de Playwright de comisiones (`e2e/tests/comisiones/*`) se adaptan en la pasada final tras Configuración; `mt-comisiones.spec.ts` solo usa la API y no cambia.
+
+## Reglas: lista paginada
+La lista de Servicios y de Productos de la pestaña «Reglas» va **paginada en el cliente** (la vista ya se carga completa):
+20 filas por página por defecto (10, 20 o 50), con «1–20 de 143», Anterior / Siguiente con «1 / 8» y «Filas por página»
+(los mismos componentes del paginador de Auditoría). Buscar, activar «Solo con excepciones» o cambiar entre Servicios y
+Productos vuelve a la página 1; editar una regla mantiene la página. En celular el pie se apila. Spec:
+`e2e/tests/comisiones/reglas-paginadas.spec.ts`.

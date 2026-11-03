@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Input, Label, Modal, Select, Spinner, Switch, Text } from "@design-system";
+import { Alert, Button, Input, Label, Modal, PageSizeSelect, Pagination, Select, Spinner, Switch, Text } from "@design-system";
 import {
   getItemRules,
   getRulesView,
@@ -30,6 +30,10 @@ const key = (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) =>
   `${c.scope}|${c.serviceId ?? ""}|${c.professionalId ?? ""}`;
 
 /** The item as it would look once the pending changes are saved. */
+/** Rows per page in the rules list (services / products). */
+const PAGE_SIZES = [10, 20, 50];
+const PAGE_SIZE_DEFAULT = 20;
+
 function effectiveItem(item: RuleItem, general: number, pending: Pending, professionals: { id: number; fullName: string }[]) {
   const own = pending[key({ scope: "RULE", serviceId: item.serviceId, professionalId: null })];
   let ownStandard = item.ownStandard;
@@ -262,6 +266,20 @@ function KindRules({
     (x) => (!onlyExceptions || hasException(x.item.serviceId)) && (!needle || normalize(x.item.name).includes(needle)),
   );
 
+  // Paginated: a tramo of the (already filtered) list at a time. Searching, filtering and switching
+  // between Servicios / Productos go back to the first page; editing a rule keeps the current one.
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_DEFAULT);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(0);
+  }, [needle, onlyExceptions, isProduct]);
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageRows = rows.slice(safePage * pageSize, (safePage + 1) * pageSize);
+  const showingFrom = rows.length === 0 ? 0 : safePage * pageSize + 1;
+  const showingTo = safePage * pageSize + pageRows.length;
+
   return (
     <div className="flex flex-col gap-3">
       <form role="search" onSubmit={(e) => e.preventDefault()}>
@@ -314,7 +332,7 @@ function KindRules({
           </p>
         ) : (
           <ul>
-            {rows.map(({ item: i }) => {
+            {pageRows.map(({ item: i }) => {
               const e = effective.get(i.serviceId)!;
               const exCount = e.exceptions.size;
               return (
@@ -359,6 +377,36 @@ function KindRules({
               );
             })}
           </ul>
+        )}
+        {rows.length > 0 && (
+          <div
+            className="flex flex-col items-stretch gap-3 border-t border-line bg-page px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
+            data-testid="rules-pager"
+          >
+            <Text variant="small" className="text-center text-ink-3 sm:text-left" data-testid="rules-showing">
+              {t("femme.pagination.showingRange", { from: showingFrom, to: showingTo, total: rows.length })}
+            </Text>
+            {pageCount > 1 && (
+              <Pagination
+                page={safePage + 1}
+                pageCount={pageCount}
+                onPageChange={(p) => setPage(p - 1)}
+                previousLabel={t("femme.pagination.previous")}
+                nextLabel={t("femme.pagination.next")}
+                className="flex-nowrap justify-center gap-1 [&>span]:min-w-[3.5rem]"
+              />
+            )}
+            <PageSizeSelect
+              value={pageSize}
+              pageSizes={PAGE_SIZES}
+              onChange={(n) => {
+                setPageSize(n);
+                setPage(0);
+              }}
+              label={t("femme.pagination.rowsPerPage")}
+              className="justify-center sm:justify-end"
+            />
+          </div>
         )}
       </div>
       {selectedItem && (
