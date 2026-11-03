@@ -67,6 +67,7 @@ class InvoiceServiceTest {
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private BusinessProfileRepository businessProfileRepository;
   @Mock private ServiceRecordRepository serviceRecordRepository;
+  @Mock private com.cursorpoc.backend.repository.AppointmentRepository appointmentRepository;
   @Mock private SifenInvoiceHeaderService sifenInvoiceHeaderService;
   @Mock private SifenNumberVoidingService sifenNumberVoidingService;
   @Mock private SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence;
@@ -551,6 +552,111 @@ class InvoiceServiceTest {
     assertThat(serviceRecord.getStatus())
         .isEqualTo(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.CLOSED);
     assertThat(serviceRecord.getClosedAt()).isNotNull();
+  }
+
+  private void stubIssuance() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    org.mockito.Mockito.lenient()
+        .when(invoiceRepository.save(any(Invoice.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+  }
+
+  private InvoiceCreateRequest requestForTurno(Long serviceRecordId, Long appointmentId) {
+    var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    return new InvoiceCreateRequest(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        List.of(line),
+        List.of(payment),
+        serviceRecordId,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        appointmentId);
+  }
+
+  private com.cursorpoc.backend.domain.Appointment turno(
+      long id, com.cursorpoc.backend.domain.enums.AppointmentStatus status) {
+    var a = new com.cursorpoc.backend.domain.Appointment();
+    a.setId(id);
+    a.setTenant(tenant);
+    a.setStatus(status);
+    return a;
+  }
+
+  @Test
+  void issueInvoice_forAFichaOfATurno_linksAndCompletesTheTurno() {
+    stubIssuance();
+    var appt = turno(70L, com.cursorpoc.backend.domain.enums.AppointmentStatus.IN_PROGRESS);
+    var record = new com.cursorpoc.backend.domain.ServiceRecord();
+    record.setId(210L);
+    record.setTenant(tenant);
+    record.setStatus(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.OPEN);
+    record.setAppointment(appt);
+    when(serviceRecordRepository.findByIdAndTenant_Id(210L, 1L)).thenReturn(Optional.of(record));
+
+    invoiceService.issueInvoice(1L, requestForTurno(210L, null));
+
+    assertThat(appt.getStatus())
+        .isEqualTo(com.cursorpoc.backend.domain.enums.AppointmentStatus.COMPLETED);
+    org.mockito.ArgumentCaptor<Invoice> saved = org.mockito.ArgumentCaptor.forClass(Invoice.class);
+    org.mockito.Mockito.verify(invoiceRepository).save(saved.capture());
+    assertThat(saved.getValue().getAppointment()).isSameAs(appt);
+  }
+
+  @Test
+  void issueInvoice_forATurnoWithoutFicha_linksAndCompletesIt() {
+    stubIssuance();
+    var appt = turno(71L, com.cursorpoc.backend.domain.enums.AppointmentStatus.CONFIRMED);
+    when(appointmentRepository.findByIdAndTenant_Id(71L, 1L)).thenReturn(Optional.of(appt));
+
+    invoiceService.issueInvoice(1L, requestForTurno(null, 71L));
+
+    assertThat(appt.getStatus())
+        .isEqualTo(com.cursorpoc.backend.domain.enums.AppointmentStatus.COMPLETED);
+    org.mockito.ArgumentCaptor<Invoice> saved = org.mockito.ArgumentCaptor.forClass(Invoice.class);
+    org.mockito.Mockito.verify(invoiceRepository).save(saved.capture());
+    assertThat(saved.getValue().getAppointment()).isSameAs(appt);
+  }
+
+  @Test
+  void issueInvoice_forATurnoAlreadyInvoiced_throwsConflict() {
+    stubIssuance();
+    var appt = turno(72L, com.cursorpoc.backend.domain.enums.AppointmentStatus.COMPLETED);
+    when(appointmentRepository.findByIdAndTenant_Id(72L, 1L)).thenReturn(Optional.of(appt));
+    when(invoiceRepository.existsByAppointment_IdAndStatus(
+            72L, com.cursorpoc.backend.domain.enums.InvoiceStatus.ISSUED))
+        .thenReturn(true);
+
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, requestForTurno(null, 72L)))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("APPOINTMENT_ALREADY_INVOICED");
+  }
+
+  @Test
+  void issueInvoice_forACancelledTurno_doesNotReviveIt() {
+    stubIssuance();
+    var appt = turno(73L, com.cursorpoc.backend.domain.enums.AppointmentStatus.CANCELLED);
+    when(appointmentRepository.findByIdAndTenant_Id(73L, 1L)).thenReturn(Optional.of(appt));
+
+    invoiceService.issueInvoice(1L, requestForTurno(null, 73L));
+
+    assertThat(appt.getStatus())
+        .isEqualTo(com.cursorpoc.backend.domain.enums.AppointmentStatus.CANCELLED);
   }
 
   @Test

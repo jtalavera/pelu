@@ -313,6 +313,11 @@ public class Invoice {
   @JoinColumn(name = "service_record_id")
   private ServiceRecord serviceRecord;
 
+  /** The turno this invoice charged (through its ficha or directly), if any. */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "appointment_id")
+  private Appointment appointment;
+
   @OneToMany(
       mappedBy = "invoice",
       cascade = CascadeType.ALL,
@@ -831,6 +836,14 @@ public class Invoice {
 
   public void setTipsAmount(BigDecimal tipsAmount) {
     this.tipsAmount = tipsAmount;
+  }
+
+  public Appointment getAppointment() {
+    return appointment;
+  }
+
+  public void setAppointment(Appointment appointment) {
+    this.appointment = appointment;
   }
 
   public ServiceRecord getServiceRecord() {

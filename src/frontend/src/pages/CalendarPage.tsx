@@ -604,7 +604,7 @@ export default function CalendarPage() {
   // Detail actions: ONE main next step by state, the rest behind "⋯".
   type DetailAction = { key: string; label: string; run: () => void; danger?: boolean };
   const apptEditable = detailAppt !== null && canModify(detailAppt);
-  let primaryAction: { key: "confirm" | "start" | "charge"; run: () => void } | null = null;
+  let primaryAction: { key: "confirm" | "start" | "charge" | "viewInvoice"; run: () => void } | null = null;
   const moreActions: DetailAction[] = [];
   if (detailAppt) {
     const st = detailAppt.status;
@@ -612,6 +612,13 @@ export default function CalendarPage() {
       primaryAction = { key: "confirm", run: () => void applyStatus("CONFIRMED") };
     } else if (apptEditable && st === "CONFIRMED") {
       primaryAction = { key: "start", run: () => void applyStatus("IN_PROGRESS") };
+    } else if (!isProfessional && detailAppt.invoiceId != null) {
+      // Already charged: no second «Cobrar»; the comprobante is one tap away.
+      const invoiceId = detailAppt.invoiceId;
+      primaryAction = {
+        key: "viewInvoice",
+        run: () => navigate("/app/billing", { state: { openInvoiceId: invoiceId } }),
+      };
     } else if (!isProfessional && (st === "IN_PROGRESS" || st === "COMPLETED")) {
       primaryAction = { key: "charge", run: () => void chargeAppointment() };
     }

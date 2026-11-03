@@ -26,7 +26,7 @@ import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/
  */
 test.describe.configure({ mode: "serial" });
 
-type Appt = { id: number; status: string; serviceRecordId: number | null };
+type Appt = { id: number; status: string; serviceRecordId: number | null; invoiceId: number | null };
 type Ficha = {
   id: number;
   status: string;
@@ -205,6 +205,8 @@ test.describe("Turno y ficha de servicio", () => {
     await chargeFicha(request, admin, client.id, ficha, seed);
     const appt = await getAppt(request, admin, turno.id);
     expect(appt.status).toBe("COMPLETED");
+    // The turno keeps the comprobante it was charged with.
+    expect(appt.invoiceId).not.toBeNull();
     expect((await apiGetJson<Ficha>(request, admin, `/api/service-records/${ficha.id}`)).status).toBe("CLOSED");
 
     await loginAsDemo(page);
@@ -278,6 +280,7 @@ test.describe("Turno y ficha de servicio", () => {
     await clickIssueInvoiceAndExpectSuccess(page);
 
     await expect.poll(async () => (await getAppt(request, admin, turno.id)).status).toBe("COMPLETED");
+    expect((await getAppt(request, admin, turno.id)).invoiceId).not.toBeNull();
     // Only the earliest turno was offered: the other one is untouched.
     expect((await getAppt(request, admin, keep.id)).status).toBe("PENDING");
   });
@@ -385,6 +388,87 @@ test.describe("Turno y ficha de servicio", () => {
     await clickIssueInvoiceAndExpectSuccess(page);
 
     await expect.poll(async () => (await getAppt(request, admin, turno.id)).status).toBe("COMPLETED");
+    expect((await getAppt(request, admin, turno.id)).invoiceId).not.toBeNull();
+  });
+
+  test("un turno ya cobrado no vuelve a ofrecer «Cobrar»: muestra «Ver comprobante» y abre la factura", async ({
+    page,
+    request,
+  }) => {
+    const admin = await loginAsDemoApi(request);
+    await ensureCashSessionOpenApi(request, admin);
+    await ensureActiveFiscalStampForInvoices(request, admin);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const clientName = `E2E TF Cobrado ${Date.now()}`;
+    const client = await seedClient(request, admin, clientName);
+    const turno = await seedTurno(request, admin, seed, client.id);
+    const ficha = await apiPostJson<Ficha>(request, admin, `/api/appointments/${turno.id}/service-record`, {});
+    await chargeFicha(request, admin, client.id, ficha, seed);
+    const charged = await getAppt(request, admin, turno.id);
+    expect(charged.status).toBe("COMPLETED");
+    expect(charged.invoiceId).not.toBeNull();
+
+    // A completed turno is not on the week grid: it is opened from the Inicio's list.
+    await loginAsDemo(page);
+    await page
+      .getByTestId("dashboard-appointment-row")
+      .filter({ hasText: clientName })
+      .locator("button")
+      .first()
+      .click({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/app\/calendar/);
+    const next = page.getByTestId("calendar-next-step");
+    await expect(next).toHaveText("View invoice");
+    await expect(page.getByRole("button", { name: "Charge", exact: true })).toHaveCount(0);
+    await next.click();
+    await expect(page).toHaveURL(/\/app\/billing/);
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 20_000 });
+  });
+
+  test("un turno pasado a «Atendido» sin comprobante sigue ofreciendo «Cobrar»", async ({ page, request }) => {
+    const admin = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const clientName = `E2E TF Atendido ${Date.now()}`;
+    const client = await seedClient(request, admin, clientName);
+    const turno = await seedTurno(request, admin, seed, client.id);
+    await setStatus(request, admin, turno.id, "COMPLETED");
+    expect((await getAppt(request, admin, turno.id)).invoiceId).toBeNull();
+
+    // A completed turno is not on the week grid: it is opened from the Inicio's list.
+    await loginAsDemo(page);
+    await page
+      .getByTestId("dashboard-appointment-row")
+      .filter({ hasText: clientName })
+      .locator("button")
+      .first()
+      .click({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/app\/calendar/);
+    await expect(page.getByTestId("calendar-next-step")).toHaveText("Charge");
+  });
+
+  test("API: un turno ya cobrado no admite un segundo comprobante", async ({ request }) => {
+    const admin = await loginAsDemoApi(request);
+    await ensureCashSessionOpenApi(request, admin);
+    await ensureActiveFiscalStampForInvoices(request, admin);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const client = await seedClient(request, admin, `E2E TF Doble ${Date.now()}`);
+    const turno = await seedTurno(request, admin, seed, client.id);
+    const body = (appointmentId: number) => ({
+      clientId: client.id,
+      clientDisplayName: null,
+      clientRucOverride: null,
+      discountType: null,
+      discountValue: null,
+      lines: [{ serviceId: seed.serviceId, description: "E2E doble", quantity: 1, unitPrice: 50_000, discountType: null, discountValue: null }],
+      payments: [{ method: "CASH", amount: 50_000 }],
+      serviceRecordId: null,
+      tipsAmount: 0,
+      appointmentId,
+    });
+    await apiPostJson(request, admin, "/api/invoices", body(turno.id));
+    const again = await request.post(`${API_BASE}/api/invoices`, { headers: authHeaders(admin), data: body(turno.id) });
+    expect(again.status()).toBe(409);
+    expect(await again.text()).toContain("APPOINTMENT_ALREADY_INVOICED");
   });
 
   test("API: una sola ficha por turno, solo fichas abiertas, de la misma clienta y sin turno", async ({ request }) => {
