@@ -239,12 +239,31 @@ describe("ServiceRecordEditor", () => {
     expect(within(rows[1]).getByTestId("service-record-line-toggle").getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("tips are compact: one inline field per professional, two per row on wide screens", async () => {
+  it("tips are a list: one professional per line (avatar, full name, amount), total in the header", async () => {
     renderEditor(openRecord);
     await userEvent.click(screen.getByTestId("service-record-tips-toggle"));
     const tips = screen.getByTestId("service-record-tips");
-    expect(tips.className).toMatch(/sm:grid-cols-2/);
-    expect(within(tips).getAllByRole("textbox")).toHaveLength(2);
+    // One line under the other: no two-column grid any more.
+    expect(tips.className).toMatch(/flex-col/);
+    expect(tips.className).not.toMatch(/grid-cols-2/);
+    const inputs = within(tips).getAllByRole("textbox");
+    expect(inputs).toHaveLength(2);
+    // Full professional names are on the lines (not truncated labels).
+    expect(within(tips).getByText("Laura")).toBeTruthy();
+    expect(within(tips).getByText("Ana")).toBeTruthy();
+    // The header shows the total once there are tips.
+    expect(screen.queryByTestId("service-record-tips-total")).toBeNull();
+    await userEvent.type(inputs[0], "5000");
+    expect(screen.getByTestId("service-record-tips-total").textContent).toContain("5.000");
+  });
+
+  it("adding a service is a thin dashed row at the end of the list", async () => {
+    renderEditor(openRecord);
+    const add = screen.getByTestId("service-record-add-line");
+    expect(add.className).toMatch(/border-dashed/);
+    const lines = screen.getAllByTestId("service-record-line");
+    await userEvent.click(add);
+    expect(screen.getAllByTestId("service-record-line")).toHaveLength(lines.length + 1);
   });
 
   it("a paid record is read-only and shows its linked invoice", async () => {

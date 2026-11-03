@@ -45,3 +45,8 @@ https://claude.ai/artifact/Mn9xkyUNEwjyzz8ognp7Ur
   no cambian.
 - **Día elegido en la tira**: letras blancas sobre el verde (la clase `text-on-primary` no existía en Tailwind; ahora
   `text-primary-fg`).
+
+## Formulario «Nuevo turno» / «Editar turno»
+Dos bloques con título: **Quién y qué** (cliente; servicio y profesional en la misma fila en pantalla ancha) y **Cuándo** (fecha y
+hora en una fila; **horarios rápidos justo debajo de la hora**; y al final la tarjeta de **Duración** con «− / +», botones
+30/45/60/90/120 y «HH:MM → HH:MM»).

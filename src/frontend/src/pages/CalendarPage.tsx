@@ -564,22 +564,19 @@ export default function CalendarPage() {
     }
   };
 
-  // "Termina a las 11:15" under the duration field (start time + duration), plus the service's own length.
-  const endsAtText = (() => {
+  // End time next to the duration ("11:00 → 12:00") and, when she changed it, the service's own length.
+  const durationEnd = (() => {
+    if (!formTime || formDuration === "" || formDuration < MIN_DURATION) return null;
+    const [hh, mm] = formTime.split(":").map(Number);
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
+    const total = hh * 60 + mm + formDuration;
+    return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  })();
+  const durationServiceNote = (() => {
     const svc = services.find((s) => s.id === formServiceId);
-    const parts: string[] = [];
-    if (formTime && formDuration !== "" && formDuration >= MIN_DURATION) {
-      const [hh, mm] = formTime.split(":").map(Number);
-      if (!Number.isNaN(hh) && !Number.isNaN(mm)) {
-        const total = hh * 60 + mm + formDuration;
-        const end = `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-        parts.push(t("femme.calendar.form.durationEnds", { time: end }));
-      }
-    }
-    if (svc && formDuration !== "" && formDuration !== svc.durationMinutes) {
-      parts.push(t("femme.calendar.form.durationServiceNote", { minutes: svc.durationMinutes }));
-    }
-    return parts.join(" ");
+    return svc && formDuration !== "" && formDuration !== svc.durationMinutes
+      ? t("femme.calendar.form.durationServiceNote", { minutes: svc.durationMinutes })
+      : "";
   })();
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -1485,6 +1482,7 @@ export default function CalendarPage() {
               <p role="alert">{availabilityWarning}</p>
             </Alert>
           )}
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-primary">{t("femme.calendar.form.sectionWho")}</h3>
           {/* Client (optional) */}
           <div className="space-y-1">
             <SearchableSelect<number>
@@ -1509,6 +1507,7 @@ export default function CalendarPage() {
               </Button>
             )}
           </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {/* Service */}
           <div className="space-y-1">
             <SearchableSelect<number>
@@ -1578,6 +1577,9 @@ export default function CalendarPage() {
               </>
             )}
           </div>
+          </div>
+          <h3 className="text-xs font-extrabold uppercase tracking-wider text-primary" >{t("femme.calendar.form.sectionWhen")}</h3>
+          <div className="grid grid-cols-2 gap-3">
           {/* Date */}
           <div className="space-y-1">
             <Label htmlFor="form-date">{t("femme.calendar.form.date")}</Label>
@@ -1623,10 +1625,27 @@ export default function CalendarPage() {
               <FieldValidationError id="form-start-past-err">{formErrors.startInPast}</FieldValidationError>
             )}
           </div>
+          </div>
+          {/* Quick times */}
+          <div className="flex flex-wrap gap-2" data-testid="appointment-quick-times">
+            {["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"].map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => setFormTime(q)}
+                aria-pressed={formTime === q}
+                className={`min-h-10 rounded-full border px-3 text-sm font-bold ${
+                  formTime === q ? "border-primary bg-primary-lt text-primary" : "border-line bg-surface text-ink"
+                }`}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
           {/* Duration: starts as the service's, adjustable (a turno can run long) */}
-          <div className="space-y-2" data-testid="appointment-duration">
+          <div className="space-y-2 rounded-card border border-line bg-bg p-3" data-testid="appointment-duration">
             <Label htmlFor="form-duration">{t("femme.calendar.form.duration")}</Label>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 aria-label={t("femme.calendar.form.durationDecrease")}
@@ -1660,6 +1679,15 @@ export default function CalendarPage() {
               >
                 +
               </button>
+              {durationEnd ? (
+                <span
+                  className="ml-auto text-sm font-bold text-ink-2"
+                  data-testid="appointment-duration-ends"
+                  aria-label={t("femme.calendar.form.durationEnds", { time: durationEnd })}
+                >
+                  {formTime} → <b className="text-ink">{durationEnd}</b>
+                </span>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2" data-testid="appointment-duration-presets">
               {DURATION_PRESETS.map((m) => (
@@ -1680,25 +1708,9 @@ export default function CalendarPage() {
               <FieldValidationError id="form-duration-err">{formErrors.duration}</FieldValidationError>
             ) : (
               <p id="form-duration-hint" className="text-xs text-ink-3" data-testid="appointment-duration-hint">
-                {endsAtText}
+                {durationServiceNote}
               </p>
             )}
-          </div>
-          {/* Quick times */}
-          <div className="flex flex-wrap gap-2" data-testid="appointment-quick-times">
-            {["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"].map((q) => (
-              <button
-                key={q}
-                type="button"
-                onClick={() => setFormTime(q)}
-                aria-pressed={formTime === q}
-                className={`min-h-10 rounded-full border px-3 text-sm font-bold ${
-                  formTime === q ? "border-primary bg-primary-lt text-primary" : "border-line bg-surface text-ink"
-                }`}
-              >
-                {q}
-              </button>
-            ))}
           </div>
         </div>
       </Modal>

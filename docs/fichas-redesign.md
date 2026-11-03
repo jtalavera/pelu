@@ -39,3 +39,9 @@ Los specs de Playwright se adaptan en la pasada final tras el rediseño de Confi
 
 ## Ajuste: servicios plegables en el detalle
 Cada servicio de la ficha es una tarjeta con borde (sin relleno): una fila resumen con número, nombre, `profesional · cant × precio` y subtotal, que se abre/cierra con un toque (`service-record-line-toggle`, `aria-expanded`). Abierta muestra servicio, profesional, cantidad, precio y "✕ Quitar". Por defecto está abierta si es el único servicio, si aún no tiene servicio elegido o si tiene un error de validación; el usuario puede cerrarla igual (salvo con error). Con varios servicios ya cargados arranca plegada.
+
+## Detalle de la ficha: agregar servicio y propinas
+- «+ Agregar servicio» (administración) es una **fila punteada de 44 px al final de la lista**, antes del Total, en lugar de un
+  enlace subrayado en fila propia. (La profesional sigue con su botón grande «Agregar servicio» y el selector a pantalla completa.)
+- **Propinas**: lista vertical, una profesional por línea (iniciales, nombre completo que se parte en dos renglones si es
+  largo, campo de monto a la derecha) dentro de una tarjeta. El encabezado «Propinas» muestra el total cuando hay.

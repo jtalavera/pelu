@@ -21,6 +21,7 @@ import { formatAmountDecimal } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
+import { initialsOf } from "../lib/initials";
 import { ProfessionalServiceLines, ServicePickerScreen } from "./ProfessionalServiceLines";
 
 type Professional = { id: number; fullName: string; displayName?: string | null; active: boolean };
@@ -706,7 +707,7 @@ export function ServiceRecordEditor({
             type="button"
             onClick={addLine}
             data-testid="service-record-add-line"
-            className="min-h-11 self-start px-1 text-sm font-bold text-primary underline underline-offset-4"
+            className="mt-2 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-dashed border-line bg-transparent text-sm font-bold text-primary hover:border-primary hover:bg-primary-lt"
           >
             + {t("femme.serviceRecords.addLine")}
           </button>
@@ -731,8 +732,15 @@ export function ServiceRecordEditor({
             className="flex min-h-11 w-full items-center justify-between text-left"
           >
             <span className={SECTION_TITLE}>{t("femme.serviceRecords.tipsSection")}</span>
-            <span aria-hidden="true" className={`text-ink-3 transition-transform ${tipsOpen ? "rotate-180" : ""}`}>
-              ⌄
+            <span className="flex items-center gap-2 text-sm font-bold text-ink-3">
+              {tipsTotal > 0 ? (
+                <span data-testid="service-record-tips-total">
+                  {t("femme.serviceRecords.tipsTotal")} {formatAmountDecimal(tipsTotal.toFixed(2))}
+                </span>
+              ) : null}
+              <span aria-hidden="true" className={`transition-transform ${tipsOpen ? "rotate-180" : ""}`}>
+                ⌄
+              </span>
             </span>
           </button>
           {tipsOpen ? (
@@ -742,15 +750,25 @@ export function ServiceRecordEditor({
                   {t("femme.serviceRecords.tipsNeedProfessional")}
                 </Text>
               ) : (
-                <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2" data-testid="service-record-tips">
+                <div
+                  className="flex flex-col rounded-card border border-line bg-bg px-3"
+                  data-testid="service-record-tips"
+                >
                   {distinctProfessionalIds.map((id) => (
-                    <div key={id} className="flex items-center justify-between gap-3 border-t border-line py-1.5">
-                      <Label htmlFor={`service-record-tip-${id}`} className="min-w-0 truncate">
-                        {t("femme.serviceRecords.tipsAmountLabel")} · {professionalName(id)}
+                    <div key={id} className="flex items-center gap-3 border-t border-line py-2 first:border-t-0">
+                      <span
+                        aria-hidden="true"
+                        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-lt font-heading text-xs font-extrabold text-primary"
+                      >
+                        {initialsOf(professionalName(id))}
+                      </span>
+                      <Label htmlFor={`service-record-tip-${id}`} className="min-w-0 flex-1 break-words font-semibold">
+                        {professionalName(id)}
                       </Label>
                       <Input
                         id={`service-record-tip-${id}`}
                         inputMode="numeric"
+                        aria-label={`${t("femme.serviceRecords.tipsAmountLabel")} · ${professionalName(id)}`}
                         className="w-32 shrink-0 text-right"
                         value={tips[id] ?? ""}
                         onChange={(e) =>
@@ -762,12 +780,6 @@ export function ServiceRecordEditor({
                   ))}
                 </div>
               )}
-              {tipsTotal > 0 ? (
-                <div className="flex justify-between text-sm">
-                  <span className="text-ink-3">{t("femme.serviceRecords.tipsTotal")}</span>
-                  <span>{formatAmountDecimal(tipsTotal.toFixed(2))}</span>
-                </div>
-              ) : null}
             </div>
           ) : null}
         </section>

@@ -12,19 +12,12 @@ import { getDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayTime } from "../lib/paraguayDateTime";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
+import { initialsOf } from "../lib/initials";
 import { ServiceRecordDetailModal } from "./ServiceRecordDetailModal";
 
 const POLL_MS = 30_000;
 const CAP = 12;
 const STATUS_RANK: Record<string, number> = { OPEN: 0, CLOSED: 1, VOIDED: 2 };
-
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  const first = parts[0][0] ?? "";
-  const last = parts.length > 1 ? (parts[parts.length - 1][0] ?? "") : "";
-  return (first + last).toUpperCase();
-}
 
 /** Local calendar day bounds as ISO instants (the API parses `Instant`, not dates). */
 function todayRangeIso(): { from: string; to: string } {

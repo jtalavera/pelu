@@ -89,7 +89,7 @@ test.describe("Duración del turno", () => {
     await expect(input).toHaveValue(String(serviceMinutes));
     await dlg.getByTestId("appointment-duration-presets").getByRole("button", { name: "90", exact: true }).click();
     await expect(input).toHaveValue("90");
-    await expect(dlg.getByTestId("appointment-duration-hint")).toContainText("Ends at 16:00");
+    await expect(dlg.getByTestId("appointment-duration-ends")).toContainText("14:30 → 16:00");
     await dlg.getByRole("button", { name: "Save" }).click();
     await expect(dlg).toBeHidden({ timeout: 15_000 });
 

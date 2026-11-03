@@ -3017,6 +3017,8 @@
         "readOnlyOtherProfessional": "Este turno pertenece a otra profesional. Podés verlo, pero solo podés editar o cambiar el estado de los turnos asignados a vos."
       },
       "form": {
+        "sectionWho": "Quién y qué",
+        "sectionWhen": "Cuándo",
         "duration": "Duración",
         "durationUnit": "min",
         "durationDecrease": "Menos duración",
