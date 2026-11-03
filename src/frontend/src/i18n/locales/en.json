@@ -55,7 +55,14 @@
         }
       },
       "preview": {
-        "hint": "See how much a professional would be paid for an open period with the commissions recorded so far. Nothing is saved.",
+        "hint": "Adds up every commission not yet settled up to the “To” date, including those from earlier periods that are still pending. Nothing is saved.",
+        "periodTotal": "Of the period {{from}} – {{to}}",
+        "carriedTotal": "Carried from earlier periods",
+        "carriedGroup": "Carried: before {{date}}",
+        "periodGroup": "Of the period {{from}} – {{to}}",
+        "groupLines_one": "{{count}} line · {{amount}}",
+        "groupLines_other": "{{count}} lines · {{amount}}",
+        "beforePeriod": "Before the period",
         "run": "Calculate",
         "total": "Total to settle",
         "empty": "No unsettled commissions for that professional in the period.",

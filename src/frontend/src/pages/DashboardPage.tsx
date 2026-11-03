@@ -5,6 +5,7 @@ import { Alert, Button, Card, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { billingStateForAppointment } from "../lib/appointmentBilling";
 import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
+import { SectionTitle } from "../components/SectionTitle";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { listAppointments, type Appointment } from "../api/appointments";
 import { TodayServiceRecords } from "../components/TodayServiceRecords";
@@ -467,18 +468,23 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 4. TODAY'S APPOINTMENTS ── */}
-      <Card data-tour="dashboard-appt-list" className="p-0">
-        <div className="flex items-center justify-between gap-3 px-4 pb-1 pt-4 sm:px-5">
-          <h2 className="font-heading text-lg font-extrabold text-ink">{t("femme.dashboard.todayAppointments")}</h2>
+      <section data-tour="dashboard-appt-list" className="flex flex-col gap-2.5">
+      <SectionTitle
+        title={t("femme.dashboard.todayAppointments")}
+        badge={todayAppts.length > 0 ? todayAppts.length : undefined}
+        badgeTestId="dashboard-appointments-count"
+        action={
           <Link
             data-tour="dashboard-view-agenda"
             to="/app/calendar"
-            className="inline-flex min-h-11 items-center text-sm font-semibold text-primary"
+            className="inline-flex min-h-11 items-center text-sm font-bold text-primary"
           >
             {t("femme.dashboard.viewAgenda")}
           </Link>
-        </div>
-
+        }
+      />
+      <Card className="p-0">
+        <div className="h-3" aria-hidden="true" />
         {todayAppts.length > 0 && (
           <div data-tour="dashboard-appt-filter" className="px-4 pb-2 sm:px-5">
             <ListSearchField
@@ -566,6 +572,7 @@ export default function DashboardPage() {
           </ul>
         )}
       </Card>
+      </section>
 
       {chargeError ? (
         <div role="alert" className="text-sm text-danger">

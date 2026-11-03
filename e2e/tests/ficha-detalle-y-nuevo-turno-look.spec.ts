@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   apiPostJson,
+  createAppointmentApi,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
@@ -100,4 +101,46 @@ test("Nuevo turno: horarios rápidos bajo la hora y la duración al final, en su
   await expect(dlg.getByText("Who and what")).toBeVisible();
   await expect(dlg.getByText("When", { exact: true })).toBeVisible();
   await page.screenshot({ path: process.env.SHOT_TURNO ?? "test-results/turno.png" });
+});
+
+test("Inicio: los títulos «Turnos de hoy» y «Fichas de servicio de hoy» van fuera de la tarjeta, grandes y con su contador", async ({
+  page,
+  request,
+}) => {
+  const admin = await loginAsDemoApi(request);
+  const seed = await seedCategoryServiceProfessional(request, admin);
+  const client = await seedClient(request, admin, `E2E Look Inicio ${Date.now()}`);
+  const slot = new Date(Date.now() + 5 * 60_000);
+  slot.setSeconds(0, 0);
+  const turno = await createAppointmentApi(request, admin, {
+    clientId: client.id,
+    professionalId: seed.professionalId,
+    serviceId: seed.serviceId,
+    startAt: slot.toISOString(),
+  });
+  await apiPostJson(request, admin, `/api/appointments/${turno.id}/service-record`, {});
+
+  await loginAsDemo(page);
+  const apptSection = page.locator('[data-tour="dashboard-appt-list"]');
+  const apptTitle = apptSection.getByRole("heading", { name: "Today's appointments" });
+  await expect(apptTitle).toBeVisible({ timeout: 20_000 });
+  const fichasSection = page.getByTestId("dashboard-today-records");
+  const fichasTitle = fichasSection.getByRole("heading", { name: "Today's service records" });
+  await expect(fichasTitle).toBeVisible();
+
+  for (const [title, section] of [[apptTitle, apptSection], [fichasTitle, fichasSection]] as const) {
+    // Big (≥ 24 px) and standing above the card, on the page background.
+    const size = await title.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    expect(size).toBeGreaterThanOrEqual(24);
+    const card = section.locator("div.rounded-card").first();
+    const [tb, cb] = await Promise.all([title.boundingBox(), card.boundingBox()]);
+    expect(tb!.y + tb!.height).toBeLessThanOrEqual(cb!.y + 1);
+    // The card does not contain the title any more.
+    await expect(card.getByRole("heading", { name: /Today's/ })).toHaveCount(0);
+  }
+
+  // Counters next to the titles: appointments of the day, open fichas (amber).
+  await expect(page.getByTestId("dashboard-appointments-count")).toHaveText(/^\d+$/);
+  await expect(page.getByTestId("dashboard-today-records-open-count")).toContainText("open");
+  await page.screenshot({ path: process.env.SHOT_INICIO ?? "test-results/inicio.png", fullPage: true });
 });
