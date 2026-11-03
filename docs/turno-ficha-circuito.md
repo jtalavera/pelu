@@ -66,3 +66,4 @@ cobrada y ella no la ve).
 ## Tests
 JUnit `AppointmentServiceRecordServiceTest`, `ProfessionalAccessPolicyTest`; Vitest `AppointmentFichaAction.test.tsx`;
 Playwright `inicio-profesional-turnos.spec.ts`, `turno-ficha-circuito.spec.ts` (incluye facturar sin ficha) y `hu-03-dashboard-principal.spec.ts` (test 7).
+Ya cobrado, la fila del Inicio (sin ficha a la que ir) muestra **«Ver comprobante»**, que abre la factura del turno.
