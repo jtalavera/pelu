@@ -12,7 +12,6 @@ import {
   Alert,
   Button,
   Input,
-  KebabMenu,
   Label,
   Modal,
   Pagination,
@@ -41,6 +40,8 @@ import {
 } from "../util/categoryAccent";
 import { formatGuaraniesGs } from "../lib/formatMoney";
 import { maskMoneyInput, moneyDigitsOnly, parseMaskedMoney } from "../lib/moneyInputMask";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { ActionIcon } from "../components/actionIcons";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -119,6 +120,7 @@ export default function CatalogItemsPage({
   );
   /** Categories live in a dialog opened from the "⋯" menu (catalog redesign). */
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   /** "Más opciones" of the item form: tax (and SKU for products). */
   const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
 
@@ -645,12 +647,17 @@ export default function CatalogItemsPage({
       >
         {t("femme.services.services.addNew")}
       </Button>
-      <KebabMenu
-        id="catalog-more"
-        triggerAriaLabel={t("femme.catalog.moreActions")}
+      <MoreActionsMenu
+        label={t("femme.catalog.moreActions")}
+        open={moreOpen}
+        onOpenChange={setMoreOpen}
+        triggerTestId="catalog-more-trigger"
+        menuTestId="catalog-more-menu"
         items={[
           {
             id: "price-list",
+            testId: "catalog-more-item-price-list",
+            icon: <ActionIcon name="download" />,
             label: priceListDownloading
               ? t("femme.services.priceList.downloading")
               : t("femme.services.priceList.downloadButton"),
@@ -659,6 +666,8 @@ export default function CatalogItemsPage({
           },
           {
             id: "categories",
+            testId: "catalog-more-item-categories",
+            icon: <ActionIcon name="tag" />,
             label: t("femme.catalog.manageCategories"),
             onSelect: () => setCategoriesOpen(true),
           },
