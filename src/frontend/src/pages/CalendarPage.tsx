@@ -444,7 +444,7 @@ export default function CalendarPage() {
     try {
       if (detailAppt.serviceRecordId) {
         await billServiceRecord(navigate, await getServiceRecord(detailAppt.serviceRecordId));
-      } else if (detailAppt.clientId != null && detailAppt.status === "IN_PROGRESS") {
+      } else if (detailAppt.status === "IN_PROGRESS") {
         await billServiceRecord(navigate, await createServiceRecordFromAppointment(detailAppt.id));
       } else {
         navigate("/app/billing", { state: await billingStateForAppointment(detailAppt) });

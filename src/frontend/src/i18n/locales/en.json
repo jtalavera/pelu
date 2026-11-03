@@ -500,6 +500,7 @@
     "appointmentFicha": {
       "go": "Go to the service record",
       "createOrAssign": "Create or assign service record",
+      "createOccasional": "Create service record",
       "modalTitle": "Service record for {{client}}",
       "createNew": "Create new service record",
       "createNewHint": "With {{service}} and {{professional]}, like the appointment",

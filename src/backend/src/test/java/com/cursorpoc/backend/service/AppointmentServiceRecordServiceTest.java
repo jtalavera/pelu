@@ -38,6 +38,7 @@ class AppointmentServiceRecordServiceTest {
   @Mock private AppointmentRepository appointmentRepository;
   @Mock private ServiceRecordRepository serviceRecordRepository;
   @Mock private ServiceRecordService serviceRecordService;
+  @Mock private ClientService clientService;
   @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   private AppointmentServiceRecordService service;
@@ -48,7 +49,11 @@ class AppointmentServiceRecordServiceTest {
   void setUp() {
     service =
         new AppointmentServiceRecordService(
-            appointmentRepository, serviceRecordRepository, serviceRecordService, timeProperties);
+            appointmentRepository,
+            serviceRecordRepository,
+            serviceRecordService,
+            timeProperties,
+            clientService);
     client = new Client();
     client.setId(5L);
     Professional professional = new Professional();
@@ -154,10 +159,35 @@ class AppointmentServiceRecordServiceTest {
   }
 
   @Test
-  void aTurnoWithoutClientCannotCreateAFicha() {
+  void aTurnoWithoutClient_createsTheFichaUnderTheGenericOccasionalClient() {
     appointment.setClient(null);
-    assertThatThrownBy(() -> service.createFromAppointment(TENANT, 100L))
-        .hasMessageContaining("APPOINTMENT_WITHOUT_CLIENT");
+    Client generic = new Client();
+    generic.setId(77L);
+    generic.setGeneric(true);
+    when(clientService.getOrCreateGenericClient(TENANT)).thenReturn(generic);
+    ServiceRecord record = openRecord(9L, 77L);
+    ServiceRecordResponse created = mock(ServiceRecordResponse.class);
+    when(created.id()).thenReturn(9L);
+    when(serviceRecordService.createServiceRecord(any(Long.class), any())).thenReturn(created);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.createFromAppointment(TENANT, 100L);
+
+    ArgumentCaptor<ServiceRecordRequest> req = ArgumentCaptor.forClass(ServiceRecordRequest.class);
+    org.mockito.Mockito.verify(serviceRecordService)
+        .createServiceRecord(any(Long.class), req.capture());
+    assertThat(req.getValue().clientId()).isEqualTo(77L);
+    assertThat(record.getAppointment()).isSameAs(appointment);
+    assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.IN_PROGRESS);
+  }
+
+  @Test
+  void aTurnoWithoutClient_cannotAssignAFicha() {
+    appointment.setClient(null);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT))
+        .thenReturn(Optional.of(openRecord(9L, 77L)));
+    assertThatThrownBy(() -> service.assign(TENANT, 100L, 9L))
+        .hasMessageContaining("SERVICE_RECORD_CLIENT_MISMATCH");
   }
 
   private ServiceRecordLine line(long serviceId, long professionalId, int qty, String price) {

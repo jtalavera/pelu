@@ -38,6 +38,7 @@ public class ClientService {
   private final ServiceRecordRepository serviceRecordRepository;
 
   static final int ACQUISITION_CHANNEL_OTHER_MAX = 100;
+  static final String GENERIC_CLIENT_NAME = "CLIENTE OCASIONAL";
 
   public ClientService(
       ClientRepository clientRepository,
@@ -240,6 +241,39 @@ public class ClientService {
     return toResponse(client, visits(tenantId, client));
   }
 
+  /**
+   * The tenant's generic "cliente ocasional", created on first use. Owns the fichas of turnos
+   * booked without a registered client, so those follow the same circuit as any other client.
+   */
+  @Transactional
+  public Client getOrCreateGenericClient(long tenantId) {
+    return clientRepository
+        .findFirstByTenant_IdAndGenericTrue(tenantId)
+        .orElseGet(
+            () -> {
+              Tenant tenant =
+                  tenantRepository
+                      .findById(tenantId)
+                      .orElseThrow(
+                          () ->
+                              new ResponseStatusException(
+                                  HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
+              Client generic = new Client();
+              generic.setTenant(tenant);
+              generic.setFullName(GENERIC_CLIENT_NAME);
+              generic.setActive(true);
+              generic.setGeneric(true);
+              generic.setVisitCount(0);
+              return clientRepository.save(generic);
+            });
+  }
+
+  private static void rejectGeneric(Client client) {
+    if (client.isGeneric()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_GENERIC_READ_ONLY");
+    }
+  }
+
   @Transactional
   public ClientResponse deactivate(long tenantId, long clientId) {
     Client client =
@@ -247,6 +281,7 @@ public class ClientService {
             .findByIdAndTenant_Id(clientId, tenantId)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
+    rejectGeneric(client);
     client.setActive(false);
     clientRepository.save(client);
     return toResponse(client, visits(tenantId, client));
@@ -259,6 +294,7 @@ public class ClientService {
             .findByIdAndTenant_Id(clientId, tenantId)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
+    rejectGeneric(client);
     client.setActive(true);
     clientRepository.save(client);
     return toResponse(client, visits(tenantId, client));

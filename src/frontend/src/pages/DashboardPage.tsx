@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { Alert, Button, Card, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
-import { billingStateForAppointment } from "../lib/appointmentBilling";
 import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
 import { SectionTitle } from "../components/SectionTitle";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
@@ -150,8 +149,6 @@ export default function DashboardPage() {
   const [openMore, setOpenMore] = useState<MoreKey | null>(null);
   const [birthdaysCount, setBirthdaysCount] = useState<number | null>(0);
   const [openRecordId, setOpenRecordId] = useState<number | null>(null);
-  const [chargingId, setChargingId] = useState<number | null>(null);
-  const [chargeError, setChargeError] = useState<string | null>(null);
   const [fichasKey, setFichasKey] = useState(0);
   const [now, setNow]                 = useState(() => new Date());
   const [apptListQuery, setApptListQuery] = useState("");
@@ -237,22 +234,6 @@ export default function DashboardPage() {
   );
 
   const locale = getDateLocale(i18n);
-
-  /**
-   * "Cobrar" on a turno with no registered client (it cannot have a ficha): opens Facturación with
-   * the booked service loaded; the turno is completed when the invoice is issued.
-   */
-  async function chargeAppointment(appt: Appointment) {
-    setChargingId(appt.id);
-    setChargeError(null);
-    try {
-      navigate("/app/billing", { state: await billingStateForAppointment(appt) });
-    } catch {
-      setChargeError(t("femme.dashboard.home.chargeError"));
-    } finally {
-      setChargingId(null);
-    }
-  }
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   const hour = now.getHours();
@@ -544,20 +525,6 @@ export default function DashboardPage() {
                     · {appt.serviceName} · {appt.professionalName}
                   </div>
                   <div className="col-start-2 row-start-3 mt-2 sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:mt-0">
-                    {appt.clientId == null &&
-                    (appt.status === "PENDING" || appt.status === "CONFIRMED" || appt.status === "IN_PROGRESS") ? (
-                      <Button
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        className="min-h-11 w-full whitespace-nowrap px-3"
-                        data-testid="dashboard-appointment-charge"
-                        disabled={chargingId === appt.id}
-                        onClick={() => void chargeAppointment(appt)}
-                      >
-                        {t("femme.dashboard.home.charge")}
-                      </Button>
-                    ) : null}
                     {!appt.serviceRecordId && appt.invoiceId != null ? (
                       // Charged with no ficha (e.g. occasional client): the comprobante is the only link.
                       <Button
@@ -588,12 +555,6 @@ export default function DashboardPage() {
         )}
       </Card>
       </section>
-
-      {chargeError ? (
-        <div role="alert" className="text-sm text-danger">
-          {chargeError}
-        </div>
-      ) : null}
 
       {/* ── 5. FICHAS DE HOY: eye-catching cards, the open ones first ── */}
       <TodayServiceRecords refreshKey={fichasKey} />

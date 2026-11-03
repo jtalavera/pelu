@@ -88,12 +88,22 @@ describe("AppointmentFichaAction", () => {
     expect(onOpenRecord).toHaveBeenCalledWith(7);
   });
 
-  it("only active turnos with a client can get a ficha", () => {
+  it("an occasional turno creates its ficha in one click, with no assign step", async () => {
+    createFromAppointment.mockResolvedValue({ id: 8 });
+    const { onOpenRecord } = renderIt({ ...base, clientId: null, clientName: null });
+    await userEvent.click(screen.getByTestId("appointment-ficha-create-or-assign"));
+    await waitFor(() => expect(createFromAppointment).toHaveBeenCalledWith(100));
+    expect(listAssignable).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("appointment-ficha-modal")).toBeNull();
+    expect(onOpenRecord).toHaveBeenCalledWith(8);
+  });
+
+  it("only active turnos without a ficha can get one (occasional clients included)", () => {
     expect(canGetFicha({ ...base, status: "PENDING" })).toBe(true);
     expect(canGetFicha({ ...base, status: "IN_PROGRESS" })).toBe(true);
     expect(canGetFicha({ ...base, status: "COMPLETED" })).toBe(false);
     expect(canGetFicha({ ...base, status: "CANCELLED" })).toBe(false);
-    expect(canGetFicha({ ...base, clientId: null })).toBe(false);
+    expect(canGetFicha({ ...base, clientId: null })).toBe(true);
     expect(canGetFicha({ ...base, serviceRecordId: 3 })).toBe(false);
   });
 });

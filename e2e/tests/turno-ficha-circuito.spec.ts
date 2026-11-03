@@ -353,11 +353,12 @@ test.describe("Turno y ficha de servicio", () => {
     expect(b.lines[0].professionalId).toBe(other.professionalId);
   });
 
-  test("turno de clienta ocasional (sin cliente): la fila ofrece «Cobrar», sin ficha, y el turno se completa al cobrar", async ({
+  test("turno de clienta ocasional: «Crear ficha» (sin asignar) la crea bajo el cliente genérico, lo pasa a En curso y al cobrar se factura como consumidor final", async ({
     page,
     request,
   }) => {
     const admin = await loginAsDemoApi(request);
+    await ensureCashSessionOpenApi(request, admin);
     await ensureActiveFiscalStampForInvoices(request, admin);
     const seed = await seedCategoryServiceProfessional(request, admin);
     const slot = new Date();
@@ -371,36 +372,45 @@ test.describe("Turno y ficha de servicio", () => {
     });
 
     await loginAsDemo(page);
-    await ensureCashSessionOpen(page);
     await page.goto("/app");
     const row = page
       .getByTestId("dashboard-appointment-row")
       .filter({ hasText: seed.professionalFullName })
       .filter({ hasText: "Occasional" });
-    await expect(row.getByTestId("dashboard-appointment-charge")).toBeVisible({ timeout: 20_000 });
-    // No registered client: no ficha to create or assign.
-    await expect(row.getByTestId("dashboard-appointment-ficha-create-or-assign")).toHaveCount(0);
-    await row.getByTestId("dashboard-appointment-charge").click();
+    // Same circuit as a registered client, but one click: nothing to assign, no direct «Cobrar».
+    const create = row.getByTestId("dashboard-appointment-ficha-create-or-assign");
+    await expect(create).toHaveText("Create service record", { timeout: 20_000 });
+    await expect(row.getByTestId("dashboard-appointment-charge")).toHaveCount(0);
+    await create.click();
+    await expect(page.getByTestId("appointment-ficha-modal")).toHaveCount(0);
 
-    await expect(page).toHaveURL(/\/app\/billing/);
-    await page.locator("#line-price-0").fill("50000");
-    await fillPaymentAmount(page, "50000");
-    await clickIssueInvoiceAndExpectSuccess(page);
+    await expect.poll(async () => (await getAppt(request, admin, turno.id)).serviceRecordId).not.toBeNull();
+    const started = await getAppt(request, admin, turno.id);
+    expect(started.status).toBe("IN_PROGRESS");
+    await expect(row.getByTestId("dashboard-appointment-ficha-go")).toBeVisible({ timeout: 20_000 });
 
-    await expect.poll(async () => (await getAppt(request, admin, turno.id)).status).toBe("COMPLETED");
-    expect((await getAppt(request, admin, turno.id)).invoiceId).not.toBeNull();
+    // The ficha belongs to the tenant's generic client, which never shows in the client list.
+    const ficha = await apiGetJson<Ficha>(request, admin, `/api/service-records/${started.serviceRecordId}`);
+    expect(ficha.appointmentId).toBe(turno.id);
+    const clients = await apiGetJson<unknown>(request, admin, "/api/clients?q=OCASIONAL");
+    expect(JSON.stringify(clients)).not.toContain("CLIENTE OCASIONAL");
 
-    // Back on the Inicio: no ficha to go to, so the row offers «Ver comprobante» (and no «Cobrar»).
-    await page.goto("/app");
-    const paidRow = page
-      .getByTestId("dashboard-appointment-row")
-      .filter({ hasText: seed.professionalFullName })
-      .filter({ hasText: "Occasional" });
-    await expect(paidRow.getByTestId("dashboard-appointment-invoice")).toHaveText("View invoice", { timeout: 20_000 });
-    await expect(paidRow.getByTestId("dashboard-appointment-charge")).toHaveCount(0);
-    await paidRow.getByTestId("dashboard-appointment-invoice").click();
-    await expect(page).toHaveURL(/\/app\/billing/);
-    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 20_000 });
+    // Nothing to assign for an occasional turno: the candidates list stays empty.
+    const candidates = await apiGetJson<unknown[]>(request, admin, `/api/appointments/${turno.id}/service-record/candidates`);
+    expect(candidates).toHaveLength(0);
+
+    // Charging the ficha completes the turno; the generic client is not the invoice's recipient.
+    await chargeFicha(request, admin, ficha.clientId, ficha, seed);
+    const charged = await getAppt(request, admin, turno.id);
+    expect(charged.status).toBe("COMPLETED");
+    expect(charged.invoiceId).not.toBeNull();
+    const invoice = await apiGetJson<{ clientId: number | null; clientDisplayName: string }>(
+      request,
+      admin,
+      `/api/invoices/${charged.invoiceId}`,
+    );
+    expect(invoice.clientId).toBeNull();
+    expect(invoice.clientDisplayName).toBe("CONSUMIDOR FINAL");
   });
 
   test("un turno ya cobrado no vuelve a ofrecer «Cobrar»: muestra «Ver comprobante» y abre la factura", async ({
