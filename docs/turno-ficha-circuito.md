@@ -13,7 +13,7 @@ nullable, índice único filtrado; migración `V91`). Las fichas sin turno (clie
   como un dato más.
 
 ## Reglas
-- **Crear**: copia cliente, servicio y profesional del turno (precio del catálogo). Requiere cliente.
+- **Crear**: copia cliente, servicio y profesional del turno (precio del catálogo). Sin cliente, usa el cliente genérico ocasional.
 - **Asignar**: solo fichas abiertas, de hoy, de la misma clienta y sin turno.
   Al asignar, el servicio del turno queda en la ficha: si ya tiene una línea con ese servicio, la primera pasa a la
   profesional del turno (sin duplicar ni tocar cantidades); si no, se agrega (cantidad 1, precio del catálogo, profesional
@@ -35,10 +35,19 @@ cobró: el de su ficha o, sin ficha, el turno desde el que se tocó «Cobrar» o
   se reactiva al facturar.
 
 ## Turno de clienta ocasional (sin cliente)
-Sin clienta registrada no hay ficha (siempre necesita una). La fila del turno en el Inicio muestra **«Cobrar»** (Pendiente,
-Confirmado o En curso) y lleva a Facturación con el servicio agendado; el turno viaja en el estado de navegación
-(`prefillServiceRecord.appointmentId`) y pasa a **Completado** al emitir la factura. Lo mismo vale para «Cobrar» en el
-detalle del turno de la Agenda.
+Un turno sin cliente registrado sigue el mismo circuito que cualquier otro. «Crear ficha» (un solo clic, sin «Asignar»:
+mezclaría fichas de personas distintas) crea la ficha bajo el **cliente genérico «CLIENTE OCASIONAL»**, uno por tenant,
+creado al primer uso (`clients.is_generic`, migración `V94`). El turno pasa a En curso y la fila muestra «Ir a la ficha».
+El Inicio ya no ofrece «Cobrar» directo para estos turnos: se cobra desde la ficha.
+- El cliente genérico no aparece en el listado ni en la búsqueda de clientes, ni en el panel de clientes inactivos; no se
+  puede desactivar ni reactivar (`CLIENT_GENERIC_READ_ONLY`).
+- Al facturar la ficha, el cliente genérico **no** es el receptor: el comprobante sale como cliente ocasional («CONSUMIDOR
+  FINAL», sin cliente vinculado), con los datos de receptor que se carguen en la factura.
+- `candidates` devuelve vacío y `assign` responde `SERVICE_RECORD_CLIENT_MISMATCH` para un turno ocasional.
+- Una ficha cobrada muestra **«Ver comprobante»** (abre la factura en Facturación): es el camino al comprobante desde el Inicio,
+  donde la fila del turno solo ofrece «Ir a la ficha».
+- Los turnos ocasionales anteriores sin ficha conservan el cobro directo (Agenda: «Cobrar»; Inicio: «Ver comprobante»
+  cuando ya están cobrados).
 
 ## Facturar sin ficha (mostrador)
 En «Nueva factura», al elegir una clienta que no tiene ficha abierta pero sí un turno de hoy sin ficha (Pendiente,
@@ -53,7 +62,7 @@ al cobrar», tildada por defecto. Si sigue tildada, al emitir la factura el turn
 | POST | `/api/appointments/{id}/service-record/assign` `{serviceRecordId}` | asigna una ficha abierta |
 | GET | `/api/appointments/{id}/service-record/candidates` | fichas asignables |
 
-Errores: `APPOINTMENT_ALREADY_HAS_SERVICE_RECORD`, `APPOINTMENT_NOT_ACTIVE`, `APPOINTMENT_WITHOUT_CLIENT`,
+Errores: `APPOINTMENT_ALREADY_HAS_SERVICE_RECORD`, `APPOINTMENT_NOT_ACTIVE`,
 `SERVICE_RECORD_CLIENT_MISMATCH`, `SERVICE_RECORD_NOT_OPEN`, `SERVICE_RECORD_ALREADY_LINKED`.
 `AppointmentResponse.serviceRecordId`, `ServiceRecordResponse/ListItem.appointmentId + appointmentStartAt`.
 

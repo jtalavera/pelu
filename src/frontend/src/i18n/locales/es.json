@@ -500,6 +500,7 @@
     "appointmentFicha": {
       "go": "Ir a la ficha",
       "createOrAssign": "Crear o asignar ficha",
+      "createOccasional": "Crear ficha",
       "modalTitle": "Ficha de {{client}}",
       "createNew": "Crear ficha nueva",
       "createNewHint": "Con {{service}} y {{professional}}, como el turno",
@@ -3140,6 +3141,7 @@
       "voidCancel": "Cancelar",
       "voiding": "Anulando…",
       "voidedReasonLabel": "Motivo de anulación",
+      "viewInvoice": "Ver comprobante",
       "linkedInvoice": "Comprobante",
       "createdAt": "Creada el",
       "closedAt": "Cerrada el",

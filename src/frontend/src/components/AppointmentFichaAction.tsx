@@ -12,11 +12,13 @@ import {
 import { formatParaguayTime } from "../lib/paraguayDateTime";
 import { getDateLocale } from "../i18n/dateLocale";
 
-/** A turno can get a ficha while it is Pendiente, Confirmado or En curso and has a client. */
+/**
+ * A turno can get a ficha while it is Pendiente, Confirmado or En curso. A turno without a registered
+ * client (occasional) gets it too: the server files it under the tenant's generic occasional client.
+ */
 export function canGetFicha(appt: Pick<Appointment, "status" | "clientId" | "serviceRecordId">): boolean {
   return (
     !appt.serviceRecordId &&
-    appt.clientId != null &&
     (appt.status === "PENDING" || appt.status === "CONFIRMED" || appt.status === "IN_PROGRESS")
   );
 }
@@ -92,6 +94,30 @@ export function AppointmentFichaAction({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (appt.clientId == null) {
+    // Occasional client: nothing to assign (the generic client mixes everyone), so one click creates.
+    return (
+      <>
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          className={`min-h-11 ${className}`}
+          data-testid={`${testIdPrefix}-create-or-assign`}
+          disabled={busy}
+          onClick={() => void run(() => createServiceRecordFromAppointment(appt.id))}
+        >
+          {t("femme.appointmentFicha.createOccasional")}
+        </Button>
+        {error ? (
+          <Alert variant="destructive" role="alert" className="mt-2">
+            {error}
+          </Alert>
+        ) : null}
+      </>
+    );
   }
 
   const clientName = appt.clientName ?? "";

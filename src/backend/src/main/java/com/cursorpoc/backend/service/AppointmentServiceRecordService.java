@@ -43,30 +43,35 @@ public class AppointmentServiceRecordService {
   private final ServiceRecordRepository serviceRecordRepository;
   private final ServiceRecordService serviceRecordService;
   private final FemmeTimeProperties timeProperties;
+  private final ClientService clientService;
 
   public AppointmentServiceRecordService(
       AppointmentRepository appointmentRepository,
       ServiceRecordRepository serviceRecordRepository,
       ServiceRecordService serviceRecordService,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      ClientService clientService) {
     this.appointmentRepository = appointmentRepository;
     this.serviceRecordRepository = serviceRecordRepository;
     this.serviceRecordService = serviceRecordService;
     this.timeProperties = timeProperties;
+    this.clientService = clientService;
   }
 
   /** Creates the turno's ficha with its client, service and professional. */
   @Transactional
   public ServiceRecordResponse createFromAppointment(long tenantId, long appointmentId) {
     Appointment appointment = requireLinkableAppointment(tenantId, appointmentId);
-    if (appointment.getClient() == null) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "APPOINTMENT_WITHOUT_CLIENT");
-    }
+    // A turno of an occasional client (no registered client) takes the tenant's generic client.
+    Long clientId =
+        appointment.getClient() != null
+            ? appointment.getClient().getId()
+            : clientService.getOrCreateGenericClient(tenantId).getId();
     ServiceRecordResponse created =
         serviceRecordService.createServiceRecord(
             tenantId,
             new ServiceRecordRequest(
-                appointment.getClient().getId(),
+                clientId,
                 List.of(
                     new ServiceRecordLineRequest(
                         appointment.getSalonService().getId(),
@@ -84,6 +89,7 @@ public class AppointmentServiceRecordService {
     Appointment appointment = requireLinkableAppointment(tenantId, appointmentId);
     ServiceRecord record = requireRecord(tenantId, serviceRecordId);
     if (appointment.getClient() == null
+        || record.getClient().isGeneric()
         || !appointment.getClient().getId().equals(record.getClient().getId())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "SERVICE_RECORD_CLIENT_MISMATCH");
     }

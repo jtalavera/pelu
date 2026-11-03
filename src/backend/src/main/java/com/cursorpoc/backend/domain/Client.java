@@ -47,6 +47,21 @@ public class Client {
   private boolean active;
 
   /**
+   * The tenant's placeholder "cliente ocasional": owns the fichas of turnos booked without a
+   * registered client. Hidden from client lists and never editable.
+   */
+  @Column(name = "is_generic", nullable = false)
+  private boolean generic;
+
+  public boolean isGeneric() {
+    return generic;
+  }
+
+  public void setGeneric(boolean generic) {
+    this.generic = generic;
+  }
+
+  /**
    * Legacy counter, never incremented anywhere (always 0). Visits are counted from CLOSED service
    * records instead ({@code ClientService}); kept only because the column is NOT NULL.
    */

@@ -530,6 +530,14 @@ public class InvoiceService implements ApplicationEventPublisherAware {
               .findByIdAndTenant_Id(request.clientId(), tenantId)
               .orElseThrow(
                   () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
+      if (client.isGeneric()) {
+        // The generic "cliente ocasional" (owner of an occasional turno's ficha) is not a real
+        // recipient: it is billed like any occasional client, with the receptor typed on the
+        // invoice.
+        client = null;
+      }
+    }
+    if (client != null) {
       invoice.setClient(client);
       // clientDisplayName is full name; clientRucOverride can override profile RUC.
       // Issue #96: a blank display name stays blank (PDF prints "Sin nombre") rather than

@@ -19,7 +19,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
 
   @Query(
       """
-      SELECT c FROM Client c WHERE c.tenant.id = :tenantId
+      SELECT c FROM Client c WHERE c.tenant.id = :tenantId AND c.generic = false
       AND (:q IS NULL
            OR LOWER(c.fullName) LIKE LOWER(CONCAT('%', :q, '%'))
            OR (c.phone IS NOT NULL AND c.phone LIKE CONCAT('%', :q, '%'))
@@ -41,6 +41,8 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
   @Query(
       "SELECT c FROM Client c WHERE c.tenant.id = :tenantId AND c.ruc = :ruc AND c.ruc IS NOT NULL")
   Optional<Client> findByTenantIdAndRuc(@Param("tenantId") Long tenantId, @Param("ruc") String ruc);
+
+  Optional<Client> findFirstByTenant_IdAndGenericTrue(Long tenantId);
 
   long deleteByTenant_Id(Long tenantId);
 
@@ -67,7 +69,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
              MAX(a.startAt) AS lastCompletedVisit
       FROM Client c
       LEFT JOIN Appointment a ON a.client = c AND a.status = :completedStatus AND a.tenant.id = :tenantId
-      WHERE c.tenant.id = :tenantId AND c.active = true
+      WHERE c.tenant.id = :tenantId AND c.active = true AND c.generic = false
       GROUP BY c.id, c.fullName, c.phone
       """)
   List<InactiveClientRow> findActiveClientsWithLastCompletedVisit(

@@ -458,9 +458,27 @@ export function ServiceRecordEditor({
           </Text>
         ) : null}
         {record.status === "CLOSED" && record.invoiceNumberFormatted ? (
-          <Text variant="small" className="text-ink-3">
-            {t("femme.serviceRecords.linkedInvoice")}: {record.invoiceNumberFormatted}
-          </Text>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Text variant="small" className="text-ink-3">
+              {t("femme.serviceRecords.linkedInvoice")}: {record.invoiceNumberFormatted}
+            </Text>
+            {record.invoiceId != null ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="min-h-11"
+                data-testid="service-record-view-invoice"
+                onClick={() => {
+                  const invoiceId = record.invoiceId;
+                  onClose();
+                  navigate("/app/billing", { state: { openInvoiceId: invoiceId } });
+                }}
+              >
+                {t("femme.serviceRecords.viewInvoice")}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
         <section className="flex flex-col gap-2 border-t border-line pt-3" aria-labelledby="sr-lines-h">
           <h3 id="sr-lines-h" className={SECTION_TITLE}>

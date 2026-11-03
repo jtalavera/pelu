@@ -24,7 +24,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 ## Criterios de aceptación
 
-1. **Datos del turno** — Se puede crear un turno seleccionando: fecha, hora, profesional, servicio y cliente registrada, o **cliente ocasional** mediante el **identificador genérico** del sistema (PRD — Definiciones transversales).
+1. **Datos del turno** — Se puede crear un turno seleccionando: fecha, hora, profesional, servicio y cliente registrada, o **cliente ocasional** mediante el **identificador genérico** del sistema (PRD — Definiciones transversales). Un turno ocasional también puede tener ficha de servicio («Crear ficha», sin asignar) y se cobra desde ella como cualquier otro turno.
 2. **Sin solapamiento** — No puede existir otro turno en el mismo horario para la misma profesional; el sistema rechaza con mensaje claro.
 3. **Refresco del calendario** — El turno creado aparece de inmediato en el calendario (misma sesión).
 4. **Estado inicial** — El estado inicial del turno es “Pendiente”.
