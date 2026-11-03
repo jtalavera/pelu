@@ -156,6 +156,9 @@ export type SettlementPreview = {
   lines: number;
   entries: EntryView[];
   draftSettlements: SettlementView[];
+  /** Part of `total` accrued before `periodFrom` (unsettled, carried from earlier periods). */
+  carriedAmount: number;
+  carriedEntryIds: number[];
 };
 
 export type SettlementStatus = "DRAFT" | "APPROVED" | "PAID" | "VOIDED";

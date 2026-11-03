@@ -37,3 +37,8 @@ siguiente paso (columna `invoice_id` en el turno).
 - Playwright: `hu-03-dashboard-principal.spec.ts` (resumen, orden de "Más del día", Cobrar, Dashboards);
   `fixtures/dashboard.ts` (`openDashboardMore`) para los specs de fichas, cumpleaños e inactivos.
   `loginAsDemo` ahora espera `dashboard-summary-appointments`.
+
+## Títulos de «Turnos de hoy» y «Fichas de servicio de hoy»
+Los dos títulos salen de la tarjeta y se apoyan sobre el fondo de la página (componente `SectionTitle`): 26 px, con un globo
+al lado — la cantidad de turnos del día (verde) y las fichas abiertas («1 abierta», ámbar) — y «Ver agenda →» a la derecha. La
+tarjeta queda solo para el contenido. Vale también para el Inicio de la profesional.
