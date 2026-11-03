@@ -411,6 +411,20 @@ test.describe("Turno y ficha de servicio", () => {
     );
     expect(invoice.clientId).toBeNull();
     expect(invoice.clientDisplayName).toBe("CONSUMIDOR FINAL");
+
+    // Inicio: the occasional turno only offers «Ir a la ficha» (no «Ver comprobante» on the row);
+    // the comprobante is reached from the charged ficha.
+    await page.goto("/app");
+    const paidRow = page
+      .getByTestId("dashboard-appointment-row")
+      .filter({ hasText: seed.professionalFullName })
+      .filter({ hasText: "Occasional" });
+    await expect(paidRow.getByTestId("dashboard-appointment-ficha-go")).toBeVisible({ timeout: 20_000 });
+    await expect(paidRow.getByTestId("dashboard-appointment-invoice")).toHaveCount(0);
+    await paidRow.getByTestId("dashboard-appointment-ficha-go").click();
+    await page.getByTestId("service-record-view-invoice").click();
+    await expect(page).toHaveURL(/\/app\/billing/);
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 20_000 });
   });
 
   test("un turno ya cobrado no vuelve a ofrecer «Cobrar»: muestra «Ver comprobante» y abre la factura", async ({

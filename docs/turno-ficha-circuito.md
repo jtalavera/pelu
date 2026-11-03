@@ -44,6 +44,8 @@ El Inicio ya no ofrece «Cobrar» directo para estos turnos: se cobra desde la f
 - Al facturar la ficha, el cliente genérico **no** es el receptor: el comprobante sale como cliente ocasional («CONSUMIDOR
   FINAL», sin cliente vinculado), con los datos de receptor que se carguen en la factura.
 - `candidates` devuelve vacío y `assign` responde `SERVICE_RECORD_CLIENT_MISMATCH` para un turno ocasional.
+- Una ficha cobrada muestra **«Ver comprobante»** (abre la factura en Facturación): es el camino al comprobante desde el Inicio,
+  donde la fila del turno solo ofrece «Ir a la ficha».
 - Los turnos ocasionales anteriores sin ficha conservan el cobro directo (Agenda: «Cobrar»; Inicio: «Ver comprobante»
   cuando ya están cobrados).
 
