@@ -22,6 +22,7 @@ import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
+import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
@@ -142,6 +143,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
   private final SalonServiceRepository salonServiceRepository;
   private final BusinessProfileRepository businessProfileRepository;
   private final ServiceRecordRepository serviceRecordRepository;
+  private final AppointmentRepository appointmentRepository;
   private final FemmeTimeProperties timeProperties;
   private final SifenInvoiceHeaderService sifenInvoiceHeaderService;
   private final SifenNumberVoidingService sifenNumberVoidingService;
@@ -157,6 +159,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       SalonServiceRepository salonServiceRepository,
       BusinessProfileRepository businessProfileRepository,
       ServiceRecordRepository serviceRecordRepository,
+      AppointmentRepository appointmentRepository,
       FemmeTimeProperties timeProperties,
       SifenInvoiceHeaderService sifenInvoiceHeaderService,
       SifenNumberVoidingService sifenNumberVoidingService,
@@ -170,6 +173,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     this.salonServiceRepository = salonServiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.serviceRecordRepository = serviceRecordRepository;
+    this.appointmentRepository = appointmentRepository;
     this.timeProperties = timeProperties;
     this.sifenInvoiceHeaderService = sifenInvoiceHeaderService;
     this.sifenNumberVoidingService = sifenNumberVoidingService;
@@ -270,6 +274,26 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       invoice.setServiceRecord(serviceRecord);
     }
 
+    // 4c. The turno this invoice charges: the one its ficha belongs to, or — for a turno with no
+    // ficha (e.g. an occasional client) — the one the user charged from. It is linked to the
+    // invoice (so the Agenda stops offering "Cobrar") and completed together with it.
+    Appointment chargedTurno = null;
+    if (serviceRecord != null && serviceRecord.getAppointment() != null) {
+      chargedTurno = serviceRecord.getAppointment();
+    } else if (request.appointmentId() != null) {
+      chargedTurno =
+          appointmentRepository
+              .findByIdAndTenant_Id(request.appointmentId(), tenantId)
+              .orElseThrow(
+                  () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "APPOINTMENT_NOT_FOUND"));
+    }
+    if (chargedTurno != null
+        && invoiceRepository.existsByAppointment_IdAndStatus(
+            chargedTurno.getId(), InvoiceStatus.ISSUED)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "APPOINTMENT_ALREADY_INVOICED");
+    }
+    invoice.setAppointment(chargedTurno);
+
     BigDecimal tipsAmount =
         request.tipsAmount() != null
             ? request.tipsAmount().setScale(2, RoundingMode.HALF_UP)
@@ -299,13 +323,12 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     if (serviceRecord != null) {
       serviceRecord.setStatus(ServiceRecordStatus.CLOSED);
       serviceRecord.setClosedAt(Instant.now());
-      // The linked turno is completed together with its ficha, whatever step it was on.
-      Appointment linked = serviceRecord.getAppointment();
-      if (linked != null
-          && linked.getStatus() != AppointmentStatus.CANCELLED
-          && linked.getStatus() != AppointmentStatus.NO_SHOW) {
-        linked.setStatus(AppointmentStatus.COMPLETED);
-      }
+    }
+    // The charged turno is completed together with its invoice, whatever step it was on.
+    if (chargedTurno != null
+        && chargedTurno.getStatus() != AppointmentStatus.CANCELLED
+        && chargedTurno.getStatus() != AppointmentStatus.NO_SHOW) {
+      chargedTurno.setStatus(AppointmentStatus.COMPLETED);
     }
 
     // 11. Stock (HU-63): product lines leave stock — an outbox event in this same transaction,

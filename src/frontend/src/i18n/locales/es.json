@@ -2947,6 +2947,7 @@
       "action": {
         "confirm": "Confirmar",
         "start": "Iniciar",
+        "viewInvoice": "Ver comprobante",
         "charge": "Cobrar",
         "complete": "Marcar como atendido",
         "noShow": "No asistió",

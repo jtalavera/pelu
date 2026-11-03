@@ -44,7 +44,47 @@ public record InvoiceCreateRequest(
      * tipsAmount} (which becomes their sum); for an invoice generated from a ficha the ficha's own
      * tips are replaced by these.
      */
-    @Valid List<InvoiceTipRequest> tips) {
+    @Valid List<InvoiceTipRequest> tips,
+    /**
+     * Optional turno this invoice charges when it has no ficha (e.g. an occasional client): the
+     * invoice is linked to it and the turno is completed with it.
+     */
+    Long appointmentId) {
+
+  public InvoiceCreateRequest(
+      Long clientId,
+      String clientDisplayName,
+      String clientRucOverride,
+      String clientIdentityDocumentOverride,
+      String discountType,
+      BigDecimal discountValue,
+      List<InvoiceLineRequest> lines,
+      List<InvoicePaymentAllocationRequest> payments,
+      Long serviceRecordId,
+      BigDecimal tipsAmount,
+      String clientIdentityDocumentTypeOverride,
+      String clientTaxpayerTypeOverride,
+      String email,
+      String issuedAt,
+      List<InvoiceTipRequest> tips) {
+    this(
+        clientId,
+        clientDisplayName,
+        clientRucOverride,
+        clientIdentityDocumentOverride,
+        discountType,
+        discountValue,
+        lines,
+        payments,
+        serviceRecordId,
+        tipsAmount,
+        clientIdentityDocumentTypeOverride,
+        clientTaxpayerTypeOverride,
+        email,
+        issuedAt,
+        tips,
+        null);
+  }
 
   public InvoiceCreateRequest(
       Long clientId,

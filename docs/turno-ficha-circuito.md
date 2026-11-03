@@ -24,6 +24,16 @@ nullable, índice único filtrado; migración `V91`). Las fichas sin turno (clie
 - Anular una ficha cobrada no reabre el turno.
 - Una profesional solo opera los turnos propios y nunca recibe montos.
 
+## Turno cobrado y su comprobante
+`invoices.appointment_id` (migración `V93`, con relleno de lo ya cobrado por ficha) enlaza el comprobante con el turno que
+cobró: el de su ficha o, sin ficha, el turno desde el que se tocó «Cobrar» o el que se dejó tildado al facturar
+(`InvoiceCreateRequest.appointmentId`). El servidor completa el turno junto con el comprobante (ya no lo hace el frontend).
+`AppointmentResponse.invoiceId` trae el comprobante emitido (no anulado) del turno.
+- Agenda: con comprobante, el botón principal es **«Ver comprobante»** (abre el detalle en Facturación) en lugar de
+  «Cobrar». Un turno «Atendido» sin comprobante sigue ofreciendo «Cobrar». Anular el comprobante vuelve a ofrecer «Cobrar».
+- Un turno cobrado no admite un segundo comprobante (`APPOINTMENT_ALREADY_INVOICED`); un turno cancelado o «No vino» no
+  se reactiva al facturar.
+
 ## Turno de clienta ocasional (sin cliente)
 Sin clienta registrada no hay ficha (siempre necesita una). La fila del turno en el Inicio muestra **«Cobrar»** (Pendiente,
 Confirmado o En curso) y lleva a Facturación con el servicio agendado; el turno viaja en el estado de navegación

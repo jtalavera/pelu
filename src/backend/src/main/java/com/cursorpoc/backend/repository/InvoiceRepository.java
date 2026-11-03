@@ -343,5 +343,20 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
   boolean existsByServiceRecord_Id(Long serviceRecordId);
 
+  boolean existsByAppointment_IdAndStatus(Long appointmentId, InvoiceStatus status);
+
+  /** Rows of {@code [appointmentId, invoiceId]}: the (latest) issued invoice of each turno. */
+  @Query(
+      """
+      SELECT i.appointment.id, MAX(i.id) FROM Invoice i
+      WHERE i.tenant.id = :tenantId AND i.status = :status
+      AND i.appointment.id IN :appointmentIds
+      GROUP BY i.appointment.id
+      """)
+  List<Object[]> findInvoiceIdsByAppointmentIds(
+      @Param("tenantId") Long tenantId,
+      @Param("appointmentIds") java.util.Collection<Long> appointmentIds,
+      @Param("status") InvoiceStatus status);
+
   Optional<Invoice> findByServiceRecord_Id(Long serviceRecordId);
 }
