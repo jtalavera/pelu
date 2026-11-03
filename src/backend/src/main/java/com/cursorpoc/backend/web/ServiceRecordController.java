@@ -8,6 +8,7 @@ import com.cursorpoc.backend.web.dto.ServiceRecordListItemResponse;
 import com.cursorpoc.backend.web.dto.ServiceRecordRequest;
 import com.cursorpoc.backend.web.dto.ServiceRecordResponse;
 import com.cursorpoc.backend.web.dto.ServiceRecordVoidRequest;
+import com.cursorpoc.backend.web.dto.ServiceResponse;
 import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.List;
@@ -27,6 +28,9 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @RequestMapping("/api/service-records")
 public class ServiceRecordController {
+
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(ServiceRecordController.class);
 
   private final ServiceRecordService serviceRecordService;
 
@@ -83,6 +87,25 @@ public class ServiceRecordController {
     PagedServiceRecordsResponse response =
         serviceRecordService.listServiceRecords(
             principal.getTenantId(), fromInstant, toInstant, clientId, status, q, page, size);
+    return ResponseEntity.ok(response);
+  }
+
+  /** The salon's most used services on its fichas (the editor's one-tap buttons); admin only. */
+  @GetMapping("/frequent-services")
+  public ResponseEntity<List<ServiceResponse>> frequentServices(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam(defaultValue = "3") int limit) {
+    requirePrincipal(principal);
+    log.info(
+        "GET /api/service-records/frequent-services tenantId={} limit={}",
+        principal.getTenantId(),
+        limit);
+    List<ServiceResponse> response =
+        serviceRecordService.frequentServices(principal.getTenantId(), limit);
+    log.info(
+        "GET /api/service-records/frequent-services tenantId={} status=200 count={}",
+        principal.getTenantId(),
+        response.size());
     return ResponseEntity.ok(response);
   }
 

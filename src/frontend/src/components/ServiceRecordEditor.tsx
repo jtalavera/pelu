@@ -20,6 +20,7 @@ import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
+import { getFrequentServices } from "../api/serviceRecords";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
 import { initialsOf } from "../lib/initials";
 import { ProfessionalServiceLines, ServicePickerScreen } from "./ProfessionalServiceLines";
@@ -223,6 +224,22 @@ export function ServiceRecordEditor({
     setPickerOpen(false);
   }
 
+  const [frequent, setFrequent] = useState<SalonServiceOption[]>([]);
+  useEffect(() => {
+    if (professionalMode || !isOpen) return;
+    let cancelled = false;
+    getFrequentServices(3)
+      .then((items) => {
+        if (!cancelled) setFrequent(Array.isArray(items) ? items : []);
+      })
+      .catch(() => {
+        if (!cancelled) setFrequent([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [professionalMode, isOpen]);
+
   function decrementLine(key: string) {
     const line = lines.find((l) => l.key === key);
     if (!line) return;
@@ -232,6 +249,26 @@ export function ServiceRecordEditor({
 
   function addLine() {
     setLines((prev) => [...prev, emptyLine()]);
+  }
+
+  /** One-tap add of a frequent service: +1 when already in the ficha, else fills the blank line or appends. */
+  function addFrequentService(service: SalonServiceOption) {
+    setLines((prev) => {
+      const existing = prev.find((l) => l.pickedService?.id === service.id);
+      if (existing) {
+        return prev.map((l) => (l.key === existing.key ? { ...l, quantity: (l.quantity || 0) + 1 } : l));
+      }
+      const last = [...prev].reverse().find((l) => l.professionalId !== "");
+      const filled: Omit<LineForm, "key"> = {
+        pickedService: service,
+        professionalId: last?.professionalId ?? "",
+        quantity: 1,
+        unitPrice: maskMoneyInput(String(Math.round(Number(service.priceMinor)))),
+      };
+      const blank = prev.find((l) => !l.pickedService);
+      if (blank) return prev.map((l) => (l.key === blank.key ? { ...l, ...filled } : l));
+      return [...prev, { key: nextKey(), ...filled }];
+    });
   }
 
   function removeLine(key: string) {
@@ -703,11 +740,32 @@ export function ServiceRecordEditor({
               </div>
             );
           })}
+          {frequent.length > 0 ? (
+            <div
+              className="mt-3 flex flex-wrap items-center gap-2"
+              data-testid="service-record-frequent"
+            >
+              <span className="text-xs font-bold uppercase tracking-wider text-ink-3">
+                {t("femme.serviceRecords.frequentLabel")}
+              </span>
+              {frequent.map((svc) => (
+                <button
+                  key={svc.id}
+                  type="button"
+                  data-testid="service-record-frequent-chip"
+                  onClick={() => addFrequentService(svc)}
+                  className="min-h-11 rounded-full border border-line bg-primary-lt px-4 text-sm font-bold text-primary hover:border-primary"
+                >
+                  + {svc.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={addLine}
             data-testid="service-record-add-line"
-            className="mt-2 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border-[1.5px] border-dashed border-line bg-transparent text-sm font-bold text-primary hover:border-primary hover:bg-primary-lt"
+            className="mt-1 flex min-h-11 items-center gap-1.5 bg-transparent px-1 text-sm font-bold text-primary underline-offset-2 hover:underline"
           >
             + {t("femme.serviceRecords.addLine")}
           </button>

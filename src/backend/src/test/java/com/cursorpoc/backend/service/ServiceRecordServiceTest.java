@@ -602,4 +602,51 @@ class ServiceRecordServiceTest {
     // Her tip survives because she is still on a line.
     assertThat(open.getTips()).hasSize(1);
   }
+
+  @Test
+  void frequentServicesKeepsUsageOrderAndDropsOtherTenants() {
+    SalonService other = new SalonService();
+    other.setId(10L);
+    other.setTenant(tenant);
+    other.setName("Corte");
+    salonService.setName("Brushing");
+    com.cursorpoc.backend.domain.ServiceCategory category =
+        new com.cursorpoc.backend.domain.ServiceCategory();
+    category.setId(5L);
+    category.setName("Cat");
+    other.setCategory(category);
+    salonService.setCategory(category);
+    Tenant foreign = new Tenant();
+    foreign.setId(2L);
+    SalonService leaked = new SalonService();
+    leaked.setId(11L);
+    leaked.setTenant(foreign);
+    leaked.setName("Ajeno");
+    when(serviceRecordRepository.findFrequentServiceIds(
+            org.mockito.ArgumentMatchers.eq(1L),
+            org.mockito.ArgumentMatchers.any(Instant.class),
+            org.mockito.ArgumentMatchers.eq(ServiceRecordStatus.VOIDED),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()))
+        .thenReturn(List.of(10L, 11L, 9L));
+    when(salonServiceRepository.findAllById(List.of(10L, 11L, 9L)))
+        .thenReturn(List.of(salonService, other, leaked));
+
+    var result = serviceRecordService.frequentServices(1L, 3);
+
+    assertThat(result).extracting(r -> r.id()).containsExactly(10L, 9L);
+  }
+
+  @Test
+  void frequentServicesIsEmptyWithoutHistory() {
+    when(serviceRecordRepository.findFrequentServiceIds(
+            org.mockito.ArgumentMatchers.eq(1L),
+            org.mockito.ArgumentMatchers.any(Instant.class),
+            org.mockito.ArgumentMatchers.eq(ServiceRecordStatus.VOIDED),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()))
+        .thenReturn(List.of());
+
+    assertThat(serviceRecordService.frequentServices(1L, 3)).isEmpty();
+  }
 }

@@ -18,6 +18,27 @@ public interface ServiceRecordRepository extends JpaRepository<ServiceRecord, Lo
 
   long deleteByTenant_Id(Long tenantId);
 
+  /**
+   * Ids of the most used active services (not products) on the tenant's fichas created since {@code
+   * since}, voided fichas excluded: most lines first, ties by name.
+   */
+  @Query(
+      """
+      SELECT l.salonService.id FROM ServiceRecordLine l
+      WHERE l.serviceRecord.tenant.id = :tenantId
+      AND l.serviceRecord.createdAt >= :since
+      AND l.serviceRecord.status <> :voided
+      AND l.salonService.kind = :kind AND l.salonService.active = true
+      GROUP BY l.salonService.id, l.salonService.name
+      ORDER BY COUNT(l) DESC, l.salonService.name ASC
+      """)
+  List<Long> findFrequentServiceIds(
+      @Param("tenantId") Long tenantId,
+      @Param("since") Instant since,
+      @Param("voided") ServiceRecordStatus voided,
+      @Param("kind") com.cursorpoc.backend.domain.enums.ServiceKind kind,
+      Pageable pageable);
+
   /** The ficha of a turno, if it has one. */
   Optional<ServiceRecord> findByTenant_IdAndAppointment_Id(Long tenantId, Long appointmentId);
 
