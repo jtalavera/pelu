@@ -194,7 +194,7 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     // AC6: own appointment → "Technical sheet".
     await page.getByTestId(`calendar-appt-${ownAppt.id}`).click();
     await page.getByTestId("calendar-more-actions").click();
-    await page.getByRole("button", { name: "Technical sheet", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Technical sheet", exact: true }).click();
     const sheetDialog = page.getByRole("dialog", { name: "Technical sheet" });
     const sheet = sheetDialog.getByTestId("client-technical-sheet");
     await expect(sheet.getByTestId("technical-sheet-client-name")).toHaveText(own.fullName);
@@ -222,7 +222,7 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     await page.getByTestId(`calendar-appt-${otherAppt.id}`).click();
     await expect(page.getByTestId("appointment-read-only-notice")).toBeVisible();
     await page.getByTestId("calendar-more-actions").click();
-    await page.getByRole("button", { name: "Technical sheet", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Technical sheet", exact: true }).click();
     await expect(
       page.getByRole("dialog", { name: "Technical sheet" }).getByLabel("Notes"),
     ).toHaveValue("Cliente de otra profesional");
@@ -380,7 +380,7 @@ test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {
     }
     await page.getByTestId(`calendar-appt-${appt.id}`).click();
     await page.getByTestId("calendar-more-actions").click();
-    await page.getByRole("button", { name: "Technical sheet", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Technical sheet", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Technical sheet" }).getByTestId("client-technical-sheet");
     await expect(sheet.getByLabel("Notes")).toHaveValue("Nota en la tablet");
     await sheet.getByLabel("Notes").fill("Editada desde la tablet");
