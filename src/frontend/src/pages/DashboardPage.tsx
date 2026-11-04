@@ -564,6 +564,19 @@ export default function DashboardPage() {
                 </li>
               );
             })}
+            <li className="mt-1 px-1 sm:px-3">
+              <button
+                type="button"
+                data-testid="dashboard-appointments-add-row"
+                onClick={() => navigate("/app/calendar")}
+                className="flex min-h-11 w-full items-center gap-2 text-sm font-bold text-primary"
+              >
+                <span aria-hidden="true" className="text-lg leading-none">
+                  +
+                </span>
+                {t("femme.dashboard.home.addAppointmentRow")}
+              </button>
+            </li>
           </ul>
         )}
       </Card>

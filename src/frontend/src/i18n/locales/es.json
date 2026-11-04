@@ -1001,6 +1001,7 @@
         "summaryCollected": "{{amount}} cobrados",
         "charge": "Cobrar",
         "chargeError": "No se pudo preparar el cobro. Probá de nuevo.",
+        "addAppointmentRow": "Nuevo turno",
         "nowTag": "ahora",
         "moreTitle": "Más del día",
         "moreRecords": "Fichas de hoy",

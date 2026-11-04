@@ -226,7 +226,7 @@ export function TodayServiceRecords({
             </li>
           ) : null}
           {onNewRecord ? (
-            <li className="mt-1 border-t border-dashed border-line">
+            <li className="mt-1">
               <button
                 type="button"
                 data-testid="dashboard-service-records-add-row"

@@ -1001,6 +1001,7 @@
         "summaryCollected": "{{amount}} collected",
         "charge": "Charge",
         "chargeError": "Could not prepare the payment. Please try again.",
+        "addAppointmentRow": "New appointment",
         "nowTag": "now",
         "moreTitle": "More for today",
         "moreRecords": "Today's service records",

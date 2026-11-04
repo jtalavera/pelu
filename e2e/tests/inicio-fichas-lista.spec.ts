@@ -67,8 +67,22 @@ test.describe("Inicio · fichas de hoy en lista", () => {
 
     const addRow = page.getByTestId("dashboard-service-records-add-row");
     await addRow.scrollIntoViewIfNeeded();
+    // No dashed divider above the row.
+    expect(await addRow.evaluate((el) => getComputedStyle(el.parentElement!).borderTopStyle)).not.toBe("dashed");
     await addRow.click();
     await expect(page.getByRole("dialog").getByText("New service record")).toBeVisible();
+  });
+
+  test("la lista de turnos termina con «+ Nuevo turno» que abre la agenda", async ({ page, request }) => {
+    const token = await loginAsDemoApi(request);
+    await seedCategoryServiceProfessional(request, token);
+    await loginAsDemo(page);
+    const row = page.getByTestId("dashboard-appointments-add-row");
+    if (await row.count()) {
+      await expect(row).toHaveText("+New appointment");
+      await row.click();
+      await expect(page).toHaveURL(/\/app\/calendar/);
+    }
   });
 
   test("Nueva ficha para «Occasional client»: se guarda sin cliente registrado y se ve traducida en la lista", async ({
