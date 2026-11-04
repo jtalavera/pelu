@@ -80,8 +80,8 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     await loginAsDemo(page);
     await page.getByTestId("dashboard-new-service-record").click({ timeout: 20_000 });
     const dialog = page.getByRole("dialog");
-    await dialog.getByRole("combobox").click();
-    await page.getByRole("button", { name: "Occasional client" }).click();
+    await dialog.locator("#service-record-client-search").click();
+    await page.getByRole("button", { name: "Occasional client", exact: true }).click();
     await dialog.getByTestId("service-record-submit").click();
     await expect(page.getByRole("dialog")).toHaveCount(0, { timeout: 15_000 });
 

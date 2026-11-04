@@ -132,7 +132,8 @@ export async function ensureCashSessionOpen(page: Page) {
 export async function clickInvoiceMenuItem(page: Page, testId: string) {
   const dialog = page.getByRole("dialog").last();
   await dialog.getByTestId("invoice-more-actions-button").click();
-  await dialog.getByTestId(testId).click();
+  // The menu is a floating panel in a portal, outside the dialog.
+  await page.getByTestId(testId).click();
 }
 
 /**
@@ -161,7 +162,8 @@ export async function openInvoicePanel(page: Page, panel: InvoicePanel) {
     await dialog.getByTestId("invoice-share-button").click();
   } else {
     await dialog.getByTestId("invoice-more-actions-button").click();
-    await dialog.getByTestId(PANEL_MENU_ITEM[panel]).click();
+    // The menu is a floating panel in a portal, outside the dialog.
+    await page.getByTestId(PANEL_MENU_ITEM[panel]).click();
   }
   await expect(frame).toBeVisible();
 }

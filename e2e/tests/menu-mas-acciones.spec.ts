@@ -74,7 +74,8 @@ test.describe("Menú «Más acciones»", () => {
     // Outside click closes it too.
     await trigger.click();
     await expect(menu).toBeVisible();
-    await page.getByRole("dialog").getByText(client.fullName).first().click();
+    // The title is clear of the floating menu (the client row sits under it).
+    await page.getByRole("dialog").getByRole("heading", { level: 2 }).click();
     await expect(menu).toHaveCount(0);
   });
 

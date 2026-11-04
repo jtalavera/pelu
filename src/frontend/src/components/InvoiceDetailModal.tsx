@@ -2075,6 +2075,8 @@ export function InvoiceDetailModal({
             })
           : t("femme.billing.history.detail.loading")
       }
+      // Wide enough for the whole action row (download, share, more actions, close) on one line.
+      className="max-w-2xl"
     >
       <div className="flex flex-col gap-4">
         {loading && (

@@ -136,7 +136,7 @@ test.describe("Issue #161 · Ajustes varios", () => {
       "invoice-menu-cancel-sifen",
       "invoice-menu-identify",
     ]) {
-      await expect(dialog.getByTestId(id)).toBeVisible();
+      await expect(page.getByTestId(id)).toBeVisible();
     }
     await dialog.getByTestId("invoice-more-actions-button").click(); // close the menu
 
