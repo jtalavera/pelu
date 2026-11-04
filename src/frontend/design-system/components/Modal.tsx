@@ -63,7 +63,13 @@ export function Modal({
           className,
         )}
       >
-        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-line px-6 py-4">
+        <div
+          className={cn(
+            "flex shrink-0 justify-between gap-4 border-b border-line px-6 py-4",
+            // A lone title is centered on the × button; with a description both start at the top.
+            description ? "items-start" : "items-center",
+          )}
+        >
           <div className="min-w-0 space-y-1">
             {title ? (
               <h2

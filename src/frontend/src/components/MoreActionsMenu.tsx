@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
-import { cn, FloatingDropdown } from "@design-system";
+import { Button, cn, FloatingDropdown } from "@design-system";
+import { ACTION_BUTTON } from "./actionButtons";
 
 export type MoreActionsItem = {
   /** Stable id (keyboard navigation and default `data-testid`). */
@@ -162,25 +163,22 @@ export function MoreActionsMenu({
 
   return (
     <div ref={anchorRef} className={cn("relative", className)}>
-      <button
+      <Button
         ref={triggerRef}
         type="button"
+        variant="outline"
+        size="md"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
         disabled={disabled}
         data-testid={triggerTestId}
         onClick={onTriggerClick ?? (() => onOpenChange(!open))}
-        className={cn(
-          "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full border-[1.5px] px-4 text-sm font-semibold",
-          "border-primary bg-primary-lt text-primary transition-colors hover:bg-primary-lt/70",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-          "disabled:cursor-not-allowed disabled:opacity-50",
-        )}
+        className={cn(ACTION_BUTTON, open && "bg-primary-lt")}
       >
         {label}
         <IconChevronDown className={cn("transition-transform", open && "rotate-180")} />
-      </button>
+      </Button>
       <FloatingDropdown ref={panelRef} anchorRef={anchorRef} open={open} width={MENU_WIDTH}>
         <div
           id={menuId}

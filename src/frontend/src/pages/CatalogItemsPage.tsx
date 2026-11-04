@@ -41,6 +41,7 @@ import {
 import { formatGuaraniesGs } from "../lib/formatMoney";
 import { maskMoneyInput, moneyDigitsOnly, parseMaskedMoney } from "../lib/moneyInputMask";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { ACTION_BUTTON } from "../components/actionButtons";
 import { ActionIcon } from "../components/actionIcons";
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -640,7 +641,7 @@ export default function CatalogItemsPage({
       <Button
         type="button"
         variant="primary"
-        className="min-h-11"
+        className={ACTION_BUTTON}
         data-tour="services-add"
         data-testid="catalog-new-button"
         onClick={openNewService}

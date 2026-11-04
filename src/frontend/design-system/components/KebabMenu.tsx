@@ -166,7 +166,7 @@ export function KebabMenu({
         onClick={() => setOpen((v) => !v)}
         onKeyDown={handleTriggerKeyDown}
         className={cn(
-          "flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-ink-2 transition-colors",
+          "flex h-11 w-11 items-center justify-center rounded-full border border-transparent text-ink-2 transition-colors",
           "hover:bg-page hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
           "",
         )}

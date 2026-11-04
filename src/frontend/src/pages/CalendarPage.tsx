@@ -41,6 +41,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { billingStateForAppointment } from "../lib/appointmentBilling";
 import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
 import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { ACTION_BUTTON } from "../components/actionButtons";
 import { ActionIcon } from "../components/actionIcons";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
@@ -1293,7 +1294,7 @@ export default function CalendarPage() {
         title={t("femme.calendar.detail.title")}
         footer={
           <div className="flex w-full flex-wrap items-center gap-2">
-            <Button size="sm" variant="secondary" className="min-h-11" onClick={closeDetail}>
+            <Button size="md" variant="secondary" className={ACTION_BUTTON} onClick={closeDetail}>
               {t("femme.calendar.detail.close")}
             </Button>
             {moreActions.length > 0 && (
@@ -1317,7 +1318,7 @@ export default function CalendarPage() {
             {primaryAction && (
               <Button
                 variant="primary"
-                className="min-h-11 flex-1"
+                className={`${ACTION_BUTTON} flex-1`}
                 disabled={actionBusy}
                 data-testid="calendar-next-step"
                 onClick={primaryAction.run}

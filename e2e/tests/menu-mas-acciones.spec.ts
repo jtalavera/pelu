@@ -1,12 +1,17 @@
 import { expect, test } from "@playwright/test";
 import {
+  apiBaseUrl,
+  apiPostJson,
   createAppointmentApi,
+  ensureActiveFiscalStampForInvoices,
+  ensureCashSessionOpenApi,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { goToCatalog } from "../fixtures/catalog";
+import { goToInvoiceHistory, searchInvoiceHistory } from "../fixtures/billing";
 
 /**
  * «Más acciones»: el antiguo botón «⋯» ahora es un botón rotulado con flecha que abre un menú
@@ -81,5 +86,62 @@ test.describe("Menú «Más acciones»", () => {
     await trigger.click();
     await expect(page.getByTestId("catalog-more-item-price-list")).toBeVisible();
     await expect(page.getByTestId("catalog-more-item-categories")).toBeVisible();
+  });
+
+  test("Detalle del comprobante: todos los botones de la fila miden lo mismo, quedan alineados y el título está centrado con la ×", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E Alinea ${Date.now()}-${Math.random()}`);
+    const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: client.fullName,
+      clientRucOverride: null,
+      clientIdentityDocumentOverride: null,
+      lines: [{ serviceId: seed.serviceId, description: seed.serviceFullName, quantity: 1, unitPrice: 10000 }],
+      payments: [{ method: "CASH", amount: 10000 }],
+    });
+    const prep = await request.post(`${apiBaseUrl()}/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-as-approved`);
+    expect(prep.ok(), await prep.text()).toBeTruthy();
+
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.click();
+
+    const dialog = page.getByRole("dialog");
+    const more = dialog.getByTestId("invoice-more-actions-button");
+    await expect(more).toBeVisible({ timeout: 20_000 });
+
+    // Every button of the action row: same height (44 px), same text size, same vertical center.
+    const bar = more.locator("xpath=ancestor::div[contains(@class,'border-t')][1]");
+    const buttons = bar.getByRole("button");
+    const count = await buttons.count();
+    expect(count).toBeGreaterThanOrEqual(3);
+    const looks = await buttons.evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { h: Math.round(r.height), cy: Math.round(r.top + r.height / 2), font: getComputedStyle(el).fontSize, y: Math.round(r.top) };
+      }),
+    );
+    for (const l of looks) {
+      expect(l.h).toBe(44);
+      expect(l.font).toBe("14px");
+    }
+    // One row: «Cerrar» is no longer alone on a second line.
+    expect(new Set(looks.map((l) => l.y)).size).toBe(1);
+
+    // The title is vertically centered with the × of the header.
+    const title = dialog.getByRole("heading", { level: 2 });
+    const close = dialog.getByRole("button", { name: /^Close/ }).first();
+    const [t, x] = await Promise.all([title.boundingBox(), close.boundingBox()]);
+    expect(Math.abs(t!.y + t!.height / 2 - (x!.y + x!.height / 2))).toBeLessThanOrEqual(2);
   });
 });

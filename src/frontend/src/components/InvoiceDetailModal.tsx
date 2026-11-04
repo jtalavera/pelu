@@ -31,6 +31,7 @@ import { useMe } from "../hooks/useMe";
 import { AssignInvoiceProfessionalsDialog } from "./invoice/AssignInvoiceProfessionalsDialog";
 import { FieldValidationError } from "./FieldValidationError";
 import { MoreActionsMenu } from "./MoreActionsMenu";
+import { ACTION_BUTTON } from "./actionButtons";
 import { ActionIcon } from "./actionIcons";
 import { InvoiceCorrectionForm } from "./InvoiceCorrectionForm";
 import { InvoiceStatePill, deriveInvoiceState } from "./InvoiceStatePill";
@@ -1907,7 +1908,8 @@ export function InvoiceDetailModal({
               {kudeRowShown ? (
                 <Button
                   variant="primary"
-                  size="sm"
+                  size="md"
+                  className={ACTION_BUTTON}
                   disabled={kudeDownloading}
                   data-testid="sifen-kude-download-button"
                   onClick={() => void handleDownloadKude()}
@@ -1921,7 +1923,8 @@ export function InvoiceDetailModal({
                 !sifenEnabled && (
                   <Button
                     variant="primary"
-                    size="sm"
+                    size="md"
+                    className={ACTION_BUTTON}
                     data-testid="invoice-download-pdf-button"
                     onClick={() => void handleDownloadPdf()}
                   >
@@ -1932,7 +1935,8 @@ export function InvoiceDetailModal({
               {shareAvailable && (
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="md"
+                  className={ACTION_BUTTON}
                   aria-expanded={activePanel === "share"}
                   data-testid="invoice-share-button"
                   onClick={() => togglePanel("share")}
@@ -1969,7 +1973,7 @@ export function InvoiceDetailModal({
                   onSelect: item.onSelect,
                 }))}
               />
-              <Button variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
+              <Button variant="ghost" size="md" className={`${ACTION_BUTTON} ml-auto`} onClick={onClose}>
                 {t("femme.billing.history.detail.close")}
               </Button>
             </div>

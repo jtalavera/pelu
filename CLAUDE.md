@@ -148,6 +148,7 @@ src/backend/src/main/java/com/cursorpoc/backend/
 - Mobile-first: use Tailwind `sm:` / `md:` breakpoints. Avoid fixed widths; prefer `w-full`, `min-w-0`, `max-w-*`.
 - Touch targets ≥ 44×44 px (the design-system `Button` handles this; extend `min-h-11` + padding for custom controls).
 - Wide data (tables, nav) must live inside `overflow-x-auto` containers.
+- Buttons in an action row (dialog footers, page action bars, «Más acciones») share one size: pass `ACTION_BUTTON` (`src/frontend/src/components/actionButtons.ts`: 44 px tall, 14 px text) to the design-system `Button`. Use `MoreActionsMenu` (not a bare «⋯») for secondary actions in those rows.
 
 ### Form validation
 

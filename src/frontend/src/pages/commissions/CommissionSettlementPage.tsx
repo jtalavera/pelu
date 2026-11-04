@@ -20,6 +20,9 @@ import { LocalizedDateInput } from "../../components/LocalizedDateInput";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDate, formatParaguayDateTime } from "../../lib/paraguayDateTime";
+import { ActionIcon } from "../../components/actionIcons";
+import { ACTION_BUTTON } from "../../components/actionButtons";
+import { MoreActionsMenu } from "../../components/MoreActionsMenu";
 import { ReassignDialog } from "./ReassignDialog";
 import { SettlementStatusBadge, formatPercent, todayYmd } from "./common";
 
@@ -41,6 +44,7 @@ export default function CommissionSettlementPage() {
   const [payDate, setPayDate] = useState(todayYmd());
   const [payRef, setPayRef] = useState("");
   const [voidOpen, setVoidOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [voidReason, setVoidReason] = useState("");
   const [voidError, setVoidError] = useState<string | null>(null);
   const [toReassign, setToReassign] = useState<EntryView | null>(null);
@@ -146,19 +150,19 @@ export default function CommissionSettlementPage() {
         {error && <Alert variant="destructive">{error}</Alert>}
         <div className="flex flex-wrap items-center gap-2 pt-1">
           {isDraft && (
-            <Button type="button" className="min-h-11" onClick={() => setConfirmApprove(true)} data-testid="settlement-approve">
+            <Button type="button" className={ACTION_BUTTON} onClick={() => setConfirmApprove(true)} data-testid="settlement-approve">
               {t("femme.commissions.settlement.approve")}
             </Button>
           )}
           {s.status === "APPROVED" && (
-            <Button type="button" className="min-h-11" onClick={() => setPayOpen(true)} data-testid="settlement-pay">
+            <Button type="button" className={ACTION_BUTTON} onClick={() => setPayOpen(true)} data-testid="settlement-pay">
               {t("femme.commissions.settlement.markPaid")}
             </Button>
           )}
           <Button
             type="button"
             variant="secondary"
-            className="min-h-11"
+            className={ACTION_BUTTON}
             onClick={() =>
               void downloadCommissionFile(settlementPdfPath(s.id, i18n.language), `liquidacion-${s.id}.pdf`).catch((err) =>
                 setError(translateApiError(err, t)),
@@ -169,12 +173,16 @@ export default function CommissionSettlementPage() {
             {t("femme.commissions.settlement.pdf")}
           </Button>
           {(isDraft || s.status === "APPROVED") && (
-            <KebabMenu
-              id="settlement-more"
-              triggerAriaLabel={t("femme.commissions.settlement.moreActions")}
+            <MoreActionsMenu
+              label={t("femme.commissions.settlement.moreActions")}
+              open={moreOpen}
+              onOpenChange={setMoreOpen}
+              triggerTestId="settlement-more-trigger"
               items={[
                 {
                   id: "void",
+                  testId: "settlement-more-item-void",
+                  icon: <ActionIcon name="ban" />,
                   label: t("femme.commissions.settlement.void"),
                   destructive: true,
                   onSelect: () => setVoidOpen(true),
