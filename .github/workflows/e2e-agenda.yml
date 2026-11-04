@@ -1,0 +1,86 @@
+name: E2E · Agenda e Inicio
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-agenda-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  agenda:
+    name: Agenda and Inicio suite
+    # Pinned: ubuntu-latest moved to 26.04, which Playwright 1.58 can't install browsers on
+    # ("Playwright does not support chromium on ubuntu26.04-x64"). Move back once Playwright is
+    # upgraded to a release that supports it.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+
+      - name: Set up Java
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: |
+            src/backend/gradle/wrapper/gradle-wrapper.properties
+            src/backend/build.gradle.kts
+            src/backend/settings.gradle.kts
+
+      - name: Grant execute permission for Gradle wrapper
+        run: chmod +x src/backend/gradlew
+
+      - name: Install frontend dependencies
+        working-directory: src/frontend
+        run: npm ci
+
+      - name: Install e2e dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Agenda and Inicio specs
+        working-directory: e2e
+        env:
+          E2E_WITH_BACKEND: "1"
+        run: >
+          npx playwright test
+          tests/hu-03-dashboard-principal.spec.ts
+          tests/inicio-fichas-lista.spec.ts
+          tests/hu-06-calendario-de-turnos.spec.ts
+          tests/hu-07-agendar-un-turno.spec.ts
+          tests/hu-08-cambiar-estado-de-un-turno.spec.ts
+          tests/hu-09-editar-o-reagendar-turno.spec.ts
+          tests/hu-19-fixes-varios-calendario.spec.ts
+          tests/turno-ficha-circuito.spec.ts
+          tests/ficha-detalle-y-nuevo-turno-look.spec.ts
+          tests/turnos-duracion-apodo.spec.ts
+          tests/ajustes-estado-y-turnos-cliente.spec.ts
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: e2e-agenda-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 7
