@@ -316,7 +316,7 @@ export function ServiceRecordEditor({
 
   function validate(): boolean {
     let ok = true;
-    if (clientSelection?.type !== "client") {
+    if (clientSelection === null) {
       setClientError(t("femme.serviceRecords.clientRequired"));
       ok = false;
     } else {
@@ -334,9 +334,10 @@ export function ServiceRecordEditor({
   /** Validates and saves; returns the saved record, or null when validation / the request failed. */
   async function persist(): Promise<ServiceRecordDetail | null> {
     setSaveError(null);
-    if (!validate() || clientSelection?.type !== "client") return null;
+    if (!validate() || clientSelection === null) return null;
     const payload = {
-      clientId: clientSelection.client.id,
+      // "Cliente ocasional" saves with no client id: the server files it under the generic client.
+      clientId: clientSelection.type === "client" ? clientSelection.client.id : null,
       lines: lines.filter((l) => !isBlankLine(l)).map((l) => ({
         serviceId: l.pickedService!.id,
         // A professional never picks the professional: a line without one is hers.
@@ -409,7 +410,9 @@ export function ServiceRecordEditor({
   const clientRow = record ? (
     <section className="flex flex-wrap items-baseline gap-x-3 gap-y-1" aria-label={t("femme.serviceRecords.clientSection")}>
       <span className={SECTION_TITLE}>{t("femme.serviceRecords.clientSection")}</span>
-      <b className="break-words text-base text-ink">{record.clientFullName}</b>
+      <b className="break-words text-base text-ink">
+        {record.clientGeneric ? t("femme.serviceRecords.occasionalClient") : record.clientFullName}
+      </b>
       <span className="ml-auto text-sm text-ink-3">{dateText}</span>
     </section>
   ) : null;
@@ -570,7 +573,6 @@ export function ServiceRecordEditor({
                 setClientError(null);
               }}
               activeOnly
-              hideOccasional
               onCreateNew={
                 allowClientCreateNew
                   ? (q) =>
@@ -941,7 +943,7 @@ export function ServiceRecordEditor({
               type="submit"
               variant={record && !professionalMode ? "secondary" : "primary"}
               className="min-h-11"
-              disabled={saving || clientSelection?.type !== "client"}
+              disabled={saving || clientSelection === null}
               data-testid="service-record-submit"
             >
               {saving ? t("femme.serviceRecords.saving") : t("femme.serviceRecords.saveShort")}

@@ -21,4 +21,6 @@ public record ServiceRecordResponse(
     List<ServiceRecordTipResponse> tips,
     /** The turno this ficha belongs to, if any (id and start), shown on the ficha. */
     Long appointmentId,
-    Instant appointmentStartAt) {}
+    Instant appointmentStartAt,
+    /** The ficha belongs to the generic "cliente ocasional": the UI shows a translated label. */
+    boolean clientGeneric) {}

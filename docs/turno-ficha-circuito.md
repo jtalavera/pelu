@@ -49,6 +49,15 @@ El Inicio ya no ofrece «Cobrar» directo para estos turnos: se cobra desde la f
 - Los turnos ocasionales anteriores sin ficha conservan el cobro directo (Agenda: «Cobrar»; Inicio: «Ver comprobante»
   cuando ya están cobrados).
 
+## Inicio · Fichas de servicio de hoy
+Lista de filas (no tarjetas): avatar, nombre en una línea (14 px, con «…»), hora · servicios (solo las abiertas) ·
+profesional · turno, y a la derecha el monto con «Cobrar» (chico: 30 px de alto, área táctil de 44 px) o la etiqueta
+«Cobrada» / «Anulada». La ficha del cliente genérico se muestra como «Cliente ocasional» (traducido; `clientGeneric` en
+`ServiceRecordResponse` y `ServiceRecordListItemResponse`). La lista termina con la fila **«+ Nueva ficha»** y, sin
+fichas, el estado vacío ofrece «Crear la primera ficha». La cabecera del Inicio trae **«Nueva ficha»** junto a «Nuevo
+turno» (mismo peso). Los tres abren «Nueva ficha», donde se elige un cliente o «Cliente ocasional» (`clientId` nulo →
+cliente genérico del tenant). La profesional no ve estos accesos.
+
 ## Facturar sin ficha (mostrador)
 En «Nueva factura», al elegir una clienta que no tiene ficha abierta pero sí un turno de hoy sin ficha (Pendiente,
 Confirmado o En curso; el más temprano), aparece un aviso con la casilla «Marcar como completado el turno de las HH:MM
