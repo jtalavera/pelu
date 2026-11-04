@@ -47,6 +47,7 @@ class ServiceRecordServiceTest {
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private TenantRepository tenantRepository;
   @Mock private InvoiceRepository invoiceRepository;
+  @Mock private ClientService clientService;
   @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   @InjectMocks private ServiceRecordService serviceRecordService;
@@ -77,6 +78,53 @@ class ServiceRecordServiceTest {
     salonService.setTenant(tenant);
     salonService.setName("Corte");
     salonService.setPriceMinor(new BigDecimal("50000"));
+  }
+
+  @Test
+  void createServiceRecord_withoutClient_usesTheGenericOccasionalClient() {
+    Client generic = new Client();
+    generic.setId(77L);
+    generic.setTenant(tenant);
+    generic.setFullName("CLIENTE OCASIONAL");
+    generic.setGeneric(true);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(clientService.getOrCreateGenericClient(1L)).thenReturn(generic);
+    when(salonServiceRepository.findByIdAndTenant_Id(9L, 1L)).thenReturn(Optional.of(salonService));
+    when(professionalRepository.findByIdAndTenant_Id(3L, 1L)).thenReturn(Optional.of(professional));
+    when(serviceRecordRepository.save(org.mockito.ArgumentMatchers.any(ServiceRecord.class)))
+        .thenAnswer(
+            inv -> {
+              ServiceRecord r = inv.getArgument(0);
+              r.setId(101L);
+              return r;
+            });
+
+    var line = new ServiceRecordLineRequest(9L, 3L, 1, new BigDecimal("50000"));
+    ServiceRecordResponse result =
+        serviceRecordService.createServiceRecord(
+            1L, new ServiceRecordRequest(null, List.of(line), List.of()));
+
+    assertThat(result.clientId()).isEqualTo(77L);
+    assertThat(result.clientGeneric()).isTrue();
+  }
+
+  @Test
+  void createServiceRecord_withARealClient_isNotGeneric() {
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
+    when(serviceRecordRepository.save(org.mockito.ArgumentMatchers.any(ServiceRecord.class)))
+        .thenAnswer(
+            inv -> {
+              ServiceRecord r = inv.getArgument(0);
+              r.setId(102L);
+              return r;
+            });
+
+    ServiceRecordResponse result =
+        serviceRecordService.createServiceRecord(
+            1L, new ServiceRecordRequest(7L, List.of(), List.of()));
+
+    assertThat(result.clientGeneric()).isFalse();
   }
 
   @Test

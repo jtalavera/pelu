@@ -16,4 +16,6 @@ public record ServiceRecordListItemResponse(
     String professionalsSummary,
     /** The turno this ficha belongs to, if any. */
     Long appointmentId,
-    Instant appointmentStartAt) {}
+    Instant appointmentStartAt,
+    /** The ficha belongs to the generic "cliente ocasional": the UI shows a translated label. */
+    boolean clientGeneric) {}

@@ -6,6 +6,7 @@ import java.util.List;
 
 /** Used for both creating and updating a service record — a full replace of lines/tips. */
 public record ServiceRecordRequest(
-    @NotNull Long clientId,
+    /** Null = the tenant's generic "cliente ocasional". */
+    Long clientId,
     @NotNull @Valid List<ServiceRecordLineRequest> lines,
     @Valid List<ServiceRecordTipRequest> tips) {}

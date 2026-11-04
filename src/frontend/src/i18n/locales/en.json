@@ -1048,6 +1048,7 @@
       "greetingAfternoon": "Good afternoon",
       "greetingEvening": "Good evening",
       "newAppointment": "+ New appointment",
+      "newServiceRecord": "+ New service record",
       "metricRevenueDay": "Revenue today",
       "metricApptToday": "Appointments today",
       "metricRevenueWeek": "Revenue this week",
@@ -3141,6 +3142,7 @@
       "voidCancel": "Cancel",
       "voiding": "Voiding…",
       "voidedReasonLabel": "Void reason",
+      "occasionalClient": "Occasional client",
       "viewInvoice": "View invoice",
       "linkedInvoice": "Invoice",
       "createdAt": "Created at",
@@ -3184,6 +3186,8 @@
       "today": {
         "title": "Today's service records",
         "openCount_one": "{{count}} open",
+        "createFirst": "Create the first service record",
+        "addRow": "New service record",
         "openCount_other": "{{count}} open",
         "emptyOpen": "There are no open service records today.",
         "proHint": "Open service records of the day. Tap one to add, change or remove services."

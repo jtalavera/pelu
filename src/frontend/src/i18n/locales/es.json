@@ -1048,6 +1048,7 @@
       "greetingAfternoon": "Buenas tardes",
       "greetingEvening": "Buenas noches",
       "newAppointment": "+ Nuevo turno",
+      "newServiceRecord": "+ Nueva ficha",
       "metricRevenueDay": "Ingresos del día",
       "metricApptToday": "Turnos hoy",
       "metricRevenueWeek": "Ingresos de la semana",
@@ -3141,6 +3142,7 @@
       "voidCancel": "Cancelar",
       "voiding": "Anulando…",
       "voidedReasonLabel": "Motivo de anulación",
+      "occasionalClient": "Cliente ocasional",
       "viewInvoice": "Ver comprobante",
       "linkedInvoice": "Comprobante",
       "createdAt": "Creada el",
@@ -3186,6 +3188,8 @@
         "openCount_one": "{{count}} abierta",
         "openCount_other": "{{count}} abiertas",
         "emptyOpen": "Hoy no hay fichas de servicio abiertas.",
+        "createFirst": "Crear la primera ficha",
+        "addRow": "Nueva ficha",
         "proHint": "Fichas abiertas del día. Tocá una para agregar, cambiar o quitar servicios."
       },
       "dashboard": {

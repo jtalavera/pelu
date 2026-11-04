@@ -37,6 +37,8 @@ export type ServiceRecordDetail = {
   /** The turno this ficha belongs to (null for a ficha without turno). */
   appointmentId?: number | null;
   appointmentStartAt?: string | null;
+  /** Belongs to the generic "cliente ocasional": show the translated label, not clientFullName. */
+  clientGeneric?: boolean;
 };
 
 export type ServiceRecordListItem = {
@@ -52,6 +54,7 @@ export type ServiceRecordListItem = {
   professionalsSummary?: string | null;
   appointmentId?: number | null;
   appointmentStartAt?: string | null;
+  clientGeneric?: boolean;
 };
 
 export type PagedServiceRecordsResponse = {
@@ -71,7 +74,8 @@ export type ServiceRecordLineInput = {
 export type ServiceRecordTipInput = { professionalId: number; amount: number };
 
 export type ServiceRecordSaveRequest = {
-  clientId: number;
+  /** null = the generic "cliente ocasional" (the server resolves it). */
+  clientId: number | null;
   lines: ServiceRecordLineInput[];
   tips: ServiceRecordTipInput[];
 };

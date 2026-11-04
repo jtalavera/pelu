@@ -63,6 +63,7 @@ public class ServiceRecordService {
   private final TenantRepository tenantRepository;
   private final InvoiceRepository invoiceRepository;
   private final FemmeTimeProperties timeProperties;
+  private final ClientService clientService;
 
   public ServiceRecordService(
       ServiceRecordRepository serviceRecordRepository,
@@ -71,7 +72,8 @@ public class ServiceRecordService {
       SalonServiceRepository salonServiceRepository,
       TenantRepository tenantRepository,
       InvoiceRepository invoiceRepository,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      ClientService clientService) {
     this.serviceRecordRepository = serviceRecordRepository;
     this.clientRepository = clientRepository;
     this.professionalRepository = professionalRepository;
@@ -79,6 +81,7 @@ public class ServiceRecordService {
     this.tenantRepository = tenantRepository;
     this.invoiceRepository = invoiceRepository;
     this.timeProperties = timeProperties;
+    this.clientService = clientService;
   }
 
   @Transactional
@@ -330,7 +333,8 @@ public class ServiceRecordService {
         r.servicesSummary(),
         r.professionalsSummary(),
         r.appointmentId(),
-        r.appointmentStartAt());
+        r.appointmentStartAt(),
+        r.clientGeneric());
   }
 
   private static ServiceRecordResponse withoutAmounts(ServiceRecordResponse r) {
@@ -364,7 +368,8 @@ public class ServiceRecordService {
         lines,
         List.of(),
         r.appointmentId(),
-        r.appointmentStartAt());
+        r.appointmentStartAt(),
+        r.clientGeneric());
   }
 
   static Instant[] resolveListRange(Instant from, Instant to) {
@@ -393,6 +398,10 @@ public class ServiceRecordService {
   }
 
   private Client requireClient(long tenantId, Long clientId) {
+    if (clientId == null) {
+      // No client picked = an occasional client: the tenant's generic one.
+      return clientService.getOrCreateGenericClient(tenantId);
+    }
     return clientRepository
         .findByIdAndTenant_Id(clientId, tenantId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
@@ -546,7 +555,8 @@ public class ServiceRecordService {
                     l ->
                         l.getProfessional() == null ? null : l.getProfessional().getDisplayName())),
         r.getAppointment() != null ? r.getAppointment().getId() : null,
-        r.getAppointment() != null ? r.getAppointment().getStartAt() : null);
+        r.getAppointment() != null ? r.getAppointment().getStartAt() : null,
+        r.getClient().isGeneric());
   }
 
   private static String distinctJoined(java.util.stream.Stream<String> names) {
@@ -605,7 +615,8 @@ public class ServiceRecordService {
         lines,
         tips,
         r.getAppointment() != null ? r.getAppointment().getId() : null,
-        r.getAppointment() != null ? r.getAppointment().getStartAt() : null);
+        r.getAppointment() != null ? r.getAppointment().getStartAt() : null,
+        r.getClient().isGeneric());
   }
 
   private static String formatInvoiceNumber(int number) {

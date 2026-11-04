@@ -8,6 +8,7 @@ import { SectionTitle } from "../components/SectionTitle";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { listAppointments, type Appointment } from "../api/appointments";
 import { TodayServiceRecords } from "../components/TodayServiceRecords";
+import { NewServiceRecordModal } from "../components/NewServiceRecordModal";
 import { BirthdaysCard } from "../components/BirthdaysCard";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
@@ -150,6 +151,7 @@ export default function DashboardPage() {
   const [birthdaysCount, setBirthdaysCount] = useState<number | null>(0);
   const [openRecordId, setOpenRecordId] = useState<number | null>(null);
   const [fichasKey, setFichasKey] = useState(0);
+  const [newRecordOpen, setNewRecordOpen] = useState(false);
   const [now, setNow]                 = useState(() => new Date());
   const [apptListQuery, setApptListQuery] = useState("");
 
@@ -406,15 +408,26 @@ export default function DashboardPage() {
             {dateLabel} · {timeLabel}
           </div>
         </div>
-        <Button
-          data-tour="dashboard-new-appointment"
-          type="button"
-          variant="primary"
-          className="min-h-11"
-          onClick={() => navigate("/app/calendar")}
-        >
-          {t("femme.dashboard.newAppointment")}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            data-tour="dashboard-new-appointment"
+            type="button"
+            variant="secondary"
+            className="min-h-11"
+            onClick={() => navigate("/app/calendar")}
+          >
+            {t("femme.dashboard.newAppointment")}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-11"
+            data-testid="dashboard-new-service-record"
+            onClick={() => setNewRecordOpen(true)}
+          >
+            {t("femme.dashboard.newServiceRecord")}
+          </Button>
+        </div>
       </div>
 
       {/* ── 2. FISCAL ALERT (one line) ── */}
@@ -557,7 +570,12 @@ export default function DashboardPage() {
       </section>
 
       {/* ── 5. FICHAS DE HOY: eye-catching cards, the open ones first ── */}
-      <TodayServiceRecords refreshKey={fichasKey} />
+      <TodayServiceRecords refreshKey={fichasKey} onNewRecord={() => setNewRecordOpen(true)} />
+      <NewServiceRecordModal
+        open={newRecordOpen}
+        onClose={() => setNewRecordOpen(false)}
+        onSaved={() => setFichasKey((k) => k + 1)}
+      />
       {openRecordId !== null ? (
         <ServiceRecordDetailModal
           serviceRecordId={openRecordId}

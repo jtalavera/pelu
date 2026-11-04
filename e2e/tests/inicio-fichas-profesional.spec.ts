@@ -85,7 +85,7 @@ async function revealCard(page: Page, clientName: string) {
 }
 
 test.describe("Inicio del admin · tarjetas de fichas", () => {
-  test("las abiertas se destacan con monto y «Cobrar»; las anuladas quedan después y sin cobrar", async ({
+  test("las abiertas muestran monto y «Cobrar»; las anuladas quedan después y sin cobrar", async ({
     page,
     request,
   }) => {
@@ -106,19 +106,11 @@ test.describe("Inicio del admin · tarjetas de fichas", () => {
 
     const open = await revealCard(page, openClient.fullName);
     await expect(open).toHaveAttribute("data-status", "OPEN");
-    await expect(open).toContainText("Gs. 50.000");
+    await expect(open).toContainText("50.000");
     await expect(open.getByRole("button", { name: /^Charge/ })).toBeVisible();
 
     const voided = await revealCard(page, voidClient.fullName);
-    // The open card stands out: an amber border and a shadow the quiet cards don't have.
-    const look = (el: Element) => {
-      const cs = getComputedStyle(el);
-      return { border: cs.borderTopColor, shadow: cs.boxShadow };
-    };
-    const openLook = await open.evaluate(look);
-    const voidedLook = await voided.evaluate(look);
-    expect(openLook.border).not.toBe(voidedLook.border);
-    expect(openLook.shadow).not.toBe("none");
+    // Rows of a compact list: the open one has «Cobrar», the voided one only a quiet status label.
     await expect(voided).toHaveAttribute("data-status", "VOIDED");
     await expect(voided.getByRole("button", { name: /^Charge/ })).toHaveCount(0);
 

@@ -32,12 +32,12 @@ const pro = [
   { id: 2, clientId: 2, clientFullName: "MARÍA ROJAS", status: "OPEN", totalAmount: null, createdAt: at, servicesSummary: "Manicura", professionalsSummary: "Bea" },
 ];
 
-function renderIt(professionalMode = false) {
+function renderIt(professionalMode = false, onNewRecord?: () => void) {
   return render(
     <MemoryRouter>
       <I18nextProvider i18n={i18n}>
         <ThemeProvider>
-          <TodayServiceRecords professionalMode={professionalMode} />
+          <TodayServiceRecords professionalMode={professionalMode} onNewRecord={onNewRecord} />
         </ThemeProvider>
       </I18nextProvider>
     </MemoryRouter>,
@@ -66,6 +66,40 @@ describe("TodayServiceRecords", () => {
     expect(screen.queryByTestId("dashboard-service-record-pay-1")).toBeNull();
     expect(cards[1].getAttribute("data-status")).toBe("CLOSED");
     expect(screen.getByTestId("dashboard-today-records-open-count").textContent).toContain("1 open");
+  });
+
+  it("a ficha of the generic occasional client shows the translated label, not the stored name", async () => {
+    listServiceRecordsPaged.mockResolvedValue({
+      content: [{ ...admin[0], clientFullName: "CLIENTE OCASIONAL", clientGeneric: true }],
+    });
+    renderIt();
+    const card = await screen.findByTestId("dashboard-service-record-card");
+    expect(card.textContent).toContain("Occasional client");
+    expect(card.textContent).not.toContain("CLIENTE OCASIONAL");
+  });
+
+  it("admin: the list ends with a «New service record» row that opens the new-record flow", async () => {
+    listServiceRecordsPaged.mockResolvedValue({ content: admin });
+    const onNew = vi.fn();
+    renderIt(false, onNew);
+    await userEvent.click(await screen.findByTestId("dashboard-service-records-add-row"));
+    expect(onNew).toHaveBeenCalledOnce();
+  });
+
+  it("admin: with no fichas the empty state offers «Create the first service record»", async () => {
+    listServiceRecordsPaged.mockResolvedValue({ content: [] });
+    const onNew = vi.fn();
+    renderIt(false, onNew);
+    await userEvent.click(await screen.findByTestId("dashboard-service-records-create-first"));
+    expect(onNew).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId("dashboard-service-records-add-row")).toBeNull();
+  });
+
+  it("without onNewRecord (professional) there is no add row nor create button", async () => {
+    listServiceRecordsPaged.mockResolvedValue({ content: pro });
+    renderIt(true);
+    await screen.findByTestId("dashboard-service-record-card");
+    expect(screen.queryByTestId("dashboard-service-records-add-row")).toBeNull();
   });
 
   it("professional: no amounts and no Charge; the card opens the ficha in professional mode", async () => {
