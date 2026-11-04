@@ -7,6 +7,7 @@ import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
 import { SectionTitle } from "../components/SectionTitle";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { listAppointments, type Appointment } from "../api/appointments";
+import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { TodayServiceRecords } from "../components/TodayServiceRecords";
 import { NewServiceRecordModal } from "../components/NewServiceRecordModal";
 import { BirthdaysCard } from "../components/BirthdaysCard";
@@ -150,6 +151,7 @@ export default function DashboardPage() {
   const [openMore, setOpenMore] = useState<MoreKey | null>(null);
   const [birthdaysCount, setBirthdaysCount] = useState<number | null>(0);
   const [openRecordId, setOpenRecordId] = useState<number | null>(null);
+  const [viewInvoiceId, setViewInvoiceId] = useState<number | null>(null);
   const [fichasKey, setFichasKey] = useState(0);
   const [newRecordOpen, setNewRecordOpen] = useState(false);
   const [now, setNow]                 = useState(() => new Date());
@@ -546,9 +548,7 @@ export default function DashboardPage() {
                         size="sm"
                         className="min-h-11 w-full whitespace-nowrap px-3"
                         data-testid="dashboard-appointment-invoice"
-                        onClick={() =>
-                          navigate("/app/billing", { state: { openInvoiceId: appt.invoiceId } })
-                        }
+                        onClick={() => setViewInvoiceId(appt.invoiceId ?? null)}
                       >
                         {t("femme.calendar.action.viewInvoice")}
                       </Button>
@@ -589,6 +589,16 @@ export default function DashboardPage() {
         onClose={() => setNewRecordOpen(false)}
         onSaved={() => setFichasKey((k) => k + 1)}
       />
+      {viewInvoiceId !== null ? (
+        <InvoiceDetailModal
+          invoiceId={viewInvoiceId}
+          onClose={() => setViewInvoiceId(null)}
+          onVoided={() => {
+            setViewInvoiceId(null);
+            refreshAppointments();
+          }}
+        />
+      ) : null}
       {openRecordId !== null ? (
         <ServiceRecordDetailModal
           serviceRecordId={openRecordId}
