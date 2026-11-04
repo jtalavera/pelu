@@ -7,6 +7,7 @@ import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
 import { SectionTitle } from "../components/SectionTitle";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { listAppointments, type Appointment } from "../api/appointments";
+import { AppointmentFormModal } from "../components/AppointmentFormModal";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { TodayServiceRecords } from "../components/TodayServiceRecords";
 import { NewServiceRecordModal } from "../components/NewServiceRecordModal";
@@ -151,6 +152,7 @@ export default function DashboardPage() {
   const [openMore, setOpenMore] = useState<MoreKey | null>(null);
   const [birthdaysCount, setBirthdaysCount] = useState<number | null>(0);
   const [openRecordId, setOpenRecordId] = useState<number | null>(null);
+  const [newApptOpen, setNewApptOpen] = useState(false);
   const [viewInvoiceId, setViewInvoiceId] = useState<number | null>(null);
   const [fichasKey, setFichasKey] = useState(0);
   const [newRecordOpen, setNewRecordOpen] = useState(false);
@@ -416,7 +418,7 @@ export default function DashboardPage() {
             type="button"
             variant="secondary"
             className="min-h-11"
-            onClick={() => navigate("/app/calendar")}
+            onClick={() => setNewApptOpen(true)}
           >
             {t("femme.dashboard.newAppointment")}
           </Button>
@@ -496,7 +498,7 @@ export default function DashboardPage() {
         {todayAppts.length === 0 ? (
           <div className="flex flex-col items-center gap-3 px-5 pb-6 pt-4 text-center">
             <p className="text-ink-3">{t("femme.dashboard.noAppts")}</p>
-            <Button type="button" variant="primary" onClick={() => navigate("/app/calendar")}>
+            <Button type="button" variant="primary" onClick={() => setNewApptOpen(true)}>
               {t("femme.dashboard.newAppointment")}
             </Button>
           </div>
@@ -568,7 +570,7 @@ export default function DashboardPage() {
               <button
                 type="button"
                 data-testid="dashboard-appointments-add-row"
-                onClick={() => navigate("/app/calendar")}
+                onClick={() => setNewApptOpen(true)}
                 className="flex min-h-11 w-full items-center gap-2 text-sm font-bold text-primary"
               >
                 <span aria-hidden="true" className="text-lg leading-none">
@@ -588,6 +590,11 @@ export default function DashboardPage() {
         open={newRecordOpen}
         onClose={() => setNewRecordOpen(false)}
         onSaved={() => setFichasKey((k) => k + 1)}
+      />
+      <AppointmentFormModal
+        open={newApptOpen}
+        onClose={() => setNewApptOpen(false)}
+        onSaved={() => refreshAppointments()}
       />
       {viewInvoiceId !== null ? (
         <InvoiceDetailModal

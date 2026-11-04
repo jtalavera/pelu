@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import {
   apiPostJson,
+  ensureActiveFiscalStampForInvoices,
+  ensureCashSessionOpenApi,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
@@ -73,16 +75,72 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     await expect(page.getByRole("dialog").getByText("New service record")).toBeVisible();
   });
 
-  test("la lista de turnos termina con «+ Nuevo turno» que abre la agenda", async ({ page, request }) => {
+  test("«+ Nuevo turno» bajo los turnos abre el formulario en Inicio y el turno guardado aparece en la lista", async ({
+    page,
+    request,
+  }) => {
     const token = await loginAsDemoApi(request);
-    await seedCategoryServiceProfessional(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     const row = page.getByTestId("dashboard-appointments-add-row");
-    if (await row.count()) {
-      await expect(row).toHaveText("+New appointment");
-      await row.click();
-      await expect(page).toHaveURL(/\/app\/calendar/);
-    }
+    // With no turnos today the list is replaced by the empty state (its button opens the same form).
+    const opener = (await row.count()) ? row : page.getByRole("button", { name: "New appointment" }).last();
+    await opener.scrollIntoViewIfNeeded();
+    await opener.click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(dialog.getByRole("heading", { name: "New appointment" })).toBeVisible();
+
+    // Save with the required fields empty → field errors, still on Inicio.
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog.getByRole("alert").first()).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(seed.professionalId).toBeTruthy();
+  });
+
+  test("la etiqueta «Pagada» de una ficha cobrada abre el comprobante en Inicio", async ({ page, request }) => {
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    const client = await seedClient(request, token, `E2E Pagada ${Date.now()}`);
+    const line = { serviceId: seed.serviceId, professionalId: seed.professionalId, quantity: 1, unitPrice: 30_000 };
+    const record = await apiPostJson<{ id: number }>(request, token, "/api/service-records", {
+      clientId: client.id,
+      lines: [line],
+      tips: [],
+    });
+    await apiPostJson(request, token, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: null,
+      clientRucOverride: null,
+      discountType: null,
+      discountValue: null,
+      lines: [
+        {
+          serviceId: line.serviceId,
+          description: "E2E Pagada line",
+          quantity: 1,
+          unitPrice: line.unitPrice,
+          discountType: null,
+          discountValue: null,
+        },
+      ],
+      payments: [{ method: "CASH", amount: line.unitPrice }],
+      serviceRecordId: record.id,
+      tipsAmount: 0,
+    });
+
+    await loginAsDemo(page);
+    const badge = page.getByTestId(`dashboard-service-record-invoice-${record.id}`);
+    await badge.scrollIntoViewIfNeeded({ timeout: 20_000 });
+    await expect(badge).toHaveText("Paid");
+    await badge.click();
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/app\/?$/);
   });
 
   test("Nueva ficha para «Occasional client»: se guarda sin cliente registrado y se ve traducida en la lista", async ({

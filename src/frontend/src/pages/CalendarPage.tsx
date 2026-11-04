@@ -4,33 +4,25 @@ import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
-  Input,
   Label,
   Modal,
   Spinner,
   Textarea,
-  TimeCombobox,
 } from "@design-system";
 import { useTour } from "../tour/useTour";
 import { calendarSteps } from "../tour/steps/calendar";
 import {
   Appointment,
-  AppointmentCreateRequest,
   AppointmentStatus,
-  AppointmentUpdateRequest,
   CALENDAR_GRID_STATUSES,
   EDITABLE_STATUSES,
-  createAppointment,
   listAppointments,
-  updateAppointment,
   updateAppointmentStatus,
 } from "../api/appointments";
 import { layoutOverlappingInDay } from "../calendar/calendarAppointmentLayout";
 import { femmeJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
-import { FieldValidationError } from "../components/FieldValidationError";
-import { LocalizedDateInput } from "../components/LocalizedDateInput";
-import { SearchableSelect } from "../components/SearchableSelect";
+import { AppointmentFormModal } from "../components/AppointmentFormModal";
 import { ClientTechnicalSheetModal } from "../components/ClientTechnicalSheetModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
@@ -78,10 +70,6 @@ function formatDate(date: Date, locale: string): string {
   return date.toLocaleDateString(locale, { month: "short", day: "numeric" });
 }
 
-function formatDateIso(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 function formatLocalYmd(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -104,18 +92,6 @@ function appointmentTopPx(startAt: string): number {
   return Math.max(0, (hours - HOUR_START) * PX_PER_HOUR);
 }
 
-const MIN_DURATION = 5;
-const MAX_DURATION = 480;
-const DURATION_STEP = 5;
-const DURATION_PRESETS = [30, 45, 60, 90, 120];
-
-/** One step up / down, rounded to the step grid and kept inside the allowed range. */
-function stepDuration(current: number | "", delta: number): number {
-  const base = current === "" ? 0 : current;
-  const next = delta > 0 ? Math.floor(base / DURATION_STEP) * DURATION_STEP + DURATION_STEP : Math.ceil(base / DURATION_STEP) * DURATION_STEP - DURATION_STEP;
-  return Math.min(MAX_DURATION, Math.max(MIN_DURATION, next));
-}
-
 function appointmentHeightPx(durationMinutes: number): number {
   return Math.max(20, (durationMinutes / 60) * PX_PER_HOUR);
 }
@@ -127,14 +103,6 @@ function isSameDay(isoString: string, day: Date): boolean {
     d.getMonth() === day.getMonth() &&
     d.getDate() === day.getDate()
   );
-}
-
-function toLocalDatetimeString(date: Date, time: string): string {
-  return `${formatDateIso(date)}T${time}:00`;
-}
-
-function toUtcIsoString(localDatetime: string): string {
-  return new Date(localDatetime).toISOString();
 }
 
 // ── Professional color palette for calendar blocks ────────────────────────────
@@ -158,17 +126,6 @@ function profColor(professionalId: number, professionals: Professional[]): ProfC
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ProfSchedule = { dayOfWeek: number; startTime: string; endTime: string; active: boolean };
 type Professional = { id: number; fullName: string; displayName?: string | null; active: boolean; schedules?: ProfSchedule[] };
-type SalonService = { id: number; name: string; durationMinutes: number; active: boolean };
-type Client = { id: number; fullName: string };
-
-type FormErrors = {
-  date?: string;
-  time?: string;
-  startInPast?: string;
-  professionalId?: string;
-  serviceId?: string;
-  duration?: string;
-};
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function CalendarPage() {
@@ -210,8 +167,6 @@ export default function CalendarPage() {
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
-  const [services, setServices] = useState<SalonService[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
 
@@ -225,16 +180,8 @@ export default function CalendarPage() {
   // New/Edit appointment modal
   const [formOpen, setFormOpen] = useState(false);
   const [editAppt, setEditAppt] = useState<Appointment | null>(null);
-  const [formDate, setFormDate] = useState("");
-  const [formTime, setFormTime] = useState("");
-  const [formProfessionalId, setFormProfessionalId] = useState<number | "">("");
-  const [formServiceId, setFormServiceId] = useState<number | "">("");
-  /** Length of the turno being created / edited, in minutes (starts as the service's own). */
-  const [formDuration, setFormDuration] = useState<number | "">("");
-  const [formClientId, setFormClientId] = useState<number | "">("");
-  const [formErrors, setFormErrors] = useState<FormErrors>({});
-  const [formSaving, setFormSaving] = useState(false);
-  const [formApiError, setFormApiError] = useState<string | null>(null);
+  const [formInitialDate, setFormInitialDate] = useState<string | undefined>(undefined);
+  const [formInitialHour, setFormInitialHour] = useState<number | undefined>(undefined);
 
   // Status change: one next-step button + a few actions behind "⋯"; cancelling asks for a reason
   const [statusModalOpen, setStatusModalOpen] = useState(false);
@@ -261,28 +208,6 @@ export default function CalendarPage() {
   }, []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  // ── Availability warning (non-blocking) ────────────────────────────────────
-  // dayOfWeek: JS Date.getDay() returns 0=Sun; schedule uses 1=Mon..7=Sun
-  const availabilityWarning = useMemo((): string | null => {
-    if (!formDate || !formTime || !formProfessionalId) return null;
-    const prof = professionals.find((p) => p.id === formProfessionalId);
-    if (!prof?.schedules?.length) return null;
-    const d = new Date(formDate + "T00:00:00");
-    const jsDay = d.getDay(); // 0=Sun..6=Sat
-    const scheduleDay = jsDay === 0 ? 7 : jsDay; // convert to 1=Mon..7=Sun
-    const sched = prof.schedules.find((s) => s.dayOfWeek === scheduleDay && s.startTime && s.endTime);
-    if (!sched) return t("femme.calendar.form.availabilityWarningDayOff");
-    // Normalize API times ("09:00:00" → "09:00")
-    const normalize = (v: string) => v.slice(0, 5);
-    if (formTime < normalize(sched.startTime) || formTime >= normalize(sched.endTime)) {
-      return t("femme.calendar.form.availabilityWarningOutsideHours", {
-        start: normalize(sched.startTime),
-        end: normalize(sched.endTime),
-      });
-    }
-    return null;
-  }, [formDate, formTime, formProfessionalId, professionals, t]);
-
   // Scroll to 8am on mount
   useEffect(() => {
     if (scrollRef.current) {
@@ -292,14 +217,10 @@ export default function CalendarPage() {
 
   // Load professionals and services once
   useEffect(() => {
-    Promise.all([
-      femmeJson<Professional[]>("/api/professionals"),
-      femmeJson<SalonService[]>("/api/services?kind=SERVICE"),
-    ])
-      .then(([profs, svcs]) => {
+    femmeJson<Professional[]>("/api/professionals")
+      .then((profs) => {
         const active = withDisplayNames(profs).filter((p) => p.active);
         setProfessionals(active);
-        setServices(svcs.filter((s) => s.active));
         if (me?.role === "PROFESSIONAL" && me.professionalId != null) {
           setSelectedProfessionalId(me.professionalId);
         }
@@ -339,15 +260,6 @@ export default function CalendarPage() {
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [appointments, pendingOpenApptId, navigate, location.pathname]);
-
-  // Load clients when form opens (active only — inactive clients must not be assignable to new turnos)
-  useEffect(() => {
-    if (formOpen && clients.length === 0) {
-      femmeJson<Client[]>("/api/clients?q=&active=true")
-        .then((c) => setClients(c))
-        .catch(() => {});
-    }
-  }, [formOpen, clients.length]);
 
   // ── Navigation ──────────────────────────────────────────────────────────────
   const activeView: "day" | "week" = isMobile ? "day" : view;
@@ -462,18 +374,8 @@ export default function CalendarPage() {
   // ── New appointment ─────────────────────────────────────────────────────────
   const openNewForm = (date?: Date, hour?: number) => {
     setEditAppt(null);
-    setFormDate(formatLocalYmd(date ?? cursor));
-    setFormTime(hour != null ? `${String(hour).padStart(2, "0")}:00` : "");
-    setFormProfessionalId(
-      isProfessional && me?.professionalId != null
-        ? me.professionalId
-        : (selectedProfessionalId ?? "")
-    );
-    setFormServiceId("");
-    setFormDuration("");
-    setFormClientId("");
-    setFormErrors({});
-    setFormApiError(null);
+    setFormInitialDate(formatLocalYmd(date ?? cursor));
+    setFormInitialHour(hour);
     setFormOpen(true);
   };
 
@@ -481,106 +383,9 @@ export default function CalendarPage() {
   const openEditForm = () => {
     if (!detailAppt) return;
     setEditAppt(detailAppt);
-    const d = new Date(detailAppt.startAt);
-    setFormDate(formatDateIso(d));
-    setFormTime(
-      `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
-    );
-    setFormProfessionalId(detailAppt.professionalId);
-    setFormServiceId(detailAppt.serviceId);
-    setFormDuration(detailAppt.durationMinutes);
-    setFormClientId(detailAppt.clientId ?? "");
-    setFormErrors({});
-    setFormApiError(null);
     setFormOpen(true);
     closeDetail();
   };
-
-  // ── Form validation ─────────────────────────────────────────────────────────
-  const validateForm = (): boolean => {
-    const errors: FormErrors = {};
-    if (!formDate) errors.date = t("femme.calendar.form.errors.dateRequired");
-    if (!formTime) errors.time = t("femme.calendar.form.errors.timeRequired");
-    if (!formProfessionalId)
-      errors.professionalId = t("femme.calendar.form.errors.professionalRequired");
-    if (!formServiceId) errors.serviceId = t("femme.calendar.form.errors.serviceRequired");
-    if (
-      formDuration === "" ||
-      !Number.isInteger(formDuration) ||
-      formDuration < MIN_DURATION ||
-      formDuration > MAX_DURATION
-    ) {
-      errors.duration = t("femme.calendar.form.errors.duration", { min: MIN_DURATION, max: MAX_DURATION });
-    }
-    if (formDate && formTime) {
-      const localDt = toLocalDatetimeString(new Date(formDate), formTime);
-      const startMs = new Date(localDt).getTime();
-      if (!Number.isNaN(startMs) && startMs < Date.now()) {
-        errors.startInPast = t("femme.calendar.form.errors.startInPast");
-      }
-    }
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // ── Save appointment ────────────────────────────────────────────────────────
-  const saveForm = async () => {
-    if (!validateForm()) return;
-    setFormSaving(true);
-    setFormApiError(null);
-    try {
-      const localDt = toLocalDatetimeString(new Date(formDate), formTime);
-      const startAt = toUtcIsoString(localDt);
-      const clientId = formClientId !== "" ? (formClientId as number) : null;
-
-      let updated: Appointment;
-      if (editAppt) {
-        const req: AppointmentUpdateRequest = {
-          clientId,
-          professionalId: formProfessionalId as number,
-          serviceId: formServiceId as number,
-          startAt,
-          durationMinutes: formDuration as number,
-        };
-        updated = await updateAppointment(editAppt.id, req);
-        setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-      } else {
-        const req: AppointmentCreateRequest = {
-          clientId,
-          professionalId: formProfessionalId as number,
-          serviceId: formServiceId as number,
-          startAt,
-          durationMinutes: formDuration as number,
-        };
-        updated = await createAppointment(req);
-        setAppointments((prev) => [...prev, updated]);
-      }
-      setFormOpen(false);
-      // Show the day of the appointment that was just saved.
-      const savedDay = new Date(updated.startAt);
-      savedDay.setHours(0, 0, 0, 0);
-      setCursor(savedDay);
-    } catch (err) {
-      setFormApiError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
-    } finally {
-      setFormSaving(false);
-    }
-  };
-
-  // End time next to the duration ("11:00 → 12:00") and, when she changed it, the service's own length.
-  const durationEnd = (() => {
-    if (!formTime || formDuration === "" || formDuration < MIN_DURATION) return null;
-    const [hh, mm] = formTime.split(":").map(Number);
-    if (Number.isNaN(hh) || Number.isNaN(mm)) return null;
-    const total = hh * 60 + mm + formDuration;
-    return `${String(Math.floor(total / 60) % 24).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-  })();
-  const durationServiceNote = (() => {
-    const svc = services.find((s) => s.id === formServiceId);
-    return svc && formDuration !== "" && formDuration !== svc.durationMinutes
-      ? t("femme.calendar.form.durationServiceNote", { minutes: svc.durationMinutes })
-      : "";
-  })();
 
   // ── Render ──────────────────────────────────────────────────────────────────
   const longDateLabel = (() => {
@@ -1450,272 +1255,25 @@ export default function CalendarPage() {
         </div>
       </Modal>
 
-      {/* ── New / Edit appointment modal ── */}
-      <Modal
+      <AppointmentFormModal
         open={formOpen}
         onClose={() => {
           if (technicalSheetClientId === null) setFormOpen(false);
         }}
-        title={editAppt ? t("femme.calendar.form.editTitle") : t("femme.calendar.form.title")}
-        footer={
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setFormOpen(false)}
-              disabled={formSaving}
-            >
-              {t("femme.calendar.form.cancel")}
-            </Button>
-            <Button size="sm" onClick={saveForm} disabled={formSaving}>
-              {formSaving ? <Spinner size="sm" /> : t("femme.calendar.form.save")}
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          {formApiError && (
-            <Alert variant="destructive">
-              <p role="alert">{formApiError}</p>
-            </Alert>
-          )}
-          {availabilityWarning && (
-            <Alert variant="warning" data-testid="availability-warning">
-              <p role="alert">{availabilityWarning}</p>
-            </Alert>
-          )}
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-primary">{t("femme.calendar.form.sectionWho")}</h3>
-          {/* Client (optional) */}
-          <div className="space-y-1">
-            <SearchableSelect<number>
-              id="form-client"
-              label={t("femme.calendar.form.client")}
-              value={formClientId}
-              onChange={(v) => setFormClientId(v)}
-              emptyOption={{ value: "", label: t("femme.calendar.form.occasionalClient") }}
-              options={clients.map((c) => ({ value: c.id, label: c.fullName }))}
-              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
-              noResultsText={t("femme.calendar.searchable.noResults")}
-            />
-            {formClientId !== "" && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="min-h-11"
-                onClick={() => setTechnicalSheetClientId(formClientId as number)}
-              >
-                {t("femme.clients.technicalSheet.view")}
-              </Button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {/* Service */}
-          <div className="space-y-1">
-            <SearchableSelect<number>
-              id="form-service"
-              label={t("femme.calendar.form.service")}
-              value={formServiceId}
-              onChange={(v) => {
-                setFormServiceId(v);
-                // The turno starts with the service's own duration; she can change it below.
-                const svc = services.find((s) => s.id === v);
-                if (svc) setFormDuration(svc.durationMinutes);
-              }}
-              emptyOption={{ value: "", label: t("femme.calendar.form.selectService") }}
-              options={services.map((s) => ({
-                value: s.id,
-                label: `${s.name} (${s.durationMinutes} min)`,
-              }))}
-              filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
-              noResultsText={t("femme.calendar.searchable.noResults")}
-              invalid={!!formErrors.serviceId}
-              describedBy={formErrors.serviceId ? "form-svc-err" : undefined}
-            />
-            {formErrors.serviceId && (
-              <FieldValidationError id="form-svc-err">
-                {formErrors.serviceId}
-              </FieldValidationError>
-            )}
-          </div>
-          {/* Professional (locked to own profile for professional role) */}
-          <div className="space-y-1">
-            {isProfessional ? (
-              <div>
-                <Label>{t("femme.calendar.form.professional")}</Label>
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    border: "var(--border-default)",
-                    borderRadius: "var(--radius-md)",
-                    fontSize: 13,
-                    color: "var(--color-ink-2)",
-                    background: "var(--color-stone)",
-                  }}
-                >
-                  {professionals.find((p) => p.id === me?.professionalId)?.fullName ??
-                    t("femme.calendar.form.selectProfessional")}
-                </div>
-              </div>
-            ) : (
-              <>
-                <SearchableSelect<number>
-                  id="form-professional"
-                  label={t("femme.calendar.form.professional")}
-                  value={formProfessionalId}
-                  onChange={(v) => setFormProfessionalId(v)}
-                  emptyOption={{ value: "", label: t("femme.calendar.form.selectProfessional") }}
-                  options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
-                  filterPlaceholder={t("femme.calendar.searchable.filterPlaceholder")}
-                  noResultsText={t("femme.calendar.searchable.noResults")}
-                  invalid={!!formErrors.professionalId}
-                  describedBy={formErrors.professionalId ? "form-prof-err" : undefined}
-                />
-                {formErrors.professionalId && (
-                  <FieldValidationError id="form-prof-err">
-                    {formErrors.professionalId}
-                  </FieldValidationError>
-                )}
-              </>
-            )}
-          </div>
-          </div>
-          <h3 className="text-xs font-extrabold uppercase tracking-wider text-primary" >{t("femme.calendar.form.sectionWhen")}</h3>
-          <div className="grid grid-cols-2 gap-3">
-          {/* Date */}
-          <div className="space-y-1">
-            <Label htmlFor="form-date">{t("femme.calendar.form.date")}</Label>
-            <LocalizedDateInput
-              id="form-date"
-              value={formDate}
-              onChange={setFormDate}
-              invalid={!!(formErrors.date || formErrors.startInPast)}
-              aria-describedby={
-                [formErrors.date && "form-date-err", formErrors.startInPast && "form-start-past-err"]
-                  .filter(Boolean)
-                  .join(" ") || undefined
-              }
-              data-testid="appointment-date-input"
-            />
-            {formErrors.date && (
-              <FieldValidationError id="form-date-err">{formErrors.date}</FieldValidationError>
-            )}
-          </div>
-          {/* Time */}
-          <div className="space-y-1">
-            <Label htmlFor="form-time">{t("femme.calendar.form.time")}</Label>
-            <TimeCombobox
-              id="form-time"
-              value={formTime}
-              onChange={setFormTime}
-              startTime="06:00"
-              endTime="20:00"
-              placeholder={t("femme.calendar.form.timePlaceholder")}
-              aria-label={t("femme.calendar.form.timeAriaLabel")}
-              invalid={!!(formErrors.time || formErrors.startInPast)}
-              aria-describedby={
-                [formErrors.time && "form-time-err", formErrors.startInPast && "form-start-past-err"]
-                  .filter(Boolean)
-                  .join(" ") || undefined
-              }
-              data-testid="appointment-time-input"
-            />
-            {formErrors.time && (
-              <FieldValidationError id="form-time-err">{formErrors.time}</FieldValidationError>
-            )}
-            {formErrors.startInPast && (
-              <FieldValidationError id="form-start-past-err">{formErrors.startInPast}</FieldValidationError>
-            )}
-          </div>
-          </div>
-          {/* Quick times */}
-          <div className="flex flex-wrap gap-2" data-testid="appointment-quick-times">
-            {["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"].map((q) => (
-              <button
-                key={q}
-                type="button"
-                onClick={() => setFormTime(q)}
-                aria-pressed={formTime === q}
-                className={`min-h-10 rounded-full border px-3 text-sm font-bold ${
-                  formTime === q ? "border-primary bg-primary-lt text-primary" : "border-line bg-surface text-ink"
-                }`}
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-          {/* Duration: starts as the service's, adjustable (a turno can run long) */}
-          <div className="space-y-2 rounded-card border border-line bg-page p-3" data-testid="appointment-duration">
-            <Label htmlFor="form-duration">{t("femme.calendar.form.duration")}</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                aria-label={t("femme.calendar.form.durationDecrease")}
-                data-testid="appointment-duration-minus"
-                onClick={() => setFormDuration(stepDuration(formDuration, -DURATION_STEP))}
-                className="flex size-11 shrink-0 items-center justify-center rounded-full border-[1.5px] border-primary font-heading text-xl font-extrabold leading-none text-primary"
-              >
-                −
-              </button>
-              <Input
-                id="form-duration"
-                type="number"
-                inputMode="numeric"
-                min={MIN_DURATION}
-                max={MAX_DURATION}
-                step={DURATION_STEP}
-                value={formDuration}
-                onChange={(e) => setFormDuration(e.target.value === "" ? "" : Math.floor(Number(e.target.value)))}
-                aria-invalid={!!formErrors.duration}
-                aria-describedby={formErrors.duration ? "form-duration-err" : "form-duration-hint"}
-                data-testid="appointment-duration-input"
-                className="w-24 text-center tabular-nums"
-              />
-              <span className="text-sm text-ink-3">{t("femme.calendar.form.durationUnit")}</span>
-              <button
-                type="button"
-                aria-label={t("femme.calendar.form.durationIncrease")}
-                data-testid="appointment-duration-plus"
-                onClick={() => setFormDuration(stepDuration(formDuration, DURATION_STEP))}
-                className="flex size-11 shrink-0 items-center justify-center rounded-full border-[1.5px] border-primary font-heading text-xl font-extrabold leading-none text-primary"
-              >
-                +
-              </button>
-              {durationEnd ? (
-                <span
-                  className="ml-auto text-sm font-bold text-ink-2"
-                  data-testid="appointment-duration-ends"
-                  aria-label={t("femme.calendar.form.durationEnds", { time: durationEnd })}
-                >
-                  {formTime} → <b className="text-ink">{durationEnd}</b>
-                </span>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-2" data-testid="appointment-duration-presets">
-              {DURATION_PRESETS.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setFormDuration(m)}
-                  aria-pressed={formDuration === m}
-                  className={`min-h-10 rounded-full border px-3 text-sm font-bold ${
-                    formDuration === m ? "border-primary bg-primary-lt text-primary" : "border-line bg-surface text-ink"
-                  }`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-            {formErrors.duration ? (
-              <FieldValidationError id="form-duration-err">{formErrors.duration}</FieldValidationError>
-            ) : (
-              <p id="form-duration-hint" className="text-xs text-ink-3" data-testid="appointment-duration-hint">
-                {durationServiceNote}
-              </p>
-            )}
-          </div>
-        </div>
-      </Modal>
+        editAppointment={editAppt}
+        initialDate={formInitialDate}
+        initialHour={formInitialHour}
+        initialProfessionalId={selectedProfessionalId}
+        onSaved={(saved, mode) => {
+          setAppointments((prev) =>
+            mode === "updated" ? prev.map((a) => (a.id === saved.id ? saved : a)) : [...prev, saved],
+          );
+          // Show the day of the appointment that was just saved.
+          const savedDay = new Date(saved.startAt);
+          savedDay.setHours(0, 0, 0, 0);
+          setCursor(savedDay);
+        }}
+      />
 
       <ClientTechnicalSheetModal
         clientId={technicalSheetClientId}
