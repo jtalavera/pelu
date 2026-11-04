@@ -167,9 +167,9 @@ test.describe("Issue #161 · Ajustes varios", () => {
     await openInvoicePanel(page, "cancel");
     await dialog.getByTestId("invoice-more-actions-button").click();
     await expect(page.getByTestId("sifen-tab-cancel")).toHaveCount(0);
-    await expect(dialog.getByTestId("invoice-more-actions-menu")).toBeVisible();
+    await expect(page.getByTestId("invoice-more-actions-menu")).toBeVisible();
     await dialog.getByTestId("invoice-more-actions-button").click();
-    await expect(dialog.getByTestId("invoice-more-actions-menu")).toHaveCount(0);
+    await expect(page.getByTestId("invoice-more-actions-menu")).toHaveCount(0);
     // "Share" closes with its own button, too.
     await openInvoicePanel(page, "share");
     await dialog.getByTestId("invoice-share-button").click();

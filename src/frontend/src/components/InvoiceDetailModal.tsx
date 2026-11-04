@@ -30,6 +30,8 @@ import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { AssignInvoiceProfessionalsDialog } from "./invoice/AssignInvoiceProfessionalsDialog";
 import { FieldValidationError } from "./FieldValidationError";
+import { MoreActionsMenu } from "./MoreActionsMenu";
+import { ActionIcon } from "./actionIcons";
 import { InvoiceCorrectionForm } from "./InvoiceCorrectionForm";
 import { InvoiceStatePill, deriveInvoiceState } from "./InvoiceStatePill";
 import { SifenStatusBadge } from "./SifenStatusBadge";
@@ -1643,6 +1645,8 @@ export function InvoiceDetailModal({
         type MenuItem = {
           key: string;
           label: string;
+          icon?: ReactNode;
+          destructive?: boolean;
           testId: string;
           hint?: string;
           active?: boolean;
@@ -1653,6 +1657,8 @@ export function InvoiceDetailModal({
         if (voidAvailable) {
           menuItems.push({
             key: "void",
+            icon: <ActionIcon name="ban" />,
+            destructive: true,
             label: t("femme.billing.history.detail.voidButton"),
             testId: "invoice-menu-void",
             active: activePanel === "void",
@@ -1662,6 +1668,8 @@ export function InvoiceDetailModal({
         if (cancelAvailable) {
           menuItems.push({
             key: "cancel",
+            icon: <ActionIcon name="ban" />,
+            destructive: true,
             label: t("femme.billing.history.detail.sifen.cancelButton"),
             testId: "invoice-menu-cancel-sifen",
             active: activePanel === "cancel",
@@ -1671,6 +1679,7 @@ export function InvoiceDetailModal({
         if (revalidateAvailable) {
           menuItems.push({
             key: "revalidate",
+            icon: <ActionIcon name="refresh" />,
             label: t("femme.billing.history.detail.sifen.revalidateButton"),
             testId: "invoice-menu-revalidate",
             active: activePanel === "revalidate",
@@ -1680,6 +1689,7 @@ export function InvoiceDetailModal({
         if (identifyAvailable) {
           menuItems.push({
             key: "identify",
+            icon: <ActionIcon name="user" />,
             label: t("femme.billing.history.detail.sifen.identifyClientButton"),
             testId: "invoice-menu-identify",
             active: activePanel === "identify",
@@ -1689,6 +1699,7 @@ export function InvoiceDetailModal({
         if (canAssignProfessionals) {
           menuItems.push({
             key: "assign",
+            icon: <ActionIcon name="user" />,
             label: t("femme.billing.history.detail.assignProfessionals.button"),
             testId: "invoice-assign-professionals-button",
             onSelect: () => {
@@ -1700,6 +1711,7 @@ export function InvoiceDetailModal({
         if (sampleAvailable) {
           menuItems.push({
             key: "sample",
+            icon: <ActionIcon name="download" />,
             label: sampleKudeDownloading
               ? t("femme.billing.history.detail.sifen.kudeSampleDownloading")
               : t("femme.billing.history.detail.sifen.kudeSampleDownloadButton"),
@@ -1711,6 +1723,7 @@ export function InvoiceDetailModal({
         }
         menuItems.push({
           key: "tech",
+          icon: <ActionIcon name="code" />,
           label: t("femme.billing.history.detail.technicalDetail"),
           testId: "invoice-menu-technical-detail",
           active: activePanel === "tech",
@@ -1927,72 +1940,39 @@ export function InvoiceDetailModal({
                   {t("femme.billing.history.detail.share")}
                 </Button>
               )}
-              <div className="relative">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  aria-haspopup="menu"
-                  aria-expanded={menuOpen}
-                  aria-label={t("femme.billing.history.detail.moreActions")}
-                  data-testid="invoice-more-actions-button"
-                  onClick={() => {
-                    // Pressing "⋯" again dismisses what it opened: the menu, or the option picked
-                    // from it (and then the menu is back, ready to pick another option).
-                    if (menuOpen) {
-                      setMenuOpen(false);
-                    } else {
-                      if (menuPanelOpen) setActivePanel(null);
-                      setMenuOpen(true);
-                    }
-                  }}
-                >
-                  ⋯
-                </Button>
-              </div>
+              <MoreActionsMenu
+                label={t("femme.billing.history.detail.moreActions")}
+                open={menuOpen}
+                onOpenChange={setMenuOpen}
+                triggerTestId="invoice-more-actions-button"
+                menuTestId="invoice-more-actions-menu"
+                // Pressing it again dismisses what it opened: the menu, or the option picked from it
+                // (and then the menu is back, ready to pick another option).
+                onTriggerClick={() => {
+                  if (menuOpen) {
+                    setMenuOpen(false);
+                  } else {
+                    if (menuPanelOpen) setActivePanel(null);
+                    setMenuOpen(true);
+                  }
+                }}
+                items={menuItems.map((item) => ({
+                  id: item.key,
+                  label: item.label,
+                  icon: item.icon,
+                  testId: item.testId,
+                  hint: item.hint,
+                  hintTestId: item.hint ? "sifen-kude-sample-hint" : undefined,
+                  active: item.active,
+                  disabled: item.disabled,
+                  destructive: item.destructive,
+                  onSelect: item.onSelect,
+                }))}
+              />
               <Button variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
                 {t("femme.billing.history.detail.close")}
               </Button>
             </div>
-
-            {menuOpen && (
-              <ul
-                role="menu"
-                data-testid="invoice-more-actions-menu"
-                className="rounded-md border border-line bg-surface py-1"
-              >
-                {menuItems.map((item) => (
-                  <li key={item.key} role="none">
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-testid={item.testId}
-                      aria-pressed={item.active === undefined ? undefined : item.active}
-                      disabled={item.disabled}
-                      onClick={() => {
-                        setMenuOpen(false);
-                        item.onSelect();
-                      }}
-                      className="block min-h-11 w-full px-3 py-2 text-left text-sm hover:bg-primary-lt disabled:opacity-50"
-                    >
-                      {item.label}
-                      {item.active && (
-                        <span aria-hidden="true" className="ml-2 text-primary">
-                          ✓
-                        </span>
-                      )}
-                      {item.hint && (
-                        <span
-                          data-testid="sifen-kude-sample-hint"
-                          className="block text-xs text-ink-3"
-                        >
-                          {item.hint}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
 
             {/* Panels (the container keeps the testid the SIFEN specs already use) */}
             {wrapPanels(

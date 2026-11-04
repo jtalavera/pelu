@@ -1,5 +1,5 @@
 import { withDisplayNames } from "../lib/professionalDisplay";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -40,6 +40,8 @@ import { isPinSession } from "../auth/sharedDevice";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { billingStateForAppointment } from "../lib/appointmentBilling";
 import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { ActionIcon } from "../components/actionIcons";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
 import { createServiceRecordFromAppointment, getServiceRecord } from "../api/serviceRecords";
@@ -602,7 +604,7 @@ export default function CalendarPage() {
   };
 
   // Detail actions: ONE main next step by state, the rest behind "⋯".
-  type DetailAction = { key: string; label: string; run: () => void; danger?: boolean };
+  type DetailAction = { key: string; label: string; icon?: ReactNode; run: () => void; danger?: boolean };
   const apptEditable = detailAppt !== null && canModify(detailAppt);
   let primaryAction: { key: "confirm" | "start" | "charge" | "viewInvoice"; run: () => void } | null = null;
   const moreActions: DetailAction[] = [];
@@ -623,11 +625,12 @@ export default function CalendarPage() {
       primaryAction = { key: "charge", run: () => void chargeAppointment() };
     }
     if (apptEditable && EDITABLE_STATUSES.includes(st)) {
-      moreActions.push({ key: "edit", label: t("femme.calendar.detail.edit"), run: openEditForm });
+      moreActions.push({ key: "edit", label: t("femme.calendar.detail.edit"), icon: <ActionIcon name="edit" />, run: openEditForm });
     }
     if (detailAppt.clientId != null) {
       moreActions.push({
         key: "technical",
+        icon: <ActionIcon name="file" />,
         label: t("femme.clients.technicalSheet.open"),
         run: () => setTechnicalSheetClientId(detailAppt.clientId as number),
       });
@@ -635,6 +638,7 @@ export default function CalendarPage() {
     if (apptEditable && (st === "PENDING" || st === "CONFIRMED" || st === "IN_PROGRESS")) {
       moreActions.push({
         key: "complete",
+        icon: <ActionIcon name="check" />,
         label: t("femme.calendar.action.complete"),
         run: () => void applyStatus("COMPLETED"),
       });
@@ -642,6 +646,7 @@ export default function CalendarPage() {
     if (apptEditable && (st === "PENDING" || st === "CONFIRMED")) {
       moreActions.push({
         key: "noshow",
+        icon: <ActionIcon name="userX" />,
         label: t("femme.calendar.action.noShow"),
         run: () => void applyStatus("NO_SHOW"),
       });
@@ -649,6 +654,7 @@ export default function CalendarPage() {
     if (apptEditable && (st === "PENDING" || st === "CONFIRMED" || st === "IN_PROGRESS")) {
       moreActions.push({
         key: "cancel",
+        icon: <ActionIcon name="ban" />,
         label: t("femme.calendar.action.cancelAppointment"),
         run: openCancelDialog,
         danger: true,
@@ -1291,17 +1297,22 @@ export default function CalendarPage() {
               {t("femme.calendar.detail.close")}
             </Button>
             {moreActions.length > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="min-h-11 min-w-11 px-0 text-lg leading-none"
-                aria-label={t("femme.calendar.action.more")}
-                aria-expanded={moreOpen}
-                data-testid="calendar-more-actions"
-                onClick={() => setMoreOpen((o) => !o)}
-              >
-                ⋯
-              </Button>
+              <MoreActionsMenu
+                label={t("femme.calendar.action.more")}
+                open={moreOpen}
+                onOpenChange={setMoreOpen}
+                triggerTestId="calendar-more-actions"
+                menuTestId="calendar-actions-panel"
+                disabled={actionBusy}
+                items={moreActions.map((a) => ({
+                  id: a.key,
+                  label: a.label,
+                  icon: a.icon,
+                  destructive: a.danger,
+                  testId: `calendar-action-${a.key}`,
+                  onSelect: a.run,
+                }))}
+              />
             )}
             {primaryAction && (
               <Button
@@ -1376,23 +1387,6 @@ export default function CalendarPage() {
               <Row label={t("femme.calendar.detail.cancelReason")}>
                 {detailAppt.cancelReason}
               </Row>
-            )}
-            {moreOpen && moreActions.length > 0 && (
-              <div className="flex flex-col border-t border-line pt-2" data-testid="calendar-actions-panel">
-                {moreActions.map((a) => (
-                  <Button
-                    key={a.key}
-                    type="button"
-                    variant="ghost"
-                    disabled={actionBusy}
-                    data-testid={`calendar-action-${a.key}`}
-                    className={`min-h-11 justify-start ${a.danger ? "text-danger" : ""}`}
-                    onClick={a.run}
-                  >
-                    {a.label}
-                  </Button>
-                ))}
-              </div>
             )}
           </div>
         )}

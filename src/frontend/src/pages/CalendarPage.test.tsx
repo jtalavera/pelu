@@ -278,7 +278,7 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       const next = await screen.findByTestId("calendar-next-step");
       expect(next.textContent).toMatch(/confirm/i);
       await user.click(screen.getByTestId("calendar-more-actions"));
-      expect(await screen.findByRole("button", { name: /edit appointment/i })).toBeTruthy();
+      expect(await screen.findByRole("menuitem", { name: /edit appointment/i })).toBeTruthy();
       expect(screen.getByTestId("calendar-action-cancel")).toBeTruthy();
       expect(screen.getByTestId("calendar-action-noshow")).toBeTruthy();
     });
