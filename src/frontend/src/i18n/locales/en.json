@@ -3080,6 +3080,7 @@
       "colPrice": "Price",
       "lineServiceAria": "Service {{n}}",
       "lineProfessionalAria": "Professional {{n}}",
+      "viewInvoiceFor": "View invoice for {{client}}",
       "newRecord": "+ New record",
       "newTitle": "New service record",
       "searchPlaceholder": "Search by client or service",

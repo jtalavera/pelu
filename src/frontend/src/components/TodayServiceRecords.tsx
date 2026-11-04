@@ -13,6 +13,7 @@ import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayTime } from "../lib/paraguayDateTime";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
 import { initialsOf } from "../lib/initials";
+import { InvoiceDetailModal } from "./InvoiceDetailModal";
 import { SectionTitle } from "./SectionTitle";
 import { ServiceRecordDetailModal } from "./ServiceRecordDetailModal";
 
@@ -58,6 +59,7 @@ export function TodayServiceRecords({
   const [visible, setVisible] = useState(CAP);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [notice, setNotice] = useState<"updated" | "voided" | null>(null);
+  const [invoiceId, setInvoiceId] = useState<number | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -86,6 +88,17 @@ export function TodayServiceRecords({
   );
   const openCount = records.filter((r) => r.status === "OPEN").length;
   const shown = sorted.slice(0, visible);
+
+  async function openInvoice(id: number) {
+    setPayError(null);
+    try {
+      const record = await getServiceRecord(id);
+      if (record.invoiceId != null) setInvoiceId(record.invoiceId);
+      else setSelectedId(id);
+    } catch (err) {
+      setPayError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    }
+  }
 
   async function pay(id: number) {
     setPayError(null);
@@ -196,6 +209,16 @@ export function TodayServiceRecords({
                         {t("femme.serviceRecords.pay")}
                       </button>
                     )
+                  ) : r.status === "CLOSED" && !professionalMode ? (
+                    <button
+                      type="button"
+                      data-testid={`dashboard-service-record-invoice-${r.id}`}
+                      aria-label={t("femme.serviceRecords.viewInvoiceFor", { client: clientName })}
+                      onClick={() => void openInvoice(r.id)}
+                      className="pointer-events-auto relative rounded-full bg-success-lt px-2.5 text-xs font-bold text-success underline-offset-2 after:absolute after:-inset-x-1 after:-inset-y-[7px] after:content-[''] hover:underline"
+                    >
+                      {t("femme.serviceRecords.statusClosed")}
+                    </button>
                   ) : (
                     <span
                       className={`rounded-full px-2.5 text-xs font-bold ${
@@ -257,6 +280,17 @@ export function TodayServiceRecords({
         >
           {t("femme.serviceRecords.dashboard.viewHistory")}
         </Link>
+      ) : null}
+
+      {invoiceId !== null ? (
+        <InvoiceDetailModal
+          invoiceId={invoiceId}
+          onClose={() => setInvoiceId(null)}
+          onVoided={() => {
+            setInvoiceId(null);
+            load();
+          }}
+        />
       ) : null}
 
       {selectedId !== null ? (

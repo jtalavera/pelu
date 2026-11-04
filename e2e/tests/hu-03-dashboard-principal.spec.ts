@@ -22,13 +22,15 @@ test.describe("HU-03 · Dashboard principal", () => {
     await expect(page.getByText("Clients this month", { exact: true })).toHaveCount(0);
   });
 
-  test("HU-03 · 2 accesos rápidos a calendario y nueva cita", async ({ page }) => {
+  test("HU-03 · 2 accesos rápidos a calendario y nueva cita (el formulario abre en Inicio)", async ({ page }) => {
     await loginAsDemo(page);
     await page.getByRole("link", { name: "View agenda →" }).click();
     await expect(page).toHaveURL(/\/app\/calendar/);
     await page.goto("/app");
     await page.getByRole("button", { name: "+ New appointment" }).first().click();
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    // The booking form opens right on Inicio: no navigation to the Agenda.
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/?$/);
   });
 
   test("HU-03 · 4 estado vacío cuando no hay citas hoy", async ({ page }) => {
