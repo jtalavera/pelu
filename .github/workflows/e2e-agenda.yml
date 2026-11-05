@@ -1,4 +1,4 @@
-name: E2E · Agenda e Inicio
+name: E2E · Agenda, Inicio y filtros con fecha
 
 on:
   pull_request:
@@ -74,6 +74,7 @@ jobs:
           tests/ficha-detalle-y-nuevo-turno-look.spec.ts
           tests/turnos-duracion-apodo.spec.ts
           tests/ajustes-estado-y-turnos-cliente.spec.ts
+          tests/filtros-fecha-un-anio.spec.ts
 
       - name: Upload report on failure
         if: failure()
