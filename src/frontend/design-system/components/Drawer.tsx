@@ -1,6 +1,7 @@
 import { useEffect, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
+import { lockBodyScroll } from "../lib/bodyScrollLock";
 import { Button } from "./Button";
 
 export type DrawerProps = {
@@ -30,13 +31,14 @@ export function Drawer({
       if (e.key === "Escape") onClose?.();
     };
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  // Page scroll lock shared by every open dialog (depends only on `open`, never on `onClose`).
+  useEffect(() => {
+    if (!open) return;
+    return lockBodyScroll();
+  }, [open]);
 
   if (!open) return null;
 
