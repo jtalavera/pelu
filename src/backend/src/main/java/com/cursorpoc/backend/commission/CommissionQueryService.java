@@ -9,6 +9,7 @@ import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.repository.CommissionEntryRepository;
 import com.cursorpoc.backend.repository.CommissionSettlementRepository;
 import com.cursorpoc.backend.repository.CommissionSettlementStatusChangeRepository;
+import com.cursorpoc.backend.service.SearchRangeLimits;
 import com.cursorpoc.backend.web.dto.CommissionDtos.EntryView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.LineWithoutBeneficiary;
 import com.cursorpoc.backend.web.dto.CommissionDtos.MyEntryView;
@@ -83,8 +84,13 @@ public class CommissionQueryService {
     ZoneId zone = configService.zone();
     PeriodInfo period = configService.currentPeriod(ledger.snapshot(tenantId), Instant.now());
     LocalDate today = LocalDate.now(zone);
+    if (from != null) {
+      SearchRangeLimits.resolveFrom(from, zone, SearchRangeLimits.TOO_OLD);
+    }
     LocalDate f =
-        from != null ? from : period.from() != null ? period.from() : today.withDayOfMonth(1);
+        from != null
+            ? from
+            : period.from() != null ? period.from() : today.minusMonths(1);
     LocalDate t = to != null ? to : period.to() != null ? period.to() : today;
     if (t.isBefore(f)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_PERIOD_INVALID");
@@ -152,6 +158,8 @@ public class CommissionQueryService {
       int page,
       int size) {
     Map<Long, String> names = configService.professionalNames(tenantId);
+    LocalDate fromLimit =
+        SearchRangeLimits.resolveFrom(from, configService.zone(), SearchRangeLimits.TOO_OLD);
     List<CommissionSettlement> all =
         settlementRepository.findByTenantIdOrderByPeriodFromDescIdDesc(tenantId).stream()
             .filter(
@@ -160,7 +168,7 @@ public class CommissionQueryService {
                         || professionalIds.isEmpty()
                         || professionalIds.contains(s.getProfessionalId()))
             .filter(s -> status == null || status.isBlank() || s.getStatus().name().equals(status))
-            .filter(s -> from == null || !s.getPeriodTo().isBefore(from))
+            .filter(s -> !s.getPeriodTo().isBefore(fromLimit))
             .filter(s -> to == null || !s.getPeriodFrom().isAfter(to))
             .toList();
     int safeSize = Math.max(1, Math.min(size, 100));
@@ -312,7 +320,10 @@ public class CommissionQueryService {
     Long single = ids.size() == 1 ? ids.get(0) : null;
     ZoneId zone = configService.zone();
     Instant fromI =
-        (from != null ? from : LocalDate.now(zone).withDayOfMonth(1))
+        SearchRangeLimits.resolveFrom(
+                from != null ? from : LocalDate.now(zone).minusMonths(1),
+                zone,
+                SearchRangeLimits.TOO_OLD)
             .atStartOfDay(zone)
             .toInstant();
     Instant toI =
@@ -351,7 +362,7 @@ public class CommissionQueryService {
       String kind,
       String settlementState) {
     ZoneId zone = configService.zone();
-    LocalDate f = from != null ? from : LocalDate.now(zone).withDayOfMonth(1);
+    LocalDate f = from != null ? from : LocalDate.now(zone).minusMonths(1);
     LocalDate t = to != null ? to : LocalDate.now(zone);
     List<EntryView> entries =
         entries(
@@ -425,7 +436,10 @@ public class CommissionQueryService {
       long tenantId, LocalDate from, LocalDate to) {
     ZoneId zone = configService.zone();
     Instant fromI =
-        (from != null ? from : LocalDate.now(zone).withDayOfMonth(1))
+        SearchRangeLimits.resolveFrom(
+                from != null ? from : LocalDate.now(zone).minusMonths(1),
+                zone,
+                SearchRangeLimits.TOO_OLD)
             .atStartOfDay(zone)
             .toInstant();
     Instant toI =

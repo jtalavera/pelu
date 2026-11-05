@@ -147,7 +147,9 @@ public class AuditLogService {
   @Transactional(readOnly = true)
   public PageResponse<AuditLogResponse> search(
       Long tenantId, String from, String to, String resource, String q, int page, int size) {
-    Instant fromInstant = parseDayStart(from);
+    Instant fromInstant =
+        SearchRangeLimits.resolveFrom(
+            parseDayStart(from), timeProperties.zoneId(), SearchRangeLimits.TOO_OLD);
     // "to" is a calendar day, inclusive: everything before the start of the next day.
     Instant toInstant = parseDayStart(to) == null ? null : parseDayStart(to).plusSeconds(86_400);
     if (fromInstant != null && toInstant != null && !fromInstant.isBefore(toInstant)) {

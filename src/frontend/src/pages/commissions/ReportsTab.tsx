@@ -17,7 +17,7 @@ import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { AssignLineDialog } from "./AssignLineDialog";
-import { firstOfMonthYmd, todayYmd, useProfessionals } from "./common";
+import { oneMonthAgoYmd, todayYmd, useProfessionals } from "./common";
 
 type Group = "byProfessional" | "byItem" | "byKind" | "byPeriod";
 const GROUPS: Group[] = ["byProfessional", "byItem", "byKind", "byPeriod"];
@@ -63,7 +63,7 @@ export function ReportsTab() {
   const { t, i18n } = useTranslation();
   const dateLocale = useDateLocale();
   const professionals = useProfessionals();
-  const [from, setFrom] = useState(firstOfMonthYmd());
+  const [from, setFrom] = useState(oneMonthAgoYmd());
   const [to, setTo] = useState(todayYmd());
   const [professionalId, setProfessionalId] = useState("");
   const [kind, setKind] = useState("");

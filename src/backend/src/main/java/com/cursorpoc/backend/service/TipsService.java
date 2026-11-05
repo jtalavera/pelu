@@ -28,6 +28,7 @@ import com.cursorpoc.backend.web.dto.TipReportRowResponse;
 import com.cursorpoc.backend.web.dto.TipWithdrawalHistoryItemResponse;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -77,6 +78,8 @@ public class TipsService {
   @Transactional(readOnly = true)
   public TipReportResponse getReport(
       long tenantId, Instant fromDate, Instant toDate, List<Long> professionalIds) {
+    fromDate =
+        SearchRangeLimits.resolveFrom(fromDate, ZoneId.systemDefault(), SearchRangeLimits.TOO_OLD);
     List<Long> resolvedProfessionalIds = resolveProfessionalIds(tenantId, professionalIds);
     if (resolvedProfessionalIds.isEmpty()) {
       return new TipReportResponse(

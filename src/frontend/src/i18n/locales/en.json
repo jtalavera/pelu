@@ -1795,7 +1795,7 @@
         "rangeErrorIncomplete": "Select both a start and end date.",
         "rangeErrorInvalidOrder": "The start date must be before the end date.",
         "rangeErrorTooLong": "The date range cannot exceed 31 days (inclusive).",
-        "rangeErrorTooOld": "The start date cannot be more than 6 months in the past.",
+        "rangeErrorTooOld": "The start date cannot be more than 1 year in the past.",
         "viewDetail": "View",
         "openDetail": "Open invoice #{{invoiceNumber}}",
         "detail": {
@@ -2040,7 +2040,7 @@
         "filterStatusClosed": "Closed",
         "rangeErrorIncomplete": "Select both a start and end date.",
         "rangeErrorInvalidOrder": "The start date must be before the end date.",
-        "rangeErrorTooOld": "The start date cannot be more than 6 months in the past."
+        "rangeErrorTooOld": "The start date cannot be more than 1 year in the past."
       },
       "movements": {
         "afterClose": "After close",
@@ -2582,7 +2582,8 @@
       "INVOICE_LIST_RANGE_INCOMPLETE": "Both start and end dates are required.",
       "INVOICE_LIST_INVALID_RANGE": "The start date must be before the end date.",
       "INVOICE_LIST_RANGE_EXCEEDS_ONE_MONTH": "The date range cannot exceed 31 days (inclusive).",
-      "INVOICE_LIST_RANGE_TOO_OLD": "The start date cannot be more than 6 months in the past.",
+      "DATE_RANGE_TOO_OLD": "The start date cannot be more than 1 year in the past.",
+      "INVOICE_LIST_RANGE_TOO_OLD": "The start date cannot be more than 1 year in the past.",
       "INVOICE_ISSUE_DATE_OUT_OF_RANGE": "The issue date must be backdated at most 30 days and future-dated at most 5 days from now.",
       "INVOICE_ISSUE_DATE_INVALID": "The issue date is not valid.",
       "INVOICE_NOT_FOUND": "Invoice not found.",
@@ -2633,7 +2634,7 @@
       "TIP_PROFESSIONAL_NOT_IN_LINES": "Tips can only be entered for professionals who performed a service on this record.",
       "SERVICE_RECORD_LIST_RANGE_INCOMPLETE": "Both start and end dates are required.",
       "SERVICE_RECORD_LIST_INVALID_RANGE": "The start date must be before the end date.",
-      "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "The start date cannot be more than 6 months in the past.",
+      "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "The start date cannot be more than 1 year in the past.",
       "STOCK_MODULE_DISABLED": "This salon does not have the Stock module enabled.",
       "STOCK_NOT_CONFIGURED": "The Stock integration is not configured yet. Contact support.",
       "STOCK_OUTBOX_EVENT_NOT_FOUND": "That Stock delivery no longer exists.",
@@ -3086,7 +3087,7 @@
       "searchPlaceholder": "Search by client or service",
       "chips": { "group": "Filter records", "open": "Open", "today": "Today", "all": "All" },
       "filters": "Filters",
-      "filtersHint": "Records up to 6 months back are shown.",
+      "filtersHint": "Records up to 1 year back are shown.",
       "statusOpen": "Open",
       "statusClosed": "Paid",
       "statusVoided": "Voided",
@@ -3172,7 +3173,7 @@
         "openDetail": "Open service record for {{client}}",
         "rangeErrorIncomplete": "Select both a start and end date.",
         "rangeErrorInvalidOrder": "The start date must be before the end date.",
-        "rangeErrorTooOld": "The start date cannot be more than 6 months in the past."
+        "rangeErrorTooOld": "The start date cannot be more than 1 year in the past."
       },
       "pro": {
         "myAppointments": "My appointments today",

@@ -24,6 +24,7 @@ import { ServiceRecordEditor } from "../components/ServiceRecordEditor";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { SearchInput } from "../components/ui/SearchInput";
 import { useDateLocale } from "../i18n/dateLocale";
+import { defaultSearchRange, isFromOlderThanOneYear } from "../lib/dateRange";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
@@ -44,15 +45,9 @@ type NavState = {
 type Chip = "open" | "today" | "all";
 type Notice = "created" | "updated" | "voided";
 
-const fmtYmd = (dt: Date) =>
-  `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-
-/** Local calendar dates: 6 months ago through today. */
+/** Local calendar dates: one month ago through today. */
 function getDefaultHistoryDateRange(): { from: string; to: string } {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
-  return { from: fmtYmd(sixMonthsAgo), to: fmtYmd(today) };
+  return defaultSearchRange();
 }
 
 function presetFilters(chip: Chip): { from: string; to: string; status: string } {
@@ -60,15 +55,6 @@ function presetFilters(chip: Chip): { from: string; to: string; status: string }
   if (chip === "today") return { from: def.to, to: def.to, status: "" };
   if (chip === "open") return { ...def, status: "OPEN" };
   return { ...def, status: "" };
-}
-
-function isFromOlderThan6Months(fromYmd: string): boolean {
-  const [fy, fm, fd] = fromYmd.split("-").map(Number);
-  const fromDate = new Date(fy, fm - 1, fd);
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-  sixMonthsAgo.setHours(0, 0, 0, 0);
-  return fromDate < sixMonthsAgo;
 }
 
 function localDateYmdToIsoStart(ymd: string): string {
@@ -84,7 +70,7 @@ function localDateYmdToIsoEnd(ymd: string): string {
 function historyRangeErrorKey(from: string, to: string): string | null {
   if (!from.trim() || !to.trim()) return "incomplete";
   if (from > to) return "invalidOrder";
-  if (isFromOlderThan6Months(from)) return "tooOld";
+  if (isFromOlderThanOneYear(from)) return "tooOld";
   return null;
 }
 

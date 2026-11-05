@@ -1795,7 +1795,7 @@
         "rangeErrorIncomplete": "Elegí fecha desde y hasta.",
         "rangeErrorInvalidOrder": "La fecha desde tiene que ser anterior a la fecha hasta.",
         "rangeErrorTooLong": "El rango de fechas no puede superar 31 días (incluidos).",
-        "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 6 meses.",
+        "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 1 año.",
         "viewDetail": "Ver",
         "openDetail": "Abrir comprobante #{{invoiceNumber}}",
         "detail": {
@@ -2040,7 +2040,7 @@
         "filterStatusClosed": "Cerrada",
         "rangeErrorIncomplete": "Elegí fecha desde y hasta.",
         "rangeErrorInvalidOrder": "La fecha desde tiene que ser anterior a la fecha hasta.",
-        "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 6 meses."
+        "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 1 año."
       },
       "movements": {
         "afterClose": "Posterior al cierre",
@@ -2584,7 +2584,8 @@
       "INVOICE_LIST_RANGE_INCOMPLETE": "Tenés que indicar fecha desde y fecha hasta.",
       "INVOICE_LIST_INVALID_RANGE": "La fecha desde tiene que ser anterior a la fecha hasta.",
       "INVOICE_LIST_RANGE_EXCEEDS_ONE_MONTH": "El rango de fechas no puede superar 31 días (incluidos).",
-      "INVOICE_LIST_RANGE_TOO_OLD": "La fecha de inicio no puede ser anterior a 6 meses.",
+      "DATE_RANGE_TOO_OLD": "La fecha de inicio no puede ser anterior a 1 año.",
+      "INVOICE_LIST_RANGE_TOO_OLD": "La fecha de inicio no puede ser anterior a 1 año.",
       "INVOICE_ISSUE_DATE_OUT_OF_RANGE": "La fecha de emisión debe estar atrasada hasta 30 días y adelantada hasta 5 días respecto de hoy.",
       "INVOICE_ISSUE_DATE_INVALID": "La fecha de emisión no es válida.",
       "INVOICE_NOT_FOUND": "Factura no encontrada.",
@@ -2633,7 +2634,7 @@
       "TIP_PROFESSIONAL_NOT_IN_LINES": "Solo se pueden cargar propinas para profesionales que realizaron un servicio en esta ficha.",
       "SERVICE_RECORD_LIST_RANGE_INCOMPLETE": "Elegí fecha desde y hasta.",
       "SERVICE_RECORD_LIST_INVALID_RANGE": "La fecha desde tiene que ser anterior a la fecha hasta.",
-      "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "La fecha de inicio no puede ser anterior a 6 meses.",
+      "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "La fecha de inicio no puede ser anterior a 1 año.",
       "STOCK_MODULE_DISABLED": "Este salón no tiene habilitado el módulo Stock.",
       "STOCK_NOT_CONFIGURED": "La integración con Stock todavía no está configurada. Contactá a soporte.",
       "STOCK_OUTBOX_EVENT_NOT_FOUND": "Ese envío a Stock ya no existe.",
@@ -3086,7 +3087,7 @@
       "searchPlaceholder": "Buscar por cliente o servicio",
       "chips": { "group": "Filtrar fichas", "open": "Abiertas", "today": "Hoy", "all": "Todas" },
       "filters": "Filtros",
-      "filtersHint": "Se muestran fichas de hasta 6 meses atrás.",
+      "filtersHint": "Se muestran fichas de hasta 1 año atrás.",
       "statusOpen": "Abierta",
       "statusClosed": "Cobrada",
       "statusVoided": "Anulada",
@@ -3172,7 +3173,7 @@
         "openDetail": "Abrir ficha de {{client}}",
         "rangeErrorIncomplete": "Elegí fecha desde y hasta.",
         "rangeErrorInvalidOrder": "La fecha desde tiene que ser anterior a la fecha hasta.",
-        "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 6 meses."
+        "rangeErrorTooOld": "La fecha de inicio no puede ser anterior a 1 año."
       },
       "pro": {
         "myAppointments": "Mis turnos de hoy",

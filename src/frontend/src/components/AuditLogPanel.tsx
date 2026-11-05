@@ -4,6 +4,7 @@ import { Alert, Button, Input, Label, PageSizeSelect, Pagination, Select, Spinne
 import { listAuditLog, type AuditLogRow } from "../api/audit";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { useDateLocale } from "../i18n/dateLocale";
+import { oneMonthAgoYmd } from "../lib/dateRange";
 
 /** Resources the "Qué" filter offers (the first literal segment of the audited endpoints). */
 const SALON_RESOURCES = [
@@ -31,6 +32,11 @@ const VERB_BY_METHOD: Record<string, string> = {
   DELETE: "delete",
 };
 
+/** «Desde» starts one month back; «Hasta» stays open so the latest entries always show. */
+function defaultAuditFilters() {
+  return { from: oneMonthAgoYmd(), to: "", resource: "", q: "" };
+}
+
 /**
  * Issue #284: the audit trail ("quién hizo qué"), newest first. Two modes, one component:
  *  - **salon** (default): the administrator's own salon only (`GET /api/audit`);
@@ -52,8 +58,8 @@ export function AuditLogPanel({ platform = false }: { platform?: boolean }) {
   // Applied filters (what the last search used) vs. the form's draft values.
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
-  const [applied, setApplied] = useState({ from: "", to: "", resource: "", q: "" });
-  const [draft, setDraft] = useState({ from: "", to: "", resource: "", q: "" });
+  const [applied, setApplied] = useState(defaultAuditFilters);
+  const [draft, setDraft] = useState(defaultAuditFilters);
   const [rangeError, setRangeError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -88,10 +94,10 @@ export function AuditLogPanel({ platform = false }: { platform?: boolean }) {
   }
 
   function onClear() {
-    const empty = { from: "", to: "", resource: "", q: "" };
+    const defaults = defaultAuditFilters();
     setRangeError(null);
-    setDraft(empty);
-    setApplied(empty);
+    setDraft(defaults);
+    setApplied(defaults);
     setPage(0);
   }
 

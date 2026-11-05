@@ -21,6 +21,7 @@ import com.cursorpoc.backend.web.dto.CashSessionResponse;
 import com.cursorpoc.backend.web.dto.PagedCashSessionsResponse;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -170,6 +171,8 @@ public class CashSessionService {
       String q,
       int page,
       int size) {
+    fromDate =
+        SearchRangeLimits.resolveFrom(fromDate, ZoneId.systemDefault(), SearchRangeLimits.TOO_OLD);
     Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, Math.min(size, 200)));
     String statusTrimmed = status != null && !status.isBlank() ? status.trim() : null;
     String qTrimmed = q != null && !q.isBlank() ? q.trim() : null;
