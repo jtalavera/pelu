@@ -105,8 +105,8 @@ public class InvoiceService implements ApplicationEventPublisherAware {
    */
   private static final BigDecimal CLIENT_IDENTIFICATION_THRESHOLD = new BigDecimal("7000000");
 
-  /** Maximum inclusive calendar months that date filters may span (6 months = ~180 days). */
-  public static final int MAX_INVOICE_LIST_MONTHS = 6;
+  /** Maximum inclusive calendar months that date filters may span (12 months = one year). */
+  public static final int MAX_INVOICE_LIST_MONTHS = 12;
 
   /**
    * Issue #174 AC-04: SIFEN technical limits for the emission date of a DE — it may be backdated up
@@ -960,19 +960,18 @@ public class InvoiceService implements ApplicationEventPublisherAware {
    * Resolves the effective date range for invoice list queries.
    *
    * <ul>
-   *   <li>Both dates null → default to last {@value MAX_INVOICE_LIST_MONTHS} months.
+   *   <li>Both dates null → default to the last {@value MAX_INVOICE_LIST_MONTHS} months.
    *   <li>Only one of from/to → 400 INVOICE_LIST_RANGE_INCOMPLETE.
    *   <li>from after to → 400 INVOICE_LIST_INVALID_RANGE.
-   *   <li>from older than 6 months ago → 400 INVOICE_LIST_RANGE_TOO_OLD.
+   *   <li>from older than one year → 400 INVOICE_LIST_RANGE_TOO_OLD.
    * </ul>
    */
   static Instant[] resolveInvoiceListRange(Instant from, Instant to, Long clientId) {
     ZoneId zone = ZoneId.systemDefault();
     if (from == null && to == null) {
       LocalDate today = LocalDate.now(zone);
-      Instant start = today.minusMonths(MAX_INVOICE_LIST_MONTHS).atStartOfDay(zone).toInstant();
       Instant end = today.atTime(LocalTime.of(23, 59, 59, 999_000_000)).atZone(zone).toInstant();
-      return new Instant[] {start, end};
+      return new Instant[] {SearchRangeLimits.floorInstant(zone), end};
     }
     if (from == null || to == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_LIST_RANGE_INCOMPLETE");
@@ -980,18 +979,10 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     if (from.isAfter(to)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_LIST_INVALID_RANGE");
     }
-    // Reject from-dates older than 6 months, with one day of tolerance: the browser sends its own
-    // local midnight, and around midnight the server's "today" (UTC) can already be a day ahead.
-    Instant sixMonthsAgo =
-        LocalDate.now(zone)
-            .minusMonths(MAX_INVOICE_LIST_MONTHS)
-            .minusDays(1)
-            .atStartOfDay(zone)
-            .toInstant();
-    if (from.isBefore(sixMonthsAgo)) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_LIST_RANGE_TOO_OLD");
-    }
-    return new Instant[] {from, to};
+    // Nothing older than one year is returned (one day of timezone tolerance on «from»).
+    return new Instant[] {
+      SearchRangeLimits.resolveFrom(from, zone, "INVOICE_LIST_RANGE_TOO_OLD"), to
+    };
   }
 
   @Transactional(readOnly = true)

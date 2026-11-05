@@ -132,6 +132,8 @@ export type TenantSnapshot = {
 /** `Instant.parse`-compatible bounds wide enough to capture every row regardless of clock. */
 const WIDE_FROM = "2000-01-01T00:00:00Z";
 const WIDE_TO = "2100-01-01T00:00:00Z";
+/** Tips report: searches never reach back more than one year, so «wide» starts just inside it. */
+const TIPS_FROM = new Date(Date.now() - 360 * 24 * 3600_000).toISOString();
 
 const numAsc = (a: number, b: number) => a - b;
 
@@ -179,7 +181,7 @@ export async function snapshotTenant(
   const tipsRes = await rawGet(
     request,
     token,
-    `/api/propinas/report?from=${WIDE_FROM}&to=${WIDE_TO}`,
+    `/api/propinas/report?from=${TIPS_FROM}&to=${WIDE_TO}`,
   );
   expect(
     tipsRes.status,

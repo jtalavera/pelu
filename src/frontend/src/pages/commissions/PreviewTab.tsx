@@ -8,7 +8,7 @@ import { LocalizedDateInput } from "../../components/LocalizedDateInput";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
-import { firstOfMonthYmd, formatPercent, todayYmd, useProfessionals } from "./common";
+import { oneMonthAgoYmd, formatPercent, todayYmd, useProfessionals } from "./common";
 
 /**
  * Replaces the old simulator: how much a professional would be paid today for an open period,
@@ -19,7 +19,7 @@ export function PreviewTab() {
   const dateLocale = useDateLocale();
   const professionals = useProfessionals();
   const [professionalId, setProfessionalId] = useState("");
-  const [from, setFrom] = useState(firstOfMonthYmd());
+  const [from, setFrom] = useState(oneMonthAgoYmd());
   const [to, setTo] = useState(todayYmd());
   const [preview, setPreview] = useState<SettlementPreview | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);

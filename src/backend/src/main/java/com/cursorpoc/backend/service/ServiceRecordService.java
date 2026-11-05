@@ -54,7 +54,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class ServiceRecordService {
 
   /** Maximum inclusive calendar months that date filters may span (mirrors invoice history). */
-  public static final int MAX_LIST_MONTHS = 6;
+  public static final int MAX_LIST_MONTHS = 12;
 
   private final ServiceRecordRepository serviceRecordRepository;
   private final ClientRepository clientRepository;
@@ -376,9 +376,8 @@ public class ServiceRecordService {
     ZoneId zone = ZoneId.systemDefault();
     if (from == null && to == null) {
       LocalDate today = LocalDate.now(zone);
-      Instant start = today.minusMonths(MAX_LIST_MONTHS).atStartOfDay(zone).toInstant();
       Instant end = today.atTime(LocalTime.of(23, 59, 59, 999_000_000)).atZone(zone).toInstant();
-      return new Instant[] {start, end};
+      return new Instant[] {SearchRangeLimits.floorInstant(zone), end};
     }
     if (from == null || to == null) {
       throw new ResponseStatusException(
@@ -388,19 +387,10 @@ public class ServiceRecordService {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "SERVICE_RECORD_LIST_INVALID_RANGE");
     }
-    // One day of tolerance: the browser sends its own local midnight, and around midnight the
-    // server's "today" (UTC) can already be a day ahead of the user's.
-    Instant sixMonthsAgo =
-        LocalDate.now(zone)
-            .minusMonths(MAX_LIST_MONTHS)
-            .minusDays(1)
-            .atStartOfDay(zone)
-            .toInstant();
-    if (from.isBefore(sixMonthsAgo)) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "SERVICE_RECORD_LIST_RANGE_TOO_OLD");
-    }
-    return new Instant[] {from, to};
+    // Nothing older than one year is returned (one day of timezone tolerance on «from»).
+    return new Instant[] {
+      SearchRangeLimits.resolveFrom(from, zone, "SERVICE_RECORD_LIST_RANGE_TOO_OLD"), to
+    };
   }
 
   private Client requireClient(long tenantId, Long clientId) {

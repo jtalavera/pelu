@@ -8,7 +8,7 @@ import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ReassignDialog } from "./ReassignDialog";
-import { SettlementStatusBadge, firstOfMonthYmd, formatPercent, todayYmd, useProfessionals } from "./common";
+import { SettlementStatusBadge, oneMonthAgoYmd, formatPercent, todayYmd, useProfessionals } from "./common";
 
 const initials = (name: string | null) =>
   (name ?? "?")
@@ -23,7 +23,7 @@ export function MovementsTab() {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const professionals = useProfessionals();
-  const [from, setFrom] = useState(firstOfMonthYmd());
+  const [from, setFrom] = useState(oneMonthAgoYmd());
   const [to, setTo] = useState(todayYmd());
   const [professionalIds, setProfessionalIds] = useState<number[]>([]);
   const [query, setQuery] = useState("");
@@ -50,7 +50,7 @@ export function MovementsTab() {
 
   /** Back to the defaults (this month, every professional, no text) and search again. */
   function clearFilters() {
-    const defaults = { from: firstOfMonthYmd(), to: todayYmd(), professionalIds: [] as number[] };
+    const defaults = { from: oneMonthAgoYmd(), to: todayYmd(), professionalIds: [] as number[] };
     setFrom(defaults.from);
     setTo(defaults.to);
     setProfessionalIds(defaults.professionalIds);

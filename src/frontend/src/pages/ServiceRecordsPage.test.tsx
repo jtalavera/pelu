@@ -170,7 +170,7 @@ describe("ServiceRecordsPage", () => {
     expect(screen.getByLabelText(/^from$/i)).toBeTruthy();
     expect(screen.getByLabelText(/^to$/i)).toBeTruthy();
     expect(screen.getByLabelText(/^status$/i)).toBeTruthy();
-    expect(screen.getByText(/up to 6 months back/i)).toBeTruthy();
+    expect(screen.getByText(/up to 1 year back/i)).toBeTruthy();
   });
 
   it("shows a friendly empty state when nothing is open", async () => {

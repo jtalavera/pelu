@@ -34,15 +34,7 @@ export function parsePercentInput(raw: string): string | null {
   return s;
 }
 
-export function todayYmd(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-export function firstOfMonthYmd(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
+export { todayYmd, oneMonthAgoYmd } from "../../lib/dateRange";
 
 export function SettlementStatusBadge({ status }: { status: string | null }) {
   const { t } = useTranslation();

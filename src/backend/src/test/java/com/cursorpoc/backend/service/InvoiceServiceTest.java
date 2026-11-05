@@ -1237,13 +1237,13 @@ class InvoiceServiceTest {
   }
 
   @Test
-  void resolveInvoiceListRange_rejectsFromOlderThan6Months() {
+  void resolveInvoiceListRange_rejectsFromOlderThanOneYear() {
     ZoneId z = ZoneId.systemDefault();
     // A date well outside the 6-month window
-    Instant from = LocalDate.now(z).minusMonths(7).atStartOfDay(z).toInstant();
+    Instant from = LocalDate.now(z).minusMonths(13).atStartOfDay(z).toInstant();
     Instant to =
         LocalDate.now(z)
-            .minusMonths(7)
+            .minusMonths(13)
             .plusDays(5)
             .atTime(23, 59, 59, 999_000_000)
             .atZone(z)
@@ -1260,9 +1260,9 @@ class InvoiceServiceTest {
   @Test
   void resolveInvoiceListRange_toleratesOneDayOfTimezoneSkewAtTheSixMonthLimit() {
     ZoneId z = ZoneId.systemDefault();
-    LocalDate limit = LocalDate.now(z).minusMonths(6);
+    LocalDate limit = LocalDate.now(z).minusYears(1);
     Instant to = LocalDate.now(z).atTime(23, 59, 59).atZone(z).toInstant();
-    // The user's local "6 months ago" can be one day earlier than the server's.
+    // The user's local "one year ago" can be one day earlier than the server's.
     Instant oneDayEarlier = limit.minusDays(1).atStartOfDay(z).toInstant();
     assertThat(InvoiceService.resolveInvoiceListRange(oneDayEarlier, to, null)).isNotNull();
     Instant twoDaysEarlier = limit.minusDays(2).atStartOfDay(z).toInstant();
@@ -1287,7 +1287,7 @@ class InvoiceServiceTest {
     ZoneId z = ZoneId.systemDefault();
     LocalDate d0 = r[0].atZone(z).toLocalDate();
     LocalDate d1 = r[1].atZone(z).toLocalDate();
-    // Default from = 6 months ago (start of that day), to = today end
+    // Default from = one year ago (start of that day), to = today end
     assertThat(d0).isEqualTo(LocalDate.now(z).minusMonths(InvoiceService.MAX_INVOICE_LIST_MONTHS));
     assertThat(d1).isEqualTo(LocalDate.now(z));
   }

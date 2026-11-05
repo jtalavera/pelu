@@ -1,3 +1,4 @@
+import { oneMonthAgoYmd } from "../lib/dateRange";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -74,6 +75,15 @@ describe("AuditLogPanel (Issue #284 · quién hizo qué)", () => {
     expect(femmeJsonMock.mock.calls[0][0]).toMatch(/^\/api\/audit\?/);
   });
 
+  it("«Desde» starts one month back and «Hasta» stays open", async () => {
+    femmeJsonMock.mockResolvedValue(page([row()]));
+    renderPanel();
+    await screen.findAllByTestId("audit-row");
+    const url = String(femmeJsonMock.mock.calls[0][0]);
+    expect(url).toContain(`from=${oneMonthAgoYmd()}`);
+    expect(url).not.toContain("to=");
+  });
+
   it("the root view shows the business of each row and uses the platform endpoint", async () => {
     femmeJsonMock.mockResolvedValue(page([row(), row({ id: 2, tenantId: null, tenantName: null, userRole: "PLATFORM_ADMIN", userEmail: "root@pelu" })]));
     renderPanel(true);
@@ -92,6 +102,7 @@ describe("AuditLogPanel (Issue #284 · quién hizo qué)", () => {
 
     await userEvent.click(screen.getByTestId("audit-filters-toggle"));
     await userEvent.type(screen.getByLabelText("User"), "ana{Enter}");
+    await userEvent.clear(screen.getByLabelText("From"));
     await userEvent.type(screen.getByLabelText("From"), "2026-10-01");
     await userEvent.selectOptions(screen.getByLabelText("What"), "invoices");
     await userEvent.click(screen.getByTestId("audit-search"));
@@ -108,7 +119,8 @@ describe("AuditLogPanel (Issue #284 · quién hizo qué)", () => {
     await waitFor(() => {
       const url = String(femmeJsonMock.mock.calls[femmeJsonMock.mock.calls.length - 1]?.[0]);
       expect(url).not.toContain("q=");
-      expect(url).not.toContain("from=");
+      // «Desde» goes back to its default: one month ago.
+      expect(url).toContain(`from=${oneMonthAgoYmd()}`);
     });
   });
 
@@ -119,6 +131,7 @@ describe("AuditLogPanel (Issue #284 · quién hizo qué)", () => {
     const calls = femmeJsonMock.mock.calls.length;
 
     await userEvent.click(screen.getByTestId("audit-filters-toggle"));
+    await userEvent.clear(screen.getByLabelText("From"));
     await userEvent.type(screen.getByLabelText("From"), "2026-10-09");
     await userEvent.type(screen.getByLabelText("To"), "2026-10-01");
     await userEvent.click(screen.getByTestId("audit-search"));

@@ -20,7 +20,7 @@ import { LocalizedDateInput } from "../../components/LocalizedDateInput";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDate } from "../../lib/paraguayDateTime";
 import { useDateLocale } from "../../i18n/dateLocale";
-import { SettlementStatusBadge, firstOfMonthYmd, todayYmd, useProfessionals } from "./common";
+import { SettlementStatusBadge, oneMonthAgoYmd, todayYmd, useProfessionals } from "./common";
 
 const STATUS_CHIPS = ["", "DRAFT", "APPROVED", "PAID", "VOIDED"] as const;
 
@@ -41,7 +41,7 @@ export function SettlementsTab({ actionSlot }: { actionSlot: HTMLElement | null 
   const [generateOpen, setGenerateOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const professionals = useProfessionals();
-  const [genFrom, setGenFrom] = useState(firstOfMonthYmd());
+  const [genFrom, setGenFrom] = useState(oneMonthAgoYmd());
   const [genTo, setGenTo] = useState(todayYmd());
   const [genProfessionals, setGenProfessionals] = useState<number[]>([]);
   const [filterProfessionals, setFilterProfessionals] = useState<number[]>([]);

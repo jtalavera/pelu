@@ -1,3 +1,4 @@
+import { defaultSearchRange, isFromOlderThanOneYear } from "../../lib/dateRange";
 import type { SalonServiceOption } from "../../components/ServiceSearchField";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -105,21 +106,7 @@ export function issueDateOutOfRange(ymd: string): boolean {
 
 /** Issue #174 AC-06: default filter is one month back through today (was six months). */
 export function getDefaultInvoiceHistoryDateRange(): { from: string; to: string } {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-  const fmtYmd = (dt: Date) =>
-    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
-  return { from: fmtYmd(oneMonthAgo), to: fmtYmd(today) };
-}
-
-export function isFromOlderThan6Months(fromYmd: string): boolean {
-  const [fy, fm, fd] = fromYmd.split("-").map(Number);
-  const fromDate = new Date(fy, fm - 1, fd);
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-  sixMonthsAgo.setHours(0, 0, 0, 0);
-  return fromDate < sixMonthsAgo;
+  return defaultSearchRange();
 }
 
 export function localDateYmdToIsoStart(ymd: string): string {
@@ -140,7 +127,7 @@ export function invoiceHistoryRangeErrorKey(from: string, to: string): string | 
   if (from > to) {
     return "invalidOrder";
   }
-  if (isFromOlderThan6Months(from)) {
+  if (isFromOlderThanOneYear(from)) {
     return "tooOld";
   }
   return null;

@@ -14,8 +14,8 @@ class ServiceRecordListRangeTest {
   private final ZoneId z = ZoneId.systemDefault();
 
   @Test
-  void acceptsTheSixMonthLimitEvenWhenTheUsersDayIsOneBehindTheServers() {
-    LocalDate limit = LocalDate.now(z).minusMonths(ServiceRecordService.MAX_LIST_MONTHS);
+  void acceptsTheOneYearLimitEvenWhenTheUsersDayIsOneBehindTheServers() {
+    LocalDate limit = LocalDate.now(z).minusYears(1);
     Instant to = LocalDate.now(z).atTime(23, 59, 59).atZone(z).toInstant();
     Instant userMidnight = limit.minusDays(1).atStartOfDay(z).toInstant();
     assertThat(ServiceRecordService.resolveListRange(userMidnight, to)).hasSize(2);
@@ -23,7 +23,7 @@ class ServiceRecordListRangeTest {
 
   @Test
   void rejectsFromDatesOlderThanTheToleratedLimit() {
-    LocalDate limit = LocalDate.now(z).minusMonths(ServiceRecordService.MAX_LIST_MONTHS);
+    LocalDate limit = LocalDate.now(z).minusYears(1);
     Instant to = LocalDate.now(z).atTime(23, 59, 59).atZone(z).toInstant();
     Instant tooOld = limit.minusDays(2).atStartOfDay(z).toInstant();
     assertThatThrownBy(() -> ServiceRecordService.resolveListRange(tooOld, to))

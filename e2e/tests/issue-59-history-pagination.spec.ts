@@ -80,14 +80,14 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     await expect(toInput).toHaveValue(fmt(today));
   });
 
-  test("#59-T4-2 · Historial rejects from-date older than 6 months", async ({ page }) => {
+  test("#59-T4-2 · Historial rejects from-date older than 1 year", async ({ page }) => {
     test.setTimeout(60_000);
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await goToInvoiceHistory(page);
 
     const tooOld = new Date();
-    tooOld.setMonth(tooOld.getMonth() - 7);
+    tooOld.setMonth(tooOld.getMonth() - 13);
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
@@ -95,7 +95,7 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     // Date filters apply on their own (debounced), no refresh button needed.
     await page.locator("#invoice-history-from").fill(fmt(tooOld));
 
-    await expect(page.getByRole("alert")).toContainText(/6 months|6 meses/i);
+    await expect(page.getByRole("alert")).toContainText(/1 year|1 año/i);
   });
 
   test("#59-T4-3 · Historial shows PageSizeSelect with options 10/25/50 after issuing invoice", async ({
