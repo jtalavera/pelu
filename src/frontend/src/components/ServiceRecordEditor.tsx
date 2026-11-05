@@ -433,35 +433,80 @@ export function ServiceRecordEditor({
     </section>
   ) : null;
 
-  /** The turno this ficha belongs to, with a way to jump to it (only when it has one). */
+  /**
+   * One discreet line under the client: the turno this ficha belongs to and, once charged, its
+   * comprobante, each with a small «Ver» link (the tap area stays 44 px). Nothing when the ficha
+   * has neither.
+   */
+  const showTurno = Boolean(record?.appointmentId && record.appointmentStartAt);
+  const showInvoice = record?.status === "CLOSED" && Boolean(record.invoiceNumberFormatted);
+  const linkClass =
+    "relative font-bold text-primary hover:underline after:absolute after:-inset-x-2 after:-inset-y-3.5 after:content-['']";
   const appointmentRow =
-    record?.appointmentId && record.appointmentStartAt ? (
+    record && (showTurno || showInvoice) ? (
       <div
-        data-testid="service-record-appointment"
-        className="flex items-center justify-between gap-3 rounded-card border-[1.5px] border-primary bg-primary-lt px-3 py-2"
+        data-testid="service-record-meta"
+        className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink-3"
       >
-        <b className="min-w-0 break-words font-heading text-ink">
-          {t("femme.appointmentFicha.goToAppointment", {
-            time: formatParaguayTime(record.appointmentStartAt, dateLocale),
-          })}
-        </b>
-        <button
-          type="button"
-          data-testid="service-record-view-appointment"
-          className="min-h-11 shrink-0 rounded-full bg-primary px-4 text-sm font-extrabold text-primary-fg"
-          onClick={() => {
-            const appointmentId = record.appointmentId;
-            onClose();
-            navigate("/app/calendar", {
-              state: {
-                selectedDate: new Date(record.appointmentStartAt as string).toLocaleDateString("sv-SE"),
-                openAppointmentId: appointmentId,
-              },
-            });
-          }}
-        >
-          {t("femme.appointmentFicha.viewAppointment")}
-        </button>
+        {showTurno ? (
+          <span data-testid="service-record-appointment" className="inline-flex items-center gap-1.5">
+            {t("femme.appointmentFicha.appointmentTag", {
+              time: formatParaguayTime(record.appointmentStartAt as string, dateLocale),
+            })}
+            <span aria-hidden="true">·</span>
+            <button
+              type="button"
+              data-testid="service-record-view-appointment"
+              aria-label={t("femme.appointmentFicha.viewAppointment")}
+              className={linkClass}
+              onClick={() => {
+                const appointmentId = record.appointmentId;
+                onClose();
+                navigate("/app/calendar", {
+                  state: {
+                    selectedDate: new Date(record.appointmentStartAt as string).toLocaleDateString("sv-SE"),
+                    openAppointmentId: appointmentId,
+                  },
+                });
+              }}
+            >
+              {t("femme.serviceRecords.viewShort")}
+            </button>
+          </span>
+        ) : null}
+        {showTurno && showInvoice ? (
+          <span aria-hidden="true" className="opacity-50">
+            |
+          </span>
+        ) : null}
+        {showInvoice ? (
+          <span data-testid="service-record-invoice-line" className="inline-flex items-center gap-1.5">
+            {t("femme.serviceRecords.invoiceShort", { number: record.invoiceNumberFormatted })}
+            {record.invoiceId != null ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <button
+                  type="button"
+                  data-testid="service-record-view-invoice"
+                  aria-label={t("femme.serviceRecords.viewInvoice")}
+                  className={linkClass}
+                  onClick={() => {
+                    const invoiceId = record.invoiceId as number;
+                    if (onViewInvoice) {
+                      // The host opens the comprobante right here, on top of the ficha.
+                      onViewInvoice(invoiceId);
+                      return;
+                    }
+                    onClose();
+                    navigate("/app/billing", { state: { openInvoiceId: invoiceId } });
+                  }}
+                >
+                  {t("femme.serviceRecords.viewShort")}
+                </button>
+              </>
+            ) : null}
+          </span>
+        ) : null}
       </div>
     ) : null;
 
@@ -475,34 +520,6 @@ export function ServiceRecordEditor({
           <Text variant="small" className="text-ink-3">
             {t("femme.serviceRecords.voidedReasonLabel")}: {record.voidReason}
           </Text>
-        ) : null}
-        {record.status === "CLOSED" && record.invoiceNumberFormatted ? (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Text variant="small" className="text-ink-3">
-              {t("femme.serviceRecords.linkedInvoice")}: {record.invoiceNumberFormatted}
-            </Text>
-            {record.invoiceId != null ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="min-h-11"
-                data-testid="service-record-view-invoice"
-                onClick={() => {
-                  const invoiceId = record.invoiceId as number;
-                  if (onViewInvoice) {
-                    // The host opens the comprobante right here, on top of the ficha.
-                    onViewInvoice(invoiceId);
-                    return;
-                  }
-                  onClose();
-                  navigate("/app/billing", { state: { openInvoiceId: invoiceId } });
-                }}
-              >
-                {t("femme.serviceRecords.viewInvoice")}
-              </Button>
-            ) : null}
-          </div>
         ) : null}
         <section className="flex flex-col gap-2 border-t border-line pt-3" aria-labelledby="sr-lines-h">
           <h3 id="sr-lines-h" className={SECTION_TITLE}>

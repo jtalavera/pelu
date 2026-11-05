@@ -3001,6 +3001,7 @@
         "sat": "Sáb",
         "sun": "Dom"
       },
+      "badge": { "charged": "Cobrado", "completed": "Completado" },
       "status": {
         "PENDING": "Pendiente",
         "CONFIRMED": "Confirmado",
@@ -3082,6 +3083,8 @@
       "lineServiceAria": "Servicio {{n}}",
       "lineProfessionalAria": "Profesional {{n}}",
       "viewInvoiceFor": "Ver comprobante de {{client}}",
+      "viewShort": "Ver",
+      "invoiceShort": "Comprobante {{number}}",
       "newRecord": "+ Nueva ficha",
       "newTitle": "Nueva ficha",
       "searchPlaceholder": "Buscar por cliente o servicio",

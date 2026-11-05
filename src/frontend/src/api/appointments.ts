@@ -125,9 +125,13 @@ export const ALL_STATUSES: AppointmentStatus[] = [
   "NO_SHOW",
 ];
 
-/** Statuses shown on the week calendar grid (HU-19). */
+/**
+ * Statuses shown on the week calendar grid (HU-19). «Completado» stays on it (outlined, marked
+ * «Cobrado» when it has a comprobante): a turno is often charged before its time has passed.
+ */
 export const CALENDAR_GRID_STATUSES: AppointmentStatus[] = [
   "PENDING",
   "CONFIRMED",
   "IN_PROGRESS",
+  "COMPLETED",
 ];
