@@ -55,8 +55,11 @@ import { goToInvoiceHistory } from "../../fixtures/billing";
 
 const world = getMtWorld();
 
-/** `Instant.parse`-compatible bounds wide enough to capture every tip row regardless of clock. */
-const WIDE_REPORT_QUERY = "from=2000-01-01T00:00:00Z&to=2100-01-01T00:00:00Z";
+/**
+ * `Instant.parse`-compatible bounds wide enough to capture every tip row regardless of clock;
+ * «from» is as far back as a search may go (one year), never older.
+ */
+const WIDE_REPORT_QUERY = `from=${new Date(Date.now() - 360 * 24 * 3600_000).toISOString()}&to=2100-01-01T00:00:00Z`;
 
 /** Per-run seed so re-runs against a reused mt backend never collide on recipient emails. */
 const RUN_SEED = Date.now();

@@ -88,9 +88,7 @@ public class CommissionQueryService {
       SearchRangeLimits.resolveFrom(from, zone, SearchRangeLimits.TOO_OLD);
     }
     LocalDate f =
-        from != null
-            ? from
-            : period.from() != null ? period.from() : today.minusMonths(1);
+        from != null ? from : period.from() != null ? period.from() : today.minusMonths(1);
     LocalDate t = to != null ? to : period.to() != null ? period.to() : today;
     if (t.isBefore(f)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_PERIOD_INVALID");
