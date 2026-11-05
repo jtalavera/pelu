@@ -418,7 +418,7 @@ export default function ServiceRecordsPage() {
                         void handlePay(r.id);
                       }}
                       onKeyDown={(e) => e.stopPropagation()}
-                      className="min-h-11 w-full rounded-xl border-[1.5px] border-primary bg-transparent px-4 font-extrabold text-primary hover:bg-primary-lt sm:w-auto"
+                      className="relative h-[30px] rounded-full bg-primary px-3.5 text-[12.5px] font-bold text-primary-fg after:absolute after:-inset-x-1 after:-inset-y-[7px] after:content-[''] hover:opacity-90"
                     >
                       {t("femme.serviceRecords.pay")}
                     </button>
