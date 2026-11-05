@@ -41,9 +41,10 @@ test.describe("Menú «Más acciones»", () => {
     await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: new RegExp(client.fullName) }).first().click({ timeout: 20_000 });
 
-    // The trigger reads as a button: visible label and a closed state.
+    // The trigger reads as a button: on the web it is the round «⋯» (named «More actions»), closed.
     const trigger = page.getByTestId("calendar-more-actions");
-    await expect(trigger).toContainText("More actions");
+    await expect(trigger).toHaveAttribute("aria-label", "More actions");
+    await expect(trigger).toContainText("⋯");
     await expect(trigger).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByTestId("calendar-actions-panel")).toHaveCount(0);
 
