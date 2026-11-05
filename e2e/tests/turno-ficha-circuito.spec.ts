@@ -190,6 +190,86 @@ test.describe("Turno y ficha de servicio", () => {
     await expect(page.getByTestId("calendar-appointment-ficha-go")).toBeVisible({ timeout: 20_000 });
   });
 
+  test("Agenda: un turno completado sigue en la agenda, «Completado» sin comprobante y «Cobrado» con comprobante", async ({
+    page,
+    request,
+  }) => {
+    const admin = await loginAsDemoApi(request);
+    await ensureCashSessionOpenApi(request, admin);
+    await ensureActiveFiscalStampForInvoices(request, admin);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+
+    // A: completed by hand, never charged.
+    const clientA = await seedClient(request, admin, `E2E TF AgA ${Date.now()}`);
+    const turnoA = await seedTurno(request, admin, seed, clientA.id);
+    await setStatus(request, admin, turnoA.id, "COMPLETED");
+    expect((await getAppt(request, admin, turnoA.id)).invoiceId).toBeNull();
+
+    // B: charged through its ficha (comprobante issued). Another professional: same slot as A.
+    const seedB = await seedCategoryServiceProfessional(request, admin);
+    const clientB = await seedClient(request, admin, `E2E TF AgB ${Date.now()}`);
+    const turnoB = await seedTurno(request, admin, seedB, clientB.id);
+    const fichaB = await openFicha(request, admin, clientB.id, seedB);
+    await apiPostJson(request, admin, `/api/appointments/${turnoB.id}/service-record/assign`, { serviceRecordId: fichaB.id });
+    await chargeFicha(request, admin, clientB.id, fichaB, seedB);
+    expect((await getAppt(request, admin, turnoB.id)).invoiceId).not.toBeNull();
+
+    await loginAsDemo(page);
+    await page.goto("/app/calendar");
+    // Day list: both stay, each with its mark.
+    const doneA = page.getByTestId(`calendar-done-badge-${turnoA.id}`);
+    const doneB = page.getByTestId(`calendar-done-badge-${turnoB.id}`);
+    await expect(doneA).toHaveText("✓ Completed", { timeout: 20_000 });
+    await expect(doneA).toHaveAttribute("data-charged", "false");
+    await expect(doneB).toHaveText("✓ Charged");
+    await expect(doneB).toHaveAttribute("data-charged", "true");
+
+    // Tapping it opens the same detail, with «View invoice» (opens in place).
+    await page.getByTestId(`calendar-appt-${turnoB.id}`).click();
+    await expect(page.getByTestId("calendar-next-step")).toHaveText("View invoice");
+    await page.keyboard.press("Escape");
+
+    // Week grid: outlined block with the same mark.
+    await page.goto("/app/calendar?view=week");
+    const blockB = page.getByTestId(`calendar-appt-${turnoB.id}`);
+    await expect(blockB).toHaveAttribute("data-done", "charged", { timeout: 20_000 });
+    await expect(blockB.getByTestId(`calendar-done-badge-${turnoB.id}`)).toHaveText("✓ Charged");
+    await expect(page.getByTestId(`calendar-appt-${turnoA.id}`)).toHaveAttribute("data-done", "completed");
+    // Outlined, not filled: the block background is the page surface, not the professional's colour.
+    const bg = await blockB.evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(bg).toBe("rgb(255, 255, 255)");
+
+  });
+
+  test("Ficha: el turno y el comprobante van en una sola línea discreta, sin caja", async ({ page, request }) => {
+    const admin = await loginAsDemoApi(request);
+    await ensureCashSessionOpenApi(request, admin);
+    await ensureActiveFiscalStampForInvoices(request, admin);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const clientName = `E2E TF Linea ${Date.now()}`;
+    const client = await seedClient(request, admin, clientName);
+    const turno = await seedTurno(request, admin, seed, client.id);
+    const ficha = await openFicha(request, admin, client.id, seed);
+    await apiPostJson(request, admin, `/api/appointments/${turno.id}/service-record/assign`, { serviceRecordId: ficha.id });
+    await chargeFicha(request, admin, client.id, ficha, seed);
+
+    await loginAsDemo(page);
+    await page.getByTestId("dashboard-service-record-card").filter({ hasText: new RegExp(clientName, "i") }).first().click({ position: { x: 40, y: 20 } });
+    const dialog = page.getByRole("dialog");
+    const line = dialog.getByTestId("service-record-meta");
+    await expect(line).toBeVisible({ timeout: 20_000 });
+    await expect(line.getByTestId("service-record-appointment")).toBeVisible();
+    await expect(line.getByTestId("service-record-invoice-line")).toBeVisible();
+    // One small line: short, small text, no framed box.
+    const box = await line.boundingBox();
+    expect(box!.height).toBeLessThan(28);
+    expect(await line.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(13);
+    expect(await line.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("0px");
+    // Both links stay reachable.
+    await expect(line.getByTestId("service-record-view-appointment")).toBeVisible();
+    await expect(line.getByTestId("service-record-view-invoice")).toBeVisible();
+  });
+
   test("cobrar la ficha completa la ficha y el turno", async ({ page, request }) => {
     const admin = await loginAsDemoApi(request);
     await ensureCashSessionOpenApi(request, admin);

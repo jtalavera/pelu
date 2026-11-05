@@ -299,6 +299,50 @@ describe("ServiceRecordEditor", () => {
     expect(screen.getByTestId("service-record-close")).toBeTruthy();
   });
 
+  describe("turno y comprobante en una sola línea discreta", () => {
+    const withTurno = { appointmentId: 9, appointmentStartAt: "2026-11-05T17:00:00Z" };
+
+    it("a paid ficha with a turno shows both on ONE small line, each with its «Ver» link", async () => {
+      const onViewInvoice = vi.fn();
+      renderEditor(
+        {
+          ...openRecord,
+          ...withTurno,
+          status: "CLOSED",
+          invoiceId: 77,
+          invoiceNumberFormatted: "0001145",
+        },
+        { onViewInvoice },
+      );
+      const line = screen.getByTestId("service-record-meta");
+      expect(line.textContent).toContain("0001145");
+      expect(within(line).getByTestId("service-record-appointment")).toBeTruthy();
+      expect(within(line).getByTestId("service-record-invoice-line")).toBeTruthy();
+      // Small, grey text: no box, no big button.
+      expect(line.className).toContain("text-xs");
+      expect(within(line).getByTestId("service-record-view-appointment").textContent).toBe("View");
+      await userEvent.click(within(line).getByTestId("service-record-view-invoice"));
+      expect(onViewInvoice).toHaveBeenCalledWith(77);
+    });
+
+    it("an open ficha with a turno shows only the turno; one without a turno shows no line", () => {
+      const { unmount } = renderEditor({ ...openRecord, ...withTurno });
+      const line = screen.getByTestId("service-record-meta");
+      expect(within(line).getByTestId("service-record-appointment")).toBeTruthy();
+      expect(within(line).queryByTestId("service-record-invoice-line")).toBeNull();
+      unmount();
+      renderEditor(openRecord);
+      expect(screen.queryByTestId("service-record-meta")).toBeNull();
+    });
+
+    it("a paid ficha without a turno shows only its comprobante", () => {
+      renderEditor({ ...openRecord, status: "CLOSED", invoiceId: 77, invoiceNumberFormatted: "0001144" });
+      const line = screen.getByTestId("service-record-meta");
+      expect(within(line).queryByTestId("service-record-appointment")).toBeNull();
+      expect(line.textContent).toContain("0001144");
+    });
+  });
+
   it("a voided record shows its reason and is read-only", async () => {
     renderEditor({ ...openRecord, status: "VOIDED", voidReason: "Left early" });
     expect(screen.getByText(/Left early/)).toBeTruthy();

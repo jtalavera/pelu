@@ -3001,6 +3001,7 @@
         "sat": "Sat",
         "sun": "Sun"
       },
+      "badge": { "charged": "Charged", "completed": "Completed" },
       "status": {
         "PENDING": "Pending",
         "CONFIRMED": "Confirmed",
@@ -3082,6 +3083,8 @@
       "lineServiceAria": "Service {{n}}",
       "lineProfessionalAria": "Professional {{n}}",
       "viewInvoiceFor": "View invoice for {{client}}",
+      "viewShort": "View",
+      "invoiceShort": "Invoice {{number}}",
       "newRecord": "+ New record",
       "newTitle": "New service record",
       "searchPlaceholder": "Search by client or service",

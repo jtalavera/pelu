@@ -511,11 +511,26 @@ export default function CalendarPage() {
                             🎂
                           </span>
                         )}
+                        {appt.status === "COMPLETED" && (
+                          <span
+                            data-testid={`calendar-done-badge-${appt.id}`}
+                            data-charged={appt.invoiceId != null ? "true" : "false"}
+                            className={`ml-1.5 whitespace-nowrap rounded-full px-2 py-px text-[11px] font-extrabold ${
+                              appt.invoiceId != null
+                                ? "bg-success-lt text-success"
+                                : "border border-line bg-page text-ink-2"
+                            }`}
+                          >
+                            ✓ {t(appt.invoiceId != null ? "femme.calendar.badge.charged" : "femme.calendar.badge.completed")}
+                          </span>
+                        )}
                       </span>
                       <span className="col-start-2 row-start-2 min-w-0 self-start break-words text-sm text-ink-3">
-                        <span className={`font-semibold ${STATUS_TEXT[appt.status] ?? "text-ink-3"}`}>
-                          {t(`femme.calendar.status.${appt.status}`)}
-                        </span>
+                        {appt.status !== "COMPLETED" && (
+                          <span className={`font-semibold ${STATUS_TEXT[appt.status] ?? "text-ink-3"}`}>
+                            {t(`femme.calendar.status.${appt.status}`)}
+                          </span>
+                        )}
                         {appt.status === "CONFIRMED" && (
                           <span aria-hidden data-testid={`confirmed-check-${appt.id}`} className="ml-1 text-success">
                             ✓
@@ -531,7 +546,8 @@ export default function CalendarPage() {
                             <span aria-hidden>🔔</span>
                           </span>
                         )}{" "}
-                        · {appt.serviceName} · {appt.professionalName}
+                        {appt.status !== "COMPLETED" ? "· " : ""}
+                        {appt.serviceName} · {appt.professionalName}
                       </span>
                       <span aria-hidden className="col-start-3 row-span-2 row-start-1 text-xl text-ink-3">
                         ›
@@ -760,11 +776,17 @@ export default function CalendarPage() {
                       const leftPct = (col / slotCount) * 100;
                       const widthPct = 100 / slotCount;
                       const hovered = hoveredApptId === appt.id;
+                      // «Completado» stays on the grid, outlined instead of filled; «Cobrado» when it
+                      // has an issued comprobante, «Completado» (grey) when it still has none.
+                      const done = appt.status === "COMPLETED";
+                      const charged = done && appt.invoiceId != null;
+                      const shortBlock = minBlockH < 40;
                       return (
                         <button
                           key={appt.id}
                           type="button"
                           data-testid={`calendar-appt-${appt.id}`}
+                          data-done={done ? (charged ? "charged" : "completed") : undefined}
                           onClick={(e) => {
                             e.stopPropagation();
                             openDetail(appt);
@@ -788,12 +810,14 @@ export default function CalendarPage() {
                             padding: hovered ? 10 : 6,
                             fontSize: hovered ? 13 : 11,
                             cursor: "pointer",
-                            background: pc.bg,
-                            border: "none",
-                            borderLeft: appt.status === "PENDING"
-                              ? `3px dotted ${pc.border}`
-                              : `3px solid ${pc.border}`,
-                            color: pc.color,
+                            background: done ? "rgb(var(--fb-surface))" : pc.bg,
+                            border: done ? `1.5px solid ${pc.border}` : "none",
+                            borderLeft: done
+                              ? `4px solid ${pc.border}`
+                              : appt.status === "PENDING"
+                                ? `3px dotted ${pc.border}`
+                                : `3px solid ${pc.border}`,
+                            color: done ? "rgb(var(--fb-ink))" : pc.color,
                             textAlign: "left",
                             overflow: hovered ? "visible" : "hidden",
                             boxShadow: hovered
@@ -866,6 +890,30 @@ export default function CalendarPage() {
                                   </svg>
                                 </span>
                               )}
+                            </span>
+                          )}
+                          {done && (
+                            <span
+                              data-testid={`calendar-done-badge-${appt.id}`}
+                              data-charged={charged ? "true" : "false"}
+                              style={{
+                                position: "absolute",
+                                right: 5,
+                                ...(shortBlock
+                                  ? { top: "50%", transform: "translateY(-50%)" }
+                                  : { bottom: 5 }),
+                                fontSize: 9.5,
+                                fontWeight: 800,
+                                lineHeight: "14px",
+                                padding: "0 7px",
+                                borderRadius: 99,
+                                whiteSpace: "nowrap",
+                                background: charged ? "rgb(var(--fb-success))" : "rgb(var(--fb-bg))",
+                                color: charged ? "rgb(var(--fb-on-primary))" : "rgb(var(--fb-ink-2))",
+                                border: charged ? "none" : "1px solid rgb(var(--fb-border))",
+                              }}
+                            >
+                              ✓ {t(charged ? "femme.calendar.badge.charged" : "femme.calendar.badge.completed")}
                             </span>
                           )}
                           <p

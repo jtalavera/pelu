@@ -334,3 +334,63 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
     });
   });
 });
+
+describe("CalendarPage · turnos completados siguen en la agenda", () => {
+  const at = (h: number) => {
+    const d = new Date();
+    d.setHours(h, 0, 0, 0);
+    return d;
+  };
+  const completed = (id: number, hour: number, invoiceId: number | null) => ({
+    ...MOCK_APPOINTMENT,
+    id,
+    clientName: `CLIENTE ${id}`,
+    status: "COMPLETED",
+    startAt: at(hour).toISOString(),
+    endAt: at(hour + 1).toISOString(),
+    serviceRecordId: null,
+    invoiceId,
+  });
+
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
+    femmeJsonMock.mockReset();
+    femmeJsonMock.mockImplementation((url: string) => {
+      if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
+      if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
+      if (url.includes("/api/appointments")) {
+        return Promise.resolve([
+          completed(101, 10, 555), // charged: has an issued comprobante
+          completed(102, 12, null), // completed, not charged yet
+          { ...MOCK_APPOINTMENT, id: 103, status: "CANCELLED", startAt: at(14).toISOString(), clientName: "CANCELADO" },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+  });
+
+  it("the Day list keeps completed turnos, marked «Charged» with a comprobante and «Completed» without", async () => {
+    renderPage();
+    const charged = await screen.findByTestId("calendar-done-badge-101");
+    expect(charged.textContent).toContain("Charged");
+    expect(charged.getAttribute("data-charged")).toBe("true");
+    const notCharged = await screen.findByTestId("calendar-done-badge-102");
+    expect(notCharged.textContent).toContain("Completed");
+    expect(notCharged.getAttribute("data-charged")).toBe("false");
+    // Cancelled turnos stay hidden.
+    expect(screen.queryByTestId("calendar-appt-103")).toBeNull();
+  });
+
+  it("the Week grid draws them outlined with the same badge", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click((await screen.findAllByTestId("calendar-view-week"))[0]);
+    const block = await screen.findByTestId("calendar-appt-101");
+    expect(block.getAttribute("data-done")).toBe("charged");
+    expect(within(block).getByTestId("calendar-done-badge-101").textContent).toContain("Charged");
+    const other = await screen.findByTestId("calendar-appt-102");
+    expect(other.getAttribute("data-done")).toBe("completed");
+    expect(within(other).getByTestId("calendar-done-badge-102").textContent).toContain("Completed");
+    expect(screen.queryByTestId("calendar-appt-103")).toBeNull();
+  });
+});
