@@ -424,8 +424,13 @@ test.describe("Turno y ficha de servicio", () => {
     await expect(paidRow.getByTestId("dashboard-appointment-invoice")).toHaveCount(0);
     await paidRow.getByTestId("dashboard-appointment-ficha-go").click();
     await page.getByTestId("service-record-view-invoice").click();
-    await expect(page).toHaveURL(/\/app\/billing/);
-    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 20_000 });
+    // The comprobante opens on top of the ficha: no trip to Facturación.
+    await expect(page.getByTestId("invoice-detail-view")).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/app\/?$/);
+    // Closing it leaves the ficha open underneath.
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("invoice-detail-view")).toHaveCount(0);
+    await expect(page.getByTestId("service-record-view-invoice")).toBeVisible();
   });
 
   test("un turno ya cobrado no vuelve a ofrecer «Cobrar»: muestra «Ver comprobante» y abre la factura", async ({

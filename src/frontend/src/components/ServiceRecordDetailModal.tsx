@@ -5,6 +5,7 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { getServiceRecord, type ServiceRecordDetail } from "../api/serviceRecords";
 import { fetchProfessionalOptions } from "../api/professionalOptions";
 import { getFrequentServices } from "../api/serviceRecords";
+import { InvoiceDetailModal } from "./InvoiceDetailModal";
 import { ServiceRecordEditor, type ServiceRecordEditorPreload } from "./ServiceRecordEditor";
 import { ServiceRecordStatusPill } from "./ServiceRecordStatusPill";
 
@@ -34,6 +35,8 @@ export function ServiceRecordDetailModal({
           .catch(() => []),
   }));
   const [loading, setLoading] = useState(true);
+  const [viewInvoiceId, setViewInvoiceId] = useState<number | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -53,12 +56,15 @@ export function ServiceRecordDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [serviceRecordId, t]);
+  }, [serviceRecordId, t, reloadTick]);
 
   return (
+    <>
     <Modal
       open
-      onClose={onClose}
+      onClose={() => {
+        if (viewInvoiceId === null) onClose();
+      }}
       title={
         <span className="flex flex-wrap items-center gap-3">
           {t("femme.serviceRecords.detailTitle")}
@@ -88,10 +94,12 @@ export function ServiceRecordDetailModal({
         )}
         {record && (
           <ServiceRecordEditor
+            key={reloadTick}
             initial={record}
             allowClientCreateNew={false}
             professionalMode={professionalMode}
             preload={preload}
+            onViewInvoice={setViewInvoiceId}
             onSaved={() => {
               onChanged?.("updated");
               onClose();
@@ -105,5 +113,19 @@ export function ServiceRecordDetailModal({
         )}
       </div>
     </Modal>
+
+    {viewInvoiceId !== null ? (
+      <InvoiceDetailModal
+        invoiceId={viewInvoiceId}
+        onClose={() => setViewInvoiceId(null)}
+        onVoided={() => {
+          // The comprobante was anulado: the ficha may have changed, so load it again.
+          setViewInvoiceId(null);
+          setReloadTick((n) => n + 1);
+          onChanged?.("updated");
+        }}
+      />
+    ) : null}
+    </>
   );
 }

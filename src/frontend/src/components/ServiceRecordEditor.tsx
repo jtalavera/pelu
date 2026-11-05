@@ -82,6 +82,7 @@ export function ServiceRecordEditor({
   onClose,
   professionalMode = false,
   preload,
+  onViewInvoice,
 }: {
   initial: ServiceRecordDetail | null;
   allowClientCreateNew: boolean;
@@ -92,6 +93,8 @@ export function ServiceRecordEditor({
   professionalMode?: boolean;
   /** Professionals and frequent services the host already requested, in parallel with the record. */
   preload?: ServiceRecordEditorPreload;
+  /** Opens the linked comprobante in place; without it the button goes to Facturación. */
+  onViewInvoice?: (invoiceId: number) => void;
   /** Client selected after returning from the "create new client" round trip. */
   initialClientOverride?: ClientOverride | null;
   onInitialClientOverrideConsumed?: () => void;
@@ -486,7 +489,12 @@ export function ServiceRecordEditor({
                 className="min-h-11"
                 data-testid="service-record-view-invoice"
                 onClick={() => {
-                  const invoiceId = record.invoiceId;
+                  const invoiceId = record.invoiceId as number;
+                  if (onViewInvoice) {
+                    // The host opens the comprobante right here, on top of the ficha.
+                    onViewInvoice(invoiceId);
+                    return;
+                  }
                   onClose();
                   navigate("/app/billing", { state: { openInvoiceId: invoiceId } });
                 }}
