@@ -51,6 +51,7 @@ class ProfessionalAccessPolicyTest {
     "POST, /api/appointments/12/service-record/assign",
     "GET, /api/appointments/12/service-record/candidates",
     "GET, /api/professionals",
+    "GET, /api/professionals/options",
     "GET, /api/services",
     "GET, /api/clients",
     "GET, /api/clients/3/technical-sheet",

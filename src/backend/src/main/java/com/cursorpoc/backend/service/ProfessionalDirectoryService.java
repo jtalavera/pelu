@@ -8,6 +8,7 @@ import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.GrantAccessResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
+import com.cursorpoc.backend.web.dto.ProfessionalOptionResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalScheduleRequest;
 import com.cursorpoc.backend.web.dto.ProfessionalUpsertRequest;
@@ -15,6 +16,7 @@ import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
@@ -54,8 +56,21 @@ public class ProfessionalDirectoryService {
 
   @Transactional(readOnly = true)
   public List<ProfessionalResponse> list(long tenantId) {
+    List<Professional> all = professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId);
+    Map<Long, List<ProfessionalSchedule>> schedules = schedulesByProfessional(all);
+    return all.stream()
+        .map(p -> toResponse(p, schedules.getOrDefault(p.getId(), List.of())))
+        .toList();
+  }
+
+  /** Just what a picker needs: id, names and active flag (no photo, schedules or access data). */
+  @Transactional(readOnly = true)
+  public List<ProfessionalOptionResponse> listOptions(long tenantId) {
     return professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
-        .map(p -> toResponse(p, schedulesFor(p.getId())))
+        .map(
+            p ->
+                new ProfessionalOptionResponse(
+                    p.getId(), p.getFullName(), p.getNickname(), p.getDisplayName(), p.isActive()))
         .toList();
   }
 
@@ -65,8 +80,10 @@ public class ProfessionalDirectoryService {
    */
   @Transactional(readOnly = true)
   public List<ProfessionalResponse> listDirectory(long tenantId) {
-    return professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
-        .map(p -> toDirectoryResponse(p, schedulesFor(p.getId())))
+    List<Professional> all = professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId);
+    Map<Long, List<ProfessionalSchedule>> schedules = schedulesByProfessional(all);
+    return all.stream()
+        .map(p -> toDirectoryResponse(p, schedules.getOrDefault(p.getId(), List.of())))
         .toList();
   }
 
@@ -76,9 +93,10 @@ public class ProfessionalDirectoryService {
     PageRequest pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
     Page<Professional> result =
         professionalRepository.findByTenantFilteredPaged(tenantId, qTrimmed, pageable);
+    Map<Long, List<ProfessionalSchedule>> schedules = schedulesByProfessional(result.getContent());
     List<ProfessionalResponse> content =
         result.getContent().stream()
-            .map(p -> toResponse(p, schedulesFor(p.getId())))
+            .map(p -> toResponse(p, schedules.getOrDefault(p.getId(), List.of())))
             .collect(Collectors.toList());
     return new PageResponse<>(
         content,
@@ -321,6 +339,19 @@ public class ProfessionalDirectoryService {
       s.setEndTime(r.endTime());
       professionalScheduleRepository.save(s);
     }
+  }
+
+  /** The schedules of all the given professionals with ONE query, grouped by professional id. */
+  private Map<Long, List<ProfessionalSchedule>> schedulesByProfessional(
+      List<Professional> professionals) {
+    if (professionals.isEmpty()) {
+      return Map.of();
+    }
+    return professionalScheduleRepository
+        .findByProfessionalIdInOrderByDayOfWeekAscIdAsc(
+            professionals.stream().map(Professional::getId).toList())
+        .stream()
+        .collect(Collectors.groupingBy(s -> s.getProfessional().getId()));
   }
 
   private List<ProfessionalSchedule> schedulesFor(Long professionalId) {

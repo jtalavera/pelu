@@ -272,7 +272,7 @@ export function NewInvoiceFlow({
   const needsLineProfessionals = commissionsEnabled || lines.some((l) => l.pickedService != null);
   useEffect(() => {
     if (!needsLineProfessionals || lineProfessionals.length > 0) return;
-    femmeJson<{ id: number; fullName: string; displayName?: string | null; active: boolean }[]>("/api/professionals")
+    femmeJson<{ id: number; fullName: string; displayName?: string | null; active: boolean }[]>("/api/professionals/options")
       .then((list) => setLineProfessionals(Array.isArray(list) ? withDisplayNames(list).filter((p) => p.active) : []))
       .catch(() => setLineProfessionals([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps

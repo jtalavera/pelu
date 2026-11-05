@@ -116,7 +116,7 @@ describe("ServiceRecordsPage", () => {
       const s = String(url);
       if (s.startsWith("/api/service-records?")) return Promise.resolve(pageOf(items));
       if (s === "/api/service-records/1") return Promise.resolve(detail);
-      if (s === "/api/professionals") return Promise.resolve([{ id: 3, fullName: "Laura", active: true }]);
+      if (s === "/api/professionals/options") return Promise.resolve([{ id: 3, fullName: "Laura", active: true }]);
       if (s.startsWith("/api/clients/")) return Promise.resolve({ email: "marta@example.com" });
       return Promise.resolve([]);
     });

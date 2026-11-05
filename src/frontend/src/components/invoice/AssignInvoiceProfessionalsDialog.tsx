@@ -41,7 +41,7 @@ export function AssignInvoiceProfessionalsDialog({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    femmeJson<ProfessionalOption[]>("/api/professionals")
+    femmeJson<ProfessionalOption[]>("/api/professionals/options")
       .then((list) => setProfessionals(Array.isArray(list) ? withDisplayNames(list).filter((p) => p.active) : []))
       .catch(() => setProfessionals([]));
   }, []);

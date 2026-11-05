@@ -1,9 +1,7 @@
-import { withDisplayNames } from "../lib/professionalDisplay";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Input, Label, Text, Textarea } from "@design-system";
-import { femmeJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import {
   createServiceRecord,
@@ -21,11 +19,18 @@ import { formatAmountDecimal } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
 import { getFrequentServices } from "../api/serviceRecords";
+import { fetchProfessionalOptions, type ProfessionalOption } from "../api/professionalOptions";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
 import { initialsOf } from "../lib/initials";
 import { ProfessionalServiceLines, ServicePickerScreen } from "./ProfessionalServiceLines";
 
-type Professional = { id: number; fullName: string; displayName?: string | null; active: boolean };
+type Professional = ProfessionalOption;
+
+/** Data the host started loading before the editor mounted (so nothing waits for the editor). */
+export type ServiceRecordEditorPreload = {
+  professionals: Promise<ProfessionalOption[]>;
+  frequentServices: Promise<SalonServiceOption[]>;
+};
 
 type LineForm = {
   key: string;
@@ -76,6 +81,7 @@ export function ServiceRecordEditor({
   onVoided,
   onClose,
   professionalMode = false,
+  preload,
 }: {
   initial: ServiceRecordDetail | null;
   allowClientCreateNew: boolean;
@@ -84,6 +90,8 @@ export function ServiceRecordEditor({
    * prices or totals, no tips, no void and no "Cobrar". The server enforces the same rules.
    */
   professionalMode?: boolean;
+  /** Professionals and frequent services the host already requested, in parallel with the record. */
+  preload?: ServiceRecordEditorPreload;
   /** Client selected after returning from the "create new client" round trip. */
   initialClientOverride?: ClientOverride | null;
   onInitialClientOverrideConsumed?: () => void;
@@ -159,9 +167,14 @@ export function ServiceRecordEditor({
   const [voidError, setVoidError] = useState<string | null>(null);
 
   useEffect(() => {
-    femmeJson<Professional[]>("/api/professionals")
-      .then((list) => setProfessionals(withDisplayNames(Array.isArray(list) ? list : []).filter((p) => p.active)))
-      .catch(() => setProfessionals([]));
+    let cancelled = false;
+    (preload?.professionals ?? fetchProfessionalOptions()).then((list) => {
+      if (!cancelled) setProfessionals(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -228,13 +241,13 @@ export function ServiceRecordEditor({
   useEffect(() => {
     if (professionalMode || !isOpen) return;
     let cancelled = false;
-    getFrequentServices(3)
-      .then((items) => {
-        if (!cancelled) setFrequent(Array.isArray(items) ? items : []);
-      })
-      .catch(() => {
-        if (!cancelled) setFrequent([]);
-      });
+    (preload?.frequentServices ??
+      getFrequentServices(3)
+        .then((items) => (Array.isArray(items) ? items : []))
+        .catch(() => [])
+    ).then((items) => {
+      if (!cancelled) setFrequent(items);
+    });
     return () => {
       cancelled = true;
     };

@@ -319,7 +319,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
           });
         }
         if (url === "/api/service-records/70") return Promise.resolve(record);
-        if (url === "/api/professionals") return Promise.resolve([{ id: 3, fullName: "Laura", active: true }]);
+        if (url === "/api/professionals/options") return Promise.resolve([{ id: 3, fullName: "Laura", active: true }]);
         if (/^\/api\/invoices\/\d+$/.test(url)) return Promise.reject(new Error("not needed"));
         if (url.includes("/api/invoices")) return Promise.resolve([]);
         return Promise.resolve(undefined);
@@ -434,7 +434,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
         // The success screen's read-back of the issued invoice is a nicety: let it fail quietly.
         if (/^\/api\/invoices\/\d+$/.test(url)) return Promise.reject(new Error("not needed here"));
         if (url.includes("/api/invoices")) return Promise.resolve([]);
-        if (url === "/api/professionals") return Promise.resolve([{ id: 3, fullName: "Laura", active: true }]);
+        if (url === "/api/professionals/options") return Promise.resolve([{ id: 3, fullName: "Laura", active: true }]);
         return Promise.resolve(undefined);
       });
     }

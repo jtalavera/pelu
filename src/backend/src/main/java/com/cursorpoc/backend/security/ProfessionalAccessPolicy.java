@@ -49,6 +49,7 @@ public final class ProfessionalAccessPolicy
           PATHS.matcher(HttpMethod.GET, "/api/appointments/{id:\\d+}/service-record/candidates"),
           // Read-only catalogs the appointment form and the professional filter need.
           PATHS.matcher(HttpMethod.GET, "/api/professionals"),
+          PATHS.matcher(HttpMethod.GET, "/api/professionals/options"),
           PATHS.matcher(HttpMethod.GET, "/api/services"),
           PATHS.matcher(HttpMethod.GET, "/api/clients"),
           // HU-68: the client's technical sheet (notes + color formula) — never the full profile.
@@ -79,6 +80,7 @@ public final class ProfessionalAccessPolicy
           PATHS.matcher(HttpMethod.POST, "/api/appointments/{id:\\d+}/service-record/assign"),
           PATHS.matcher(HttpMethod.GET, "/api/appointments/{id:\\d+}/service-record/candidates"),
           PATHS.matcher(HttpMethod.GET, "/api/professionals"),
+          PATHS.matcher(HttpMethod.GET, "/api/professionals/options"),
           PATHS.matcher(HttpMethod.GET, "/api/services"),
           PATHS.matcher(HttpMethod.GET, "/api/clients"),
           // Inicio of the shared device: the same open fichas of today, without money.

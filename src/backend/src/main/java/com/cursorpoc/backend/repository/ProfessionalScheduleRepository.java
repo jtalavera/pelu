@@ -1,12 +1,17 @@
 package com.cursorpoc.backend.repository;
 
 import com.cursorpoc.backend.domain.ProfessionalSchedule;
+import java.util.Collection;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProfessionalScheduleRepository extends JpaRepository<ProfessionalSchedule, Long> {
 
   List<ProfessionalSchedule> findByProfessionalIdOrderByDayOfWeekAscIdAsc(Long professionalId);
+
+  /** Every schedule of several professionals in one query (avoids one query per professional). */
+  List<ProfessionalSchedule> findByProfessionalIdInOrderByDayOfWeekAscIdAsc(
+      Collection<Long> professionalIds);
 
   void deleteByProfessionalId(Long professionalId);
 

@@ -7,6 +7,7 @@ import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
 import { SectionTitle } from "../components/SectionTitle";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
 import { listAppointments, type Appointment } from "../api/appointments";
+import { AppointmentDetailModal } from "../components/AppointmentDetailModal";
 import { AppointmentFormModal } from "../components/AppointmentFormModal";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { TodayServiceRecords } from "../components/TodayServiceRecords";
@@ -153,6 +154,7 @@ export default function DashboardPage() {
   const [birthdaysCount, setBirthdaysCount] = useState<number | null>(0);
   const [openRecordId, setOpenRecordId] = useState<number | null>(null);
   const [newApptOpen, setNewApptOpen] = useState(false);
+  const [detailAppt, setDetailAppt] = useState<Appointment | null>(null);
   const [viewInvoiceId, setViewInvoiceId] = useState<number | null>(null);
   const [fichasKey, setFichasKey] = useState(0);
   const [newRecordOpen, setNewRecordOpen] = useState(false);
@@ -204,6 +206,10 @@ export default function DashboardPage() {
       })
       .catch(() => setTodayAppts([]));
   }, [todayRangeIso.from, todayRangeIso.to]);
+  // Keep the open detail dialog in sync with the refreshed list (ficha created / assigned, polling).
+  useEffect(() => {
+    setDetailAppt((prev) => (prev ? (todayAppts.find((a) => a.id === prev.id) ?? prev) : prev));
+  }, [todayAppts]);
   useEffect(() => {
     refreshAppointments();
     const id = window.setInterval(refreshAppointments, POLL_MS);
@@ -507,10 +513,7 @@ export default function DashboardPage() {
         ) : (
           <ul className="flex flex-col px-2 pb-2 sm:px-3" data-testid="dashboard-appointments">
             {visibleTodayAppts.map((appt) => {
-              const goToApptDetail = () =>
-                navigate("/app/calendar", {
-                  state: { selectedDate: toLocalDateStr(new Date(appt.startAt)), openAppointmentId: appt.id },
-                });
+              const goToApptDetail = () => setDetailAppt(appt);
               return (
                 <li
                   key={appt.id}
@@ -590,6 +593,14 @@ export default function DashboardPage() {
         open={newRecordOpen}
         onClose={() => setNewRecordOpen(false)}
         onSaved={() => setFichasKey((k) => k + 1)}
+      />
+      <AppointmentDetailModal
+        appointment={detailAppt}
+        onClose={() => setDetailAppt(null)}
+        onChanged={(updated) => {
+          if (updated) setDetailAppt(updated);
+          refreshAppointments();
+        }}
       />
       <AppointmentFormModal
         open={newApptOpen}

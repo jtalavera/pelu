@@ -1,43 +1,20 @@
 import { withDisplayNames } from "../lib/professionalDisplay";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Alert,
-  Button,
-  Label,
-  Modal,
-  Spinner,
-  Textarea,
-} from "@design-system";
+import { Alert, Button, Spinner } from "@design-system";
 import { useTour } from "../tour/useTour";
 import { calendarSteps } from "../tour/steps/calendar";
-import {
-  Appointment,
-  AppointmentStatus,
-  CALENDAR_GRID_STATUSES,
-  EDITABLE_STATUSES,
-  listAppointments,
-  updateAppointmentStatus,
-} from "../api/appointments";
+import { Appointment, CALENDAR_GRID_STATUSES, listAppointments } from "../api/appointments";
 import { layoutOverlappingInDay } from "../calendar/calendarAppointmentLayout";
 import { femmeJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
+import { AppointmentDetailModal } from "../components/AppointmentDetailModal";
 import { AppointmentFormModal } from "../components/AppointmentFormModal";
-import { ClientTechnicalSheetModal } from "../components/ClientTechnicalSheetModal";
-import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { isPinSession } from "../auth/sharedDevice";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { billingStateForAppointment } from "../lib/appointmentBilling";
-import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
-import { MoreActionsMenu } from "../components/MoreActionsMenu";
-import { ACTION_BUTTON } from "../components/actionButtons";
-import { ActionIcon } from "../components/actionIcons";
-import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
-import { billServiceRecord } from "../lib/serviceRecordBilling";
-import { createServiceRecordFromAppointment, getServiceRecord } from "../api/serviceRecords";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
 const HOUR_START = 7;
@@ -72,18 +49,6 @@ function formatDate(date: Date, locale: string): string {
 
 function formatLocalYmd(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function formatDateTime(isoString: string, locale: string): string {
-  const d = new Date(isoString);
-  return d.toLocaleString(locale, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
 }
 
 function appointmentTopPx(startAt: string): number {
@@ -132,7 +97,6 @@ export default function CalendarPage() {
   const { t, i18n } = useTranslation();
   const locale = getDateLocale(i18n);
   const { me } = useMe();
-  const isProfessional = me?.role === "PROFESSIONAL";
   // HU-66: no guided tour on a shared device's PIN session (it keeps no per-user state).
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR") && !isPinSession();
   const tourRole =
@@ -170,26 +134,13 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
 
-  // Detail modal
+  // Detail modal (shared with Inicio: AppointmentDetailModal owns its actions and sub-dialogs)
   const [detailAppt, setDetailAppt] = useState<Appointment | null>(null);
-  const [openRecordId, setOpenRecordId] = useState<number | null>(null);
-  /** HU-68 AC6–8: client whose technical sheet is open on top of the detail / form modal. */
-  const [technicalSheetClientId, setTechnicalSheetClientId] = useState<number | null>(null);
-  const [detailError, setDetailError] = useState<string | null>(null);
 
-  // New/Edit appointment modal
+  // New appointment modal (editing happens from the detail modal)
   const [formOpen, setFormOpen] = useState(false);
-  const [editAppt, setEditAppt] = useState<Appointment | null>(null);
   const [formInitialDate, setFormInitialDate] = useState<string | undefined>(undefined);
   const [formInitialHour, setFormInitialHour] = useState<number | undefined>(undefined);
-
-  // Status change: one next-step button + a few actions behind "⋯"; cancelling asks for a reason
-  const [statusModalOpen, setStatusModalOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [actionBusy, setActionBusy] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
-  const [statusSaving, setStatusSaving] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
 
   const [hoveredApptId, setHoveredApptId] = useState<number | null>(null);
   const [dayGridHover, setDayGridHover] = useState<{
@@ -255,7 +206,6 @@ export default function CalendarPage() {
     const appt = appointments.find((a) => a.id === pendingOpenApptId);
     if (appt) {
       setDetailAppt(appt);
-      setDetailError(null);
       setPendingOpenApptId(null);
       navigate(location.pathname, { replace: true, state: {} });
     }
@@ -288,16 +238,9 @@ export default function CalendarPage() {
     );
   };
 
-  // A professional browses every agenda but only modifies her own appointments (the backend
-  // enforces the same rule).
-  const canModify = (appt: Appointment) =>
-    !isProfessional || (me?.professionalId != null && appt.professionalId === me.professionalId);
-
   // ── Appointment click → detail ──────────────────────────────────────────────
   const openDetail = (appt: Appointment) => {
     setDetailAppt(appt);
-    setDetailError(null);
-    setMoreOpen(false);
   };
 
   // After the turno's ficha is created / assigned the list reloads: keep the open detail in sync.
@@ -305,86 +248,29 @@ export default function CalendarPage() {
     setDetailAppt((prev) => (prev ? (appointments.find((a) => a.id === prev.id) ?? prev) : prev));
   }, [appointments]);
 
-  const closeDetail = () => {
-    setDetailAppt(null);
-    setDetailError(null);
-    setMoreOpen(false);
-  };
+  const closeDetail = () => setDetailAppt(null);
 
-  // ── Status change ───────────────────────────────────────────────────────────
-  const openCancelDialog = () => {
-    if (!detailAppt) return;
-    setCancelReason(detailAppt.cancelReason ?? "");
-    setStatusError(null);
-    setMoreOpen(false);
-    setStatusModalOpen(true);
-  };
-
-  /** Moves the open appointment to `status` (no reason unless cancelling). */
-  const applyStatus = async (status: AppointmentStatus, reason: string | null = null) => {
-    if (!detailAppt) return;
-    setStatusSaving(true);
-    setActionBusy(true);
-    setStatusError(null);
-    setDetailError(null);
-    try {
-      const updated = await updateAppointmentStatus(detailAppt.id, {
-        status,
-        cancelReason: status === "CANCELLED" ? reason || null : null,
-      });
-      setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-      setDetailAppt(updated);
-      setStatusModalOpen(false);
-      setMoreOpen(false);
-    } catch (err) {
-      const msg = translateApiError(err, t, "femme.apiErrors.GENERIC");
-      if (status === "CANCELLED") setStatusError(msg);
-      else setDetailError(msg);
-    } finally {
-      setStatusSaving(false);
-      setActionBusy(false);
+  /** The detail dialog changed the turno (status, edit, ficha): keep the grid and the dialog in sync. */
+  const onDetailChanged = (updated?: Appointment, kind?: "status" | "edited") => {
+    if (!updated) {
+      void fetchAppointments();
+      return;
     }
-  };
-
-  const saveStatus = () => applyStatus("CANCELLED", cancelReason);
-
-  /**
-   * "Cobrar" always goes through the turno's ficha: its own, or one created right now. (An old
-   * Atendido turno with no ficha keeps the previous behaviour: the booked service as the only line.)
-   */
-  const chargeAppointment = async () => {
-    if (!detailAppt) return;
-    setActionBusy(true);
-    setDetailError(null);
-    try {
-      if (detailAppt.serviceRecordId) {
-        await billServiceRecord(navigate, await getServiceRecord(detailAppt.serviceRecordId));
-      } else if (detailAppt.status === "IN_PROGRESS") {
-        await billServiceRecord(navigate, await createServiceRecordFromAppointment(detailAppt.id));
-      } else {
-        navigate("/app/billing", { state: await billingStateForAppointment(detailAppt) });
-      }
-    } catch {
-      setDetailError(t("femme.calendar.chargeError"));
-    } finally {
-      setActionBusy(false);
+    setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+    setDetailAppt(updated);
+    if (kind === "edited") {
+      // Show the day of the turno that was just saved.
+      const savedDay = new Date(updated.startAt);
+      savedDay.setHours(0, 0, 0, 0);
+      setCursor(savedDay);
     }
   };
 
   // ── New appointment ─────────────────────────────────────────────────────────
   const openNewForm = (date?: Date, hour?: number) => {
-    setEditAppt(null);
     setFormInitialDate(formatLocalYmd(date ?? cursor));
     setFormInitialHour(hour);
     setFormOpen(true);
-  };
-
-  // ── Edit appointment ────────────────────────────────────────────────────────
-  const openEditForm = () => {
-    if (!detailAppt) return;
-    setEditAppt(detailAppt);
-    setFormOpen(true);
-    closeDetail();
   };
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -408,65 +294,6 @@ export default function CalendarPage() {
     IN_PROGRESS: "text-primary",
     COMPLETED: "text-ink-3",
   };
-
-  // Detail actions: ONE main next step by state, the rest behind "⋯".
-  type DetailAction = { key: string; label: string; icon?: ReactNode; run: () => void; danger?: boolean };
-  const apptEditable = detailAppt !== null && canModify(detailAppt);
-  let primaryAction: { key: "confirm" | "start" | "charge" | "viewInvoice"; run: () => void } | null = null;
-  const moreActions: DetailAction[] = [];
-  if (detailAppt) {
-    const st = detailAppt.status;
-    if (apptEditable && st === "PENDING") {
-      primaryAction = { key: "confirm", run: () => void applyStatus("CONFIRMED") };
-    } else if (apptEditable && st === "CONFIRMED") {
-      primaryAction = { key: "start", run: () => void applyStatus("IN_PROGRESS") };
-    } else if (!isProfessional && detailAppt.invoiceId != null) {
-      // Already charged: no second «Cobrar»; the comprobante is one tap away.
-      const invoiceId = detailAppt.invoiceId;
-      primaryAction = {
-        key: "viewInvoice",
-        run: () => navigate("/app/billing", { state: { openInvoiceId: invoiceId } }),
-      };
-    } else if (!isProfessional && (st === "IN_PROGRESS" || st === "COMPLETED")) {
-      primaryAction = { key: "charge", run: () => void chargeAppointment() };
-    }
-    if (apptEditable && EDITABLE_STATUSES.includes(st)) {
-      moreActions.push({ key: "edit", label: t("femme.calendar.detail.edit"), icon: <ActionIcon name="edit" />, run: openEditForm });
-    }
-    if (detailAppt.clientId != null) {
-      moreActions.push({
-        key: "technical",
-        icon: <ActionIcon name="file" />,
-        label: t("femme.clients.technicalSheet.open"),
-        run: () => setTechnicalSheetClientId(detailAppt.clientId as number),
-      });
-    }
-    if (apptEditable && (st === "PENDING" || st === "CONFIRMED" || st === "IN_PROGRESS")) {
-      moreActions.push({
-        key: "complete",
-        icon: <ActionIcon name="check" />,
-        label: t("femme.calendar.action.complete"),
-        run: () => void applyStatus("COMPLETED"),
-      });
-    }
-    if (apptEditable && (st === "PENDING" || st === "CONFIRMED")) {
-      moreActions.push({
-        key: "noshow",
-        icon: <ActionIcon name="userX" />,
-        label: t("femme.calendar.action.noShow"),
-        run: () => void applyStatus("NO_SHOW"),
-      });
-    }
-    if (apptEditable && (st === "PENDING" || st === "CONFIRMED" || st === "IN_PROGRESS")) {
-      moreActions.push({
-        key: "cancel",
-        icon: <ActionIcon name="ban" />,
-        label: t("femme.calendar.action.cancelAppointment"),
-        run: openCancelDialog,
-        danger: true,
-      });
-    }
-  }
 
   const navBtn =
     "inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-line bg-surface text-lg leading-none text-ink-2 hover:bg-primary-lt";
@@ -1090,177 +917,11 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* ── Appointment detail modal ── */}
-      <Modal
-        open={detailAppt !== null}
-        onClose={() => {
-          if (technicalSheetClientId === null) closeDetail();
-        }}
-        title={t("femme.calendar.detail.title")}
-        footer={
-          <div className="flex w-full flex-wrap items-center gap-2">
-            <Button size="md" variant="secondary" className={ACTION_BUTTON} onClick={closeDetail}>
-              {t("femme.calendar.detail.close")}
-            </Button>
-            {moreActions.length > 0 && (
-              <MoreActionsMenu
-                label={t("femme.calendar.action.more")}
-                open={moreOpen}
-                onOpenChange={setMoreOpen}
-                triggerTestId="calendar-more-actions"
-                menuTestId="calendar-actions-panel"
-                disabled={actionBusy}
-                items={moreActions.map((a) => ({
-                  id: a.key,
-                  label: a.label,
-                  icon: a.icon,
-                  destructive: a.danger,
-                  testId: `calendar-action-${a.key}`,
-                  onSelect: a.run,
-                }))}
-              />
-            )}
-            {primaryAction && (
-              <Button
-                variant="primary"
-                className={`${ACTION_BUTTON} flex-1`}
-                disabled={actionBusy}
-                data-testid="calendar-next-step"
-                onClick={primaryAction.run}
-              >
-                {t(`femme.calendar.action.${primaryAction.key}`)}
-              </Button>
-            )}
-          </div>
-        }
-      >
-        {detailAppt && (
-          <div className="space-y-3 text-sm">
-            {!canModify(detailAppt) && (
-              <Alert variant="info" data-testid="appointment-read-only-notice">
-                {t("femme.calendar.detail.readOnlyOtherProfessional")}
-              </Alert>
-            )}
-            {detailError && (
-              <Alert variant="destructive">
-                <p>{detailError}</p>
-              </Alert>
-            )}
-            <Row label={t("femme.calendar.detail.client")}>
-              {detailAppt.clientName ?? (
-                <span className="italic text-ink-3">
-                  {t("femme.calendar.detail.occasionalClient")}
-                </span>
-              )}
-              {detailAppt.clientBirthdayOnDay && (
-                <span data-testid="appointment-detail-birthday" className="ml-2">
-                  🎂 {t("femme.calendar.clientBirthday")}
-                </span>
-              )}
-            </Row>
-            <Row label={t("femme.calendar.detail.professional")}>
-              {detailAppt.professionalName}
-            </Row>
-            <Row label={t("femme.calendar.detail.service")}>
-              {detailAppt.serviceName} —{" "}
-              {t("femme.calendar.detail.duration", { minutes: detailAppt.durationMinutes })}
-            </Row>
-            <Row label={t("femme.calendar.detail.date")}>
-              {formatDateTime(detailAppt.startAt, locale)}
-            </Row>
-            <Row label={t("femme.calendar.detail.status")}>
-              <StatusBadge status={detailAppt.status} />
-            </Row>
-            {detailAppt.reminderSentAt && (
-              <Row label={t("femme.calendar.detail.reminderSent")}>
-                <span data-testid={`reminder-sent-${detailAppt.id}`}>
-                  {formatDateTime(detailAppt.reminderSentAt, locale)}
-                </span>
-              </Row>
-            )}
-            {canModify(detailAppt) ? (
-              <div className="flex">
-                <AppointmentFichaAction
-                  appt={detailAppt}
-                  testIdPrefix="calendar-appointment-ficha"
-                  className="w-full"
-                  onOpenRecord={setOpenRecordId}
-                  onChanged={() => void fetchAppointments()}
-                />
-              </div>
-            ) : null}
-            {detailAppt.cancelReason && (
-              <Row label={t("femme.calendar.detail.cancelReason")}>
-                {detailAppt.cancelReason}
-              </Row>
-            )}
-          </div>
-        )}
-      </Modal>
-
-      {openRecordId !== null ? (
-        <ServiceRecordDetailModal
-          serviceRecordId={openRecordId}
-          professionalMode={isProfessional}
-          onClose={() => setOpenRecordId(null)}
-          onChanged={() => void fetchAppointments()}
-        />
-      ) : null}
-
-      {/* ── Cancel appointment (asks for a reason) ── */}
-      <Modal
-        open={statusModalOpen}
-        onClose={() => setStatusModalOpen(false)}
-        title={t("femme.calendar.cancelTitle")}
-        footer={
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="min-h-11"
-              onClick={() => setStatusModalOpen(false)}
-              disabled={statusSaving}
-            >
-              {t("femme.calendar.cancelBack")}
-            </Button>
-            <Button
-              size="sm"
-              variant="danger"
-              className="min-h-11"
-              data-testid="calendar-cancel-confirm"
-              onClick={saveStatus}
-              disabled={statusSaving}
-            >
-              {statusSaving ? <Spinner size="sm" /> : t("femme.calendar.cancelConfirm")}
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          {statusError && (
-            <Alert variant="destructive">
-              <p role="alert">{statusError}</p>
-            </Alert>
-          )}
-          <div className="space-y-1">
-            <Label htmlFor="cancel-reason">{t("femme.calendar.cancelDialog.reason")}</Label>
-            <Textarea
-              id="cancel-reason"
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder={t("femme.calendar.cancelDialog.reasonPlaceholder")}
-              rows={3}
-            />
-          </div>
-        </div>
-      </Modal>
+      <AppointmentDetailModal appointment={detailAppt} onClose={closeDetail} onChanged={onDetailChanged} />
 
       <AppointmentFormModal
         open={formOpen}
-        onClose={() => {
-          if (technicalSheetClientId === null) setFormOpen(false);
-        }}
-        editAppointment={editAppt}
+        onClose={() => setFormOpen(false)}
         initialDate={formInitialDate}
         initialHour={formInitialHour}
         initialProfessionalId={selectedProfessionalId}
@@ -1275,30 +936,6 @@ export default function CalendarPage() {
         }}
       />
 
-      <ClientTechnicalSheetModal
-        clientId={technicalSheetClientId}
-        onClose={() => setTechnicalSheetClientId(null)}
-      />
-    </div>
-  );
-}
-
-// ── Helper sub-component ──────────────────────────────────────────────────────
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-      <span
-        style={{
-          width: 112,
-          flexShrink: 0,
-          fontWeight: 500,
-          fontSize: 13,
-          color: "var(--color-ink-2)",
-        }}
-      >
-        {label}
-      </span>
-      <span style={{ fontSize: 13, color: "var(--color-ink)" }}>{children}</span>
     </div>
   );
 }

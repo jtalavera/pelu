@@ -215,7 +215,7 @@ test.describe("Turno y ficha de servicio", () => {
     await expect(row.getByTestId("dashboard-appointment-ficha-go")).toBeVisible();
   });
 
-  test("Agenda: «Cobrar» de un turno En curso sin ficha crea la ficha y abre Facturación con ella", async ({
+  test("Inicio: «Cobrar» de un turno En curso sin ficha crea la ficha y abre Facturación con ella", async ({
     page,
     request,
   }) => {
@@ -230,7 +230,8 @@ test.describe("Turno y ficha de servicio", () => {
 
     await loginAsDemo(page);
     await page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName }).locator("button").first().click();
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    // The turno opens in place on Inicio (no navigation to the Agenda).
+    await expect(page).toHaveURL(/\/app\/?$/);
     await page.getByTestId("calendar-next-step").click();
     await expect(page).toHaveURL(/\/app\/billing/);
     await expect(page.locator("#billing-client-search")).toHaveValue(new RegExp(clientName, "i"));
@@ -452,7 +453,8 @@ test.describe("Turno y ficha de servicio", () => {
       .locator("button")
       .first()
       .click({ timeout: 20_000 });
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    // The turno opens in place on Inicio (no navigation to the Agenda).
+    await expect(page).toHaveURL(/\/app\/?$/);
     const next = page.getByTestId("calendar-next-step");
     await expect(next).toHaveText("View invoice");
     await expect(page.getByRole("button", { name: "Charge", exact: true })).toHaveCount(0);
@@ -478,7 +480,8 @@ test.describe("Turno y ficha de servicio", () => {
       .locator("button")
       .first()
       .click({ timeout: 20_000 });
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    // The turno opens in place on Inicio (no navigation to the Agenda).
+    await expect(page).toHaveURL(/\/app\/?$/);
     await expect(page.getByTestId("calendar-next-step")).toHaveText("Charge");
   });
 

@@ -118,7 +118,7 @@ export default function PropinasPage() {
   );
 
   useEffect(() => {
-    femmeJson<Professional[]>("/api/professionals")
+    femmeJson<Professional[]>("/api/professionals/options")
       .then((list) => setProfessionals(Array.isArray(list) ? withDisplayNames(list) : []))
       .catch(() => setProfessionals([]));
   }, []);

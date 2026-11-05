@@ -94,7 +94,7 @@ describe("ServiceRecordEditor", () => {
     femmePutJson.mockReset();
     femmeJson.mockImplementation((url: unknown) => {
       const s = String(url);
-      if (s === "/api/professionals") {
+      if (s === "/api/professionals/options") {
         return Promise.resolve([
           { id: 3, fullName: "Laura", active: true },
           { id: 4, fullName: "Ana", active: true },
