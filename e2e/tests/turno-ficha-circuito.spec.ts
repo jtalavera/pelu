@@ -459,8 +459,13 @@ test.describe("Turno y ficha de servicio", () => {
     await expect(next).toHaveText("View invoice");
     await expect(page.getByRole("button", { name: "Charge", exact: true })).toHaveCount(0);
     await next.click();
-    await expect(page).toHaveURL(/\/app\/billing/);
-    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 20_000 });
+    // «Ver comprobante» opens the comprobante on top of the turno: no trip to Facturación.
+    await expect(page.getByTestId("invoice-detail-view")).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/app\/?$/);
+    // Closing it leaves the turno's detail open underneath.
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("invoice-detail-view")).toHaveCount(0);
+    await expect(page.getByTestId("calendar-next-step")).toHaveText("View invoice");
   });
 
   test("un turno pasado a «Atendido» sin comprobante sigue ofreciendo «Cobrar»", async ({ page, request }) => {

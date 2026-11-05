@@ -17,6 +17,7 @@ import { billServiceRecord } from "../lib/serviceRecordBilling";
 import { AppointmentFichaAction } from "./AppointmentFichaAction";
 import { AppointmentFormModal } from "./AppointmentFormModal";
 import { ClientTechnicalSheetModal } from "./ClientTechnicalSheetModal";
+import { InvoiceDetailModal } from "./InvoiceDetailModal";
 import { MoreActionsMenu } from "./MoreActionsMenu";
 import { ServiceRecordDetailModal } from "./ServiceRecordDetailModal";
 import { StatusBadge } from "./StatusBadge";
@@ -83,6 +84,7 @@ export function AppointmentDetailModal({
   const [actionBusy, setActionBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [openRecordId, setOpenRecordId] = useState<number | null>(null);
+  const [viewInvoiceId, setViewInvoiceId] = useState<number | null>(null);
   const [technicalSheetClientId, setTechnicalSheetClientId] = useState<number | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
@@ -95,6 +97,7 @@ export function AppointmentDetailModal({
     setMoreOpen(false);
     setEditing(false);
     setOpenRecordId(null);
+    setViewInvoiceId(null);
     setCancelOpen(false);
   }, [appointmentId]);
 
@@ -173,7 +176,8 @@ export function AppointmentDetailModal({
       const invoiceId = appointment.invoiceId;
       primaryAction = {
         key: "viewInvoice",
-        run: () => navigate("/app/billing", { state: { openInvoiceId: invoiceId } }),
+        // The comprobante opens right here, on top of the turno: no trip to Facturación.
+        run: () => setViewInvoiceId(invoiceId),
       };
     } else if (!isProfessional && (st === "IN_PROGRESS" || st === "COMPLETED")) {
       primaryAction = { key: "charge", run: () => void chargeAppointment() };
@@ -230,7 +234,9 @@ export function AppointmentDetailModal({
       <Modal
         open={appointment !== null && !editing}
         onClose={() => {
-          if (technicalSheetClientId === null && openRecordId === null && !cancelOpen) onClose();
+          if (technicalSheetClientId === null && openRecordId === null && viewInvoiceId === null && !cancelOpen) {
+            onClose();
+          }
         }}
         title={t("femme.calendar.detail.title")}
         footer={
@@ -325,6 +331,17 @@ export function AppointmentDetailModal({
           </div>
         )}
       </Modal>
+
+      {viewInvoiceId !== null ? (
+        <InvoiceDetailModal
+          invoiceId={viewInvoiceId}
+          onClose={() => setViewInvoiceId(null)}
+          onVoided={() => {
+            setViewInvoiceId(null);
+            onChanged();
+          }}
+        />
+      ) : null}
 
       {openRecordId !== null ? (
         <ServiceRecordDetailModal
