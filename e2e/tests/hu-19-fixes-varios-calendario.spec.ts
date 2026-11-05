@@ -38,7 +38,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     await expect(group.getByTestId("calendar-prof-chip-all")).toHaveAttribute("aria-pressed", "false");
   });
 
-  test("HU-19 · 6 turno Completado no aparece en la grilla", async ({ page, request }) => {
+  test("HU-19 · 6 turno Completado sigue en la grilla, marcado como completado", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
     const client = await seedClient(request, token, `E2E GridDone ${Date.now()}`);
@@ -58,7 +58,11 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
       .getByRole("button", { name: "Close" })
       .last()
       .click();
-    await expect(page.getByRole("button", { name: new RegExp(client.fullName) })).toHaveCount(0);
+    // It stays on the grid (outlined, marked «Completed» since it has no comprobante yet).
+    const block = page.getByRole("button", { name: new RegExp(client.fullName) });
+    await expect(block).toHaveCount(1);
+    await expect(block).toHaveAttribute("data-done", "completed");
+    await expect(block).toContainText("✓ Completed");
   });
 
   test("HU-25 / HU-19 al mover el cursor en la grilla, el resalte es solo 30 min (banda bajo el slot)", async ({

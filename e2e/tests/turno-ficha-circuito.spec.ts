@@ -205,12 +205,13 @@ test.describe("Turno y ficha de servicio", () => {
     await setStatus(request, admin, turnoA.id, "COMPLETED");
     expect((await getAppt(request, admin, turnoA.id)).invoiceId).toBeNull();
 
-    // B: charged through its ficha (comprobante issued).
+    // B: charged through its ficha (comprobante issued). Another professional: same slot as A.
+    const seedB = await seedCategoryServiceProfessional(request, admin);
     const clientB = await seedClient(request, admin, `E2E TF AgB ${Date.now()}`);
-    const turnoB = await seedTurno(request, admin, seed, clientB.id);
-    const fichaB = await openFicha(request, admin, clientB.id, seed);
+    const turnoB = await seedTurno(request, admin, seedB, clientB.id);
+    const fichaB = await openFicha(request, admin, clientB.id, seedB);
     await apiPostJson(request, admin, `/api/appointments/${turnoB.id}/service-record/assign`, { serviceRecordId: fichaB.id });
-    await chargeFicha(request, admin, clientB.id, fichaB, seed);
+    await chargeFicha(request, admin, clientB.id, fichaB, seedB);
     expect((await getAppt(request, admin, turnoB.id)).invoiceId).not.toBeNull();
 
     await loginAsDemo(page);
