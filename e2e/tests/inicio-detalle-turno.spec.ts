@@ -37,13 +37,14 @@ test.describe("Inicio · detalle del turno en el lugar", () => {
   }) => {
     const { token, clientName, turnoId } = await seedTodayTurno(request);
     await loginAsDemo(page);
-    const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName });
+    const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: new RegExp(clientName, "i") });
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.locator("button").first().click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText(clientName);
+    // Client names are stored in capitals.
+    await expect(dialog).toContainText(new RegExp(clientName, "i"));
     await expect(page).toHaveURL(/\/app\/?$/);
 
     await dialog.getByTestId("calendar-next-step").click(); // Confirmar
@@ -61,7 +62,7 @@ test.describe("Inicio · detalle del turno en el lugar", () => {
   test("cancelar desde el detalle pide el motivo y el turno sale de la lista", async ({ page, request }) => {
     const { token, clientName, turnoId } = await seedTodayTurno(request);
     await loginAsDemo(page);
-    const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName });
+    const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: new RegExp(clientName, "i") });
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.locator("button").first().click();
 
