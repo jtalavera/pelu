@@ -509,6 +509,7 @@
       "candidateTitle": "Ficha de las {{time}}",
       "appointmentTag": "Turno {{time}}",
       "noAppointmentTag": "Sin turno",
+      "goShort": "Ficha",
       "viewAppointment": "Ver turno",
       "goToAppointment": "Turno de las {{time}}"
     },
@@ -2959,6 +2960,7 @@
         "confirm": "Confirmar",
         "start": "Iniciar",
         "viewInvoice": "Ver comprobante",
+        "invoiceShort": "Comprobante",
         "charge": "Cobrar",
         "complete": "Marcar como atendido",
         "noShow": "No asistió",

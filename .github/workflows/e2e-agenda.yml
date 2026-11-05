@@ -75,6 +75,7 @@ jobs:
           tests/issue-143-ajustes-clientes-timbrado.spec.ts
           tests/inicio-fichas-profesional.spec.ts
           tests/inicio-profesional-turnos.spec.ts
+          tests/mensajes-estilo.spec.ts
           tests/profesionales-opciones.spec.ts
           tests/hu-06-calendario-de-turnos.spec.ts
           tests/hu-07-agendar-un-turno.spec.ts

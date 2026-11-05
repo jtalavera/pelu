@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Label, Modal, Spinner, Textarea } from "@design-system";
@@ -14,7 +14,11 @@ import { getDateLocale } from "../i18n/dateLocale";
 import { useMe } from "../hooks/useMe";
 import { billingStateForAppointment } from "../lib/appointmentBilling";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
-import { AppointmentFichaAction } from "./AppointmentFichaAction";
+import {
+  AppointmentFichaAction,
+  fichaActionKind,
+  type AppointmentFichaActionHandle,
+} from "./AppointmentFichaAction";
 import { AppointmentFormModal } from "./AppointmentFormModal";
 import { ClientTechnicalSheetModal } from "./ClientTechnicalSheetModal";
 import { InvoiceDetailModal } from "./InvoiceDetailModal";
@@ -35,23 +39,32 @@ function formatDateTime(isoString: string, locale: string): string {
   });
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+const FIELD_LABEL = "text-[11px] font-extrabold uppercase tracking-wider text-primary";
+
+function Field({ label, children, wide = false }: { label: string; children: ReactNode; wide?: boolean }) {
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-      <span
-        style={{
-          width: 112,
-          flexShrink: 0,
-          fontWeight: 500,
-          fontSize: 13,
-          color: "var(--color-ink-2)",
-        }}
-      >
-        {label}
-      </span>
-      <span style={{ fontSize: 13, color: "var(--color-ink)" }}>{children}</span>
+    <div className={`min-w-0 ${wide ? "sm:col-span-2" : ""}`}>
+      <dt className={FIELD_LABEL}>{label}</dt>
+      <dd className="m-0 break-words text-ink">{children}</dd>
     </div>
   );
+}
+
+/** True from the `sm` breakpoint up (the web layout); false on a phone. */
+function useIsWide(): boolean {
+  const query = "(min-width: 640px)";
+  const [wide, setWide] = useState(
+    () => typeof window === "undefined" || !window.matchMedia || window.matchMedia(query).matches,
+  );
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) => setWide(e.matches);
+    setWide(mq.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return wide;
 }
 
 type DetailAction = { key: string; label: string; icon?: ReactNode; run: () => void; danger?: boolean };
@@ -79,6 +92,8 @@ export function AppointmentDetailModal({
   const { me } = useMe();
   const isProfessional = me?.role === "PROFESSIONAL";
 
+  const isWide = useIsWide();
+  const fichaRef = useRef<AppointmentFichaActionHandle>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -162,7 +177,7 @@ export function AppointmentDetailModal({
   };
 
   // Detail actions: ONE main next step by state, the rest behind "⋯".
-  let primaryAction: { key: "confirm" | "start" | "charge" | "viewInvoice"; run: () => void } | null = null;
+  let primaryAction: { key: "confirm" | "start" | "charge"; run: () => void } | null = null;
   const moreActions: DetailAction[] = [];
   if (appointment) {
     const st = appointment.status;
@@ -171,15 +186,9 @@ export function AppointmentDetailModal({
       primaryAction = { key: "confirm", run: () => void applyStatus("CONFIRMED") };
     } else if (apptEditable && st === "CONFIRMED") {
       primaryAction = { key: "start", run: () => void applyStatus("IN_PROGRESS") };
-    } else if (!isProfessional && appointment.invoiceId != null) {
-      // Already charged: no second «Cobrar»; the comprobante is one tap away.
-      const invoiceId = appointment.invoiceId;
-      primaryAction = {
-        key: "viewInvoice",
-        // The comprobante opens right here, on top of the turno: no trip to Facturación.
-        run: () => setViewInvoiceId(invoiceId),
-      };
-    } else if (!isProfessional && (st === "IN_PROGRESS" || st === "COMPLETED")) {
+    } else if (!isProfessional && appointment.invoiceId == null && (st === "IN_PROGRESS" || st === "COMPLETED")) {
+      // Not charged yet. (Once charged there is no second «Cobrar»: the comprobante is one of the
+      // two document tiles of the body.)
       primaryAction = { key: "charge", run: () => void chargeAppointment() };
     }
     if (apptEditable && EDITABLE_STATUSES.includes(st)) {
@@ -228,6 +237,39 @@ export function AppointmentDetailModal({
     }
   }
 
+  const fichaKind = appointment !== null && canModify(appointment) ? fichaActionKind(appointment) : null;
+  const showFicha = fichaKind !== null;
+  const showInvoice = appointment !== null && !isProfessional && appointment.invoiceId != null;
+  // On a phone the ficha and the comprobante live inside «Más acciones» (first two options); on the
+  // web they are buttons of the footer.
+  const menuActions: DetailAction[] = [...moreActions];
+  if (!isWide && appointment) {
+    const docs: DetailAction[] = [];
+    if (showFicha) {
+      docs.push({
+        key: "ficha",
+        icon: <ActionIcon name="file" />,
+        label: t(
+          fichaKind === "go"
+            ? "femme.appointmentFicha.go"
+            : fichaKind === "createOccasional"
+              ? "femme.appointmentFicha.createOccasional"
+              : "femme.appointmentFicha.createOrAssign",
+        ),
+        run: () => fichaRef.current?.trigger(),
+      });
+    }
+    if (showInvoice) {
+      docs.push({
+        key: "invoice",
+        icon: <ActionIcon name="file" />,
+        label: t("femme.calendar.action.viewInvoice"),
+        run: () => setViewInvoiceId(appointment.invoiceId as number),
+      });
+    }
+    menuActions.unshift(...docs);
+  }
+
   return (
     <>
       {/* ── Appointment detail modal ── */}
@@ -238,46 +280,119 @@ export function AppointmentDetailModal({
             onClose();
           }
         }}
-        title={t("femme.calendar.detail.title")}
+        title={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {t("femme.calendar.detail.title")}
+            {appointment ? <StatusBadge status={appointment.status} /> : null}
+          </span>
+        }
         footer={
-          <div className="flex w-full flex-wrap items-center gap-2">
-            <Button size="md" variant="secondary" className={ACTION_BUTTON} onClick={onClose}>
-              {t("femme.calendar.detail.close")}
-            </Button>
-            {moreActions.length > 0 && (
-              <MoreActionsMenu
-                label={t("femme.calendar.action.more")}
-                open={moreOpen}
-                onOpenChange={setMoreOpen}
-                triggerTestId="calendar-more-actions"
-                menuTestId="calendar-actions-panel"
-                disabled={actionBusy}
-                items={moreActions.map((a) => ({
-                  id: a.key,
-                  label: a.label,
-                  icon: a.icon,
-                  destructive: a.danger,
-                  testId: `calendar-action-${a.key}`,
-                  onSelect: a.run,
-                }))}
-              />
-            )}
-            {primaryAction && (
-              <Button
-                variant="primary"
-                className={`${ACTION_BUTTON} flex-1`}
-                disabled={actionBusy}
-                data-testid="calendar-next-step"
-                onClick={primaryAction.run}
-              >
-                {t(`femme.calendar.action.${primaryAction.key}`)}
+          isWide ? (
+            // Web: «Cerrar» first, then the ficha and the comprobante, the next step and «⋯».
+            <div className="flex w-full flex-wrap items-center gap-2">
+              <Button size="md" variant="secondary" className={ACTION_BUTTON} onClick={onClose}>
+                {t("femme.calendar.detail.close")}
               </Button>
-            )}
-          </div>
+              {showFicha && appointment ? (
+                <AppointmentFichaAction
+                  ref={fichaRef}
+                  compact
+                  appt={appointment}
+                  testIdPrefix="calendar-appointment-ficha"
+                  className={ACTION_BUTTON}
+                  onOpenRecord={setOpenRecordId}
+                  onChanged={() => onChanged()}
+                />
+              ) : null}
+              {showInvoice && appointment ? (
+                <Button
+                  type="button"
+                  size="md"
+                  variant="outline"
+                  className={ACTION_BUTTON}
+                  data-testid="appointment-view-invoice"
+                  // The comprobante opens right here, on top of the turno: no trip to Facturación.
+                  onClick={() => setViewInvoiceId(appointment.invoiceId as number)}
+                >
+                  {t("femme.calendar.action.invoiceShort")}
+                </Button>
+              ) : null}
+              {primaryAction ? (
+                <Button
+                  variant="primary"
+                  className={`${ACTION_BUTTON} flex-1`}
+                  disabled={actionBusy}
+                  data-testid="calendar-next-step"
+                  onClick={primaryAction.run}
+                >
+                  {t(`femme.calendar.action.${primaryAction.key}`)}
+                </Button>
+              ) : (
+                <span className="flex-1" aria-hidden="true" />
+              )}
+              {menuActions.length > 0 && (
+                <MoreActionsMenu
+                  compact
+                  label={t("femme.calendar.action.more")}
+                  open={moreOpen}
+                  onOpenChange={setMoreOpen}
+                  triggerTestId="calendar-more-actions"
+                  menuTestId="calendar-actions-panel"
+                  disabled={actionBusy}
+                  items={menuActions.map((a) => ({
+                    id: a.key,
+                    label: a.label,
+                    icon: a.icon,
+                    destructive: a.danger,
+                    testId: `calendar-action-${a.key}`,
+                    onSelect: a.run,
+                  }))}
+                />
+              )}
+            </div>
+          ) : (
+            // Phone: the next step on top, then «Cerrar» and «Más acciones» (the ficha and the
+            // comprobante are its first options).
+            <div className="flex w-full flex-wrap items-center gap-2">
+              {primaryAction ? (
+                <Button
+                  variant="primary"
+                  className={`${ACTION_BUTTON} w-full`}
+                  disabled={actionBusy}
+                  data-testid="calendar-next-step"
+                  onClick={primaryAction.run}
+                >
+                  {t(`femme.calendar.action.${primaryAction.key}`)}
+                </Button>
+              ) : null}
+              <Button size="md" variant="secondary" className={`${ACTION_BUTTON} flex-1`} onClick={onClose}>
+                {t("femme.calendar.detail.close")}
+              </Button>
+              {menuActions.length > 0 && (
+                <MoreActionsMenu
+                  className="flex-1 [&>button]:w-full"
+                  label={t("femme.calendar.action.more")}
+                  open={moreOpen}
+                  onOpenChange={setMoreOpen}
+                  triggerTestId="calendar-more-actions"
+                  menuTestId="calendar-actions-panel"
+                  disabled={actionBusy}
+                  items={menuActions.map((a) => ({
+                    id: a.key,
+                    label: a.label,
+                    icon: a.icon,
+                    destructive: a.danger,
+                    testId: `calendar-action-${a.key}`,
+                    onSelect: a.run,
+                  }))}
+                />
+              )}
+            </div>
+          )
         }
       >
         {appointment && (
-          <div className="space-y-3 text-sm">
+          <div className="space-y-4 text-sm">
             {!canModify(appointment) && (
               <Alert variant="info" data-testid="appointment-read-only-notice">
                 {t("femme.calendar.detail.readOnlyOtherProfessional")}
@@ -288,46 +403,59 @@ export function AppointmentDetailModal({
                 <p>{detailError}</p>
               </Alert>
             )}
-            <Row label={t("femme.calendar.detail.client")}>
-              {appointment.clientName ?? (
-                <span className="italic text-ink-3">{t("femme.calendar.detail.occasionalClient")}</span>
-              )}
-              {appointment.clientBirthdayOnDay && (
-                <span data-testid="appointment-detail-birthday" className="ml-2">
-                  🎂 {t("femme.calendar.clientBirthday")}
-                </span>
-              )}
-            </Row>
-            <Row label={t("femme.calendar.detail.professional")}>{appointment.professionalName}</Row>
-            <Row label={t("femme.calendar.detail.service")}>
-              {appointment.serviceName} —{" "}
-              {t("femme.calendar.detail.duration", { minutes: appointment.durationMinutes })}
-            </Row>
-            <Row label={t("femme.calendar.detail.date")}>{formatDateTime(appointment.startAt, locale)}</Row>
-            <Row label={t("femme.calendar.detail.status")}>
-              <StatusBadge status={appointment.status} />
-            </Row>
-            {appointment.reminderSentAt && (
-              <Row label={t("femme.calendar.detail.reminderSent")}>
-                <span data-testid={`reminder-sent-${appointment.id}`}>
-                  {formatDateTime(appointment.reminderSentAt, locale)}
-                </span>
-              </Row>
-            )}
-            {canModify(appointment) ? (
-              <div className="flex">
-                <AppointmentFichaAction
-                  appt={appointment}
-                  testIdPrefix="calendar-appointment-ficha"
-                  className="w-full"
-                  onOpenRecord={setOpenRecordId}
-                  onChanged={() => onChanged()}
-                />
+
+            {/* Who: the client first and biggest. */}
+            <div>
+              <div className={FIELD_LABEL}>{t("femme.calendar.detail.client")}</div>
+              <div className="break-words font-heading text-xl font-extrabold leading-tight text-ink">
+                {appointment.clientName ?? (
+                  <span className="text-base font-semibold italic text-ink-3">
+                    {t("femme.calendar.detail.occasionalClient")}
+                  </span>
+                )}
+                {appointment.clientBirthdayOnDay && (
+                  <span data-testid="appointment-detail-birthday" className="ml-2 text-sm font-semibold">
+                    🎂 {t("femme.calendar.clientBirthday")}
+                  </span>
+                )}
               </div>
+            </div>
+
+            {/* What, when and with whom. */}
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+              <Field label={t("femme.calendar.detail.professional")}>{appointment.professionalName}</Field>
+              <Field label={t("femme.calendar.detail.service")}>
+                {appointment.serviceName} ·{" "}
+                {t("femme.calendar.detail.duration", { minutes: appointment.durationMinutes })}
+              </Field>
+              <Field label={t("femme.calendar.detail.date")} wide>
+                {formatDateTime(appointment.startAt, locale)}
+              </Field>
+              {appointment.reminderSentAt && (
+                <Field label={t("femme.calendar.detail.reminderSent")} wide>
+                  <span data-testid={`reminder-sent-${appointment.id}`}>
+                    {formatDateTime(appointment.reminderSentAt, locale)}
+                  </span>
+                </Field>
+              )}
+              {appointment.cancelReason && (
+                <Field label={t("femme.calendar.detail.cancelReason")} wide>
+                  {appointment.cancelReason}
+                </Field>
+              )}
+            </dl>
+
+            {/* Phone: the ficha's own dialogs (create / assign) live here; the button is a menu option. */}
+            {!isWide && showFicha ? (
+              <AppointmentFichaAction
+                ref={fichaRef}
+                hideButton
+                appt={appointment}
+                testIdPrefix="calendar-appointment-ficha"
+                onOpenRecord={setOpenRecordId}
+                onChanged={() => onChanged()}
+              />
             ) : null}
-            {appointment.cancelReason && (
-              <Row label={t("femme.calendar.detail.cancelReason")}>{appointment.cancelReason}</Row>
-            )}
           </div>
         )}
       </Modal>

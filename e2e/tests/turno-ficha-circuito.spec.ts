@@ -225,9 +225,10 @@ test.describe("Turno y ficha de servicio", () => {
     await expect(doneB).toHaveText("✓ Charged");
     await expect(doneB).toHaveAttribute("data-charged", "true");
 
-    // Tapping it opens the same detail, with «View invoice» (opens in place).
+    // Tapping it opens the same detail, with the comprobante button in its footer (opens in place).
     await page.getByTestId(`calendar-appt-${turnoB.id}`).click();
-    await expect(page.getByTestId("calendar-next-step")).toHaveText("View invoice");
+    await expect(page.getByTestId("appointment-view-invoice")).toBeVisible();
+    await expect(page.getByTestId("calendar-next-step")).toHaveCount(0);
     await page.keyboard.press("Escape");
 
     // Week grid: outlined block with the same mark.
@@ -548,17 +549,71 @@ test.describe("Turno y ficha de servicio", () => {
       .click({ timeout: 20_000 });
     // The turno opens in place on Inicio (no navigation to the Agenda).
     await expect(page).toHaveURL(/\/app\/?$/);
-    const next = page.getByTestId("calendar-next-step");
-    await expect(next).toHaveText("View invoice");
+    // Charged: no «Cobrar» nor next step; the comprobante is a footer button next to «Ficha».
+    const invoiceBtn = page.getByTestId("appointment-view-invoice");
+    await expect(invoiceBtn).toBeVisible();
+    await expect(invoiceBtn).toHaveText("Invoice");
+    await expect(page.getByTestId("calendar-next-step")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Charge", exact: true })).toHaveCount(0);
-    await next.click();
+    await invoiceBtn.click();
     // «Ver comprobante» opens the comprobante on top of the turno: no trip to Facturación.
     await expect(page.getByTestId("invoice-detail-view")).toBeVisible({ timeout: 20_000 });
     await expect(page).toHaveURL(/\/app\/?$/);
     // Closing it leaves the turno's detail open underneath.
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("invoice-detail-view")).toHaveCount(0);
-    await expect(page.getByTestId("calendar-next-step")).toHaveText("View invoice");
+    await expect(page.getByTestId("appointment-view-invoice")).toBeVisible();
+  });
+
+  test("detalle del turno: «Cerrar» a la izquierda y ficha y comprobante en el pie (web); dentro de «Más acciones» (celular)", async ({
+    page,
+    request,
+  }) => {
+    const admin = await loginAsDemoApi(request);
+    await ensureCashSessionOpenApi(request, admin);
+    await ensureActiveFiscalStampForInvoices(request, admin);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const clientName = `E2E TF Pie ${Date.now()}`;
+    const client = await seedClient(request, admin, clientName);
+    const turno = await seedTurno(request, admin, seed, client.id);
+    const ficha = await openFicha(request, admin, client.id, seed);
+    await apiPostJson(request, admin, `/api/appointments/${turno.id}/service-record/assign`, { serviceRecordId: ficha.id });
+    await chargeFicha(request, admin, client.id, ficha, seed);
+
+    await loginAsDemo(page);
+    const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: new RegExp(clientName, "i") });
+    await row.locator("button").first().click({ timeout: 20_000 });
+    const dialog = page.getByRole("dialog");
+
+    // Web: the footer reads Cerrar · Ficha · Comprobante · ⋯, left to right, one row.
+    const foot = {
+      close: dialog.getByRole("button", { name: "Close" }).last(),
+      ficha: dialog.getByTestId("calendar-appointment-ficha-go"),
+      invoice: dialog.getByTestId("appointment-view-invoice"),
+      more: dialog.getByTestId("calendar-more-actions"),
+    };
+    const box = async (l: typeof foot.close) => (await l.boundingBox())!;
+    const [c, f, i, m] = [await box(foot.close), await box(foot.ficha), await box(foot.invoice), await box(foot.more)];
+    expect(c.x).toBeLessThan(f.x);
+    expect(f.x).toBeLessThan(i.x);
+    expect(i.x).toBeLessThan(m.x);
+    expect(new Set([c, f, i, m].map((b) => Math.round(b.y))).size).toBe(1);
+    // The status moved to the header.
+    await expect(dialog.getByRole("heading", { level: 2 })).toContainText("Completed");
+    await page.keyboard.press("Escape");
+
+    // Phone: the same dialog keeps «Cerrar» and «Más acciones»; ficha and comprobante are menu options.
+    await page.setViewportSize({ width: 390, height: 780 });
+    await row.locator("button").first().click();
+    const phoneDialog = page.getByRole("dialog");
+    await expect(phoneDialog.getByTestId("appointment-view-invoice")).toHaveCount(0);
+    await expect(phoneDialog.getByTestId("calendar-appointment-ficha-go")).toHaveCount(0);
+    await phoneDialog.getByTestId("calendar-more-actions").click();
+    const menu = page.getByTestId("calendar-actions-panel");
+    await expect(menu.getByTestId("calendar-action-ficha")).toBeVisible();
+    await expect(menu.getByTestId("calendar-action-invoice")).toBeVisible();
+    await menu.getByTestId("calendar-action-invoice").click();
+    await expect(page.getByTestId("invoice-detail-view")).toBeVisible({ timeout: 20_000 });
   });
 
   test("un turno pasado a «Atendido» sin comprobante sigue ofreciendo «Cobrar»", async ({ page, request }) => {

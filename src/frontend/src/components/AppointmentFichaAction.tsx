@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Modal, Spinner } from "@design-system";
 import type { Appointment } from "../api/appointments";
@@ -23,25 +23,43 @@ export function canGetFicha(appt: Pick<Appointment, "status" | "clientId" | "ser
   );
 }
 
+export type FichaActionKind = "go" | "createOccasional" | "createOrAssign";
+
+/** What the ficha action of a turno is right now (null when there is none). */
+export function fichaActionKind(
+  appt: Pick<Appointment, "status" | "clientId" | "serviceRecordId">,
+): FichaActionKind | null {
+  if (appt.serviceRecordId) return "go";
+  if (!canGetFicha(appt)) return null;
+  return appt.clientId == null ? "createOccasional" : "createOrAssign";
+}
+
+/** Lets a parent run the action from its own control (e.g. an item of a menu). */
+export type AppointmentFichaActionHandle = { trigger: () => void };
+
 /**
  * The turno's ficha action, shared by Inicio and Agenda: «Ir a la ficha» when it has one, «Crear o
  * asignar ficha» when it does not (create a new one from the turno, or take an open ficha of the
  * same client from today). Creating or assigning starts the turno and opens the ficha.
  */
-export function AppointmentFichaAction({
-  appt,
-  onOpenRecord,
-  onChanged,
-  className = "",
-  testIdPrefix = "appointment-ficha",
-}: {
-  appt: Appointment;
-  onOpenRecord: (serviceRecordId: number) => void;
-  /** The turno changed (new ficha, status En curso): reload the lists. */
-  onChanged?: () => void;
-  className?: string;
-  testIdPrefix?: string;
-}) {
+export const AppointmentFichaAction = forwardRef<
+  AppointmentFichaActionHandle,
+  {
+    appt: Appointment;
+    onOpenRecord: (serviceRecordId: number) => void;
+    /** The turno changed (new ficha, status En curso): reload the lists. */
+    onChanged?: () => void;
+    className?: string;
+    testIdPrefix?: string;
+    /** Footer style: outlined, with the short «Ficha» label. */
+    compact?: boolean;
+    /** No button of its own: the parent runs it through the ref (its dialogs still show here). */
+    hideButton?: boolean;
+  }
+>(function AppointmentFichaAction(
+  { appt, onOpenRecord, onChanged, className = "", testIdPrefix = "appointment-ficha", compact = false, hideButton = false },
+  ref,
+) {
   const { t, i18n } = useTranslation();
   const locale = getDateLocale(i18n);
   const [open, setOpen] = useState(false);
@@ -65,17 +83,33 @@ export function AppointmentFichaAction({
     };
   }, [open, appt.id]);
 
+  useImperativeHandle(ref, () => ({
+    trigger() {
+      if (appt.serviceRecordId) {
+        onOpenRecord(appt.serviceRecordId);
+      } else if (!canGetFicha(appt)) {
+        return;
+      } else if (appt.clientId == null) {
+        void run(() => createServiceRecordFromAppointment(appt.id));
+      } else {
+        setError(null);
+        setOpen(true);
+      }
+    },
+  }));
+
   if (appt.serviceRecordId) {
+    if (hideButton) return null;
     return (
       <Button
         type="button"
-        variant="secondary"
+        variant={compact ? "outline" : "secondary"}
         size="sm"
         className={`min-h-11 ${className}`}
         data-testid={`${testIdPrefix}-go`}
         onClick={() => onOpenRecord(appt.serviceRecordId as number)}
       >
-        {t("femme.appointmentFicha.go")}
+        {t(compact ? "femme.appointmentFicha.goShort" : "femme.appointmentFicha.go")}
       </Button>
     );
   }
@@ -100,17 +134,19 @@ export function AppointmentFichaAction({
     // Occasional client: nothing to assign (the generic client mixes everyone), so one click creates.
     return (
       <>
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          className={`min-h-11 ${className}`}
-          data-testid={`${testIdPrefix}-create-or-assign`}
-          disabled={busy}
-          onClick={() => void run(() => createServiceRecordFromAppointment(appt.id))}
-        >
-          {t("femme.appointmentFicha.createOccasional")}
-        </Button>
+        {hideButton ? null : (
+          <Button
+            type="button"
+            variant={compact ? "outline" : "primary"}
+            size="sm"
+            className={`min-h-11 ${className}`}
+            data-testid={`${testIdPrefix}-create-or-assign`}
+            disabled={busy}
+            onClick={() => void run(() => createServiceRecordFromAppointment(appt.id))}
+          >
+            {t("femme.appointmentFicha.createOccasional")}
+          </Button>
+        )}
         {error ? (
           <Alert variant="destructive" role="alert" className="mt-2">
             {error}
@@ -123,19 +159,21 @@ export function AppointmentFichaAction({
   const clientName = appt.clientName ?? "";
   return (
     <>
-      <Button
-        type="button"
-        variant="primary"
-        size="sm"
-        className={`min-h-11 ${className}`}
-        data-testid={`${testIdPrefix}-create-or-assign`}
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        {t("femme.appointmentFicha.createOrAssign")}
-      </Button>
+      {hideButton ? null : (
+        <Button
+          type="button"
+          variant={compact ? "outline" : "primary"}
+          size="sm"
+          className={`min-h-11 ${className}`}
+          data-testid={`${testIdPrefix}-create-or-assign`}
+          onClick={() => {
+            setError(null);
+            setOpen(true);
+          }}
+        >
+          {t("femme.appointmentFicha.createOrAssign")}
+        </Button>
+      )}
       {open ? (
         <Modal
           open
@@ -208,4 +246,4 @@ export function AppointmentFichaAction({
       ) : null}
     </>
   );
-}
+});
