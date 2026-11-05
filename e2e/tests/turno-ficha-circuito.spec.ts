@@ -10,6 +10,7 @@ import {
   loginAsDemoApi,
   seedCategoryServiceProfessional,
   seedClient,
+  soonTodaySlot,
   type SeededSalon,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
@@ -42,8 +43,7 @@ async function seedTurno(
   clientId: number,
 ): Promise<{ id: number }> {
   // A few minutes from now (still today), so the turno shows up in Inicio's list at any hour.
-  const slot = new Date(Date.now() + 5 * 60_000);
-  slot.setSeconds(0, 0);
+  const slot = soonTodaySlot();
   return createAppointmentApi(request, token, {
     clientId,
     professionalId: seed.professionalId,
@@ -450,9 +450,7 @@ test.describe("Turno y ficha de servicio", () => {
     await ensureCashSessionOpenApi(request, admin);
     await ensureActiveFiscalStampForInvoices(request, admin);
     const seed = await seedCategoryServiceProfessional(request, admin);
-    const slot = new Date();
-    slot.setTime(Date.now() + 5 * 60_000);
-    slot.setSeconds(0, 0);
+    const slot = soonTodaySlot();
     const turno = await createAppointmentApi(request, admin, {
       clientId: null,
       professionalId: seed.professionalId,
@@ -698,9 +696,7 @@ test.describe("Turno y ficha de servicio", () => {
     const client = await seedClient(request, admin, `E2E TF ProCli ${Date.now()}`);
 
     // A turno of the logged-in professional herself.
-    const slot = new Date();
-    slot.setTime(Date.now() + 5 * 60_000);
-    slot.setSeconds(0, 0);
+    const slot = soonTodaySlot();
     const own = await createAppointmentApi(request, admin, {
       clientId: client.id,
       professionalId: pro.id,
