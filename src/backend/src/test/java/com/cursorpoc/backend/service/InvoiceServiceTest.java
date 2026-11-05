@@ -1258,6 +1258,19 @@ class InvoiceServiceTest {
   }
 
   @Test
+  void resolveInvoiceListRange_toleratesOneDayOfTimezoneSkewAtTheSixMonthLimit() {
+    ZoneId z = ZoneId.systemDefault();
+    LocalDate limit = LocalDate.now(z).minusMonths(6);
+    Instant to = LocalDate.now(z).atTime(23, 59, 59).atZone(z).toInstant();
+    // The user's local "6 months ago" can be one day earlier than the server's.
+    Instant oneDayEarlier = limit.minusDays(1).atStartOfDay(z).toInstant();
+    assertThat(InvoiceService.resolveInvoiceListRange(oneDayEarlier, to, null)).isNotNull();
+    Instant twoDaysEarlier = limit.minusDays(2).atStartOfDay(z).toInstant();
+    assertThatThrownBy(() -> InvoiceService.resolveInvoiceListRange(twoDaysEarlier, to, null))
+        .isInstanceOf(ResponseStatusException.class);
+  }
+
+  @Test
   void resolveInvoiceListRange_allowsRecentDates() {
     ZoneId z = ZoneId.systemDefault();
     // Dates within the last month are always allowed

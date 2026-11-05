@@ -980,9 +980,14 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     if (from.isAfter(to)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_LIST_INVALID_RANGE");
     }
-    // Reject from-dates older than 6 months
+    // Reject from-dates older than 6 months, with one day of tolerance: the browser sends its own
+    // local midnight, and around midnight the server's "today" (UTC) can already be a day ahead.
     Instant sixMonthsAgo =
-        LocalDate.now(zone).minusMonths(MAX_INVOICE_LIST_MONTHS).atStartOfDay(zone).toInstant();
+        LocalDate.now(zone)
+            .minusMonths(MAX_INVOICE_LIST_MONTHS)
+            .minusDays(1)
+            .atStartOfDay(zone)
+            .toInstant();
     if (from.isBefore(sixMonthsAgo)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_LIST_RANGE_TOO_OLD");
     }

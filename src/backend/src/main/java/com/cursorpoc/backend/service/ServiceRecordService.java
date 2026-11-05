@@ -388,8 +388,14 @@ public class ServiceRecordService {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "SERVICE_RECORD_LIST_INVALID_RANGE");
     }
+    // One day of tolerance: the browser sends its own local midnight, and around midnight the
+    // server's "today" (UTC) can already be a day ahead of the user's.
     Instant sixMonthsAgo =
-        LocalDate.now(zone).minusMonths(MAX_LIST_MONTHS).atStartOfDay(zone).toInstant();
+        LocalDate.now(zone)
+            .minusMonths(MAX_LIST_MONTHS)
+            .minusDays(1)
+            .atStartOfDay(zone)
+            .toInstant();
     if (from.isBefore(sixMonthsAgo)) {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "SERVICE_RECORD_LIST_RANGE_TOO_OLD");
