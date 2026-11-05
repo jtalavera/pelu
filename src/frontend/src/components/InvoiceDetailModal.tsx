@@ -1904,12 +1904,12 @@ export function InvoiceDetailModal({
                 {sampleKudeError}
               </Alert>
             )}
-            <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
+            <div className="flex flex-col gap-2 border-t border-line pt-4">
               {kudeRowShown ? (
                 <Button
                   variant="primary"
                   size="md"
-                  className={ACTION_BUTTON}
+                  className={`${ACTION_BUTTON} w-full`}
                   disabled={kudeDownloading}
                   data-testid="sifen-kude-download-button"
                   onClick={() => void handleDownloadKude()}
@@ -1924,7 +1924,7 @@ export function InvoiceDetailModal({
                   <Button
                     variant="primary"
                     size="md"
-                    className={ACTION_BUTTON}
+                    className={`${ACTION_BUTTON} w-full`}
                     data-testid="invoice-download-pdf-button"
                     onClick={() => void handleDownloadPdf()}
                   >
@@ -1932,50 +1932,54 @@ export function InvoiceDetailModal({
                   </Button>
                 )
               )}
-              {shareAvailable && (
-                <Button
-                  variant="outline"
-                  size="md"
-                  className={ACTION_BUTTON}
-                  aria-expanded={activePanel === "share"}
-                  data-testid="invoice-share-button"
-                  onClick={() => togglePanel("share")}
-                >
-                  {t("femme.billing.history.detail.share")}
+              {/* «Cerrar» on the left like every dialog, then the rest, all the same size. */}
+              <div className={`grid gap-2 ${shareAvailable ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"}`}>
+                <Button variant="secondary" size="md" className={ACTION_BUTTON} onClick={onClose}>
+                  {t("femme.billing.history.detail.close")}
                 </Button>
-              )}
-              <MoreActionsMenu
-                label={t("femme.billing.history.detail.moreActions")}
-                open={menuOpen}
-                onOpenChange={setMenuOpen}
-                triggerTestId="invoice-more-actions-button"
-                menuTestId="invoice-more-actions-menu"
-                // Pressing it again dismisses what it opened: the menu, or the option picked from it
-                // (and then the menu is back, ready to pick another option).
-                onTriggerClick={() => {
-                  if (menuOpen) {
-                    setMenuOpen(false);
-                  } else {
-                    if (menuPanelOpen) setActivePanel(null);
-                    setMenuOpen(true);
-                  }
-                }}
-                items={menuItems.map((item) => ({
-                  id: item.key,
-                  label: item.label,
-                  icon: item.icon,
-                  testId: item.testId,
-                  hint: item.hint,
-                  hintTestId: item.hint ? "sifen-kude-sample-hint" : undefined,
-                  active: item.active,
-                  disabled: item.disabled,
-                  destructive: item.destructive,
-                  onSelect: item.onSelect,
-                }))}
-              />
-              <Button variant="ghost" size="md" className={`${ACTION_BUTTON} ml-auto`} onClick={onClose}>
-                {t("femme.billing.history.detail.close")}
-              </Button>
+                {shareAvailable && (
+                  <Button
+                    variant="outline"
+                    size="md"
+                    className={`${ACTION_BUTTON} w-full`}
+                    aria-expanded={activePanel === "share"}
+                    data-testid="invoice-share-button"
+                    onClick={() => togglePanel("share")}
+                  >
+                    {t("femme.billing.history.detail.share")}
+                  </Button>
+                )}
+                <MoreActionsMenu
+                  className={`[&>button]:w-full ${shareAvailable ? "col-span-2 sm:col-span-1" : ""}`}
+                  label={t("femme.billing.history.detail.moreActions")}
+                  open={menuOpen}
+                  onOpenChange={setMenuOpen}
+                  triggerTestId="invoice-more-actions-button"
+                  menuTestId="invoice-more-actions-menu"
+                  // Pressing it again dismisses what it opened: the menu, or the option picked from it
+                  // (and then the menu is back, ready to pick another option).
+                  onTriggerClick={() => {
+                    if (menuOpen) {
+                      setMenuOpen(false);
+                    } else {
+                      if (menuPanelOpen) setActivePanel(null);
+                      setMenuOpen(true);
+                    }
+                  }}
+                  items={menuItems.map((item) => ({
+                    id: item.key,
+                    label: item.label,
+                    icon: item.icon,
+                    testId: item.testId,
+                    hint: item.hint,
+                    hintTestId: item.hint ? "sifen-kude-sample-hint" : undefined,
+                    active: item.active,
+                    disabled: item.disabled,
+                    destructive: item.destructive,
+                    onSelect: item.onSelect,
+                  }))}
+                />
+              </div>
             </div>
 
             {/* Panels (the container keeps the testid the SIFEN specs already use) */}
@@ -2075,8 +2079,6 @@ export function InvoiceDetailModal({
             })
           : t("femme.billing.history.detail.loading")
       }
-      // Wide enough for the whole action row (download, share, more actions, close) on one line.
-      className="max-w-2xl"
     >
       <div className="flex flex-col gap-4">
         {loading && (

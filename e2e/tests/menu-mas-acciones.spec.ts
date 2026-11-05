@@ -121,7 +121,11 @@ test.describe("Menú «Más acciones»", () => {
     const more = dialog.getByTestId("invoice-more-actions-button");
     await expect(more).toBeVisible({ timeout: 20_000 });
 
-    // Every button of the action row: same height (44 px), same text size, same vertical center.
+    // The dialog is as narrow as the others (512 px), no longer 672 px.
+    const dlgBox = await dialog.boundingBox();
+    expect(dlgBox!.width).toBeLessThanOrEqual(520);
+
+    // Every button of the action area: same height (44 px) and same text size.
     const bar = more.locator("xpath=ancestor::div[contains(@class,'border-t')][1]");
     const buttons = bar.getByRole("button");
     const count = await buttons.count();
@@ -129,15 +133,31 @@ test.describe("Menú «Más acciones»", () => {
     const looks = await buttons.evaluateAll((els) =>
       els.map((el) => {
         const r = el.getBoundingClientRect();
-        return { h: Math.round(r.height), cy: Math.round(r.top + r.height / 2), font: getComputedStyle(el).fontSize, y: Math.round(r.top) };
+        return {
+          label: (el.textContent ?? "").trim(),
+          h: Math.round(r.height),
+          font: getComputedStyle(el).fontSize,
+          x: Math.round(r.left),
+          y: Math.round(r.top),
+          w: Math.round(r.width),
+        };
       }),
     );
     for (const l of looks) {
       expect(l.h).toBe(44);
       expect(l.font).toBe("14px");
     }
-    // One row: «Cerrar» is no longer alone on a second line.
-    expect(new Set(looks.map((l) => l.y)).size).toBe(1);
+    // Layout: the download on its own row on top, full width; below it «Cerrar» on the LEFT, then
+    // the rest, all in one row.
+    const download = looks.find((l) => /KuDE|PDF/i.test(l.label))!;
+    const rest = looks.filter((l) => l !== download);
+    expect(download).toBeTruthy();
+    expect(new Set(rest.map((l) => l.y)).size).toBe(1);
+    expect(rest[0].y).toBeGreaterThan(download.y);
+    const closeBtn = rest.find((l) => /^Close/.test(l.label))!;
+    expect(closeBtn.x).toBe(Math.min(...rest.map((l) => l.x)));
+    const barBox = await bar.boundingBox();
+    expect(download.w).toBeGreaterThanOrEqual(barBox!.width - 2);
 
     // The title is vertically centered with the × of the header.
     const title = dialog.getByRole("heading", { level: 2 });
