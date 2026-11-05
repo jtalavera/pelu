@@ -102,6 +102,15 @@ describe("TodayServiceRecords", () => {
     expect(screen.queryByTestId("dashboard-service-records-add-row")).toBeNull();
   });
 
+  it("admin: «View history» sits in the title row, next to the section title", async () => {
+    listServiceRecordsPaged.mockResolvedValue({ content: pro });
+    renderIt(false);
+    await screen.findByTestId("dashboard-service-record-card");
+    const link = screen.getByTestId("dashboard-service-records-history-link");
+    expect(link.closest('[data-testid="section-title"]')).not.toBeNull();
+    expect(link.textContent).toMatch(/View history/i);
+  });
+
   it("professional: no amounts and no Charge; the card opens the ficha in professional mode", async () => {
     listServiceRecordsPaged.mockResolvedValue({ content: pro });
     renderIt(true);
