@@ -180,6 +180,7 @@ class PinSessionSecurityTest {
     "PUT, /api/appointments/4",
     "PATCH, /api/appointments/4/status",
     "GET, /api/professionals",
+    "GET, /api/professionals/options",
     "GET, /api/services",
     "GET, /api/clients",
     "GET, /api/service-records",

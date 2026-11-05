@@ -67,7 +67,7 @@ describe("PropinasPage", () => {
     balances = { 1: 180000, 2: 95000, 3: 0 };
     femmeJson.mockImplementation((url: unknown) => {
       const s = String(url);
-      if (s === "/api/professionals") return Promise.resolve(pros);
+      if (s === "/api/professionals/options") return Promise.resolve(pros);
       if (s.startsWith("/api/propinas/balance")) {
         const id = Number(new URL(s, "http://x").searchParams.get("professionalId"));
         return Promise.resolve({ professionalId: id, professionalName: "x", balance: balances[id] ?? 0 });
@@ -243,7 +243,7 @@ describe("PropinasPage", () => {
     });
     femmeJson.mockImplementation((url: unknown) => {
       const s = String(url);
-      if (s === "/api/professionals") return Promise.resolve(pros);
+      if (s === "/api/professionals/options") return Promise.resolve(pros);
       if (s.startsWith("/api/propinas/balance")) return Promise.resolve({ balance: 0 });
       if (s.startsWith("/api/propinas/report?")) return Promise.resolve(report(rows));
       if (s.startsWith("/api/propinas/withdrawals?")) {
@@ -272,7 +272,7 @@ describe("PropinasPage", () => {
     const many = Array.from({ length: 7 }, (_, i) => ({ id: 10 + i, fullName: `Pro ${i}`, active: true }));
     femmeJson.mockImplementation((url: unknown) => {
       const s = String(url);
-      if (s === "/api/professionals") return Promise.resolve(many);
+      if (s === "/api/professionals/options") return Promise.resolve(many);
       if (s.startsWith("/api/propinas/balance")) {
         const id = Number(new URL(s, "http://x").searchParams.get("professionalId"));
         return Promise.resolve({ professionalId: id, professionalName: "x", balance: (id - 9) * 1000 });
@@ -300,7 +300,7 @@ describe("PropinasPage", () => {
   it("shows an empty message when there are no movements", async () => {
     femmeJson.mockImplementation((url: unknown) => {
       const s = String(url);
-      if (s === "/api/professionals") return Promise.resolve(pros);
+      if (s === "/api/professionals/options") return Promise.resolve(pros);
       if (s.startsWith("/api/propinas/balance")) return Promise.resolve({ balance: 0 });
       if (s.startsWith("/api/propinas/report?")) {
         return Promise.resolve({ ...report([]), withdrawalsTotal: 0 });

@@ -65,6 +65,8 @@ jobs:
           npx playwright test
           tests/hu-03-dashboard-principal.spec.ts
           tests/inicio-fichas-lista.spec.ts
+          tests/inicio-detalle-turno.spec.ts
+          tests/profesionales-opciones.spec.ts
           tests/hu-06-calendario-de-turnos.spec.ts
           tests/hu-07-agendar-un-turno.spec.ts
           tests/hu-08-cambiar-estado-de-un-turno.spec.ts

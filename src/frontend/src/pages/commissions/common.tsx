@@ -10,7 +10,7 @@ export type ProfessionalOption = { id: number; fullName: string; displayName?: s
 export function useProfessionals(): ProfessionalOption[] {
   const [list, setList] = useState<ProfessionalOption[]>([]);
   useEffect(() => {
-    femmeJson<ProfessionalOption[]>("/api/professionals")
+    femmeJson<ProfessionalOption[]>("/api/professionals/options")
       .then((l) => setList(Array.isArray(l) ? withDisplayNames(l) : []))
       .catch(() => setList([]));
   }, []);

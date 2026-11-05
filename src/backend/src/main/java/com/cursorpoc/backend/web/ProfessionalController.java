@@ -5,6 +5,7 @@ import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.ProfessionalDirectoryService;
 import com.cursorpoc.backend.web.dto.GrantAccessResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
+import com.cursorpoc.backend.web.dto.ProfessionalOptionResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalScheduleRequest;
 import com.cursorpoc.backend.web.dto.ProfessionalUpsertRequest;
@@ -47,6 +48,24 @@ public class ProfessionalController {
       return professionalDirectoryService.listDirectory(principal.getTenantId());
     }
     return professionalDirectoryService.list(principal.getTenantId());
+  }
+
+  /**
+   * Lightweight list for pickers (id, names, active flag): no photos, schedules or access data, so
+   * it loads fast. Open to every role, like the directory list.
+   */
+  @GetMapping("/options")
+  public List<ProfessionalOptionResponse> options(
+      @AuthenticationPrincipal FemmeUserPrincipal principal) {
+    requirePrincipal(principal);
+    log.info("GET /api/professionals/options tenantId={}", principal.getTenantId());
+    List<ProfessionalOptionResponse> response =
+        professionalDirectoryService.listOptions(principal.getTenantId());
+    log.info(
+        "GET /api/professionals/options tenantId={} status=200 count={}",
+        principal.getTenantId(),
+        response.size());
+    return response;
   }
 
   @GetMapping("/page")

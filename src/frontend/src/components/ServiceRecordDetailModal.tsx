@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Alert, Button, Modal, Spinner, Text } from "@design-system";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { getServiceRecord, type ServiceRecordDetail } from "../api/serviceRecords";
-import { ServiceRecordEditor } from "./ServiceRecordEditor";
+import { fetchProfessionalOptions } from "../api/professionalOptions";
+import { getFrequentServices } from "../api/serviceRecords";
+import { ServiceRecordEditor, type ServiceRecordEditorPreload } from "./ServiceRecordEditor";
 import { ServiceRecordStatusPill } from "./ServiceRecordStatusPill";
 
 export function ServiceRecordDetailModal({
@@ -21,6 +23,16 @@ export function ServiceRecordDetailModal({
 }) {
   const { t } = useTranslation();
   const [record, setRecord] = useState<ServiceRecordDetail | null>(null);
+  // The professionals and the frequent services do not depend on the ficha: ask for them right now,
+  // in parallel with it, instead of after the editor mounts (three requests one after another).
+  const [preload] = useState<ServiceRecordEditorPreload>(() => ({
+    professionals: fetchProfessionalOptions(),
+    frequentServices: professionalMode
+      ? Promise.resolve([])
+      : getFrequentServices(3)
+          .then((items) => (Array.isArray(items) ? items : []))
+          .catch(() => []),
+  }));
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -79,6 +91,7 @@ export function ServiceRecordDetailModal({
             initial={record}
             allowClientCreateNew={false}
             professionalMode={professionalMode}
+            preload={preload}
             onSaved={() => {
               onChanged?.("updated");
               onClose();
