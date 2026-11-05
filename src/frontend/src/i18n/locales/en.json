@@ -509,6 +509,7 @@
       "candidateTitle": "Service record from {{time}}",
       "appointmentTag": "Appointment {{time}}",
       "noAppointmentTag": "No appointment",
+      "goShort": "Record",
       "viewAppointment": "View appointment",
       "goToAppointment": "Appointment at {{time}}"
     },
@@ -2959,6 +2960,7 @@
         "confirm": "Confirm",
         "start": "Start",
         "viewInvoice": "View invoice",
+        "invoiceShort": "Invoice",
         "charge": "Charge",
         "complete": "Mark as completed",
         "noShow": "No show",
