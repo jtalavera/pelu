@@ -50,7 +50,9 @@ test.describe("Ficha de servicio · lista limpia", () => {
     expect(c!.x).toBeLessThan(s!.x);
     expect(s!.x).toBeLessThan(p!.x);
     expect(p!.x).toBeLessThan(m!.x);
-    expect(new Set([c!, s!, p!, m!].map((b) => Math.round(b.y))).size).toBe(1);
+    // Same row: the vertical centres line up (the «⋯» button can be shorter than the others).
+    const centres = [c!, s!, p!, m!].map((b) => b.y + b.height / 2);
+    expect(Math.max(...centres) - Math.min(...centres)).toBeLessThan(3);
     await expect(dialog.getByTestId("service-record-void-open")).toHaveCount(0);
 
     // The secondary actions are in the menu, «Anular ficha» last and in red.

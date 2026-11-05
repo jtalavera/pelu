@@ -142,6 +142,8 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     await pickFichaClient(page, dlg, client.fullName);
     await pickLineService(page, 0, seed.serviceFullName);
 
+    // The picked line folds into a plain row: open it to reach its fields.
+    await expandFichaLine(dlg, 0);
     // Clear the auto-filled unit price/quantity and leave professional unselected.
     await setControlledInputValue(page.locator("#service-record-line-price-0"), "");
     await setControlledInputValue(page.locator("#service-record-line-qty-0"), "0");
