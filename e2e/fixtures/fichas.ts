@@ -69,3 +69,12 @@ export async function expandFichaLine(dlg: Locator, idx: number): Promise<void> 
   const toggle = line.getByTestId("service-record-line-toggle");
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
 }
+
+/**
+ * Picks an option of the ficha dialog's «⋯» menu (tips, voiding, the turno). The menu opens in a
+ * portal, so the option is looked up on the page.
+ */
+export async function clickFichaMenuItem(page: Page, dlg: Locator, testId: string): Promise<void> {
+  await dlg.getByTestId("service-record-more").click();
+  await page.getByTestId(testId).click();
+}

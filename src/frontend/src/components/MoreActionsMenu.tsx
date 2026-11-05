@@ -33,6 +33,8 @@ export type MoreActionsMenuProps = {
   onTriggerClick?: () => void;
   disabled?: boolean;
   className?: string;
+  /** Icon-only trigger («⋯», 44 px round) for crowded rows; `label` stays as its accessible name. */
+  compact?: boolean;
 };
 
 const MENU_WIDTH = 264;
@@ -71,6 +73,7 @@ export function MoreActionsMenu({
   onTriggerClick,
   disabled,
   className,
+  compact = false,
 }: MoreActionsMenuProps) {
   const menuId = useId();
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -173,11 +176,20 @@ export function MoreActionsMenu({
         aria-controls={open ? menuId : undefined}
         disabled={disabled}
         data-testid={triggerTestId}
+        aria-label={compact ? label : undefined}
         onClick={onTriggerClick ?? (() => onOpenChange(!open))}
-        className={cn(ACTION_BUTTON, open && "bg-primary-lt")}
+        className={cn(ACTION_BUTTON, compact && "w-11 px-0", open && "bg-primary-lt")}
       >
-        {label}
-        <IconChevronDown className={cn("transition-transform", open && "rotate-180")} />
+        {compact ? (
+          <span aria-hidden className="text-xl leading-none">
+            ⋯
+          </span>
+        ) : (
+          <>
+            {label}
+            <IconChevronDown className={cn("transition-transform", open && "rotate-180")} />
+          </>
+        )}
       </Button>
       <FloatingDropdown ref={panelRef} anchorRef={anchorRef} open={open} width={MENU_WIDTH}>
         <div

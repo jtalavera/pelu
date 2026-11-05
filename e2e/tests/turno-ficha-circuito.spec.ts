@@ -185,7 +185,8 @@ test.describe("Turno y ficha de servicio", () => {
     await expect(card).toBeVisible({ timeout: 20_000 });
     await card.click({ position: { x: 40, y: 20 } });
     const dialog = page.getByRole("dialog");
-    await dialog.getByTestId("service-record-view-appointment").click();
+    await dialog.getByTestId("service-record-more").click();
+    await page.getByTestId("service-record-view-appointment").click();
     await expect(page).toHaveURL(/\/app\/calendar/);
     await expect(page.getByTestId("calendar-appointment-ficha-go")).toBeVisible({ timeout: 20_000 });
   });

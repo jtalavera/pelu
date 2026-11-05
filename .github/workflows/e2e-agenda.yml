@@ -66,6 +66,15 @@ jobs:
           tests/hu-03-dashboard-principal.spec.ts
           tests/inicio-fichas-lista.spec.ts
           tests/inicio-detalle-turno.spec.ts
+          tests/ficha-lista-limpia.spec.ts
+          tests/issue-53-ficha-servicio.spec.ts
+          tests/issue-119-ficha-servicio-ajustes.spec.ts
+          tests/issue-129-ficha-servicio-fixes.spec.ts
+          tests/issue-133-ajustes-varios.spec.ts
+          tests/issue-135-ajustes-varios-v2.spec.ts
+          tests/issue-143-ajustes-clientes-timbrado.spec.ts
+          tests/inicio-fichas-profesional.spec.ts
+          tests/inicio-profesional-turnos.spec.ts
           tests/profesionales-opciones.spec.ts
           tests/hu-06-calendario-de-turnos.spec.ts
           tests/hu-07-agendar-un-turno.spec.ts

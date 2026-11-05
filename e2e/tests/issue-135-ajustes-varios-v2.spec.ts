@@ -11,7 +11,7 @@ import {
 import { loginAsDemo } from "../fixtures/auth";
 import { openDashboardMore } from "../fixtures/dashboard";
 import { setControlledInputValue } from "../fixtures/ui";
-import { openFichaDialog } from "../fixtures/fichas";
+import { openFichaDialog, clickFichaMenuItem } from "../fixtures/fichas";
 import {
   filterPropinasByProfessional,
   openWithdrawDialog,
@@ -139,7 +139,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
 
     // Open the folded tips section and scroll to the bottom of the form before saving, simulating
     // a user who scrolled past the top while editing a field further down.
-    await dialog.getByTestId("service-record-tips-toggle").click();
+    await clickFichaMenuItem(page, dialog, "service-record-tips-toggle");
     await expect
       .poll(async () => {
         await scrollContainer.evaluate((el) => {
@@ -188,7 +188,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await dialog.getByTestId("service-record-tips-toggle").click();
+    await clickFichaMenuItem(page, dialog, "service-record-tips-toggle");
     const tipInput = dialog.locator(`#service-record-tip-${seed.professionalId}`);
     await setControlledInputValue(tipInput, "1000");
     await dialog.getByTestId("service-record-submit").click();

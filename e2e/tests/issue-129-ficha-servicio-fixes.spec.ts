@@ -96,7 +96,9 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     expect(box!.width).toBeGreaterThan(450);
     expect(box!.width).toBeLessThanOrEqual(600);
 
-    // All line-item fields fit and are visible without needing horizontal scroll.
+    // All line-item fields fit and are visible without needing horizontal scroll (once the
+    // service row is opened).
+    await expandFichaLine(dialog, 0);
     await expect(dialog.locator("#service-record-line-svc-0")).toBeVisible();
     await expect(dialog.locator("#service-record-line-prof-0")).toBeVisible();
     await expect(dialog.locator("#service-record-line-price-0")).toBeVisible();

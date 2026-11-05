@@ -159,6 +159,8 @@ test.describe("Issue #119 · Ajustes en Ficha de servicio y Facturación", () =>
 
     await loginAsDemo(page);
     const dialog = await openFichaDialog(page, client.fullName);
+    // The service is a plain row; tapping it opens its fields.
+    await expandFichaLine(dialog, 0);
     const priceInput = dialog.locator("#service-record-line-price-0");
     const qtyInput = dialog.locator("#service-record-line-qty-0");
     await expect(priceInput).toHaveValue("50.000");
