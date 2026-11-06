@@ -204,7 +204,8 @@ test.describe("Turno y ficha de servicio", () => {
     await apiPostJson(request, admin, `/api/appointments/${turno.id}/service-record`, {});
 
     await loginAsDemo(page);
-    await page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName }).first().click();
+    // The turno's detail opens from the client's name (the first button of the row).
+    await page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName }).locator("button").first().click();
     const detail = page.getByRole("dialog").last();
     await detail.getByTestId("calendar-appointment-ficha-go").click();
     await page.getByTestId("service-record-more").click();
