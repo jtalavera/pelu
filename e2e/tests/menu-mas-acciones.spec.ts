@@ -160,6 +160,14 @@ test.describe("Menú «Más acciones»", () => {
     const barBox = await bar.boundingBox();
     expect(download.w).toBeGreaterThanOrEqual(barBox!.width - 2);
 
+    // «Más acciones» is the round «⋯» (like the ficha and the turno dialogs), at the far right of
+    // the row, and keeps its accessible name.
+    await expect(more).toHaveText("⋯");
+    await expect(more).toHaveAccessibleName(/more actions/i);
+    const moreLook = looks.find((l) => l.label === "⋯")!;
+    expect(moreLook.w).toBe(44);
+    expect(moreLook.x).toBe(Math.max(...rest.map((l) => l.x)));
+
     // The title is vertically centered with the × of the header.
     const title = dialog.getByRole("heading", { level: 2 });
     const close = dialog.getByRole("button", { name: /^Close/ }).first();

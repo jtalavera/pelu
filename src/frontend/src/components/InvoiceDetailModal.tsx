@@ -1932,8 +1932,9 @@ export function InvoiceDetailModal({
                   </Button>
                 )
               )}
-              {/* «Cerrar» on the left like every dialog, then the rest, all the same size. */}
-              <div className={`grid gap-2 ${shareAvailable ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2"}`}>
+              {/* «Cerrar» on the left like every dialog, then «Compartir» and, at the far right, the «⋯»
+                  menu, the same one as the ficha and the turno dialogs; all the same height. */}
+              <div className="flex items-center gap-2">
                 <Button variant="secondary" size="md" className={ACTION_BUTTON} onClick={onClose}>
                   {t("femme.billing.history.detail.close")}
                 </Button>
@@ -1941,7 +1942,7 @@ export function InvoiceDetailModal({
                   <Button
                     variant="outline"
                     size="md"
-                    className={`${ACTION_BUTTON} w-full`}
+                    className={ACTION_BUTTON}
                     aria-expanded={activePanel === "share"}
                     data-testid="invoice-share-button"
                     onClick={() => togglePanel("share")}
@@ -1949,8 +1950,9 @@ export function InvoiceDetailModal({
                     {t("femme.billing.history.detail.share")}
                   </Button>
                 )}
+                <span className="flex-1" aria-hidden="true" />
                 <MoreActionsMenu
-                  className={`[&>button]:w-full ${shareAvailable ? "col-span-2 sm:col-span-1" : ""}`}
+                  compact
                   label={t("femme.billing.history.detail.moreActions")}
                   open={menuOpen}
                   onOpenChange={setMenuOpen}
