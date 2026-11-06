@@ -3017,6 +3017,13 @@
         "sun": "Dom"
       },
       "badge": { "charged": "Cobrado", "completed": "Completado" },
+      "legend": {
+        "COMPLETED_CHARGED": "Cobrado",
+        "COMPLETED": "Completado sin cobrar",
+        "IN_PROGRESS": "En curso",
+        "CONFIRMED": "Confirmado",
+        "PENDING": "Pendiente"
+      },
       "status": {
         "PENDING": "Pendiente",
         "CONFIRMED": "Confirmado",

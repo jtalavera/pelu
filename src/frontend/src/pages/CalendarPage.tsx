@@ -1,5 +1,5 @@
 import { withDisplayNames } from "../lib/professionalDisplay";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Spinner } from "@design-system";
 import { useTour } from "../tour/useTour";
@@ -18,13 +18,15 @@ import { isPinSession } from "../auth/sharedDevice";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
-const HOUR_START = 7;
-const HOUR_END = 21;
-const TOTAL_HOURS = HOUR_END - HOUR_START;
+// The week grid always offers 08:00–18:00 (click-to-create) and grows to fit turnos outside it, within 07–21.
+const CORE_START = 8;
+const CORE_END = 18;
+const MIN_HOUR = 7;
+const MAX_HOUR = 21;
 const PX_PER_HOUR = 64;
-const GRID_HEIGHT = TOTAL_HOURS * PX_PER_HOUR;
 const PX_PER_HALF_HOUR = PX_PER_HOUR / 2;
-const SLOTS_PER_DAY = TOTAL_HOURS * 2;
+/** Each turno card keeps at least this width when several share the same hour. */
+const MIN_PX_PER_SLOT = 96;
 
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
@@ -52,10 +54,10 @@ function formatLocalYmd(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function appointmentTopPx(startAt: string): number {
+function appointmentTopPx(startAt: string, gridStart: number): number {
   const d = new Date(startAt);
   const hours = d.getHours() + d.getMinutes() / 60;
-  return Math.max(0, (hours - HOUR_START) * PX_PER_HOUR);
+  return Math.max(0, (hours - gridStart) * PX_PER_HOUR);
 }
 
 function appointmentHeightPx(durationMinutes: number): number {
@@ -87,6 +89,99 @@ type ProfColor = (typeof PROF_COLORS)[number];
 function profColor(professionalId: number, professionals: Professional[]): ProfColor {
   const idx = professionals.findIndex((p) => p.id === professionalId);
   return PROF_COLORS[(idx === -1 ? 0 : idx) % PROF_COLORS.length];
+}
+
+// ── Status icons of the week grid ─────────────────────────────────────────────
+type GlyphKind = "COMPLETED_CHARGED" | "COMPLETED" | "IN_PROGRESS" | "CONFIRMED" | "PENDING";
+
+/** Round 18px icon: filled green ✓ charged, amber ✓ completed (not charged), ● in progress, green ✓ confirmed, dashed ◔ pending. */
+function StatusGlyph({ kind }: { kind: GlyphKind }) {
+  const size = 18;
+  const check = (
+    <path d="M5 9.5l2.7 2.7L13 6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+  );
+  if (kind === "COMPLETED_CHARGED") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true" style={{ color: "rgb(var(--fb-on-primary))" }}>
+        <circle cx="9" cy="9" r="9" fill="rgb(var(--fb-success))" />
+        {check}
+      </svg>
+    );
+  }
+  if (kind === "COMPLETED") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true" style={{ color: "rgb(var(--fb-warning))" }}>
+        <circle cx="9" cy="9" r="8" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        {check}
+      </svg>
+    );
+  }
+  if (kind === "IN_PROGRESS") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true">
+        <circle cx="9" cy="9" r="9" fill="rgb(var(--fb-primary))" />
+        <circle cx="9" cy="9" r="3.2" fill="rgb(var(--fb-on-primary))" />
+      </svg>
+    );
+  }
+  if (kind === "CONFIRMED") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true" style={{ color: "rgb(var(--fb-success))" }}>
+        <circle cx="9" cy="9" r="8" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        {check}
+      </svg>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true" style={{ color: "rgb(var(--fb-ink-3))" }}>
+      <circle cx="9" cy="9" r="8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeDasharray="3 2.5" />
+      <path d="M9 9V4.5A4.5 4.5 0 0 1 13.5 9Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function StatusIcon({
+  status,
+  charged,
+  apptId,
+  label,
+  doneLabel,
+}: {
+  status: string;
+  charged: boolean;
+  apptId: number;
+  label: string;
+  doneLabel: string;
+}) {
+  if (status === "COMPLETED") {
+    return (
+      <span
+        role="img"
+        data-testid={`calendar-done-badge-${apptId}`}
+        data-charged={charged ? "true" : "false"}
+        aria-label={doneLabel}
+        title={doneLabel}
+        style={{ display: "inline-flex" }}
+      >
+        <StatusGlyph kind={charged ? "COMPLETED_CHARGED" : "COMPLETED"} />
+      </span>
+    );
+  }
+  if (status === "CONFIRMED") {
+    return (
+      <span role="img" data-testid={`confirmed-check-${apptId}`} aria-label={label} title={label} style={{ display: "inline-flex" }}>
+        <StatusGlyph kind="CONFIRMED" />
+      </span>
+    );
+  }
+  if (status === "IN_PROGRESS" || status === "PENDING") {
+    return (
+      <span role="img" data-testid={`status-icon-${apptId}`} data-status={status} aria-label={label} title={label} style={{ display: "inline-flex" }}>
+        <StatusGlyph kind={status} />
+      </span>
+    );
+  }
+  return null;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -159,14 +254,6 @@ export default function CalendarPage() {
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, []);
-
-  const scrollRef = useRef<HTMLDivElement>(null);
-  // Scroll to 8am on mount
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = (8 - HOUR_START) * PX_PER_HOUR;
-    }
   }, []);
 
   // Load professionals and services once
@@ -295,6 +382,31 @@ export default function CalendarPage() {
   const dayList = searching ? fullDayList.filter(matchesSearch) : fullDayList;
   const weekAppts = appointments.filter((a) => CALENDAR_GRID_STATUSES.includes(a.status));
   const weekMatchCount = searching ? weekAppts.filter(matchesSearch).length : weekAppts.length;
+  // Week grid: per-day layout, hour range and column widths.
+  const weekDayData = weekDays.map(({ date }) => {
+    const appts = appointments
+      .filter((a) => isSameDay(a.startAt, date))
+      .filter((a) => CALENDAR_GRID_STATUSES.includes(a.status));
+    const layout = layoutOverlappingInDay(appts);
+    const maxSlots = Math.max(1, ...Array.from(layout.values()).map((l) => l.slotCount));
+    return { appts, layout, maxSlots };
+  });
+  let gridStart = CORE_START;
+  let gridEnd = CORE_END;
+  for (const a of weekAppts) {
+    const s = new Date(a.startAt);
+    const startH = s.getHours();
+    const endH = Math.ceil((startH * 60 + s.getMinutes() + a.durationMinutes) / 60);
+    gridStart = Math.min(gridStart, startH);
+    gridEnd = Math.max(gridEnd, endH);
+  }
+  gridStart = Math.max(MIN_HOUR, gridStart);
+  gridEnd = Math.min(MAX_HOUR, Math.max(gridEnd, gridStart + 1));
+  const totalHours = gridEnd - gridStart;
+  const gridHeight = totalHours * PX_PER_HOUR;
+  const slotsPerDay = totalHours * 2;
+  const weekGridColumns = `52px ${weekDayData.map((d) => `minmax(${d.maxSlots * MIN_PX_PER_SLOT}px, 1fr)`).join(" ")}`;
+  const weekGridMinWidth = 52 + weekDayData.reduce((n, d) => n + d.maxSlots * MIN_PX_PER_SLOT, 0);
   /** The text with the part that matches the search highlighted. */
   const highlight = (text: string) => {
     const range = searching ? findQueryMatch(text, searchQuery) : null;
@@ -653,409 +765,369 @@ export default function CalendarPage() {
 
       {/* ── Calendar grid (week) ── */}
       {!loading && activeView === "week" && (
-        <div
-          data-tour="calendar-grid"
-          style={{
-            background: "var(--color-white)",
-            borderRadius: "var(--radius-xl)",
-            border: "var(--border-default)",
-            overflow: "hidden",
-          }}
-        >
-          {/* Day header row */}
+        <div data-tour="calendar-grid">
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: `52px repeat(${visibleDays.length}, 1fr)`,
-              borderBottom: "var(--border-default)",
+              background: "var(--color-white)",
+              borderRadius: "var(--radius-xl)",
+              border: "var(--border-default)",
+              overflow: "hidden",
             }}
           >
-            <div
-              style={{
-                borderRight: "var(--border-default)",
-                background: "var(--color-stone)",
-              }}
-            />
-            {visibleDays.map(({ key, label, date }, dayIdx) => (
-              <div
-                key={key}
-                style={{
-                  padding: "10px 8px",
-                  textAlign: "center",
-                  fontSize: 11,
-                  color: "var(--color-ink-3)",
-                  background: "var(--color-stone)",
-                  borderRight: dayIdx < visibleDays.length - 1 ? "var(--border-default)" : "none",
-                }}
-              >
+            <div style={{ overflowX: "auto" }}>
+              <div style={{ minWidth: weekGridMinWidth }}>
+                {/* Day header row */}
                 <div
                   style={{
-                    textTransform: "uppercase",
-                    fontSize: 9,
-                    letterSpacing: "0.06em",
-                    marginBottom: 4,
+                    display: "grid",
+                    gridTemplateColumns: weekGridColumns,
+                    borderBottom: "var(--border-default)",
                   }}
                 >
-                  {label}
-                </div>
-                {isToday(date) ? (
                   <div
                     style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: "50%",
-                      background: "var(--color-rose)",
-                      color: "var(--color-on-primary)",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontWeight: 500,
-                      fontSize: 12,
-                      lineHeight: 1,
+                      borderRight: "var(--border-default)",
+                      background: "var(--color-stone)",
                     }}
-                  >
-                    {date.getDate()}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: 12, color: "var(--color-ink)", fontWeight: 400 }}>
-                    {date.getDate()}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Scrollable time grid */}
-          <div
-            ref={scrollRef}
-            style={{ overflowY: "auto", maxHeight: "calc(100vh - 230px)" }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: `52px repeat(${visibleDays.length}, 1fr)`,
-                height: GRID_HEIGHT,
-              }}
-            >
-              {/* Hour labels */}
-              <div style={{ position: "relative", borderRight: "var(--border-default)" }}>
-                {Array.from({ length: TOTAL_HOURS }).map((_, i) => {
-                  const hour = HOUR_START + i;
-                  return (
-                    <div
-                      key={hour}
-                      style={{
-                        position: "absolute",
-                        top: i * PX_PER_HOUR,
-                        right: 10,
-                        transform: "translateY(-50%)",
-                        fontSize: 11,
-                        color: "var(--color-ink-3)",
-                        textAlign: "right",
-                        paddingTop: 8,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {String(hour).padStart(2, "0")}:00
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Day columns */}
-              {visibleDays.map(({ key, date }) => {
-                const dayAppts = appointments
-                  .filter((a) => isSameDay(a.startAt, date))
-                  .filter((a) => CALENDAR_GRID_STATUSES.includes(a.status));
-                const overlapLayout = layoutOverlappingInDay(dayAppts);
-                return (
-                  <div
-                    key={key}
-                    data-testid={`calendar-day-col-${key}`}
-                    onMouseMove={(e) => {
-                      const col = e.currentTarget as HTMLDivElement;
-                      const relY = e.clientY - col.getBoundingClientRect().top;
-                      const slot = Math.min(
-                        SLOTS_PER_DAY - 1,
-                        Math.max(0, Math.floor(relY / PX_PER_HALF_HOUR)),
-                      );
-                      setDayGridHover({ colKey: key, slot });
-                    }}
-                    onMouseLeave={() => {
-                      setDayGridHover((h) => (h?.colKey === key ? null : h));
-                    }}
-                    style={{
-                      position: "relative",
-                      height: GRID_HEIGHT,
-                      borderLeft: "var(--border-default)",
-                      overflow: "visible",
-                      zIndex: 0,
-                    }}
-                  >
-                    {/* Hour lines */}
-                    {Array.from({ length: TOTAL_HOURS }).map((_, i) => (
+                  />
+                  {visibleDays.map(({ key, label, date }, dayIdx) => {
+                    const today = isToday(date);
+                    const count = weekDayData[dayIdx].appts.length;
+                    return (
                       <div
-                        key={i}
+                        key={key}
+                        data-testid={`calendar-day-head-${key}`}
                         style={{
-                          position: "absolute",
-                          left: 0,
-                          right: 0,
-                          top: i * PX_PER_HOUR,
-                          borderTop: "var(--border-default)",
+                          padding: "8px 6px",
+                          textAlign: "center",
+                          fontSize: 11,
+                          color: "var(--color-ink-3)",
+                          background: "var(--color-stone)",
+                          borderRight: dayIdx < visibleDays.length - 1 ? "var(--border-default)" : "none",
                         }}
-                      />
-                    ))}
-                    {/* Half-hour dashed lines */}
-                    {Array.from({ length: TOTAL_HOURS }).map((_, i) => (
-                      <div
-                        key={`h${i}`}
-                        style={{
-                          position: "absolute",
-                          left: 0,
-                          right: 0,
-                          top: i * PX_PER_HOUR + PX_PER_HOUR / 2,
-                          borderTop: "0.5px dashed var(--color-stone-md)",
-                        }}
-                      />
-                    ))}
-
-                    {dayGridHover?.colKey === key ? (
-                      <div
-                        data-testid="calendar-hover-slot"
-                        style={{
-                          position: "absolute",
-                          left: 0,
-                          right: 0,
-                          top: dayGridHover.slot * PX_PER_HALF_HOUR,
-                          height: PX_PER_HALF_HOUR,
-                          background: "var(--color-rose-lt)",
-                          zIndex: 1,
-                          pointerEvents: "none",
-                        }}
-                        aria-hidden
-                      />
-                    ) : null}
-                    {/* Click-to-create overlay */}
-                    <button
-                      type="button"
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        width: "100%",
-                        zIndex: 0,
-                        background: "transparent",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                      onClick={(e) => {
-                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                        const relY = e.clientY - rect.top;
-                        const hour = Math.floor(relY / PX_PER_HOUR) + HOUR_START;
-                        openNewForm(date, hour);
-                      }}
-                      aria-label={t("femme.calendar.newAppointment")}
-                    />
-
-                    {/* Appointment blocks */}
-                    {dayAppts.map((appt) => {
-                      const top = appointmentTopPx(appt.startAt);
-                      const minBlockH = appointmentHeightPx(appt.durationMinutes);
-                      const pc = profColor(appt.professionalId, professionals);
-                      const slot = overlapLayout.get(appt.id) ?? { col: 0, slotCount: 1 };
-                      const { col, slotCount } = slot;
-                      const leftPct = (col / slotCount) * 100;
-                      const widthPct = 100 / slotCount;
-                      const hovered = hoveredApptId === appt.id;
-                      // «Completado» stays on the grid, outlined instead of filled; «Cobrado» when it
-                      // has an issued comprobante, «Completado» (grey) when it still has none.
-                      const done = appt.status === "COMPLETED";
-                      const charged = done && appt.invoiceId != null;
-                      const shortBlock = minBlockH < 40;
-                      const dimmed = searching && !matchesSearch(appt);
-                      return (
-                        <button
-                          key={appt.id}
-                          type="button"
-                          data-testid={`calendar-appt-${appt.id}`}
-                          data-done={done ? (charged ? "charged" : "completed") : undefined}
-                          data-dimmed={dimmed ? "true" : undefined}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openDetail(appt);
-                          }}
-                          onMouseEnter={() => setHoveredApptId(appt.id)}
-                          onMouseLeave={() => setHoveredApptId(null)}
+                      >
+                        <div
                           style={{
-                            position: "absolute",
-                            left: `${leftPct}%`,
-                            width: hovered
-                              ? "auto"
-                              : `calc(${widthPct}% - 4px)`,
-                            minWidth: hovered ? `calc(${widthPct}% - 4px)` : undefined,
-                            maxWidth: hovered ? "calc(100% - 4px)" : undefined,
-                            marginLeft: 2,
-                            top,
-                            minHeight: minBlockH,
-                            height: hovered ? "auto" : minBlockH,
-                            zIndex: hovered ? 60 : 10,
-                            opacity: dimmed && !hovered ? 0.3 : 1,
-                            transition: "opacity 0.15s",
-                            borderRadius: "var(--radius-md)",
-                            padding: hovered ? 10 : 6,
-                            fontSize: hovered ? 13 : 11,
-                            cursor: "pointer",
-                            background: done ? "rgb(var(--fb-surface))" : pc.bg,
-                            border: done ? `1.5px solid ${pc.border}` : "none",
-                            borderLeft: done
-                              ? `4px solid ${pc.border}`
-                              : appt.status === "PENDING"
-                                ? `3px dotted ${pc.border}`
-                                : `3px solid ${pc.border}`,
-                            color: done ? "rgb(var(--fb-ink))" : pc.color,
-                            textAlign: "left",
-                            overflow: hovered ? "visible" : "hidden",
-                            boxShadow: hovered
-                              ? "0 10px 28px rgba(0, 0, 0, 0.18)"
-                              : undefined,
+                            textTransform: "uppercase",
+                            fontSize: 9,
+                            letterSpacing: "0.06em",
+                            marginBottom: 4,
                           }}
-                          aria-label={`${appt.clientName ?? t("femme.calendar.detail.occasionalClient")} – ${appt.serviceName}${appt.clientBirthdayOnDay ? ` – ${t("femme.calendar.clientBirthday")}` : ""}`}
                         >
-                          {(appt.status === "CONFIRMED" || appt.reminderSentAt || appt.clientBirthdayOnDay) && (
-                            <span
+                          {label}
+                        </div>
+                        <div
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: "50%",
+                            background: today ? "var(--color-rose)" : "transparent",
+                            color: today ? "var(--color-on-primary)" : "var(--color-ink)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: today ? 500 : 400,
+                            fontSize: 12,
+                            lineHeight: 1,
+                          }}
+                        >
+                          {date.getDate()}
+                        </div>
+                        <div style={{ fontSize: 10, marginTop: 2 }}>
+                          {count > 0 ? t("femme.calendar.count", { count }) : t("femme.calendar.free")}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Scrollable time grid */}
+                <div style={{ overflowY: "auto", maxHeight: "calc(100vh - 260px)" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: weekGridColumns,
+                      height: gridHeight,
+                    }}
+                  >
+                    {/* Hour labels */}
+                    <div style={{ position: "relative", borderRight: "var(--border-default)" }}>
+                      {Array.from({ length: totalHours }).map((_, i) => {
+                        const hour = gridStart + i;
+                        return (
+                          <div
+                            key={hour}
+                            style={{
+                              position: "absolute",
+                              top: i * PX_PER_HOUR,
+                              right: 10,
+                              transform: "translateY(-50%)",
+                              fontSize: 11,
+                              color: "var(--color-ink-3)",
+                              textAlign: "right",
+                              paddingTop: 8,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {String(hour).padStart(2, "0")}:00
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Day columns */}
+                    {visibleDays.map(({ key, date }, dayIdx) => {
+                      const { appts: dayAppts, layout: overlapLayout } = weekDayData[dayIdx];
+                      const today = isToday(date);
+                      return (
+                        <div
+                          key={key}
+                          data-testid={`calendar-day-col-${key}`}
+                          data-today={today ? "true" : undefined}
+                          onMouseMove={(e) => {
+                            const col = e.currentTarget as HTMLDivElement;
+                            const relY = e.clientY - col.getBoundingClientRect().top;
+                            const slot = Math.min(
+                              slotsPerDay - 1,
+                              Math.max(0, Math.floor(relY / PX_PER_HALF_HOUR)),
+                            );
+                            setDayGridHover({ colKey: key, slot });
+                          }}
+                          onMouseLeave={() => {
+                            setDayGridHover((h) => (h?.colKey === key ? null : h));
+                          }}
+                          style={{
+                            position: "relative",
+                            height: gridHeight,
+                            borderLeft: "var(--border-default)",
+                            background: today ? "var(--color-rose-lt)" : undefined,
+                            overflow: "visible",
+                            zIndex: 0,
+                          }}
+                        >
+                          {/* Hour lines */}
+                          {Array.from({ length: totalHours }).map((_, i) => (
+                            <div
+                              key={i}
                               style={{
                                 position: "absolute",
-                                top: 4,
-                                right: 4,
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 3,
+                                left: 0,
+                                right: 0,
+                                top: i * PX_PER_HOUR,
+                                borderTop: "var(--border-default)",
                               }}
-                            >
-                              {appt.clientBirthdayOnDay && (
+                            />
+                          ))}
+                          {/* Half-hour dashed lines */}
+                          {Array.from({ length: totalHours }).map((_, i) => (
+                            <div
+                              key={`h${i}`}
+                              style={{
+                                position: "absolute",
+                                left: 0,
+                                right: 0,
+                                top: i * PX_PER_HOUR + PX_PER_HOUR / 2,
+                                borderTop: "0.5px dashed var(--color-stone-md)",
+                              }}
+                            />
+                          ))}
+
+                          {dayGridHover?.colKey === key ? (
+                            <div
+                              data-testid="calendar-hover-slot"
+                              style={{
+                                position: "absolute",
+                                left: 0,
+                                right: 0,
+                                top: dayGridHover.slot * PX_PER_HALF_HOUR,
+                                height: PX_PER_HALF_HOUR,
+                                background: "var(--color-rose-lt)",
+                                zIndex: 1,
+                                pointerEvents: "none",
+                              }}
+                              aria-hidden
+                            />
+                          ) : null}
+                          {/* Click-to-create overlay */}
+                          <button
+                            type="button"
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              width: "100%",
+                              zIndex: 0,
+                              background: "transparent",
+                              border: "none",
+                              cursor: "pointer",
+                            }}
+                            onClick={(e) => {
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                              const relY = e.clientY - rect.top;
+                              const hour = Math.floor(relY / PX_PER_HOUR) + gridStart;
+                              openNewForm(date, hour);
+                            }}
+                            aria-label={t("femme.calendar.newAppointment")}
+                          />
+
+                          {/* Appointment blocks: clean cards, the professional's colour is the left stripe */}
+                          {dayAppts.map((appt) => {
+                            const top = appointmentTopPx(appt.startAt, gridStart);
+                            const minBlockH = appointmentHeightPx(appt.durationMinutes);
+                            const pc = profColor(appt.professionalId, professionals);
+                            const slot = overlapLayout.get(appt.id) ?? { col: 0, slotCount: 1 };
+                            const { col, slotCount } = slot;
+                            const leftPct = (col / slotCount) * 100;
+                            const widthPct = 100 / slotCount;
+                            const hovered = hoveredApptId === appt.id;
+                            const done = appt.status === "COMPLETED";
+                            const charged = done && appt.invoiceId != null;
+                            const dimmed = searching && !matchesSearch(appt);
+                            const start = new Date(appt.startAt);
+                            const timeLabel = `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
+                            const clientLabel = clientLabelOf(appt);
+                            return (
+                              <button
+                                key={appt.id}
+                                type="button"
+                                data-testid={`calendar-appt-${appt.id}`}
+                                data-done={done ? (charged ? "charged" : "completed") : undefined}
+                                data-dimmed={dimmed ? "true" : undefined}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openDetail(appt);
+                                }}
+                                onMouseEnter={() => setHoveredApptId(appt.id)}
+                                onMouseLeave={() => setHoveredApptId(null)}
+                                style={{
+                                  position: "absolute",
+                                  left: `${leftPct}%`,
+                                  width: `calc(${widthPct}% - 4px)`,
+                                  marginLeft: 2,
+                                  top,
+                                  height: hovered ? "auto" : minBlockH,
+                                  minHeight: minBlockH,
+                                  zIndex: hovered ? 60 : 10,
+                                  opacity: dimmed && !hovered ? 0.3 : 1,
+                                  transition: "opacity 0.15s",
+                                  borderRadius: "var(--radius-md)",
+                                  padding: "4px 6px 4px 7px",
+                                  fontSize: 12,
+                                  cursor: "pointer",
+                                  background: "rgb(var(--fb-surface))",
+                                  border: "1px solid rgb(var(--fb-border))",
+                                  borderLeft: `4px solid ${pc.border}`,
+                                  color: "rgb(var(--fb-ink))",
+                                  textAlign: "left",
+                                  overflow: hovered ? "visible" : "hidden",
+                                  boxShadow: hovered ? "0 10px 28px rgba(0, 0, 0, 0.18)" : undefined,
+                                }}
+                                aria-label={`${clientLabel} – ${appt.serviceName}${appt.clientBirthdayOnDay ? ` – ${t("femme.calendar.clientBirthday")}` : ""}`}
+                              >
                                 <span
-                                  role="img"
-                                  data-testid={`birthday-badge-${appt.id}`}
-                                  aria-label={t("femme.calendar.clientBirthday")}
-                                  title={t("femme.calendar.clientBirthday")}
-                                  style={{ fontSize: 11, lineHeight: "12px" }}
-                                >
-                                  🎂
-                                </span>
-                              )}
-                              {appt.reminderSentAt && (
-                                <span
-                                  data-testid={`reminder-sent-badge-${appt.id}`}
-                                  title={t("femme.calendar.detail.reminderSent")}
                                   style={{
-                                    width: 12,
-                                    height: 12,
                                     display: "flex",
                                     alignItems: "center",
-                                    justifyContent: "center",
-                                    opacity: 0.85,
+                                    justifyContent: "space-between",
+                                    gap: 4,
+                                    marginBottom: 2,
                                   }}
                                 >
-                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                                    <path
-                                      d="M8 1.5c-.6 0-1 .45-1 1v.55C4.9 3.5 3.5 5.35 3.5 7.5v2.5L2 12h12l-1.5-2V7.5c0-2.15-1.4-4-3.5-4.45V2.5c0-.55-.45-1-1-1Z"
-                                      stroke="currentColor"
-                                      strokeWidth="1.1"
-                                      strokeLinejoin="round"
+                                  <span style={{ fontSize: 11, fontWeight: 600, color: "rgb(var(--fb-ink-2))" }}>
+                                    {timeLabel}
+                                  </span>
+                                  <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                                    {appt.clientBirthdayOnDay && (
+                                      <span
+                                        role="img"
+                                        data-testid={`birthday-badge-${appt.id}`}
+                                        aria-label={t("femme.calendar.clientBirthday")}
+                                        title={t("femme.calendar.clientBirthday")}
+                                        style={{ fontSize: 11, lineHeight: "12px" }}
+                                      >
+                                        🎂
+                                      </span>
+                                    )}
+                                    {appt.reminderSentAt && (
+                                      <span
+                                        data-testid={`reminder-sent-badge-${appt.id}`}
+                                        title={t("femme.calendar.detail.reminderSent")}
+                                        style={{
+                                          width: 12,
+                                          height: 12,
+                                          display: "flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          opacity: 0.85,
+                                        }}
+                                      >
+                                        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                          <path
+                                            d="M8 1.5c-.6 0-1 .45-1 1v.55C4.9 3.5 3.5 5.35 3.5 7.5v2.5L2 12h12l-1.5-2V7.5c0-2.15-1.4-4-3.5-4.45V2.5c0-.55-.45-1-1-1Z"
+                                            stroke="currentColor"
+                                            strokeWidth="1.1"
+                                            strokeLinejoin="round"
+                                          />
+                                          <path d="M6.5 13a1.5 1.5 0 0 0 3 0" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+                                        </svg>
+                                      </span>
+                                    )}
+                                    <StatusIcon
+                                      status={appt.status}
+                                      charged={charged}
+                                      apptId={appt.id}
+                                      label={t(`femme.calendar.status.${appt.status}`)}
+                                      doneLabel={t(charged ? "femme.calendar.badge.charged" : "femme.calendar.badge.completed")}
                                     />
-                                    <path d="M6.5 13a1.5 1.5 0 0 0 3 0" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
-                                  </svg>
+                                  </span>
                                 </span>
-                              )}
-                              {appt.status === "CONFIRMED" && (
-                                <span
-                                  aria-hidden="true"
-                                  data-testid={`confirmed-check-${appt.id}`}
-                                  style={{
-                                    width: 12,
-                                    height: 12,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    opacity: 0.85,
-                                  }}
-                                >
-                                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                                    <path d="M2 6l2.5 2.5L10 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                                  </svg>
-                                </span>
-                              )}
-                            </span>
-                          )}
-                          {done && (
-                            <span
-                              data-testid={`calendar-done-badge-${appt.id}`}
-                              data-charged={charged ? "true" : "false"}
-                              style={{
-                                position: "absolute",
-                                right: 5,
-                                ...(shortBlock
-                                  ? { top: "50%", transform: "translateY(-50%)" }
-                                  : { bottom: 5 }),
-                                fontSize: 9.5,
-                                fontWeight: 800,
-                                lineHeight: "14px",
-                                padding: "0 7px",
-                                borderRadius: 99,
-                                whiteSpace: "nowrap",
-                                background: charged ? "rgb(var(--fb-success))" : "rgb(var(--fb-bg))",
-                                color: charged ? "rgb(var(--fb-on-primary))" : "rgb(var(--fb-ink-2))",
-                                border: charged ? "none" : "1px solid rgb(var(--fb-border))",
-                              }}
-                            >
-                              ✓ {t(charged ? "femme.calendar.badge.charged" : "femme.calendar.badge.completed")}
-                            </span>
-                          )}
-                          <p
-                            style={{
-                              fontWeight: 500,
-                              margin: 0,
-                              overflow: hovered ? "visible" : "hidden",
-                              textOverflow: hovered ? "clip" : "ellipsis",
-                              whiteSpace: hovered ? "normal" : "nowrap",
-                              wordBreak: hovered ? "break-word" : "normal",
-                            }}
-                          >
-                            {highlight(appt.clientName ?? t("femme.calendar.detail.occasionalClient"))}
-                          </p>
-                          <p
-                            style={{
-                              fontSize: 10,
-                              margin: 0,
-                              overflow: hovered ? "visible" : "hidden",
-                              textOverflow: hovered ? "clip" : "ellipsis",
-                              whiteSpace: hovered ? "normal" : "nowrap",
-                              wordBreak: hovered ? "break-word" : "normal",
-                              opacity: 0.85,
-                            }}
-                          >
-                            {highlight(appt.serviceName)}
-                          </p>
-                          <p
-                            style={{
-                              fontSize: 10,
-                              margin: 0,
-                              overflow: hovered ? "visible" : "hidden",
-                              textOverflow: hovered ? "clip" : "ellipsis",
-                              whiteSpace: hovered ? "normal" : "nowrap",
-                              wordBreak: hovered ? "break-word" : "normal",
-                              opacity: 0.75,
-                            }}
-                          >
-                            {appt.professionalName}
-                          </p>
-                        </button>
+                                <p style={{ margin: 0, fontWeight: 700, fontSize: 12.5, lineHeight: 1.25, wordBreak: "break-word" }}>
+                                  {highlight(clientLabel)}
+                                </p>
+                                <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.25, color: "rgb(var(--fb-ink-3))", wordBreak: "break-word" }}>
+                                  {highlight(appt.serviceName)} · {appt.professionalName}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
                       );
                     })}
                   </div>
-                );
-              })}
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* Legend: what each icon and each stripe colour means */}
+          <ul
+            data-testid="calendar-week-legend"
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "6px 16px",
+              listStyle: "none",
+              margin: "10px 0 0",
+              padding: 0,
+              fontSize: 12,
+              color: "var(--color-ink-3)",
+            }}
+          >
+            {(["COMPLETED_CHARGED", "COMPLETED", "IN_PROGRESS", "CONFIRMED", "PENDING"] as const).map((k) => (
+              <li key={k} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <StatusGlyph kind={k} />
+                {t(`femme.calendar.legend.${k}`)}
+              </li>
+            ))}
+            {professionals.map((p) => (
+              <li key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span
+                  aria-hidden
+                  style={{ width: 4, height: 14, borderRadius: 2, background: profColor(p.id, professionals).border }}
+                />
+                {p.displayName ?? p.fullName}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

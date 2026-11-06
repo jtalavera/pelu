@@ -58,11 +58,11 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
       .getByRole("button", { name: "Close" })
       .last()
       .click();
-    // It stays on the grid (outlined, marked «Completed» since it has no comprobante yet).
+    // It stays on the grid (a clean card, marked «Completed» since it has no comprobante yet).
     const block = page.getByRole("button", { name: new RegExp(client.fullName) });
     await expect(block).toHaveCount(1);
     await expect(block).toHaveAttribute("data-done", "completed");
-    await expect(block).toContainText("✓ Completed");
+    await expect(block.locator("[data-testid^='calendar-done-badge-']")).toHaveAttribute("aria-label", "Completed");
   });
 
   test("HU-25 / HU-19 al mover el cursor en la grilla, el resalte es solo 30 min (banda bajo el slot)", async ({

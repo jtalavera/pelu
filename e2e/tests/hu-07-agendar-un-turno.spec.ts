@@ -67,7 +67,7 @@ test.describe("HU-07 · Agendar un turno", () => {
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
-    await expect(page.getByText("Pending", { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Appointment detail" }).getByText("Pending", { exact: true })).toBeVisible();
   });
 
   test("HU-07 · 2 sin solapamiento: segundo turno mismo slot muestra error", async ({
