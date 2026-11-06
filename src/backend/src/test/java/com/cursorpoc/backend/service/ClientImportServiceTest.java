@@ -128,9 +128,9 @@ class ClientImportServiceTest {
     assertThat(result.rows().get(0).errorCode()).isEqualTo(ClientImportService.ERROR_RUC_INVALID);
   }
 
-  // AC-3: two rows in the same file sharing a non-blank phone — only the first is imported.
+  // The phone is not unique: two rows of the same file sharing it are both imported.
   @Test
-  void duplicatePhoneInSameFile_onlySecondIsRejected() {
+  void samePhoneInTwoRows_bothAreImported() {
     byte[] bytes =
         workbook(
             CLIENT_HEADERS,
@@ -138,11 +138,9 @@ class ClientImportServiceTest {
             new String[] {"Otra Persona", "(0981) 123-456"});
     ImportResult result = service.importClients(1L, bytes);
 
-    assertThat(result.importedCount()).isEqualTo(1);
-    assertThat(result.failedCount()).isEqualTo(1);
-    assertThat(result.rows().get(1).errorCode())
-        .isEqualTo(ClientImportService.ERROR_PHONE_DUPLICATE);
-    verify(clientRepository, org.mockito.Mockito.times(1)).save(any());
+    assertThat(result.importedCount()).isEqualTo(2);
+    assertThat(result.failedCount()).isEqualTo(0);
+    verify(clientRepository, org.mockito.Mockito.times(2)).save(any());
   }
 
   // Client email is not unique: a row whose email matches an existing tenant client is imported.

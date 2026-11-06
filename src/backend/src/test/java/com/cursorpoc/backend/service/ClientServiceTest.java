@@ -271,31 +271,24 @@ class ClientServiceTest {
   }
 
   @Test
-  void create_duplicatePhone_throwsConflict() {
+  void create_samePhoneAsAnotherClient_isAllowed() {
     Client existing = buildClient(2L, "Other", "0981000001", null, null);
     lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(existing));
 
-    assertThatThrownBy(
-            () -> clientService.create(1L, new ClientRequest("New", "0981000001", null, null)))
-        .isInstanceOf(ResponseStatusException.class)
-        .satisfies(
-            ex ->
-                assertThat(((ResponseStatusException) ex).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT));
+    var response = clientService.create(1L, new ClientRequest("New", "0981000001", null, null));
+
+    // The phone is not unique: several clients may share one number (a family, a shared line).
+    assertThat(response.phone()).isEqualTo("0981000001");
   }
 
   @Test
-  void create_duplicatePhone_differentFormatting_throwsConflict() {
+  void create_samePhoneWrittenDifferently_isAllowed() {
     Client existing = buildClient(2L, "Other", "0981000001", null, null);
     lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(existing));
 
-    assertThatThrownBy(
-            () -> clientService.create(1L, new ClientRequest("New", "(0981) 000-001", null, null)))
-        .isInstanceOf(ResponseStatusException.class)
-        .satisfies(
-            ex ->
-                assertThat(((ResponseStatusException) ex).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT));
+    var response = clientService.create(1L, new ClientRequest("New", "(0981) 000-001", null, null));
+
+    assertThat(response.phone()).isEqualTo("(0981) 000-001");
   }
 
   @Test
@@ -470,19 +463,15 @@ class ClientServiceTest {
   }
 
   @Test
-  void update_duplicatePhone_throwsConflict() {
+  void update_toAPhoneOfAnotherClient_isAllowed() {
     Client c = buildClient(5L, "Ana", "0981000001", null, null);
     Client other = buildClient(6L, "Other", "0981999999", null, null);
     lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
     lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(c, other));
 
-    assertThatThrownBy(
-            () -> clientService.update(1L, 5L, new ClientRequest("Ana", "0981999999", null, null)))
-        .isInstanceOf(ResponseStatusException.class)
-        .satisfies(
-            ex ->
-                assertThat(((ResponseStatusException) ex).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT));
+    var response = clientService.update(1L, 5L, new ClientRequest("Ana", "0981999999", null, null));
+
+    assertThat(response.phone()).isEqualTo("0981999999");
   }
 
   @Test
