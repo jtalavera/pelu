@@ -51,12 +51,15 @@ test.describe("HU-10 · Crear cliente", () => {
     await dlg.getByLabel("Phone").fill(phone);
     await dlg.getByRole("button", { name: "Save" }).click();
 
-    // It saves (no «already exists» error) and both clients are found by that phone.
+    // It saves (no «already exists» error) and both clients are listed. The form may store the phone
+    // formatted («0981 123 456») while the seeded one is raw digits, so each is looked up by name.
     await expect(dlg).toHaveCount(0, { timeout: 15_000 });
     await expect(page.getByText(/already exists/i)).toHaveCount(0);
-    await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(phone);
-    await expect(page.getByText(firstName.toUpperCase(), { exact: true }).first()).toBeVisible();
+    const search = page.getByPlaceholder(/Search by name, phone, or RUC/i);
+    await search.fill(secondName);
     await expect(page.getByText(secondName.toUpperCase(), { exact: true }).first()).toBeVisible();
+    await search.fill(firstName);
+    await expect(page.getByText(firstName.toUpperCase(), { exact: true }).first()).toBeVisible();
   });
 
   test("HU-10 · 4 nueva cliente aparece al buscarla en el directorio", async ({ page, request }) => {
