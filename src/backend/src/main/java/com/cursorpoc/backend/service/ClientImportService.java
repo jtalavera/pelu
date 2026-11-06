@@ -13,11 +13,9 @@ import com.cursorpoc.backend.util.ParaguayRucValidator;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
@@ -58,8 +56,6 @@ public class ClientImportService {
 
   public static final String ERROR_FULL_NAME_REQUIRED = "IMPORT_ROW_FULL_NAME_REQUIRED";
   public static final String ERROR_RUC_INVALID = "IMPORT_ROW_RUC_INVALID";
-  public static final String ERROR_PHONE_DUPLICATE = "IMPORT_ROW_PHONE_DUPLICATE";
-  public static final String ERROR_RUC_DUPLICATE = "IMPORT_ROW_RUC_DUPLICATE";
   public static final String ERROR_ROW_FAILED = "IMPORT_ROW_FAILED";
 
   private static final String COL_NOMBRE_COMPLETO = "nombre_completo";
@@ -105,15 +101,8 @@ public class ClientImportService {
       Row headerRow = sheet.getRow(sheet.getFirstRowNum());
       Map<String, Integer> headerIndex = buildHeaderIndex(headerRow);
 
-      // AC-3/AC-6: existing clients of THIS tenant only — a different tenant's matching
-      // telefono/ruc never counts as a duplicate.
-      Set<String> seenPhones = new HashSet<>();
-      Set<String> seenRucs = new HashSet<>();
-      for (Client existing : clientRepository.findByTenant_Id(tenantId)) {
-        addIfPresent(seenPhones, digitsOnly(existing.getPhone()));
-        addIfPresent(seenRucs, existing.getRuc() == null ? null : existing.getRuc().trim());
-      }
-
+      // The phone and the RUC are not unique: several clients may share them (e.g. a family
+      // invoicing with one parent's RUC), so rows are never rejected for repeating them.
       List<ImportRowOutcome> outcomes = new ArrayList<>();
       DataFormatter formatter = new DataFormatter();
 
@@ -126,9 +115,7 @@ public class ClientImportService {
         }
         int excelRowNumber = r + 1;
         try {
-          outcomes.add(
-              processRow(
-                  tenant, row, excelRowNumber, headerIndex, formatter, seenPhones, seenRucs));
+          outcomes.add(processRow(tenant, row, excelRowNumber, headerIndex, formatter));
         } catch (Exception ex) {
           log.error(
               "importClients tenantId={} row={} status=REJECTED error={}",
@@ -153,9 +140,7 @@ public class ClientImportService {
       Row row,
       int excelRowNumber,
       Map<String, Integer> headerIndex,
-      DataFormatter formatter,
-      Set<String> seenPhones,
-      Set<String> seenRucs) {
+      DataFormatter formatter) {
     String nombreCompleto = textValue(row, headerIndex.get(COL_NOMBRE_COMPLETO), formatter);
     String telefono = textValue(row, headerIndex.get(COL_TELEFONO), formatter);
     String email = textValue(row, headerIndex.get(COL_EMAIL), formatter);
@@ -174,14 +159,6 @@ public class ClientImportService {
       return ImportRowOutcome.rejected(excelRowNumber, ERROR_RUC_INVALID, fullName);
     }
 
-    String phoneKey = digitsOnly(telefono);
-    if (phoneKey != null && seenPhones.contains(phoneKey)) {
-      return ImportRowOutcome.rejected(excelRowNumber, ERROR_PHONE_DUPLICATE, fullName);
-    }
-    if (normalizedRuc != null && seenRucs.contains(normalizedRuc)) {
-      return ImportRowOutcome.rejected(excelRowNumber, ERROR_RUC_DUPLICATE, fullName);
-    }
-
     boolean active = !"NO".equalsIgnoreCase(activo == null ? "" : activo.trim());
 
     Client client = new Client();
@@ -197,16 +174,7 @@ public class ClientImportService {
     client.setVisitCount(0);
     clientRepository.save(client);
 
-    addIfPresent(seenPhones, phoneKey);
-    addIfPresent(seenRucs, normalizedRuc);
-
     return ImportRowOutcome.imported(excelRowNumber, fullName);
-  }
-
-  private static void addIfPresent(Set<String> set, String value) {
-    if (value != null) {
-      set.add(value);
-    }
   }
 
   private static Map<String, Integer> buildHeaderIndex(Row headerRow) {
@@ -249,17 +217,6 @@ public class ClientImportService {
 
   private static boolean isBlank(String s) {
     return s == null || s.isBlank();
-  }
-
-  /**
-   * Digits-only phone comparison, matching {@code ClientService#phoneDuplicateExists} — clients may
-   * be created with formatted numbers (e.g. "(0981) 123-456") or raw digits, and both represent the
-   * same phone number.
-   */
-  private static String digitsOnly(String value) {
-    if (value == null) return null;
-    String digits = value.replaceAll("\\D+", "");
-    return digits.isEmpty() ? null : digits;
   }
 
   private static String normalizeHeader(String s) {

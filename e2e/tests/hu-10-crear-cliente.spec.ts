@@ -33,24 +33,30 @@ test.describe("HU-10 · Crear cliente", () => {
     ).toBeVisible();
   });
 
-  test("HU-10 · 3 unicidad teléfono: segundo cliente mismo teléfono falla", async ({
+  test("HU-10 · 3 el teléfono no es único: un segundo cliente puede usar el mismo número", async ({
     page,
     request,
   }) => {
     const token = await loginAsDemoApi(request);
     const phone = `0981${String(Date.now()).slice(-6)}`;
-    await seedClient(request, token, `E2E Dup ${Date.now()}`, phone);
+    const firstName = `E2E Dup ${Date.now()}`;
+    await seedClient(request, token, firstName, phone);
 
     await loginAsDemo(page);
     await page.goto("/app/clients");
     await page.getByRole("button", { name: "+ New client" }).first().click();
     const dlg = page.getByRole("dialog");
-    await dlg.getByLabel("Full name").fill("E2E Other");
+    const secondName = `E2E Other ${Date.now()}`;
+    await dlg.getByLabel("Full name").fill(secondName);
     await dlg.getByLabel("Phone").fill(phone);
     await dlg.getByRole("button", { name: "Save" }).click();
-    await expect(
-      page.getByText("A client with this phone number already exists.", { exact: true }),
-    ).toBeVisible();
+
+    // It saves (no «already exists» error) and both clients are found by that phone.
+    await expect(dlg).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByText(/already exists/i)).toHaveCount(0);
+    await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(phone);
+    await expect(page.getByText(firstName.toUpperCase(), { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(secondName.toUpperCase(), { exact: true }).first()).toBeVisible();
   });
 
   test("HU-10 · 4 nueva cliente aparece al buscarla en el directorio", async ({ page, request }) => {

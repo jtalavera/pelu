@@ -140,13 +140,6 @@ public class ClientService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
     }
 
-    if (phone != null && phoneDuplicateExists(tenantId, phone, null)) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_PHONE_DUPLICATE");
-    }
-    if (ruc != null && clientRepository.findByTenantIdAndRuc(tenantId, ruc).isPresent()) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_RUC_DUPLICATE");
-    }
-
     ClientAcquisitionChannel channel = parseAcquisitionChannel(request.acquisitionChannel());
     validateBirthday(request);
     String channelOther = acquisitionChannelOther(channel, request.acquisitionChannelOther());
@@ -207,17 +200,6 @@ public class ClientService {
 
     if (isRucFormatCheckApplicable(type) && ruc != null && !ParaguayRucValidator.isValid(ruc)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
-    }
-
-    if (phone != null
-        && !phone.equals(client.getPhone())
-        && phoneDuplicateExists(tenantId, phone, client.getId())) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_PHONE_DUPLICATE");
-    }
-    if (ruc != null
-        && !ruc.equals(client.getRuc())
-        && clientRepository.findByTenantIdAndRuc(tenantId, ruc).isPresent()) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_RUC_DUPLICATE");
     }
 
     ClientAcquisitionChannel channel = parseAcquisitionChannel(request.acquisitionChannel());
@@ -382,25 +364,6 @@ public class ClientService {
 
   private static boolean isRucFormatCheckApplicable(ClientIdentityDocumentType type) {
     return type == null || type == ClientIdentityDocumentType.RUC;
-  }
-
-  /**
-   * Phone duplicate check compares digits only: clients may be created with formatted numbers (e.g.
-   * "(0981) 123-456") or raw digits (e.g. via API integrations), and both represent the same phone
-   * number.
-   */
-  private boolean phoneDuplicateExists(long tenantId, String phone, Long excludeClientId) {
-    String targetDigits = digitsOnly(phone);
-    if (targetDigits == null) return false;
-    return clientRepository.findByTenant_Id(tenantId).stream()
-        .filter(c -> excludeClientId == null || !c.getId().equals(excludeClientId))
-        .anyMatch(c -> targetDigits.equals(digitsOnly(c.getPhone())));
-  }
-
-  private static String digitsOnly(String value) {
-    if (value == null) return null;
-    String digits = value.replaceAll("\\D+", "");
-    return digits.isEmpty() ? null : digits;
   }
 
   /**
