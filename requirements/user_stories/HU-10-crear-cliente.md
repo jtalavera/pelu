@@ -28,7 +28,7 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 1. **Campos** — Se puede crear una cliente con: nombre completo, teléfono, email y RUC; todos opcionales excepto el nombre.
 2. **Validación RUC** — Si se informa RUC, acepta formato paraguayo (`XXXXXXXX-D`) y valida el dígito verificador al guardar.
-3. **Unicidad** — Antes de guardar, el sistema verifica duplicados por **RUC** solo cuando el campo tiene valor (los vacíos no participan en la unicidad); si hay conflicto, muestra que el RUC está duplicado. El **teléfono y el email no son únicos**: varias clientes del mismo negocio pueden compartir el mismo teléfono (una familia, una línea compartida) o el mismo email.
+3. **Sin unicidad** — El **teléfono, el email y el RUC no son únicos**: varias clientes del mismo negocio pueden compartir el mismo teléfono (una familia, una línea compartida), el mismo email o el mismo RUC (p. ej. quienes facturan con el RUC de su padre o madre). El sistema no rechaza ni advierte por repetidos; el RUC sí se valida por formato.
 4. **Disponibilidad inmediata** — La cliente creada está disponible de inmediato para búsqueda al agendar un turno (listado y buscador de clientes).
 5. **Cliente ocasional — identificador** — Existe opción de “cliente ocasional” representada por un **identificador genérico** del sistema (sin alta con datos obligatorios); su uso en agendas y ventas se describe en las historias correspondientes. Para que un turno ocasional tenga ficha de servicio, el sistema mantiene un cliente genérico «CLIENTE OCASIONAL» por tenant (creado al primer uso), que no aparece en el listado de clientes ni se puede editar; al facturar su ficha, el comprobante sale como cliente ocasional (consumidor final).
 
@@ -44,4 +44,4 @@ Multi-tenant: datos y acciones solo del **tenant** actual (negocio / HU-02). Con
 
 ## Notas para estimación y pruebas
 
-- **Pruebas:** solo nombre mínimo, RUC válido/inválido, RUC duplicado y teléfono repetido permitido, cliente ocasional en alta.
+- **Pruebas:** solo nombre mínimo, RUC válido/inválido, teléfono, email y RUC repetidos permitidos, cliente ocasional en alta.

@@ -163,9 +163,9 @@ class ClientImportServiceTest {
     verify(clientRepository).save(any());
   }
 
-  // AC-3: a non-blank RUC duplicating an existing tenant client rejects the row.
+  // The RUC is not unique: a row whose RUC an existing tenant client already has is imported.
   @Test
-  void duplicateRucAgainstExistingClient_isRejected() {
+  void sameRucAsExistingClient_isImported() {
     Client existing = new Client();
     existing.setId(9L);
     existing.setTenant(tenant);
@@ -178,9 +178,23 @@ class ClientImportServiceTest {
         workbook(CLIENT_HEADERS, new String[] {"Nuevo Cliente", null, null, "80000005-6"});
     ImportResult result = service.importClients(1L, bytes);
 
-    assertThat(result.failedCount()).isEqualTo(1);
-    assertThat(result.rows().get(0).errorCode()).isEqualTo(ClientImportService.ERROR_RUC_DUPLICATE);
-    verify(clientRepository, never()).save(any());
+    assertThat(result.importedCount()).isEqualTo(1);
+    assertThat(result.failedCount()).isZero();
+    verify(clientRepository).save(any());
+  }
+
+  // The same RUC in two rows of the file: both are imported.
+  @Test
+  void sameRucInTwoRows_bothAreImported() {
+    byte[] bytes =
+        workbook(
+            CLIENT_HEADERS,
+            new String[] {"Hija", null, null, "80000005-6"},
+            new String[] {"Hijo", null, null, "80000005-6"});
+    ImportResult result = service.importClients(1L, bytes);
+
+    assertThat(result.importedCount()).isEqualTo(2);
+    assertThat(result.failedCount()).isZero();
   }
 
   // AC-3 (PRD cross-cutting rule): blank telefono/email/ruc never collide across rows.

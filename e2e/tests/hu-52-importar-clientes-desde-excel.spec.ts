@@ -12,7 +12,7 @@ import { loginAsPlatformAdmin } from "../fixtures/auth";
 // row-by-row -> persist flow for the "clientes" entity, exercised via the Platform Admin's
 // "/platform/import" screen (clients tab). Mirrors HU-51's servicios import test (same UI, same
 // per-row-independent semantics), swapping in clientes-specific validation (name required,
-// per-tenant RUC uniqueness (the phone is not unique), RUC format).
+// RUC format; the phone, email and RUC are not unique).
 
 const E2E_JWT_SECRET = "e2e-jwt-secret-min-32-characters-long!!";
 
@@ -102,11 +102,10 @@ test.describe("HU-52 · Importar clientes desde Excel", () => {
   });
 
   // AC-2: a row without nombre_completo is rejected without stopping the rest of the file.
-  // AC-3: a non-blank ruc that duplicates another row of the same file (which, for this tenant,
-  // plays the role of "an existing client") is rejected row by row. Neither email nor phone is
-  // unique, so the "Cliente Email Duplicado" and "Cliente Telefono Duplicado" rows are imported.
+  // AC-3: neither the email, the phone nor the RUC is unique, so the "Cliente Email Duplicado",
+  // "Cliente Telefono Duplicado" and "Cliente Ruc Duplicado" rows are imported like any other.
   // AC-4: an invalid RUC format rejects only that row.
-  test("AC2+AC3+AC4: blank name, invalid RUC, and RUC duplicates are rejected individually, shared email and phone are accepted, valid rows still import", async ({
+  test("AC2+AC3+AC4: blank name and invalid RUC are rejected individually, shared email, phone and RUC are accepted, valid rows still import", async ({
     page,
     request,
   }) => {
@@ -123,7 +122,7 @@ test.describe("HU-52 · Importar clientes desde Excel", () => {
 
     const summary = page.getByTestId("import-run-summary-clients");
     await expect(summary).toBeVisible({ timeout: 15_000 });
-    await expect(summary).toContainText("4 of 7 rows imported. 3 failed.");
+    await expect(summary).toContainText("5 of 7 rows imported. 2 failed.");
 
     const failedList = page.getByTestId("import-run-failed-rows-clients");
     await expect(failedList).toContainText("Missing client name.");
@@ -132,7 +131,7 @@ test.describe("HU-52 · Importar clientes desde Excel", () => {
     );
     await expect(failedList).not.toContainText("already has this phone number");
     await expect(failedList).not.toContainText("already has this email address");
-    await expect(failedList).toContainText("Another client of this tenant already has this RUC.");
+    await expect(failedList).not.toContainText("already has this RUC");
 
     const forged = forgeTenantAdminToken(tenant.id, "999994", "e2e-import-clientes-mixto@e2e.test");
     const clientsRes = await request.get(`${apiBaseUrl()}/api/clients`, { headers: authHeaders(forged) });
@@ -144,6 +143,7 @@ test.describe("HU-52 · Importar clientes desde Excel", () => {
         "CLIENTE VALIDO DOS",
         "CLIENTE EMAIL DUPLICADO",
         "CLIENTE TELEFONO DUPLICADO",
+        "CLIENTE RUC DUPLICADO",
       ].sort(),
     );
   });

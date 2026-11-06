@@ -68,10 +68,6 @@ class ClientServiceTest {
 
   @Test
   void create_withNameOnly_succeeds() {
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response = clientService.create(1L, new ClientRequest("Ana García", null, null, null));
 
     assertThat(response.fullName()).isEqualTo("ANA GARCÍA");
@@ -84,10 +80,6 @@ class ClientServiceTest {
 
   @Test
   void create_trimsFullName() {
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response = clientService.create(1L, new ClientRequest("  Ana  ", null, null, null));
 
     assertThat(response.fullName()).isEqualTo("ANA");
@@ -95,10 +87,6 @@ class ClientServiceTest {
 
   @Test
   void create_withValidRuc_succeeds() {
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response =
         clientService.create(1L, new ClientRequest("Ana García", null, null, "80000005-6"));
 
@@ -143,10 +131,6 @@ class ClientServiceTest {
   /** SIFEN D205/iTiContRec: a client explicitly marked Persona Jurídica persists that value. */
   @Test
   void create_withRucAndPersonaJuridica_persistsTaxpayerType() {
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response =
         clientService.create(
             1L,
@@ -293,10 +277,6 @@ class ClientServiceTest {
 
   @Test
   void create_sameEmailAsAnotherClient_succeeds() {
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response = clientService.create(1L, new ClientRequest("New", null, "a@b.com", null));
 
     assertThat(response.email()).isEqualTo("a@b.com");
@@ -308,9 +288,6 @@ class ClientServiceTest {
     Client c = buildClient(5L, "Ana", null, "old@b.com", null);
     lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
     lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(c));
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
 
     var response =
         clientService.update(1L, 5L, new ClientRequest("Ana", null, "taken@b.com", null));
@@ -319,28 +296,19 @@ class ClientServiceTest {
   }
 
   @Test
-  void create_duplicateRuc_throwsConflict() {
+  void create_sameRucAsAnotherClient_isAllowed() {
     Client existing = buildClient(2L, "Other", null, null, "80000005-6");
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(1L, "80000005-6"))
-        .thenReturn(Optional.of(existing));
+    lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(existing));
 
-    assertThatThrownBy(
-            () -> clientService.create(1L, new ClientRequest("New", null, null, "80000005-6")))
-        .isInstanceOf(ResponseStatusException.class)
-        .satisfies(
-            ex ->
-                assertThat(((ResponseStatusException) ex).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT));
+    var response = clientService.create(1L, new ClientRequest("New", null, null, "80000005-6"));
+
+    // The RUC is not unique: several clients may invoice with the same one (e.g. a parent's).
+    assertThat(response.ruc()).isEqualTo("80000005-6");
   }
 
   @Test
   void create_emptyPhoneAndEmail_treatedAsNull_noUniquenessCheck() {
     // blank strings → null → uniqueness not checked
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response = clientService.create(1L, new ClientRequest("Maria", "  ", " ", " "));
     assertThat(response.phone()).isNull();
     assertThat(response.email()).isNull();
@@ -439,9 +407,6 @@ class ClientServiceTest {
     Client c = buildClient(5L, "Old Name", "0981000000", null, null);
     lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
     lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(c));
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
 
     var response =
         clientService.update(1L, 5L, new ClientRequest("New Name", "0981999999", null, null));
@@ -453,10 +418,6 @@ class ClientServiceTest {
   void update_samePhone_doesNotThrowDuplicate() {
     Client c = buildClient(5L, "Ana", "0981000001", null, null);
     lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     // same phone → no conflict
     var response = clientService.update(1L, 5L, new ClientRequest("Ana", "0981000001", null, null));
     assertThat(response.phone()).isEqualTo("0981000001");

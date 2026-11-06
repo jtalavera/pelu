@@ -56,7 +56,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     expect(serviceRecordsIdx).toBeLessThan(billingIdx);
   });
 
-  test("AC2 · RUC duplicado muestra el mensaje de advertencia esperado", async ({
+  test("AC2 · el RUC no es único: otro cliente puede usar el mismo RUC (p. ej. el de un familiar)", async ({
     page,
     request,
   }) => {
@@ -72,9 +72,10 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     await dlg.getByTestId("client-more-toggle").click();
     await dlg.getByLabel("Document number").fill(ruc);
     await dlg.getByRole("button", { name: "Save" }).click();
-    await expect(
-      page.getByText("A client with the same RUC already exists.", { exact: true }),
-    ).toBeVisible();
+    // It saves: no «same RUC already exists» warning, just the creation toast.
+    const toast = page.getByTestId("clients-toast");
+    await expect(toast).toContainText("created successfully", { timeout: 10_000 });
+    await expect(page.getByText(/same RUC already exists/i)).toHaveCount(0);
   });
 
   test("AC3 · crear cliente con éxito muestra un mensaje verde", async ({ page }) => {

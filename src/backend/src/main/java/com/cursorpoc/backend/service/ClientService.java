@@ -140,10 +140,6 @@ public class ClientService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
     }
 
-    if (ruc != null && clientRepository.findByTenantIdAndRuc(tenantId, ruc).isPresent()) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_RUC_DUPLICATE");
-    }
-
     ClientAcquisitionChannel channel = parseAcquisitionChannel(request.acquisitionChannel());
     validateBirthday(request);
     String channelOther = acquisitionChannelOther(channel, request.acquisitionChannelOther());
@@ -204,12 +200,6 @@ public class ClientService {
 
     if (isRucFormatCheckApplicable(type) && ruc != null && !ParaguayRucValidator.isValid(ruc)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
-    }
-
-    if (ruc != null
-        && !ruc.equals(client.getRuc())
-        && clientRepository.findByTenantIdAndRuc(tenantId, ruc).isPresent()) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_RUC_DUPLICATE");
     }
 
     ClientAcquisitionChannel channel = parseAcquisitionChannel(request.acquisitionChannel());
