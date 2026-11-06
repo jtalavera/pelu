@@ -165,6 +165,39 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     await expect(page.getByText("CLIENTE OCASIONAL")).toHaveCount(0);
   });
 
+  test("«Cobrar» se ve igual en el Inicio y en la lista de Fichas de servicio (píldora rellena)", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E Cobrar igual ${Date.now()}`);
+    const record = await apiPostJson<{ id: number }>(request, token, "/api/service-records", {
+      clientId: client.id,
+      lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId, quantity: 1, unitPrice: 50_000 }],
+      tips: [],
+    });
+    const look = (el: Element) => {
+      const cs = getComputedStyle(el);
+      return { radius: cs.borderTopLeftRadius, bg: cs.backgroundColor, color: cs.color, border: cs.borderTopWidth, height: cs.height };
+    };
+
+    await loginAsDemo(page);
+    const inicio = page.getByTestId(`dashboard-service-record-pay-${record.id}`);
+    await expect(inicio).toBeVisible({ timeout: 20_000 });
+    const inicioLook = await inicio.evaluate(look);
+
+    await page.goto("/app/service-records");
+    const list = page.getByTestId(`service-record-pay-${record.id}`);
+    await expect(list).toBeVisible({ timeout: 20_000 });
+    const listLook = await list.evaluate(look);
+
+    expect(listLook).toEqual(inicioLook);
+    // Filled pill, not an outlined square.
+    expect(parseFloat(listLook.radius)).toBeGreaterThan(14);
+    expect(listLook.border).toBe("0px");
+  });
+
   test("«Ver historial» va a la derecha del título, en el mismo lugar que «Ver agenda»", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     await seedCategoryServiceProfessional(request, token);
