@@ -174,7 +174,7 @@ test.describe("Turno y ficha de servicio", () => {
     expect(appt.serviceRecordId).toBe(mine.id);
   });
 
-  test("la ficha muestra su turno y «Ver turno» abre el detalle en la Agenda", async ({ page, request }) => {
+  test("la ficha muestra su turno y «Ver turno» abre el detalle en el lugar, sin ir al Calendario", async ({ page, request }) => {
     const admin = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, admin);
     const clientName = `E2E TF Ver ${Date.now()}`;
@@ -189,8 +189,32 @@ test.describe("Turno y ficha de servicio", () => {
     const dialog = page.getByRole("dialog");
     await dialog.getByTestId("service-record-more").click();
     await page.getByTestId("service-record-view-appointment").click();
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    // The turno's detail opens on top of the ficha, right here: no trip to the Calendar.
     await expect(page.getByTestId("calendar-appointment-ficha-go")).toBeVisible({ timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/app\/calendar/);
+    await expect(page.getByTestId("service-record-more")).toBeVisible();
+  });
+
+  test("desde el detalle del turno, abrir la ficha y «Ver turno» vuelve a ese mismo turno", async ({ page, request }) => {
+    const admin = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const clientName = `E2E TF Vuelta ${Date.now()}`;
+    const client = await seedClient(request, admin, clientName);
+    const turno = await seedTurno(request, admin, seed, client.id);
+    await apiPostJson(request, admin, `/api/appointments/${turno.id}/service-record`, {});
+
+    await loginAsDemo(page);
+    // The turno's detail opens from the client's name (the first button of the row).
+    await page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName }).locator("button").first().click();
+    const detail = page.getByRole("dialog").last();
+    await detail.getByTestId("calendar-appointment-ficha-go").click();
+    await page.getByTestId("service-record-more").click();
+    await page.getByTestId("service-record-view-appointment").click();
+
+    // The ficha closes and the turno's detail (already open underneath) is what is left.
+    await expect(page.getByTestId("service-record-more")).toHaveCount(0);
+    await expect(page.getByTestId("calendar-appointment-ficha-go")).toBeVisible();
+    await expect(page).not.toHaveURL(/\/app\/calendar/);
   });
 
   test("Agenda: un turno completado sigue en la agenda, «Completado» sin comprobante y «Cobrado» con comprobante", async ({

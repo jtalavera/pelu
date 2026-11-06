@@ -84,6 +84,7 @@ export function ServiceRecordEditor({
   professionalMode = false,
   preload,
   onViewInvoice,
+  onViewAppointment,
 }: {
   initial: ServiceRecordDetail | null;
   allowClientCreateNew: boolean;
@@ -96,6 +97,8 @@ export function ServiceRecordEditor({
   preload?: ServiceRecordEditorPreload;
   /** Opens the linked comprobante in place; without it the button goes to Facturación. */
   onViewInvoice?: (invoiceId: number) => void;
+  /** Opens a turno of the ficha in place; without it the link goes to the Agenda. */
+  onViewAppointment?: (appointmentId: number) => void;
   /** Client selected after returning from the "create new client" round trip. */
   initialClientOverride?: ClientOverride | null;
   onInitialClientOverrideConsumed?: () => void;
@@ -494,11 +497,18 @@ export function ServiceRecordEditor({
       </div>
     ) : null;
 
-  /** Opens a turno of this ficha, the earliest by default (the Agenda, with its detail open). */
+  /**
+   * Opens a turno of this ficha, the earliest by default: in place when the host can (like the
+   * comprobante), otherwise the Agenda with its detail open.
+   */
   function openTurno(target: { id: number; startAt: string } | undefined = turnos[0]) {
     if (!target) return;
     const appointmentId = target.id;
     const startAt = target.startAt;
+    if (onViewAppointment) {
+      onViewAppointment(appointmentId);
+      return;
+    }
     onClose();
     navigate("/app/calendar", {
       state: {
