@@ -10,7 +10,7 @@ reserva) siguen igual.
 - **Inicio · Fichas de hoy**: cada tarjeta lleva el chip «Turno 11:15» o «Sin turno».
 - **Agenda · detalle del turno**: el mismo botón de ficha; «Cobrar» pasa siempre por la ficha (la del turno o una creada en
   ese momento). Un turno Atendido viejo sin ficha conserva el cobro anterior (el servicio agendado como única línea).
-- **Ficha**: «Turno de las 10:30» + «Ver turno» (abre el detalle en la Agenda). En el historial de fichas el turno aparece
+- **Ficha**: «Turno de las 10:30» + «Ver turno» (abre el detalle del turno en el lugar, sin ir al Calendario; si la ficha se abrió desde ese mismo turno, vuelve a él). En el historial de fichas el turno aparece
   como un dato más.
 
 ## Reglas
