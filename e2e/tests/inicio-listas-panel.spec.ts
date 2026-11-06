@@ -72,7 +72,7 @@ test.describe("Inicio · listas del panel", () => {
     // 12 per page (the newest first): «Más (n)» says how many are left and loads the next ones.
     const more = page.getByTestId("dashboard-service-records-more");
     await expect(more).toBeVisible();
-    await expect(more).toHaveText(/^More \\(\\d+\\)$/);
+    await expect(more).toHaveText(/^More \(\d+\)$/);
     const voided = cards.filter({ hasText: `${marker} anulada` });
     await expect(voided).toHaveCount(12);
     for (let i = 0; i < 40 && (await more.isVisible()); i++) await more.click();
