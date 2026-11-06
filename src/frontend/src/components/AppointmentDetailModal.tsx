@@ -474,6 +474,7 @@ export function AppointmentDetailModal({
       {openRecordId !== null ? (
         <ServiceRecordDetailModal
           serviceRecordId={openRecordId}
+          fromAppointmentId={appointmentId ?? undefined}
           professionalMode={isProfessional}
           onClose={() => setOpenRecordId(null)}
           onChanged={() => onChanged()}

@@ -160,6 +160,7 @@ export default function DashboardPage() {
   const [newRecordOpen, setNewRecordOpen] = useState(false);
   const [now, setNow]                 = useState(() => new Date());
   const [apptListQuery, setApptListQuery] = useState("");
+  const [chargedOpen, setChargedOpen] = useState(false);
 
   const todayStr = useMemo(() => toLocalDateStr(now), [now]);
 
@@ -246,6 +247,84 @@ export default function DashboardPage() {
   );
 
   const locale = getDateLocale(i18n);
+
+  // «Cobrado» = completed with an issued comprobante. Those wait folded; everything else (still to
+  // attend, or completed but not charged yet) stays on view.
+  const isChargedAppt = (a: Appointment) => a.status === "COMPLETED" && a.invoiceId != null;
+  const pendingAppts = visibleTodayAppts.filter((a) => !isChargedAppt(a));
+  const chargedAppts = visibleTodayAppts.filter(isChargedAppt);
+  const searchingAppts = apptListQuery.trim() !== "";
+  const chargedShown = chargedOpen || (searchingAppts && chargedAppts.length > 0);
+
+  function renderApptRow(appt: Appointment, charged: boolean) {
+    const goToApptDetail = () => setDetailAppt(appt);
+    return (
+      <li
+        key={appt.id}
+        data-testid="dashboard-appointment-row"
+        className={`grid grid-cols-[44px_minmax(0,1fr)] items-center gap-x-2.5 gap-y-0.5 border-t border-line px-1 py-3 first:border-t-0 sm:grid-cols-[52px_minmax(0,1fr)_auto] sm:gap-x-3 sm:px-3 ${charged ? "opacity-80" : ""}`}
+      >
+        <span className="col-start-1 row-span-2 row-start-1 font-heading text-[17px] font-extrabold tabular-nums text-ink">
+          {fmtTime(appt.startAt, locale)}
+        </span>
+        <button
+          type="button"
+          aria-label={t("femme.dashboard.openAppointmentDetail", {
+            client: appt.clientName ?? t("femme.calendar.detail.occasionalClient"),
+          })}
+          onClick={goToApptDetail}
+          className="col-start-2 row-start-1 min-w-0 self-end break-words text-left font-semibold text-ink"
+        >
+          {appt.clientName ?? t("femme.calendar.detail.occasionalClient")}
+          {appt.status === "IN_PROGRESS" && (
+            <span className="ml-1.5 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-wider text-primary">
+              · {t("femme.dashboard.home.nowTag")}
+            </span>
+          )}
+          {appt.status === "COMPLETED" ? (
+            <span
+              data-testid={charged ? "dashboard-appointment-charged-tag" : "dashboard-appointment-uncharged-tag"}
+              className={`ml-1.5 whitespace-nowrap rounded-full px-2 py-px text-[11px] font-extrabold ${
+                charged ? "bg-success-lt text-success" : "bg-warning-lt text-warning"
+              }`}
+            >
+              {charged
+                ? `✓ ${t("femme.calendar.badge.charged")}`
+                : `✓ ${t("femme.calendar.badge.completed")} · ${t("femme.dashboard.home.unchargedTag")}`}
+            </span>
+          ) : null}
+        </button>
+        <div className="col-start-2 row-start-2 min-w-0 self-start break-words text-sm text-ink-3">
+          <span className={`font-semibold ${APPT_STATUS_TEXT[appt.status] ?? "text-ink-3"}`}>
+            {t(`femme.status.${appt.status}`, { defaultValue: appt.status })}
+          </span>{" "}
+          · {appt.serviceName} · {appt.professionalName}
+        </div>
+        <div className="col-start-2 row-start-3 mt-2 sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:mt-0">
+          {!appt.serviceRecordId && appt.invoiceId != null ? (
+            // Charged with no ficha (e.g. occasional client): the comprobante is the only link.
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="min-h-11 w-full whitespace-nowrap px-3"
+              data-testid="dashboard-appointment-invoice"
+              onClick={() => setViewInvoiceId(appt.invoiceId ?? null)}
+            >
+              {t("femme.calendar.action.viewInvoice")}
+            </Button>
+          ) : null}
+          <AppointmentFichaAction
+            appt={appt}
+            testIdPrefix="dashboard-appointment-ficha"
+            className="w-full whitespace-nowrap px-3"
+            onOpenRecord={setOpenRecordId}
+            onChanged={refreshAppointments}
+          />
+        </div>
+      </li>
+    );
+  }
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   const hour = now.getHours();
@@ -475,7 +554,7 @@ export default function DashboardPage() {
       <section data-tour="dashboard-appt-list" className="flex flex-col gap-2.5">
       <SectionTitle
         title={t("femme.dashboard.todayAppointments")}
-        badge={todayAppts.length > 0 ? todayAppts.length : undefined}
+        badge={pendingAppts.length > 0 ? pendingAppts.length : undefined}
         badgeTestId="dashboard-appointments-count"
         action={
           <Link
@@ -511,65 +590,60 @@ export default function DashboardPage() {
         ) : visibleTodayAppts.length === 0 ? (
           <div className="px-5 pb-5 pt-2 text-sm text-ink-3">{t("femme.listFilter.noMatches")}</div>
         ) : (
-          <ul className="flex flex-col px-2 pb-2 sm:px-3" data-testid="dashboard-appointments">
-            {visibleTodayAppts.map((appt) => {
-              const goToApptDetail = () => setDetailAppt(appt);
-              return (
-                <li
-                  key={appt.id}
-                  data-testid="dashboard-appointment-row"
-                  className="grid grid-cols-[44px_minmax(0,1fr)] items-center gap-x-2.5 gap-y-0.5 border-t border-line px-1 py-3 first:border-t-0 sm:grid-cols-[52px_minmax(0,1fr)_auto] sm:gap-x-3 sm:px-3"
+          <div className="px-2 pb-2 sm:px-3">
+            {pendingAppts.length > 0 ? (
+              <>
+                <div
+                  data-testid="dashboard-appointments-group"
+                  className="px-1 pb-1 pt-1 text-[11.5px] font-extrabold uppercase tracking-wider text-ink-3 sm:px-3"
                 >
-                  <span className="col-start-1 row-span-2 row-start-1 font-heading text-[17px] font-extrabold tabular-nums text-ink">
-                    {fmtTime(appt.startAt, locale)}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label={t("femme.dashboard.openAppointmentDetail", {
-                      client: appt.clientName ?? t("femme.calendar.detail.occasionalClient"),
-                    })}
-                    onClick={goToApptDetail}
-                    className="col-start-2 row-start-1 min-w-0 self-end break-words text-left font-semibold text-ink"
+                  {t("femme.dashboard.home.pendingGroup")}
+                </div>
+                <ul className="flex flex-col" data-testid="dashboard-appointments">
+                  {pendingAppts.map((appt) => renderApptRow(appt, false))}
+                </ul>
+              </>
+            ) : searchingAppts ? null : (
+              <p className="px-1 py-2 text-sm text-ink-3 sm:px-3" data-testid="dashboard-appointments-all-done">
+                {t("femme.dashboard.home.allAttended")}
+              </p>
+            )}
+
+            {chargedAppts.length > 0 ? (
+              <div className="border-t border-line" data-testid="dashboard-appointments-charged">
+                <button
+                  type="button"
+                  data-testid="dashboard-appointments-charged-toggle"
+                  aria-expanded={chargedShown}
+                  onClick={() => setChargedOpen((v) => !v)}
+                  className="flex min-h-12 w-full items-center gap-2.5 px-1 text-left text-sm font-bold text-ink sm:px-3"
+                >
+                  <span>{t("femme.dashboard.home.chargedTitle")}</span>
+                  <span
+                    data-testid="dashboard-appointments-charged-count"
+                    className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary-lt px-2 text-xs font-extrabold tabular-nums text-primary"
                   >
-                    {appt.clientName ?? t("femme.calendar.detail.occasionalClient")}
-                    {appt.status === "IN_PROGRESS" && (
-                      <span className="ml-1.5 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-wider text-primary">
-                        · {t("femme.dashboard.home.nowTag")}
-                      </span>
-                    )}
-                  </button>
-                  <div className="col-start-2 row-start-2 min-w-0 self-start break-words text-sm text-ink-3">
-                    <span className={`font-semibold ${APPT_STATUS_TEXT[appt.status] ?? "text-ink-3"}`}>
-                      {t(`femme.status.${appt.status}`, { defaultValue: appt.status })}
-                    </span>{" "}
-                    · {appt.serviceName} · {appt.professionalName}
-                  </div>
-                  <div className="col-start-2 row-start-3 mt-2 sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:mt-0">
-                    {!appt.serviceRecordId && appt.invoiceId != null ? (
-                      // Charged with no ficha (e.g. occasional client): the comprobante is the only link.
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        className="min-h-11 w-full whitespace-nowrap px-3"
-                        data-testid="dashboard-appointment-invoice"
-                        onClick={() => setViewInvoiceId(appt.invoiceId ?? null)}
-                      >
-                        {t("femme.calendar.action.viewInvoice")}
-                      </Button>
-                    ) : null}
-                    <AppointmentFichaAction
-                      appt={appt}
-                      testIdPrefix="dashboard-appointment-ficha"
-                      className="w-full whitespace-nowrap px-3"
-                      onOpenRecord={setOpenRecordId}
-                      onChanged={refreshAppointments}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-            <li className="mt-1 px-1 sm:px-3">
+                    {chargedAppts.length}
+                  </span>
+                  <span className="text-xs font-semibold text-ink-3">
+                    {t("femme.dashboard.home.chargedHint")}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={`ml-auto text-ink-3 transition-transform ${chargedShown ? "rotate-180" : ""}`}
+                  >
+                    ⌄
+                  </span>
+                </button>
+                {chargedShown ? (
+                  <ul className="flex flex-col" data-testid="dashboard-appointments-charged-list">
+                    {chargedAppts.map((appt) => renderApptRow(appt, true))}
+                  </ul>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="mt-1 px-1 sm:px-3">
               <button
                 type="button"
                 data-testid="dashboard-appointments-add-row"
@@ -581,8 +655,8 @@ export default function DashboardPage() {
                 </span>
                 {t("femme.dashboard.home.addAppointmentRow")}
               </button>
-            </li>
-          </ul>
+            </div>
+          </div>
         )}
       </Card>
       </section>

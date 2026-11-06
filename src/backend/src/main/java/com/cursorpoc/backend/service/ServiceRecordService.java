@@ -146,6 +146,9 @@ public class ServiceRecordService {
     return toDetailDto(record, linkedInvoice);
   }
 
+  /** Status filter value for the fichas that are no longer open (paid or voided). */
+  public static final String STATUS_NOT_OPEN = "NOT_OPEN";
+
   @Transactional(readOnly = true)
   public PagedServiceRecordsResponse listServiceRecords(
       long tenantId,
@@ -158,18 +161,36 @@ public class ServiceRecordService {
       int size) {
     Instant[] fromTo = resolveListRange(fromDate, toDate);
     ServiceRecordStatus status = null;
+    boolean notOpen = false;
     if (statusStr != null && !statusStr.isBlank()) {
-      try {
-        status = ServiceRecordStatus.valueOf(statusStr.toUpperCase());
-      } catch (IllegalArgumentException e) {
-        // ignore bad status filter
+      if (STATUS_NOT_OPEN.equalsIgnoreCase(statusStr.trim())) {
+        notOpen = true;
+      } else {
+        try {
+          status = ServiceRecordStatus.valueOf(statusStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+          // ignore bad status filter
+        }
       }
     }
     String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
     Pageable pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
-    Page<ServiceRecord> recordPage =
-        serviceRecordRepository.findByTenantWithFiltersPaged(
-            tenantId, fromTo[0], fromTo[1], clientId, status, qTrimmed, pageable);
+    Page<ServiceRecord> recordPage;
+    if (notOpen) {
+      recordPage =
+          serviceRecordRepository.findNotOpenWithFiltersPaged(
+              tenantId,
+              fromTo[0],
+              fromTo[1],
+              clientId,
+              ServiceRecordStatus.OPEN,
+              qTrimmed,
+              pageable);
+    } else {
+      recordPage =
+          serviceRecordRepository.findByTenantWithFiltersPaged(
+              tenantId, fromTo[0], fromTo[1], clientId, status, qTrimmed, pageable);
+    }
     List<ServiceRecordListItemResponse> content =
         recordPage.getContent().stream()
             .map(ServiceRecordService::toListItemDto)

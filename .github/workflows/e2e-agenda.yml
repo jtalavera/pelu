@@ -92,6 +92,7 @@ jobs:
           tests/hu-10-crear-cliente.spec.ts
           tests/hu-52-importar-clientes-desde-excel.spec.ts
           tests/issue-139-cambios-varios.spec.ts
+          tests/inicio-listas-panel.spec.ts
 
       - name: Upload report on failure
         if: failure()

@@ -12,6 +12,7 @@ import {
 } from "../fixtures/api";
 import { DEMO_PASSWORD, loginAs, loginAsDemo } from "../fixtures/auth";
 import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
+import { revealFichaCard } from "../fixtures/dashboard";
 
 /**
  * Inicio · fichas de servicio de hoy como tarjetas.
@@ -74,14 +75,10 @@ function cardOf(page: Page, clientName: string) {
   return page.getByTestId("dashboard-service-record-card").filter({ hasText: clientName });
 }
 
-/** The grid shows 12 cards and a "Show more" button: reveal more until the card is on screen. */
+/** Open fichas are on view; paid / voided ones wait in the folded «Cobradas y anuladas»: open and page it. */
 async function revealCard(page: Page, clientName: string) {
-  const card = cardOf(page, clientName);
-  const more = page.getByTestId("dashboard-service-records-more");
   await expect(page.getByTestId("dashboard-service-record-card").first()).toBeVisible({ timeout: 20_000 });
-  for (let i = 0; i < 50 && !(await card.isVisible()) && (await more.isVisible()); i++) await more.click();
-  await expect(card).toBeVisible();
-  return card;
+  return revealFichaCard(page, clientName);
 }
 
 test.describe("Inicio del admin · tarjetas de fichas", () => {
