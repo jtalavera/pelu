@@ -2958,6 +2958,16 @@
     },
     "calendar": {
       "views": { "label": "Vista", "day": "Día", "week": "Semana" },
+      "search": {
+        "label": "Buscar cliente o servicio",
+        "placeholder": "Buscar cliente o servicio",
+        "clear": "Borrar búsqueda",
+        "countDay": "{{shown}} de {{total}} turnos",
+        "countWeek": "{{shown}} de {{total}} turnos de la semana",
+        "noMatchesTitle": "Sin resultados",
+        "noMatchesBody": "Ningún turno de este día coincide con «{{term}}».",
+        "reset": "Borrar búsqueda"
+      },
       "action": {
         "confirm": "Confirmar",
         "start": "Iniciar",

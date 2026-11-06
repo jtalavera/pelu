@@ -11,6 +11,7 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { AppointmentDetailModal } from "../components/AppointmentDetailModal";
 import { AppointmentFormModal } from "../components/AppointmentFormModal";
 import { getDateLocale } from "../i18n/dateLocale";
+import { findQueryMatch, matchesListQuery } from "../util/matchesListQuery";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { isPinSession } from "../auth/sharedDevice";
@@ -129,6 +130,8 @@ export default function CalendarPage() {
     () => (location.state as { openAppointmentId?: number } | null)?.openAppointmentId ?? null,
   );
   const [selectedProfessionalId, setSelectedProfessionalId] = useState<number | null>(null);
+  // Search by client or service: filters the day list and dims the non-matching blocks of the week.
+  const [searchQuery, setSearchQuery] = useState("");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [loading, setLoading] = useState(true);
@@ -281,9 +284,29 @@ export default function CalendarPage() {
   const weekLabel = `${formatDate(weekStart, locale)} – ${formatDate(addDays(weekStart, 6), locale)}`;
   const rangeLabel = activeView === "week" ? weekLabel : longDateLabel;
   // Same appointments the grid shows (cancelled and no-shows are not listed).
-  const dayList = appointments
+  const fullDayList = appointments
     .filter((a) => isSameDay(a.startAt, cursor) && CALENDAR_GRID_STATUSES.includes(a.status))
     .sort((a, b) => a.startAt.localeCompare(b.startAt));
+  const searching = searchQuery.trim() !== "";
+  /** The search looks at the client (or «Cliente ocasional») and the service of the turno. */
+  const clientLabelOf = (a: Appointment) => a.clientName ?? t("femme.calendar.detail.occasionalClient");
+  const matchesSearch = (a: Appointment) =>
+    matchesListQuery(clientLabelOf(a), searchQuery) || matchesListQuery(a.serviceName, searchQuery);
+  const dayList = searching ? fullDayList.filter(matchesSearch) : fullDayList;
+  const weekAppts = appointments.filter((a) => CALENDAR_GRID_STATUSES.includes(a.status));
+  const weekMatchCount = searching ? weekAppts.filter(matchesSearch).length : weekAppts.length;
+  /** The text with the part that matches the search highlighted. */
+  const highlight = (text: string) => {
+    const range = searching ? findQueryMatch(text, searchQuery) : null;
+    if (!range) return text;
+    return (
+      <>
+        {text.slice(0, range[0])}
+        <mark className="rounded bg-warning-lt px-px text-inherit">{text.slice(range[0], range[1])}</mark>
+        {text.slice(range[1])}
+      </>
+    );
+  };
   const visibleDays = weekDays;
   const selectedProfessionalName =
     professionals.find((p) => p.id === selectedProfessionalId)?.fullName ?? null;
@@ -345,6 +368,51 @@ export default function CalendarPage() {
           <span className="min-w-0 truncate font-heading text-lg font-extrabold text-ink" data-testid="calendar-range-label">
             {rangeLabel}
           </span>
+        </div>
+        <div
+          data-tour="calendar-search"
+          className="relative order-last w-full sm:order-none sm:w-auto sm:max-w-sm sm:flex-1"
+        >
+          <label htmlFor="calendar-search" className="sr-only">
+            {t("femme.calendar.search.label")}
+          </label>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            id="calendar-search"
+            data-testid="calendar-search"
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t("femme.calendar.search.placeholder")}
+            autoComplete="off"
+            spellCheck={false}
+            enterKeyHint="search"
+            className="h-11 w-full rounded-full border-[1.5px] border-line bg-bg pl-[42px] pr-11 text-sm text-ink placeholder:text-ink-3 focus:border-primary focus:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-search-cancel-button]:hidden"
+          />
+          {searching && (
+            <button
+              type="button"
+              data-testid="calendar-search-clear"
+              aria-label={t("femme.calendar.search.clear")}
+              onClick={() => setSearchQuery("")}
+              className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-lg text-ink-3 hover:bg-primary-lt"
+            >
+              ×
+            </button>
+          )}
         </div>
         {!isMobile && (
           <div
@@ -441,6 +509,15 @@ export default function CalendarPage() {
         </div>
       )}
 
+      {/* How many turnos match the search */}
+      {searching && !loading && (
+        <p data-testid="calendar-search-count" aria-live="polite" className="text-sm tabular-nums text-ink-3">
+          {activeView === "week"
+            ? t("femme.calendar.search.countWeek", { shown: weekMatchCount, total: weekAppts.length })
+            : t("femme.calendar.search.countDay", { shown: dayList.length, total: fullDayList.length })}
+        </p>
+      )}
+
       {/* Errors */}
       {pageError && (
         <Alert variant="destructive">
@@ -462,7 +539,20 @@ export default function CalendarPage() {
           className="rounded-card border border-line bg-surface shadow-sm"
           data-testid="calendar-day-list"
         >
-          {dayList.length === 0 ? (
+          {dayList.length === 0 && searching && fullDayList.length > 0 ? (
+            <div
+              data-testid="calendar-search-empty"
+              className="flex flex-col items-center gap-1 px-5 py-8 text-center text-ink-3"
+            >
+              <p className="font-heading text-base font-extrabold text-ink">
+                {t("femme.calendar.search.noMatchesTitle")}
+              </p>
+              <p>{t("femme.calendar.search.noMatchesBody", { term: searchQuery.trim() })}</p>
+              <Button type="button" variant="outline" className="mt-2 min-h-11" onClick={() => setSearchQuery("")}>
+                {t("femme.calendar.search.reset")}
+              </Button>
+            </div>
+          ) : dayList.length === 0 ? (
             <div className="flex flex-col items-center gap-3 px-5 py-8 text-center text-ink-3">
               <p>
                 {selectedProfessionalName
@@ -494,7 +584,7 @@ export default function CalendarPage() {
                         {time}
                       </span>
                       <span className="col-start-2 row-start-1 min-w-0 self-end break-words font-semibold text-ink">
-                        {clientLabel}
+                        {highlight(clientLabel)}
                         {appt.status === "IN_PROGRESS" && (
                           <span className="ml-1.5 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-wider text-primary">
                             · {t("femme.calendar.now")}
@@ -547,7 +637,7 @@ export default function CalendarPage() {
                           </span>
                         )}{" "}
                         {appt.status !== "COMPLETED" ? "· " : ""}
-                        {appt.serviceName} · {appt.professionalName}
+                        {highlight(appt.serviceName)} · {appt.professionalName}
                       </span>
                       <span aria-hidden className="col-start-3 row-span-2 row-start-1 text-xl text-ink-3">
                         ›
@@ -781,12 +871,14 @@ export default function CalendarPage() {
                       const done = appt.status === "COMPLETED";
                       const charged = done && appt.invoiceId != null;
                       const shortBlock = minBlockH < 40;
+                      const dimmed = searching && !matchesSearch(appt);
                       return (
                         <button
                           key={appt.id}
                           type="button"
                           data-testid={`calendar-appt-${appt.id}`}
                           data-done={done ? (charged ? "charged" : "completed") : undefined}
+                          data-dimmed={dimmed ? "true" : undefined}
                           onClick={(e) => {
                             e.stopPropagation();
                             openDetail(appt);
@@ -806,6 +898,8 @@ export default function CalendarPage() {
                             minHeight: minBlockH,
                             height: hovered ? "auto" : minBlockH,
                             zIndex: hovered ? 60 : 10,
+                            opacity: dimmed && !hovered ? 0.3 : 1,
+                            transition: "opacity 0.15s",
                             borderRadius: "var(--radius-md)",
                             padding: hovered ? 10 : 6,
                             fontSize: hovered ? 13 : 11,
@@ -926,7 +1020,7 @@ export default function CalendarPage() {
                               wordBreak: hovered ? "break-word" : "normal",
                             }}
                           >
-                            {appt.clientName ?? t("femme.calendar.detail.occasionalClient")}
+                            {highlight(appt.clientName ?? t("femme.calendar.detail.occasionalClient"))}
                           </p>
                           <p
                             style={{
@@ -939,7 +1033,7 @@ export default function CalendarPage() {
                               opacity: 0.85,
                             }}
                           >
-                            {appt.serviceName}
+                            {highlight(appt.serviceName)}
                           </p>
                           <p
                             style={{
