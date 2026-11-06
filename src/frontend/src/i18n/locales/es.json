@@ -3203,7 +3203,7 @@
       "dashboard": {
         "title": "Fichas de servicio de hoy",
         "empty": "No hay fichas de servicio hoy.",
-        "viewHistory": "Ver historial",
+        "viewHistory": "Ver historial →",
         "showMore": "Más"
       }
     },
