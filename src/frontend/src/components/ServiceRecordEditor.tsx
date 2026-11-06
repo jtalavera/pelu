@@ -12,24 +12,25 @@ import {
 import { ClientSearchField, type ClientSelection } from "./ClientSearchField";
 import { ServiceSearchField, type SalonServiceOption } from "./ServiceSearchField";
 import { SearchableSelect } from "./SearchableSelect";
+import { MoreActionsMenu } from "./MoreActionsMenu";
 import { FieldValidationError } from "./FieldValidationError";
 import { useMe } from "../hooks/useMe";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
-import { getFrequentServices } from "../api/serviceRecords";
 import { fetchProfessionalOptions, type ProfessionalOption } from "../api/professionalOptions";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
 import { initialsOf } from "../lib/initials";
 import { ProfessionalServiceLines, ServicePickerScreen } from "./ProfessionalServiceLines";
+import { ActionIcon } from "./actionIcons";
+import type { MoreActionsItem } from "./MoreActionsMenu";
 
 type Professional = ProfessionalOption;
 
 /** Data the host started loading before the editor mounted (so nothing waits for the editor). */
 export type ServiceRecordEditorPreload = {
   professionals: Promise<ProfessionalOption[]>;
-  frequentServices: Promise<SalonServiceOption[]>;
 };
 
 type LineForm = {
@@ -154,6 +155,7 @@ export function ServiceRecordEditor({
     return map;
   });
   const [tipsOpen, setTipsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const [clientError, setClientError] = useState<string | null>(null);
   /** Per-line expand/collapse chosen by the user; a line never touched is open when it is the only one or has no service yet. */
@@ -219,6 +221,10 @@ export function ServiceRecordEditor({
     0,
   );
 
+  // Tips are not a fixed section any more: they show up once there is a tip or the user asks for
+  // them from the «⋯» menu.
+  const tipsVisible = tipsOpen || tipsTotal > 0;
+
   function professionalName(id: number | ""): string {
     if (id === "") return "—";
     return professionals.find((p) => p.id === id)?.fullName ?? String(id);
@@ -240,22 +246,6 @@ export function ServiceRecordEditor({
     setPickerOpen(false);
   }
 
-  const [frequent, setFrequent] = useState<SalonServiceOption[]>([]);
-  useEffect(() => {
-    if (professionalMode || !isOpen) return;
-    let cancelled = false;
-    (preload?.frequentServices ??
-      getFrequentServices(3)
-        .then((items) => (Array.isArray(items) ? items : []))
-        .catch(() => [])
-    ).then((items) => {
-      if (!cancelled) setFrequent(items);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [professionalMode, isOpen]);
-
   function decrementLine(key: string) {
     const line = lines.find((l) => l.key === key);
     if (!line) return;
@@ -265,26 +255,6 @@ export function ServiceRecordEditor({
 
   function addLine() {
     setLines((prev) => [...prev, emptyLine()]);
-  }
-
-  /** One-tap add of a frequent service: +1 when already in the ficha, else fills the blank line or appends. */
-  function addFrequentService(service: SalonServiceOption) {
-    setLines((prev) => {
-      const existing = prev.find((l) => l.pickedService?.id === service.id);
-      if (existing) {
-        return prev.map((l) => (l.key === existing.key ? { ...l, quantity: (l.quantity || 0) + 1 } : l));
-      }
-      const last = [...prev].reverse().find((l) => l.professionalId !== "");
-      const filled: Omit<LineForm, "key"> = {
-        pickedService: service,
-        professionalId: last?.professionalId ?? "",
-        quantity: 1,
-        unitPrice: maskMoneyInput(String(Math.round(Number(service.priceMinor)))),
-      };
-      const blank = prev.find((l) => !l.pickedService);
-      if (blank) return prev.map((l) => (l.key === blank.key ? { ...l, ...filled } : l));
-      return [...prev, { key: nextKey(), ...filled }];
-    });
   }
 
   function removeLine(key: string) {
@@ -422,14 +392,32 @@ export function ServiceRecordEditor({
 
   const dateText = record ? formatParaguayDateTime(record.createdAt, dateLocale) : null;
 
-  /** One compact line: CLIENTE · name · created date (existing records show the name, new ones the search). */
+  const turnoTime =
+    record?.appointmentId && record.appointmentStartAt
+      ? formatParaguayTime(record.appointmentStartAt, dateLocale)
+      : null;
+
+  /**
+   * CLIENTE, its name big and one grey line with the date and, while the ficha is being edited, the
+   * turno it belongs to (the way to open that turno is in the «⋯» menu).
+   */
   const clientRow = record ? (
-    <section className="flex flex-wrap items-baseline gap-x-3 gap-y-1" aria-label={t("femme.serviceRecords.clientSection")}>
-      <span className={SECTION_TITLE}>{t("femme.serviceRecords.clientSection")}</span>
-      <b className="break-words text-base text-ink">
+    <section aria-label={t("femme.serviceRecords.clientSection")}>
+      <div className={SECTION_TITLE}>{t("femme.serviceRecords.clientSection")}</div>
+      <div className="break-words font-heading text-xl font-extrabold leading-tight text-ink">
         {record.clientGeneric ? t("femme.serviceRecords.occasionalClient") : record.clientFullName}
-      </b>
-      <span className="ml-auto text-sm text-ink-3">{dateText}</span>
+      </div>
+      <div className="mt-0.5 text-sm text-ink-3">
+        {dateText}
+        {isOpen && turnoTime ? (
+          <>
+            {" · "}
+            <span data-testid="service-record-appointment">
+              {t("femme.appointmentFicha.appointmentTag", { time: turnoTime })}
+            </span>
+          </>
+        ) : null}
+      </div>
     </section>
   ) : null;
 
@@ -459,16 +447,7 @@ export function ServiceRecordEditor({
               data-testid="service-record-view-appointment"
               aria-label={t("femme.appointmentFicha.viewAppointment")}
               className={linkClass}
-              onClick={() => {
-                const appointmentId = record.appointmentId;
-                onClose();
-                navigate("/app/calendar", {
-                  state: {
-                    selectedDate: new Date(record.appointmentStartAt as string).toLocaleDateString("sv-SE"),
-                    openAppointmentId: appointmentId,
-                  },
-                });
-              }}
+              onClick={openTurno}
             >
               {t("femme.serviceRecords.viewShort")}
             </button>
@@ -509,6 +488,51 @@ export function ServiceRecordEditor({
         ) : null}
       </div>
     ) : null;
+
+  /** Opens the turno this ficha belongs to (the Agenda, with its detail open). */
+  function openTurno() {
+    if (!record?.appointmentId || !record.appointmentStartAt) return;
+    const appointmentId = record.appointmentId;
+    const startAt = record.appointmentStartAt;
+    onClose();
+    navigate("/app/calendar", {
+      state: {
+        selectedDate: new Date(startAt).toLocaleDateString("sv-SE"),
+        openAppointmentId: appointmentId,
+      },
+    });
+  }
+
+  // Everything that is not the main flow lives in «⋯»: the turno, the tips and voiding the ficha.
+  const menuItems: MoreActionsItem[] = [];
+  if (record && turnoTime) {
+    menuItems.push({
+      id: "turno",
+      label: t("femme.appointmentFicha.viewAppointment"),
+      icon: <ActionIcon name="file" />,
+      testId: "service-record-view-appointment",
+      onSelect: openTurno,
+    });
+  }
+  if (!professionalMode && !tipsVisible) {
+    menuItems.push({
+      id: "tips",
+      label: t("femme.serviceRecords.tipsSection"),
+      icon: <ActionIcon name="tag" />,
+      testId: "service-record-tips-toggle",
+      onSelect: () => setTipsOpen(true),
+    });
+  }
+  if (!professionalMode && record && isOpen && !showVoidForm) {
+    menuItems.push({
+      id: "void",
+      label: t("femme.serviceRecords.voidButton"),
+      icon: <ActionIcon name="ban" />,
+      destructive: true,
+      testId: "service-record-void-open",
+      onSelect: () => setShowVoidForm(true),
+    });
+  }
 
   if (isReadOnly && record) {
     const tipRows = record.tips.filter((tp) => Number(tp.amount) > 0);
@@ -594,10 +618,7 @@ export function ServiceRecordEditor({
         className="flex flex-col gap-3"
       >
         {record ? (
-          <>
-            {clientRow}
-            {appointmentRow}
-          </>
+          clientRow
         ) : (
           <section className="flex flex-col gap-2" aria-labelledby="sr-client-h">
             <h3 id="sr-client-h" className={SECTION_TITLE}>
@@ -631,7 +652,7 @@ export function ServiceRecordEditor({
           </section>
         )}
 
-        <section className="flex flex-col gap-1 border-t border-line pt-3" aria-labelledby="sr-lines-h">
+        <section className="flex flex-col gap-1" aria-labelledby="sr-lines-h">
           <h3 id="sr-lines-h" className={SECTION_TITLE}>
             {t("femme.serviceRecords.linesSection")}
           </h3>
@@ -651,27 +672,17 @@ export function ServiceRecordEditor({
               professionals.find((p) => p.id === line.professionalId)?.fullName ??
               record?.lines.find((l) => l.professionalId === line.professionalId)?.professionalName ??
               undefined;
-            const expanded =
-              !!lineErrors[idx]?.service ||
-              (openLines[line.key] ?? (lines.length === 1 || !line.pickedService));
+            // Rows are plain text; only a new (empty) line, one with an error or one the user tapped
+            // opens its fields.
+            const expanded = !!lineErrors[idx]?.service || (openLines[line.key] ?? !line.pickedService);
             const bodyId = `service-record-line-body-${idx}`;
             const summaryName = line.pickedService?.name ?? t("femme.serviceRecords.newServiceLine");
-            const summarySub =
-              [
-                professionalName,
-                line.quantity > 1
-                  ? professionalMode
-                    ? `×${line.quantity}`
-                    : `${line.quantity} × ${line.unitPrice || "0"}`
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" · ") || t("femme.serviceRecords.lineFillIn");
+            const summarySub = professionalName || t("femme.serviceRecords.lineFillIn");
             return (
               <div
                 key={line.key}
                 data-testid="service-record-line"
-                className="mt-2 overflow-hidden rounded-card border border-line first:mt-1"
+                className="border-t border-line first:border-t-0"
               >
                 <button
                   type="button"
@@ -679,37 +690,29 @@ export function ServiceRecordEditor({
                   aria-controls={bodyId}
                   data-testid="service-record-line-toggle"
                   onClick={() => setOpenLines((o) => ({ ...o, [line.key]: !expanded }))}
-                  className="grid min-h-14 w-full grid-cols-[1.5rem_minmax(0,1fr)_auto_1.25rem] items-center gap-3 px-3.5 py-2.5 text-left hover:bg-bg"
+                  className="flex min-h-14 w-full items-center gap-3 rounded-lg px-1 py-2.5 text-left hover:bg-bg"
                 >
-                  <span
-                    aria-hidden="true"
-                    className="flex size-6 items-center justify-center rounded-full bg-primary font-heading text-[13px] font-extrabold text-primary-fg"
-                  >
-                    {idx + 1}
-                  </span>
-                  <span className="flex min-w-0 flex-col">
+                  <span className="flex min-w-0 flex-1 flex-col">
                     <b className="truncate text-ink">{summaryName}</b>
                     <span className="truncate text-sm text-ink-3">{summarySub}</span>
                   </span>
-                  {professionalMode ? (
-                    <span aria-hidden="true" />
-                  ) : (
+                  <span className="shrink-0 text-right">
                     <b
-                      className="whitespace-nowrap font-heading text-ink"
+                      className="block whitespace-nowrap font-heading text-ink"
                       data-testid="service-record-line-subtotal"
                     >
                       {formatAmountDecimal(lineSubtotal(line).toFixed(2))}
                     </b>
-                  )}
-                  <span
-                    aria-hidden="true"
-                    className={`text-ink-3 transition-transform ${expanded ? "rotate-180" : ""}`}
-                  >
-                    ⌄
+                    {line.quantity > 1 ? (
+                      <span className="block text-xs text-ink-3">× {line.quantity}</span>
+                    ) : null}
+                  </span>
+                  <span aria-hidden="true" className="w-4 shrink-0 text-center text-ink-3">
+                    {expanded ? "⌃" : "✎"}
                   </span>
                 </button>
                 {expanded ? (
-                  <div id={bodyId} className="flex flex-col gap-2 border-t border-line px-3.5 pb-3 pt-3">
+                  <div id={bodyId} className="mb-2 flex flex-col gap-2 rounded-card bg-bg p-3.5">
                     <ServiceSearchField
                       id={`service-record-line-svc-${idx}`}
                       label={t("femme.serviceRecords.lineServiceAria", { n: idx + 1 })}
@@ -798,27 +801,6 @@ export function ServiceRecordEditor({
               </div>
             );
           })}
-          {frequent.length > 0 ? (
-            <div
-              className="mt-3 flex flex-wrap items-center gap-2"
-              data-testid="service-record-frequent"
-            >
-              <span className="text-xs font-bold uppercase tracking-wider text-ink-3">
-                {t("femme.serviceRecords.frequentLabel")}
-              </span>
-              {frequent.map((svc) => (
-                <button
-                  key={svc.id}
-                  type="button"
-                  data-testid="service-record-frequent-chip"
-                  onClick={() => addFrequentService(svc)}
-                  className="min-h-11 rounded-full border border-line bg-primary-lt px-4 text-sm font-bold text-primary hover:border-primary"
-                >
-                  + {svc.name}
-                </button>
-              ))}
-            </div>
-          ) : null}
           <button
             type="button"
             onClick={addLine}
@@ -830,36 +812,24 @@ export function ServiceRecordEditor({
             </>
           )}
           {professionalMode ? null : (
-            <div className="flex justify-between font-heading text-lg font-extrabold" data-testid="service-record-total">
-              <span>{t("femme.serviceRecords.total")}</span>
-              <span>{formatAmountDecimal(total.toFixed(2))}</span>
+            <div className="flex items-baseline justify-between pt-1" data-testid="service-record-total">
+              <span className="text-sm font-bold text-ink-2">{t("femme.serviceRecords.total")}</span>
+              <span className="font-heading text-2xl font-extrabold text-ink">{formatAmountDecimal(total.toFixed(2))}</span>
             </div>
           )}
         </section>
 
-        {professionalMode ? null : (
-        <section className="border-t border-line" aria-label={t("femme.serviceRecords.tipsSection")}>
-          <button
-            type="button"
-            data-testid="service-record-tips-toggle"
-            aria-expanded={tipsOpen}
-            aria-controls="service-record-tips-body"
-            onClick={() => setTipsOpen((v) => !v)}
-            className="flex min-h-11 w-full items-center justify-between text-left"
-          >
+        {professionalMode || !tipsVisible ? null : (
+        <section aria-label={t("femme.serviceRecords.tipsSection")}>
+          <div className="flex min-h-11 items-center justify-between">
             <span className={SECTION_TITLE}>{t("femme.serviceRecords.tipsSection")}</span>
-            <span className="flex items-center gap-2 text-sm font-bold text-ink-3">
-              {tipsTotal > 0 ? (
-                <span data-testid="service-record-tips-total">
-                  {t("femme.serviceRecords.tipsTotal")} {formatAmountDecimal(tipsTotal.toFixed(2))}
-                </span>
-              ) : null}
-              <span aria-hidden="true" className={`transition-transform ${tipsOpen ? "rotate-180" : ""}`}>
-                ⌄
+            {tipsTotal > 0 ? (
+              <span data-testid="service-record-tips-total" className="text-sm font-bold text-ink-3">
+                {t("femme.serviceRecords.tipsTotal")} {formatAmountDecimal(tipsTotal.toFixed(2))}
               </span>
-            </span>
-          </button>
-          {tipsOpen ? (
+            ) : null}
+          </div>
+          {tipsVisible ? (
             <div id="service-record-tips-body" className="flex flex-col gap-1 pb-2">
               {distinctProfessionalIds.length === 0 ? (
                 <Text variant="muted" className="text-sm">
@@ -953,52 +923,50 @@ export function ServiceRecordEditor({
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            {!professionalMode && record && isOpen && !showVoidForm ? (
-              <Button
-                type="button"
-                variant="secondary"
-                className="min-h-11 text-danger"
-                data-testid="service-record-void-open"
-                onClick={() => setShowVoidForm(true)}
-              >
-                {t("femme.serviceRecords.voidButton")}
-              </Button>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-11"
+            onClick={onClose}
+            data-testid="service-record-close"
+          >
+            {record ? t("femme.serviceRecords.close") : t("femme.serviceRecords.cancel")}
+          </Button>
+          <Button
+            type="submit"
+            variant={record && !professionalMode ? "outline" : "primary"}
+            className="min-h-11"
+            disabled={saving || clientSelection === null}
+            data-testid="service-record-submit"
+          >
+            {saving ? t("femme.serviceRecords.saving") : t("femme.serviceRecords.saveShort")}
+          </Button>
+          <span className="flex-1" aria-hidden="true" />
+          {!professionalMode && record && isOpen ? (
             <Button
               type="button"
-              variant="secondary"
+              variant="primary"
               className="min-h-11"
-              onClick={onClose}
-              data-testid="service-record-close"
+              disabled={saving}
+              onClick={() => void handlePay()}
+              data-testid="service-record-generate-invoice"
             >
-              {record ? t("femme.serviceRecords.close") : t("femme.serviceRecords.cancel")}
+              {t("femme.serviceRecords.pay")}
             </Button>
-            <Button
-              type="submit"
-              variant={record && !professionalMode ? "secondary" : "primary"}
-              className="min-h-11"
-              disabled={saving || clientSelection === null}
-              data-testid="service-record-submit"
-            >
-              {saving ? t("femme.serviceRecords.saving") : t("femme.serviceRecords.saveShort")}
-            </Button>
-            {!professionalMode && record && isOpen ? (
-              <Button
-                type="button"
-                variant="primary"
-                className="min-h-11"
-                disabled={saving}
-                onClick={() => void handlePay()}
-                data-testid="service-record-generate-invoice"
-              >
-                {t("femme.serviceRecords.pay")}
-              </Button>
-            ) : null}
-          </div>
+          ) : null}
+          {menuItems.length > 0 ? (
+            <MoreActionsMenu
+              compact
+              label={t("femme.calendar.action.more")}
+              items={menuItems}
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
+              triggerTestId="service-record-more"
+              menuTestId="service-record-actions-panel"
+              disabled={saving}
+            />
+          ) : null}
         </div>
       </form>
     </div>

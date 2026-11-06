@@ -21,7 +21,7 @@ test.describe("Ficha de servicio · carga rápida de profesionales", () => {
     expect(mine).not.toHaveProperty("schedules");
   });
 
-  test("al abrir una ficha, el profesional y los servicios frecuentes se piden en paralelo con la ficha", async ({
+  test("al abrir una ficha, los profesionales se piden en paralelo con la ficha", async ({
     page,
     request,
   }) => {
@@ -40,18 +40,16 @@ test.describe("Ficha de servicio · carga rápida de profesionales", () => {
     await loginAsDemo(page);
     await expect(page.getByTestId("dashboard-service-record-card").first()).toBeVisible({ timeout: 20_000 });
     // Only what is requested from here on counts (Inicio's own load is already done).
-    const starts: { record?: number; professionals?: number; frequent?: number } = {};
+    const starts: { record?: number; professionals?: number } = {};
     page.on("request", (r) => {
       const u = new URL(r.url()).pathname;
       if (/^\/api\/service-records\/\d+$/.test(u)) starts.record ??= Date.now();
       if (u === "/api/professionals/options") starts.professionals ??= Date.now();
-      if (u === "/api/service-records/frequent-services") starts.frequent ??= Date.now();
     });
     await page.getByTestId("dashboard-service-record-card").first().click({ position: { x: 40, y: 20 } });
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect.poll(() => Object.keys(starts).length, { timeout: 15_000 }).toBe(3);
+    await expect.poll(() => Object.keys(starts).length, { timeout: 15_000 }).toBe(2);
     // The other two requests start with the ficha's, not after it has been answered.
     expect(Math.abs(starts.professionals! - starts.record!)).toBeLessThan(150);
-    expect(Math.abs(starts.frequent! - starts.record!)).toBeLessThan(150);
   });
 });

@@ -197,4 +197,26 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     expect(parseFloat(listLook.radius)).toBeGreaterThan(14);
     expect(listLook.border).toBe("0px");
   });
+
+  test("«Ver historial» va a la derecha del título, en el mismo lugar que «Ver agenda»", async ({ page, request }) => {
+    const token = await loginAsDemoApi(request);
+    await seedCategoryServiceProfessional(request, token);
+    await loginAsDemo(page);
+
+    const history = page.getByTestId("dashboard-service-records-history-link");
+    await expect(history).toBeVisible({ timeout: 20_000 });
+    await expect(history).toHaveText("View history");
+    const agenda = page.getByRole("link", { name: /View agenda/ });
+    await expect(agenda).toBeVisible();
+
+    // Inside the title row of «Fichas de servicio de hoy», right-aligned like «Ver agenda».
+    const titleRow = page.getByTestId("dashboard-today-records").getByTestId("section-title");
+    await expect(titleRow.getByTestId("dashboard-service-records-history-link")).toBeVisible();
+    const h = (await history.boundingBox())!;
+    const a = (await agenda.boundingBox())!;
+    expect(Math.abs(h.x + h.width - (a.x + a.width))).toBeLessThan(3);
+
+    await history.click();
+    await expect(page).toHaveURL(/\/app\/service-records/);
+  });
 });

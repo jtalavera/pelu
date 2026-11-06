@@ -22,6 +22,7 @@ import {
   pickFichaClient,
   pickLineProfessional,
   pickLineService,
+  clickFichaMenuItem,
 } from "../fixtures/fichas";
 
 test.describe.configure({ mode: "serial" });
@@ -131,7 +132,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(dlg.getByTestId("service-record-total")).toContainText("80.000");
 
     // Tips (folded) show one row per distinct professional on the lines.
-    await dlg.getByTestId("service-record-tips-toggle").click();
+    await clickFichaMenuItem(page, dlg, "service-record-tips-toggle");
     const tipInput1 = page.locator(`#service-record-tip-${seed.professionalId}`);
     const tipInput2 = page.locator(`#service-record-tip-${secondProfessional.id}`);
     await setControlledInputValue(tipInput1, "5000");
@@ -278,7 +279,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
 
     await loginAsDemo(page);
     const dialogV = await openFichaDialog(page, client.fullName);
-    await dialogV.getByTestId("service-record-void-open").click();
+    await clickFichaMenuItem(page, dialogV, "service-record-void-open");
     await dialogV.getByLabel("Reason").fill("Cliente se retiró antes de comenzar");
     await dialogV.getByTestId("service-record-void-confirm").click();
     // Voiding closes the dialog and a toast confirms it on the list.
