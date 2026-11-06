@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
+import com.cursorpoc.backend.domain.Appointment;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.Professional;
@@ -17,6 +18,7 @@ import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.PagedServiceRecordsResponse;
+import com.cursorpoc.backend.web.dto.ServiceRecordAppointmentResponse;
 import com.cursorpoc.backend.web.dto.ServiceRecordLineRequest;
 import com.cursorpoc.backend.web.dto.ServiceRecordLineResponse;
 import com.cursorpoc.backend.web.dto.ServiceRecordListItemResponse;
@@ -33,6 +35,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayDeque;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -369,6 +372,7 @@ public class ServiceRecordService {
         List.of(),
         r.appointmentId(),
         r.appointmentStartAt(),
+        r.appointments(),
         r.clientGeneric());
   }
 
@@ -550,8 +554,8 @@ public class ServiceRecordService {
                 .map(
                     l ->
                         l.getProfessional() == null ? null : l.getProfessional().getDisplayName())),
-        r.getAppointment() != null ? r.getAppointment().getId() : null,
-        r.getAppointment() != null ? r.getAppointment().getStartAt() : null,
+        r.firstAppointment() != null ? r.firstAppointment().getId() : null,
+        r.firstAppointment() != null ? r.firstAppointment().getStartAt() : null,
         r.getClient().isGeneric());
   }
 
@@ -610,8 +614,12 @@ public class ServiceRecordService {
         linkedInvoice != null ? formatInvoiceNumber(linkedInvoice.getInvoiceNumber()) : null,
         lines,
         tips,
-        r.getAppointment() != null ? r.getAppointment().getId() : null,
-        r.getAppointment() != null ? r.getAppointment().getStartAt() : null,
+        r.firstAppointment() != null ? r.firstAppointment().getId() : null,
+        r.firstAppointment() != null ? r.firstAppointment().getStartAt() : null,
+        r.getAppointments().stream()
+            .sorted(Comparator.comparing(Appointment::getStartAt))
+            .map(a -> new ServiceRecordAppointmentResponse(a.getId(), a.getStartAt()))
+            .collect(Collectors.toList()),
         r.getClient().isGeneric());
   }
 

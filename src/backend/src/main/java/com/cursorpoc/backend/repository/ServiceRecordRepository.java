@@ -39,24 +39,15 @@ public interface ServiceRecordRepository extends JpaRepository<ServiceRecord, Lo
       @Param("kind") com.cursorpoc.backend.domain.enums.ServiceKind kind,
       Pageable pageable);
 
-  /** The ficha of a turno, if it has one. */
-  Optional<ServiceRecord> findByTenant_IdAndAppointment_Id(Long tenantId, Long appointmentId);
-
-  /** Fichas of several turnos at once (the Inicio / Agenda lists). */
-  @Query(
-      """
-      SELECT r.appointment.id, r.id FROM ServiceRecord r
-      WHERE r.tenant.id = :tenantId AND r.appointment.id IN :appointmentIds
-      """)
-  List<Object[]> findIdsByAppointmentIds(
-      @Param("tenantId") Long tenantId, @Param("appointmentIds") Collection<Long> appointmentIds);
-
-  /** Open fichas of a client created in the range and not tied to any turno (assignable ones). */
+  /**
+   * Open fichas of a client created in the range; a ficha may serve several turnos, so any is
+   * assignable.
+   */
   @Query(
       """
       SELECT r FROM ServiceRecord r
       WHERE r.tenant.id = :tenantId AND r.client.id = :clientId
-      AND r.status = :status AND r.appointment IS NULL
+      AND r.status = :status
       AND r.createdAt >= :from AND r.createdAt <= :to
       ORDER BY r.createdAt DESC
       """)

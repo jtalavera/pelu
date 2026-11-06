@@ -169,7 +169,7 @@ public class AppointmentService {
     if (newStatus != previousStatus) {
       recordStatusTransition(tenantId, appointment, newStatus);
       if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.NO_SHOW) {
-        releaseOpenServiceRecord(tenantId, appointmentId);
+        releaseOpenServiceRecord(appointment);
       }
     }
     return toResponse(appointment);
@@ -177,13 +177,16 @@ public class AppointmentService {
 
   /**
    * A cancelled / no-show turno lets go of its ficha when it is still open: the ficha stays open
-   * (it is not voided) and can be assigned to another turno. A charged ficha keeps its link.
+   * (it is not voided), keeps its other turnos and can be assigned to another turno. A charged
+   * ficha keeps its link.
    */
-  private void releaseOpenServiceRecord(long tenantId, long appointmentId) {
-    serviceRecordRepository
-        .findByTenant_IdAndAppointment_Id(tenantId, appointmentId)
-        .filter(r -> r.getStatus() == ServiceRecordStatus.OPEN)
-        .ifPresent(r -> r.setAppointment(null));
+  private void releaseOpenServiceRecord(Appointment appointment) {
+    ServiceRecord record = appointment.getServiceRecord();
+    if (record != null && record.getStatus() == ServiceRecordStatus.OPEN) {
+      record.getAppointments().remove(appointment);
+      appointment.setServiceRecord(null);
+      appointmentRepository.save(appointment);
+    }
   }
 
   /** Issue #268: counts only transitions into CANCELLED / NO_SHOW (re-saving is not counted). */
@@ -319,29 +322,21 @@ public class AppointmentService {
   }
 
   private List<AppointmentResponse> toResponses(long tenantId, List<Appointment> appointments) {
-    Map<Long, Long> recordIds = new HashMap<>();
     Map<Long, Long> invoiceIds = new HashMap<>();
     if (!appointments.isEmpty()) {
       List<Long> ids = appointments.stream().map(Appointment::getId).toList();
-      for (Object[] row : serviceRecordRepository.findIdsByAppointmentIds(tenantId, ids)) {
-        recordIds.put((Long) row[0], (Long) row[1]);
-      }
       for (Object[] row :
           invoiceRepository.findInvoiceIdsByAppointmentIds(tenantId, ids, InvoiceStatus.ISSUED)) {
         invoiceIds.put((Long) row[0], (Long) row[1]);
       }
     }
     return appointments.stream()
-        .map(a -> toResponse(a, recordIds.get(a.getId()), invoiceIds.get(a.getId())))
+        .map(a -> toResponse(a, recordIdOf(a), invoiceIds.get(a.getId())))
         .toList();
   }
 
   private AppointmentResponse toResponse(Appointment a) {
-    Long recordId =
-        serviceRecordRepository
-            .findByTenant_IdAndAppointment_Id(a.getTenant().getId(), a.getId())
-            .map(ServiceRecord::getId)
-            .orElse(null);
+    Long recordId = recordIdOf(a);
     Long invoiceId = null;
     for (Object[] row :
         invoiceRepository.findInvoiceIdsByAppointmentIds(
@@ -349,6 +344,11 @@ public class AppointmentService {
       invoiceId = (Long) row[1];
     }
     return toResponse(a, recordId, invoiceId);
+  }
+
+  /** The turno's ficha id (the lazy reference needs no extra query), or null. */
+  private static Long recordIdOf(Appointment a) {
+    return a.getServiceRecord() != null ? a.getServiceRecord().getId() : null;
   }
 
   private AppointmentResponse toResponse(Appointment a, Long serviceRecordId, Long invoiceId) {

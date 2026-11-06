@@ -345,13 +345,19 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
   boolean existsByAppointment_IdAndStatus(Long appointmentId, InvoiceStatus status);
 
-  /** Rows of {@code [appointmentId, invoiceId]}: the (latest) issued invoice of each turno. */
+  /**
+   * Rows of [appointmentId, invoiceId]: the latest issued invoice of each turno, whether linked to
+   * the turno itself or to the ficha that was charged (a ficha may serve several turnos, all
+   * charged by one invoice).
+   */
   @Query(
       """
-      SELECT i.appointment.id, MAX(i.id) FROM Invoice i
-      WHERE i.tenant.id = :tenantId AND i.status = :status
-      AND i.appointment.id IN :appointmentIds
-      GROUP BY i.appointment.id
+      SELECT a.id, MAX(i.id) FROM Appointment a, Invoice i
+      WHERE a.tenant.id = :tenantId AND i.tenant.id = :tenantId AND i.status = :status
+      AND a.id IN :appointmentIds
+      AND (i.appointment.id = a.id
+           OR (a.serviceRecord IS NOT NULL AND i.serviceRecord.id = a.serviceRecord.id))
+      GROUP BY a.id
       """)
   List<Object[]> findInvoiceIdsByAppointmentIds(
       @Param("tenantId") Long tenantId,

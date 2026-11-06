@@ -505,12 +505,14 @@
       "createNew": "Create new service record",
       "createNewHint": "With {{service}} and {{professional]}, like the appointment",
       "assignTitle": "Or assign an open one from today",
-      "noCandidates": "{{client}} has no open service records today without an appointment.",
+      "noCandidates": "{{client}} has no open service records today.",
       "candidateTitle": "Service record from {{time}}",
       "appointmentTag": "Appointment {{time}}",
+      "appointmentsTag": "Appointments {{times}}",
       "noAppointmentTag": "No appointment",
       "goShort": "Record",
       "viewAppointment": "View appointment",
+      "viewAppointmentAt": "View appointment {{time}}",
       "goToAppointment": "Appointment at {{time}}"
     },
     "nav": {

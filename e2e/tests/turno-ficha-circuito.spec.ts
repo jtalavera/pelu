@@ -22,7 +22,8 @@ import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/
  *  - En el Inicio, un turno sin ficha ofrece «Crear o asignar ficha»; con ficha, «Ir a la ficha».
  *  - Crear o asignar pasa el turno a En curso; la ficha muestra a qué turno pertenece.
  *  - Cobrar la ficha completa ficha y turno; cancelar el turno suelta la ficha abierta.
- *  - Un turno tiene una sola ficha; una profesional solo opera sus turnos.
+ *  - Un turno tiene una sola ficha, pero una ficha puede pertenecer a varios turnos; una profesional
+ *    solo opera sus turnos.
  */
 test.describe.configure({ mode: "serial" });
 
@@ -31,6 +32,7 @@ type Ficha = {
   id: number;
   status: string;
   appointmentId: number | null;
+  appointments?: { id: number; startAt: string }[];
   clientId: number;
   lines: { serviceId: number; professionalId: number | null; quantity: number; unitPrice: string | number | null }[];
 };
@@ -663,7 +665,7 @@ test.describe("Turno y ficha de servicio", () => {
     expect(await again.text()).toContain("APPOINTMENT_ALREADY_INVOICED");
   });
 
-  test("API: una sola ficha por turno, solo fichas abiertas, de la misma clienta y sin turno", async ({ request }) => {
+  test("API: una sola ficha por turno (pero una ficha admite varios turnos), solo fichas abiertas y de la misma clienta", async ({ request }) => {
     const admin = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, admin);
     const client = await seedClient(request, admin, `E2E TF Reglas ${Date.now()}`);
@@ -685,10 +687,46 @@ test.describe("Turno y ficha de servicio", () => {
     const second = await seedTurno(request, admin, await seedCategoryServiceProfessional(request, admin), client.id);
     const mine = await openFicha(request, admin, client.id, seed);
     expect((await post(`/api/appointments/${second.id}/service-record/assign`, { serviceRecordId: mine.id })).status()).toBe(200);
+    // A ficha that already has a turno can serve another one.
     const third = await seedTurno(request, admin, await seedCategoryServiceProfessional(request, admin), client.id);
-    const taken = await post(`/api/appointments/${third.id}/service-record/assign`, { serviceRecordId: mine.id });
-    expect(taken.status()).toBe(409);
-    expect(await taken.text()).toContain("SERVICE_RECORD_ALREADY_LINKED");
+    expect((await post(`/api/appointments/${third.id}/service-record/assign`, { serviceRecordId: mine.id })).status()).toBe(200);
+    const shared = await apiGetJson<Ficha>(request, admin, `/api/service-records/${mine.id}`);
+    expect((shared.appointments ?? []).map((a) => a.id).sort()).toEqual([second.id, third.id].sort());
+    expect((await getAppt(request, admin, second.id)).serviceRecordId).toBe(mine.id);
+    expect((await getAppt(request, admin, third.id)).serviceRecordId).toBe(mine.id);
+    // …but a turno that has a ficha cannot take another one.
+    const other2 = await openFicha(request, admin, client.id, seed);
+    const second2 = await post(`/api/appointments/${third.id}/service-record/assign`, { serviceRecordId: other2.id });
+    expect(second2.status()).toBe(409);
+    expect(await second2.text()).toContain("APPOINTMENT_ALREADY_HAS_SERVICE_RECORD");
+  });
+
+  test("Una ficha con varios turnos: cobrarla completa todos sus turnos y los marca cobrados", async ({ request }) => {
+    const admin = await loginAsDemoApi(request);
+    await ensureCashSessionOpenApi(request, admin);
+    await ensureActiveFiscalStampForInvoices(request, admin);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const client = await seedClient(request, admin, `E2E TF Varios ${Date.now()}`);
+    const first = await seedTurno(request, admin, seed, client.id);
+    const second = await seedTurno(request, admin, await seedCategoryServiceProfessional(request, admin), client.id);
+    const ficha = await openFicha(request, admin, client.id, seed);
+    const post = (path: string, data: unknown) =>
+      request.post(`${API_BASE}${path}`, { headers: authHeaders(admin), data });
+    expect((await post(`/api/appointments/${first.id}/service-record/assign`, { serviceRecordId: ficha.id })).status()).toBe(200);
+    expect((await post(`/api/appointments/${second.id}/service-record/assign`, { serviceRecordId: ficha.id })).status()).toBe(200);
+    expect((await getAppt(request, admin, first.id)).status).toBe("IN_PROGRESS");
+    expect((await getAppt(request, admin, second.id)).status).toBe("IN_PROGRESS");
+
+    await chargeFicha(request, admin, client.id, ficha, seed);
+
+    const a = await getAppt(request, admin, first.id);
+    const b = await getAppt(request, admin, second.id);
+    expect(a.status).toBe("COMPLETED");
+    expect(b.status).toBe("COMPLETED");
+    // Both turnos show the same comprobante ("Cobrado"), so the Agenda offers no «Cobrar» on either.
+    expect(a.invoiceId).not.toBeNull();
+    expect(b.invoiceId).toBe(a.invoiceId);
+    expect((await apiGetJson<Ficha>(request, admin, `/api/service-records/${ficha.id}`)).status).toBe("CLOSED");
   });
 
   test("API: una profesional opera la ficha de su turno, sin montos, y no la de otra", async ({ request }) => {

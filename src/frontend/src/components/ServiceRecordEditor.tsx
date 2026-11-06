@@ -392,10 +392,19 @@ export function ServiceRecordEditor({
 
   const dateText = record ? formatParaguayDateTime(record.createdAt, dateLocale) : null;
 
-  const turnoTime =
-    record?.appointmentId && record.appointmentStartAt
-      ? formatParaguayTime(record.appointmentStartAt, dateLocale)
-      : null;
+  // Every turno of the ficha (it may serve several); falls back to the single first one.
+  const turnos: { id: number; startAt: string }[] =
+    record?.appointments && record.appointments.length > 0
+      ? record.appointments
+      : record?.appointmentId && record.appointmentStartAt
+        ? [{ id: record.appointmentId, startAt: record.appointmentStartAt }]
+        : [];
+  const turnoTimes = turnos.map((a) => formatParaguayTime(a.startAt, dateLocale));
+  const turnoTime = turnoTimes.length > 0 ? turnoTimes.join(" · ") : null;
+  const turnoTag =
+    turnos.length > 1
+      ? t("femme.appointmentFicha.appointmentsTag", { times: turnoTime })
+      : t("femme.appointmentFicha.appointmentTag", { time: turnoTime });
 
   /**
    * CLIENTE, its name big and one grey line with the date and, while the ficha is being edited, the
@@ -412,9 +421,7 @@ export function ServiceRecordEditor({
         {isOpen && turnoTime ? (
           <>
             {" · "}
-            <span data-testid="service-record-appointment">
-              {t("femme.appointmentFicha.appointmentTag", { time: turnoTime })}
-            </span>
+            <span data-testid="service-record-appointment">{turnoTag}</span>
           </>
         ) : null}
       </div>
@@ -426,7 +433,7 @@ export function ServiceRecordEditor({
    * comprobante, each with a small «Ver» link (the tap area stays 44 px). Nothing when the ficha
    * has neither.
    */
-  const showTurno = Boolean(record?.appointmentId && record.appointmentStartAt);
+  const showTurno = turnos.length > 0;
   const showInvoice = record?.status === "CLOSED" && Boolean(record.invoiceNumberFormatted);
   const linkClass =
     "relative font-bold text-primary hover:underline after:absolute after:-inset-x-2 after:-inset-y-3.5 after:content-['']";
@@ -438,16 +445,14 @@ export function ServiceRecordEditor({
       >
         {showTurno ? (
           <span data-testid="service-record-appointment" className="inline-flex items-center gap-1.5">
-            {t("femme.appointmentFicha.appointmentTag", {
-              time: formatParaguayTime(record.appointmentStartAt as string, dateLocale),
-            })}
+            {turnoTag}
             <span aria-hidden="true">·</span>
             <button
               type="button"
               data-testid="service-record-view-appointment"
               aria-label={t("femme.appointmentFicha.viewAppointment")}
               className={linkClass}
-              onClick={openTurno}
+              onClick={() => openTurno()}
             >
               {t("femme.serviceRecords.viewShort")}
             </button>
@@ -489,11 +494,11 @@ export function ServiceRecordEditor({
       </div>
     ) : null;
 
-  /** Opens the turno this ficha belongs to (the Agenda, with its detail open). */
-  function openTurno() {
-    if (!record?.appointmentId || !record.appointmentStartAt) return;
-    const appointmentId = record.appointmentId;
-    const startAt = record.appointmentStartAt;
+  /** Opens a turno of this ficha, the earliest by default (the Agenda, with its detail open). */
+  function openTurno(target: { id: number; startAt: string } | undefined = turnos[0]) {
+    if (!target) return;
+    const appointmentId = target.id;
+    const startAt = target.startAt;
     onClose();
     navigate("/app/calendar", {
       state: {
@@ -505,13 +510,23 @@ export function ServiceRecordEditor({
 
   // Everything that is not the main flow lives in «⋯»: the turno, the tips and voiding the ficha.
   const menuItems: MoreActionsItem[] = [];
-  if (record && turnoTime) {
+  if (record && turnos.length === 1) {
     menuItems.push({
       id: "turno",
       label: t("femme.appointmentFicha.viewAppointment"),
       icon: <ActionIcon name="file" />,
       testId: "service-record-view-appointment",
-      onSelect: openTurno,
+      onSelect: () => openTurno(),
+    });
+  } else if (record && turnos.length > 1) {
+    turnos.forEach((turno, index) => {
+      menuItems.push({
+        id: `turno-${turno.id}`,
+        label: t("femme.appointmentFicha.viewAppointmentAt", { time: turnoTimes[index] }),
+        icon: <ActionIcon name="file" />,
+        testId: index === 0 ? "service-record-view-appointment" : `service-record-view-appointment-${turno.id}`,
+        onSelect: () => openTurno(turno),
+      });
     });
   }
   if (!professionalMode && !tipsVisible) {

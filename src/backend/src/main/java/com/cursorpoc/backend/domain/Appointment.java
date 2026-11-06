@@ -52,6 +52,14 @@ public class Appointment {
   @Column(nullable = false, length = 32)
   private AppointmentStatus status;
 
+  /**
+   * The ficha de servicio of this turno: a turno has at most one ficha, while a ficha may belong to
+   * several turnos. Null while the turno has none.
+   */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "service_record_id")
+  private ServiceRecord serviceRecord;
+
   @Column(name = "cancel_reason", length = 500)
   private String cancelReason;
 
@@ -128,6 +136,14 @@ public class Appointment {
 
   public void setStatus(AppointmentStatus status) {
     this.status = status;
+  }
+
+  public ServiceRecord getServiceRecord() {
+    return serviceRecord;
+  }
+
+  public void setServiceRecord(ServiceRecord serviceRecord) {
+    this.serviceRecord = serviceRecord;
   }
 
   public String getCancelReason() {

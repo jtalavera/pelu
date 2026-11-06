@@ -28,10 +28,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * The turno ↔ ficha de servicio circuit: a turno has at most one ficha and a ficha belongs to at
- * most one turno. The ficha is created from the turno (same client, service and professional) or an
+ * The turno ↔ ficha de servicio circuit: a turno has at most one ficha, while a ficha may belong to
+ * several turnos. The ficha is created from the turno (same client, service and professional) or an
  * open ficha of the same client from today is assigned to it; either way a Pendiente / Confirmado
- * turno moves to En curso. Charging the ficha completes the turno (see {@code InvoiceService}).
+ * turno moves to En curso. Charging the ficha completes all its turnos (see InvoiceService).
  */
 @Service
 public class AppointmentServiceRecordService {
@@ -96,9 +96,6 @@ public class AppointmentServiceRecordService {
     if (record.getStatus() != ServiceRecordStatus.OPEN) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "SERVICE_RECORD_NOT_OPEN");
     }
-    if (record.getAppointment() != null) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "SERVICE_RECORD_ALREADY_LINKED");
-    }
     ensureTurnoService(record, appointment);
     return link(tenantId, appointment, record);
   }
@@ -106,15 +103,24 @@ public class AppointmentServiceRecordService {
   /**
    * The turno's service must be on the ficha it is assigned to: a line with that service takes the
    * turno's professional; without one, the service is added (quantity 1, catalog price, turno's
-   * professional). Existing lines and quantities are left alone.
+   * professional). Existing lines and quantities are left alone. When the ficha already serves
+   * other turnos, a line is only reused if it has no professional or is already the turno's own, so
+   * one turno never takes over the line of another.
    */
   private void ensureTurnoService(ServiceRecord record, Appointment appointment) {
     Hibernate.initialize(record.getLines());
     Hibernate.initialize(record.getTips());
     SalonService turnoService = appointment.getSalonService();
+    boolean sharedWithOtherTurnos = !record.getAppointments().isEmpty();
+    Long turnoProfessionalId = appointment.getProfessional().getId();
     ServiceRecordLine match =
         record.getLines().stream()
             .filter(l -> l.getSalonService().getId().equals(turnoService.getId()))
+            .filter(
+                l ->
+                    !sharedWithOtherTurnos
+                        || l.getProfessional() == null
+                        || l.getProfessional().getId().equals(turnoProfessionalId))
             .findFirst()
             .orElse(null);
     if (match != null) {
@@ -145,7 +151,7 @@ public class AppointmentServiceRecordService {
     record.getTips().removeIf(t -> !onLines.contains(t.getProfessional().getId()));
   }
 
-  /** Open fichas of today, of the turno's client, that no turno has taken yet. */
+  /** Open fichas of today of the turno's client (a ficha may serve several turnos). */
   @Transactional(readOnly = true)
   public List<ServiceRecordListItemResponse> candidates(long tenantId, long appointmentId) {
     Appointment appointment = requireAppointment(tenantId, appointmentId);
@@ -165,13 +171,16 @@ public class AppointmentServiceRecordService {
   }
 
   private ServiceRecordResponse link(long tenantId, Appointment appointment, ServiceRecord record) {
-    record.setAppointment(appointment);
-    serviceRecordRepository.saveAndFlush(record);
+    appointment.setServiceRecord(record);
+    if (!record.getAppointments().contains(appointment)) {
+      record.getAppointments().add(appointment);
+    }
     if (appointment.getStatus() == AppointmentStatus.PENDING
         || appointment.getStatus() == AppointmentStatus.CONFIRMED) {
       appointment.setStatus(AppointmentStatus.IN_PROGRESS);
-      appointmentRepository.save(appointment);
     }
+    appointmentRepository.saveAndFlush(appointment);
+    serviceRecordRepository.saveAndFlush(record);
     return serviceRecordService.getServiceRecord(tenantId, record.getId());
   }
 
@@ -180,9 +189,7 @@ public class AppointmentServiceRecordService {
     if (!LINKABLE.contains(appointment.getStatus())) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "APPOINTMENT_NOT_ACTIVE");
     }
-    if (serviceRecordRepository
-        .findByTenant_IdAndAppointment_Id(tenantId, appointmentId)
-        .isPresent()) {
+    if (appointment.getServiceRecord() != null) {
       throw new ResponseStatusException(
           HttpStatus.CONFLICT, "APPOINTMENT_ALREADY_HAS_SERVICE_RECORD");
     }

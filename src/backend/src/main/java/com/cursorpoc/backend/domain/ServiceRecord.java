@@ -17,7 +17,9 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -37,10 +39,13 @@ public class ServiceRecord {
   @JoinColumn(name = "client_id", nullable = false)
   private Client client;
 
-  /** The turno this ficha belongs to (at most one each way); null for walk-ins without a turno. */
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "appointment_id")
-  private Appointment appointment;
+  /**
+   * The turnos this ficha belongs to: one ficha may serve several turnos, while each turno has at
+   * most one ficha (the link lives on {@link Appointment#getServiceRecord()}). Empty for walk-ins.
+   */
+  @OneToMany(mappedBy = "serviceRecord")
+  @BatchSize(size = 50)
+  private List<Appointment> appointments = new ArrayList<>();
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 32)
@@ -98,12 +103,13 @@ public class ServiceRecord {
     this.client = client;
   }
 
-  public Appointment getAppointment() {
-    return appointment;
+  public List<Appointment> getAppointments() {
+    return appointments;
   }
 
-  public void setAppointment(Appointment appointment) {
-    this.appointment = appointment;
+  /** The earliest turno of this ficha, or null when it has none. */
+  public Appointment firstAppointment() {
+    return appointments.stream().min(Comparator.comparing(Appointment::getStartAt)).orElse(null);
   }
 
   public ServiceRecordStatus getStatus() {

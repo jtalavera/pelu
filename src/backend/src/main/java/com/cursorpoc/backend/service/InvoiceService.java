@@ -53,6 +53,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -274,24 +276,28 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       invoice.setServiceRecord(serviceRecord);
     }
 
-    // 4c. The turno this invoice charges: the one its ficha belongs to, or — for a turno with no
-    // ficha (e.g. an occasional client) — the one the user charged from. It is linked to the
-    // invoice (so the Agenda stops offering "Cobrar") and completed together with it.
-    Appointment chargedTurno = null;
-    if (serviceRecord != null && serviceRecord.getAppointment() != null) {
-      chargedTurno = serviceRecord.getAppointment();
+    // 4c. The turnos this invoice charges: all the ones its ficha belongs to (a ficha may serve
+    // several turnos), or, for a turno with no ficha (e.g. an occasional client), the one the user
+    // charged from. The earliest is linked to the invoice; the Agenda finds the others through the
+    // ficha, so it stops offering "Cobrar" on all of them. All are completed with the invoice.
+    List<Appointment> chargedTurnos = new ArrayList<>();
+    if (serviceRecord != null && !serviceRecord.getAppointments().isEmpty()) {
+      chargedTurnos.addAll(serviceRecord.getAppointments());
     } else if (request.appointmentId() != null) {
-      chargedTurno =
+      Appointment requested =
           appointmentRepository
               .findByIdAndTenant_Id(request.appointmentId(), tenantId)
               .orElseThrow(
                   () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "APPOINTMENT_NOT_FOUND"));
+      chargedTurnos.add(requested);
     }
-    if (chargedTurno != null
-        && invoiceRepository.existsByAppointment_IdAndStatus(
-            chargedTurno.getId(), InvoiceStatus.ISSUED)) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "APPOINTMENT_ALREADY_INVOICED");
+    for (Appointment turno : chargedTurnos) {
+      if (invoiceRepository.existsByAppointment_IdAndStatus(turno.getId(), InvoiceStatus.ISSUED)) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "APPOINTMENT_ALREADY_INVOICED");
+      }
     }
+    Appointment chargedTurno =
+        chargedTurnos.stream().min(Comparator.comparing(Appointment::getStartAt)).orElse(null);
     invoice.setAppointment(chargedTurno);
 
     BigDecimal tipsAmount =
@@ -324,11 +330,12 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       serviceRecord.setStatus(ServiceRecordStatus.CLOSED);
       serviceRecord.setClosedAt(Instant.now());
     }
-    // The charged turno is completed together with its invoice, whatever step it was on.
-    if (chargedTurno != null
-        && chargedTurno.getStatus() != AppointmentStatus.CANCELLED
-        && chargedTurno.getStatus() != AppointmentStatus.NO_SHOW) {
-      chargedTurno.setStatus(AppointmentStatus.COMPLETED);
+    // The charged turnos are completed together with their invoice, whatever step they were on.
+    for (Appointment turno : chargedTurnos) {
+      if (turno.getStatus() != AppointmentStatus.CANCELLED
+          && turno.getStatus() != AppointmentStatus.NO_SHOW) {
+        turno.setStatus(AppointmentStatus.COMPLETED);
+      }
     }
 
     // 11. Stock (HU-63): product lines leave stock — an outbox event in this same transaction,

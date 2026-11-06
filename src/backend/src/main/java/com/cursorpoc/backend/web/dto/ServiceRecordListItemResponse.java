@@ -14,7 +14,7 @@ public record ServiceRecordListItemResponse(
     String servicesSummary,
     /** Distinct professional names on the record, in line order, comma-separated. */
     String professionalsSummary,
-    /** The turno this ficha belongs to, if any. */
+    /** The earliest turno this ficha belongs to, if any. */
     Long appointmentId,
     Instant appointmentStartAt,
     /** The ficha belongs to the generic "cliente ocasional": the UI shows a translated label. */
