@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterByListQuery, matchesListQuery, normalizeForSearch } from "./matchesListQuery";
+import { filterByListQuery, findQueryMatch, matchesListQuery, normalizeForSearch } from "./matchesListQuery";
 
 describe("matchesListQuery", () => {
   it("matches case-insensitive substring", () => {
@@ -11,6 +11,21 @@ describe("matchesListQuery", () => {
   it("treats empty query as match all", () => {
     expect(matchesListQuery("x", "")).toBe(true);
     expect(matchesListQuery("x", "   ")).toBe(true);
+  });
+});
+
+describe("accent-insensitive search", () => {
+  it("matches with or without accents, in either direction", () => {
+    expect(matchesListQuery("TANIA NUÑEZ Z", "nunez")).toBe(true);
+    expect(matchesListQuery("Nunez", "nuñ")).toBe(true);
+    expect(matchesListQuery("Coloración", "coloracion")).toBe(true);
+  });
+
+  it("finds the range to highlight in the original text", () => {
+    expect(findQueryMatch("TANIA NUÑEZ Z", "nunez")).toEqual([6, 11]);
+    expect(findQueryMatch("Spa de pies", "DE")).toEqual([4, 6]);
+    expect(findQueryMatch("Spa de pies", "xyz")).toBeNull();
+    expect(findQueryMatch("Spa de pies", "  ")).toBeNull();
   });
 });
 

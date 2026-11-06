@@ -77,6 +77,7 @@ jobs:
           tests/inicio-profesional-turnos.spec.ts
           tests/mensajes-estilo.spec.ts
           tests/comprobante-tres-puntos.spec.ts
+          tests/calendario-buscador.spec.ts
           tests/profesionales-opciones.spec.ts
           tests/hu-06-calendario-de-turnos.spec.ts
           tests/hu-07-agendar-un-turno.spec.ts

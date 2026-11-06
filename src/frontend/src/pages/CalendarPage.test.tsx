@@ -393,4 +393,88 @@ describe("CalendarPage · turnos completados siguen en la agenda", () => {
     expect(within(other).getByTestId("calendar-done-badge-102").textContent).toContain("Completed");
     expect(screen.queryByTestId("calendar-appt-103")).toBeNull();
   });
+
+  describe("buscador por cliente o servicio", () => {
+    const todayAt = (hour: number) => {
+      const d = new Date();
+      d.setHours(hour, 0, 0, 0);
+      return d.toISOString();
+    };
+    const turno = (id: number, hour: number, clientName: string | null, serviceName: string) => ({
+      ...MOCK_APPOINTMENT,
+      id,
+      clientName,
+      serviceName,
+      startAt: todayAt(hour),
+      endAt: todayAt(hour + 1),
+    });
+
+    beforeEach(() => {
+      femmeJsonMock.mockImplementation((url: string) => {
+        if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
+        if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
+        if (url.includes("/api/appointments")) {
+          return Promise.resolve([
+            turno(201, 10, "TANIA NUÑEZ Z", "SPA DE PIES"),
+            turno(202, 11, "JUAN TALAVERA", "SPA DE PIES"),
+            turno(203, 12, null, "MAQUILLAJE"),
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+    });
+
+    it("filters the Day list by client, ignoring case and accents, and counts the matches", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByTestId("calendar-appt-201");
+      await user.type(screen.getByTestId("calendar-search"), "nunez");
+      expect(screen.getByTestId("calendar-appt-201")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-appt-202")).toBeNull();
+      expect(screen.queryByTestId("calendar-appt-203")).toBeNull();
+      expect(screen.getByTestId("calendar-search-count").textContent).toBe("1 of 3 appointments");
+      // The matching part is highlighted.
+      expect(within(screen.getByTestId("calendar-appt-201")).getByText(/Nu/i, { selector: "mark" })).toBeTruthy();
+    });
+
+    it("filters by service and also finds the occasional client by its label", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByTestId("calendar-appt-201");
+      await user.type(screen.getByTestId("calendar-search"), "spa de");
+      expect(screen.getByTestId("calendar-search-count").textContent).toBe("2 of 3 appointments");
+      expect(screen.queryByTestId("calendar-appt-203")).toBeNull();
+      await user.clear(screen.getByTestId("calendar-search"));
+      await user.type(screen.getByTestId("calendar-search"), "occasional");
+      expect(screen.getByTestId("calendar-appt-203")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-appt-201")).toBeNull();
+    });
+
+    it("shows «No results» with a button that clears the search, and the × clears it too", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByTestId("calendar-appt-201");
+      expect(screen.queryByTestId("calendar-search-clear")).toBeNull();
+      await user.type(screen.getByTestId("calendar-search"), "zzz");
+      const empty = screen.getByTestId("calendar-search-empty");
+      expect(empty.textContent).toContain("No results");
+      await user.click(within(empty).getByRole("button", { name: "Clear search" }));
+      expect((screen.getByTestId("calendar-search") as HTMLInputElement).value).toBe("");
+      expect(screen.getByTestId("calendar-appt-202")).toBeTruthy();
+      await user.type(screen.getByTestId("calendar-search"), "talavera");
+      await user.click(screen.getByTestId("calendar-search-clear"));
+      expect(screen.getByTestId("calendar-appt-201")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-search-count")).toBeNull();
+    });
+
+    it("dims (instead of removing) the Week blocks that do not match", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click((await screen.findAllByTestId("calendar-view-week"))[0]);
+      await user.type(screen.getByTestId("calendar-search"), "talavera");
+      expect((await screen.findByTestId("calendar-appt-202")).getAttribute("data-dimmed")).toBeNull();
+      expect(screen.getByTestId("calendar-appt-201").getAttribute("data-dimmed")).toBe("true");
+      expect(screen.getByTestId("calendar-search-count").textContent).toBe("1 of 3 appointments this week");
+    });
+  });
 });

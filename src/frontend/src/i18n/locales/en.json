@@ -2958,6 +2958,16 @@
     },
     "calendar": {
       "views": { "label": "View", "day": "Day", "week": "Week" },
+      "search": {
+        "label": "Search client or service",
+        "placeholder": "Search client or service",
+        "clear": "Clear search",
+        "countDay": "{{shown}} of {{total}} appointments",
+        "countWeek": "{{shown}} of {{total}} appointments this week",
+        "noMatchesTitle": "No results",
+        "noMatchesBody": "No appointment on this day matches “{{term}}”.",
+        "reset": "Clear search"
+      },
       "action": {
         "confirm": "Confirm",
         "start": "Start",
