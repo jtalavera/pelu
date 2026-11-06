@@ -16,6 +16,7 @@ import {
 import { loginAsDemo } from "../fixtures/auth";
 import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
 import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome } from "../fixtures/billing";
+import { revealAppointmentRow, revealFichaCard } from "../fixtures/dashboard";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 /**
@@ -282,13 +283,8 @@ test.describe("Turno y ficha de servicio", () => {
     await chargeFicha(request, admin, client.id, ficha, seed);
 
     await loginAsDemo(page);
-    // Inicio shows 12 fichas at a time (open ones first): reveal more until this one is listed.
-    const card = page.getByTestId("dashboard-service-record-card").filter({ hasText: new RegExp(clientName, "i") }).first();
-    const more = page.getByTestId("dashboard-service-records-more");
-    for (let i = 0; i < 10 && !(await card.isVisible()); i++) {
-      if (await more.isVisible()) await more.click();
-      else await page.waitForTimeout(500);
-    }
+    // The charged ficha waits in the folded «Cobradas y anuladas»: open it (and page) until it shows.
+    const card = await revealFichaCard(page, new RegExp(clientName, "i"));
     await card.click({ position: { x: 40, y: 20 } });
     const dialog = page.getByRole("dialog");
     const line = dialog.getByTestId("service-record-meta");
@@ -325,7 +321,8 @@ test.describe("Turno y ficha de servicio", () => {
     expect((await apiGetJson<Ficha>(request, admin, `/api/service-records/${ficha.id}`)).status).toBe("CLOSED");
 
     await loginAsDemo(page);
-    const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName }).first();
+    // Charged: the turno waits in the folded «Cobrados».
+    const row = await revealAppointmentRow(page, (rows) => rows.filter({ hasText: clientName }));
     await expect(row).toContainText("Completed");
     await expect(row.getByTestId("dashboard-appointment-ficha-go")).toBeVisible();
   });
@@ -529,10 +526,9 @@ test.describe("Turno y ficha de servicio", () => {
     // Inicio: the occasional turno only offers «Ir a la ficha» (no «Ver comprobante» on the row);
     // the comprobante is reached from the charged ficha.
     await page.goto("/app");
-    const paidRow = page
-      .getByTestId("dashboard-appointment-row")
-      .filter({ hasText: seed.professionalFullName })
-      .filter({ hasText: "Occasional" });
+    const paidRow = await revealAppointmentRow(page, (rows) =>
+      rows.filter({ hasText: seed.professionalFullName }).filter({ hasText: "Occasional" }),
+    );
     await expect(paidRow.getByTestId("dashboard-appointment-ficha-go")).toBeVisible({ timeout: 20_000 });
     await expect(paidRow.getByTestId("dashboard-appointment-invoice")).toHaveCount(0);
     await paidRow.getByTestId("dashboard-appointment-ficha-go").click();
@@ -565,12 +561,8 @@ test.describe("Turno y ficha de servicio", () => {
 
     // A completed turno is not on the week grid: it is opened from the Inicio's list.
     await loginAsDemo(page);
-    await page
-      .getByTestId("dashboard-appointment-row")
-      .filter({ hasText: clientName })
-      .locator("button")
-      .first()
-      .click({ timeout: 20_000 });
+    const chargedRow = await revealAppointmentRow(page, (rows) => rows.filter({ hasText: clientName }));
+    await chargedRow.locator("button").first().click({ timeout: 20_000 });
     // The turno opens in place on Inicio (no navigation to the Agenda).
     await expect(page).toHaveURL(/\/app\/?$/);
     // Charged: no «Cobrar» nor next step; the comprobante is a footer button next to «Ficha».
@@ -605,7 +597,7 @@ test.describe("Turno y ficha de servicio", () => {
     await chargeFicha(request, admin, client.id, ficha, seed);
 
     await loginAsDemo(page);
-    const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: new RegExp(clientName, "i") });
+    const row = await revealAppointmentRow(page, (rows) => rows.filter({ hasText: new RegExp(clientName, "i") }));
     await row.locator("button").first().click({ timeout: 20_000 });
     const dialog = page.getByRole("dialog");
 

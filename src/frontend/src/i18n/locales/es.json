@@ -1005,6 +1005,11 @@
         "charge": "Cobrar",
         "chargeError": "No se pudo preparar el cobro. Probá de nuevo.",
         "addAppointmentRow": "Nuevo turno",
+        "pendingGroup": "Por atender o cobrar",
+        "unchargedTag": "sin cobrar",
+        "allAttended": "No quedan turnos por atender o cobrar.",
+        "chargedTitle": "Cobrados",
+        "chargedHint": "Ya tienen comprobante",
         "nowTag": "ahora",
         "moreTitle": "Más del día",
         "moreRecords": "Fichas de hoy",
@@ -3204,6 +3209,8 @@
         "openCount_one": "{{count}} abierta",
         "openCount_other": "{{count}} abiertas",
         "emptyOpen": "Hoy no hay fichas de servicio abiertas.",
+        "closedTitle": "Cobradas y anuladas",
+        "closedHint": "Ya cerradas hoy",
         "createFirst": "Crear la primera ficha",
         "addRow": "Nueva ficha",
         "proHint": "Fichas abiertas del día. Tocá una para agregar, cambiar o quitar servicios."
@@ -3212,7 +3219,10 @@
         "title": "Fichas de servicio de hoy",
         "empty": "No hay fichas de servicio hoy.",
         "viewHistory": "Ver historial →",
-        "showMore": "Más"
+        "viewHistoryOlder_one": "Ver historial. {{count}} ficha de un día anterior sigue abierta",
+        "viewHistoryOlder_other": "Ver historial. {{count}} fichas de días anteriores siguen abiertas",
+        "showMore": "Más",
+        "showMoreCount": "Más ({{count}})"
       }
     },
     "propinas": {

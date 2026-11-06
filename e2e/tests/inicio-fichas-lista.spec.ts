@@ -8,6 +8,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { revealFichaCard } from "../fixtures/dashboard";
 
 /**
  * Inicio · «Fichas de servicio de hoy» como lista de filas:
@@ -135,6 +136,8 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     });
 
     await loginAsDemo(page);
+    // The charged ficha waits in the folded «Cobradas y anuladas»: open it first.
+    await revealFichaCard(page, client.fullName);
     const badge = page.getByTestId(`dashboard-service-record-invoice-${record.id}`);
     await badge.scrollIntoViewIfNeeded({ timeout: 20_000 });
     await expect(badge).toHaveText("Paid");
@@ -205,7 +208,8 @@ test.describe("Inicio · fichas de hoy en lista", () => {
 
     const history = page.getByTestId("dashboard-service-records-history-link");
     await expect(history).toBeVisible({ timeout: 20_000 });
-    await expect(history).toHaveText("View history →");
+    // A dot with the older open fichas may follow the text.
+    await expect(history).toHaveText(/^View history →/);
     const agenda = page.getByRole("link", { name: /View agenda/ });
     await expect(agenda).toBeVisible();
 

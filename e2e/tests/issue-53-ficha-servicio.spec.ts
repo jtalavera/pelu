@@ -72,14 +72,23 @@ async function createServiceRecordApi(
 }
 
 /**
- * The dashboard's "Today's service records" grid caps at 12 cards with a "More" button that
- * reveals the rest in place. When other tests (or other tenants' demo activity) have already
- * created same-day records, a freshly-created card may not land in that first page — click
- * "More" until every fetched record is visible so assertions don't depend on how much unrelated
- * "today" activity already exists.
+ * The dashboard's "Today's service records" shows every OPEN ficha of the day; the paid / voided ones
+ * wait in a folded list that pages 12 at a time with a "More (n)" button. When other tests (or other
+ * tenants' demo activity) have already created same-day records, a freshly-created card may sit in
+ * that folded list — open it and click "More" until every fetched record is visible so assertions
+ * don't depend on how much unrelated "today" activity already exists.
  */
 async function revealAllTodayRecords(page: Page): Promise<void> {
   await openDashboardMore(page, "records");
+  // The paid / voided fichas wait in the folded «Cobradas y anuladas»: open it before paging.
+  await expect(page.getByTestId("dashboard-service-record-card").first()).toBeVisible({ timeout: 20_000 });
+  const closedToggle = page.getByTestId("dashboard-service-records-closed-toggle");
+  if (
+    (await closedToggle.isVisible().catch(() => false)) &&
+    (await closedToggle.getAttribute("aria-expanded")) !== "true"
+  ) {
+    await closedToggle.click();
+  }
   const moreButton = page.getByTestId("dashboard-service-records-more");
   // Each click reveals 12 more (DASHBOARD_SERVICE_RECORDS_CAP) — a generous cap so this keeps
   // working as the full suite (and its own same-day fichas) grows well past what 10 clicks (132
@@ -347,7 +356,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     expect(firstCardAfterVoid).toContain(olderClient.fullName);
   });
 
-  test("AC10 · el dashboard muestra un máximo de 12 fichas en una grilla y un botón Más que revela el resto en el lugar", async ({
+  test("AC10 · el dashboard muestra todas las fichas abiertas de hoy, sin tope de 12", async ({
     page,
     request,
   }) => {
@@ -368,12 +377,10 @@ test.describe("Issue #53 · Ficha de servicio", () => {
       timeout: 15_000,
     });
 
+    // Every OPEN ficha of the day is on view; «Más» only pages the paid / voided ones.
     const cards = page.getByTestId("dashboard-service-record-card").filter({ hasText: capMarker });
-    await expect(page.getByTestId("dashboard-service-record-card")).toHaveCount(12);
-    const moreButton = page.getByTestId("dashboard-service-records-more");
-    await expect(moreButton).toBeVisible();
-    await moreButton.click();
     await expect(cards).toHaveCount(15);
+    await expect(page.getByTestId("dashboard-service-records-more")).toHaveCount(0);
     await expect(page).toHaveURL(/\/app\/?$/);
   });
 

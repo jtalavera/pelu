@@ -1005,6 +1005,11 @@
         "charge": "Charge",
         "chargeError": "Could not prepare the payment. Please try again.",
         "addAppointmentRow": "New appointment",
+        "pendingGroup": "To attend or charge",
+        "unchargedTag": "not charged",
+        "allAttended": "No appointments left to attend or charge.",
+        "chargedTitle": "Charged",
+        "chargedHint": "Already have a comprobante",
         "nowTag": "now",
         "moreTitle": "More for today",
         "moreRecords": "Today's service records",
@@ -3206,13 +3211,18 @@
         "addRow": "New service record",
         "openCount_other": "{{count}} open",
         "emptyOpen": "There are no open service records today.",
+        "closedTitle": "Paid and voided",
+        "closedHint": "Already closed today",
         "proHint": "Open service records of the day. Tap one to add, change or remove services."
       },
       "dashboard": {
         "title": "Today's service records",
         "empty": "No service records today.",
         "viewHistory": "View history →",
-        "showMore": "More"
+        "viewHistoryOlder_one": "View history. {{count}} service record from a previous day is still open",
+        "viewHistoryOlder_other": "View history. {{count}} service records from previous days are still open",
+        "showMore": "More",
+        "showMoreCount": "More ({{count}})"
       }
     },
     "propinas": {

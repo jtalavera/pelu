@@ -58,6 +58,27 @@ public interface ServiceRecordRepository extends JpaRepository<ServiceRecord, Lo
       @Param("from") Instant from,
       @Param("to") Instant to);
 
+  /** Like {@link #findByTenantWithFiltersPaged}, for the fichas already paid or voided. */
+  @Query(
+      """
+      SELECT r FROM ServiceRecord r
+      WHERE r.tenant.id = :tenantId
+      AND (:fromDate IS NULL OR r.createdAt >= :fromDate)
+      AND (:toDate IS NULL OR r.createdAt <= :toDate)
+      AND (:clientId IS NULL OR r.client.id = :clientId)
+      AND r.status <> :open
+      AND (:q IS NULL OR LOWER(r.client.fullName) LIKE LOWER(CONCAT('%', :q, '%')))
+      ORDER BY r.createdAt DESC
+      """)
+  Page<ServiceRecord> findNotOpenWithFiltersPaged(
+      @Param("tenantId") Long tenantId,
+      @Param("fromDate") Instant fromDate,
+      @Param("toDate") Instant toDate,
+      @Param("clientId") Long clientId,
+      @Param("open") ServiceRecordStatus open,
+      @Param("q") String q,
+      Pageable pageable);
+
   @Query(
       """
       SELECT r FROM ServiceRecord r
