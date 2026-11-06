@@ -205,7 +205,7 @@ test.describe("Inicio · fichas de hoy en lista", () => {
 
     const history = page.getByTestId("dashboard-service-records-history-link");
     await expect(history).toBeVisible({ timeout: 20_000 });
-    await expect(history).toHaveText("View history");
+    await expect(history).toHaveText("View history →");
     const agenda = page.getByRole("link", { name: /View agenda/ });
     await expect(agenda).toBeVisible();
 

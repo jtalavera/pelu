@@ -3203,7 +3203,7 @@
       "dashboard": {
         "title": "Today's service records",
         "empty": "No service records today.",
-        "viewHistory": "View history",
+        "viewHistory": "View history →",
         "showMore": "More"
       }
     },
