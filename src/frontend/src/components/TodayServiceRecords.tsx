@@ -117,6 +117,18 @@ export function TodayServiceRecords({
         badge={openCount > 0 ? t("femme.serviceRecords.today.openCount", { count: openCount }) : undefined}
         badgeTone="amber"
         badgeTestId="dashboard-today-records-open-count"
+        action={
+          !professionalMode ? (
+            <Link
+              to="/app/service-records"
+              state={{ activeTab: "history" }}
+              data-testid="dashboard-service-records-history-link"
+              className="inline-flex min-h-11 items-center text-sm font-bold text-primary"
+            >
+              {t("femme.serviceRecords.dashboard.viewHistory")}
+            </Link>
+          ) : undefined
+        }
       />
       <Card className="p-4 sm:p-5">
       {loaded && sorted.length === 0 ? (
@@ -270,16 +282,6 @@ export function TodayServiceRecords({
         <div role="alert" className="pt-3 text-sm text-danger">
           {payError}
         </div>
-      ) : null}
-
-      {!professionalMode ? (
-        <Link
-          to="/app/service-records"
-          state={{ activeTab: "history" }}
-          className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-primary"
-        >
-          {t("femme.serviceRecords.dashboard.viewHistory")}
-        </Link>
       ) : null}
 
       {invoiceId !== null ? (
