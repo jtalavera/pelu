@@ -143,15 +143,12 @@ describe("ServiceRecordEditor", () => {
     expect(total.textContent).toMatch(/370\.000/);
   });
 
-  it("tips live in a folded \"Tips\" section (same title style as Client / Services), one field per professional", async () => {
+  it("tips are no longer a fixed section: they open from the «⋯» menu, one field per professional", async () => {
     renderEditor(openRecord);
     expect(screen.queryByLabelText(/tip · /i)).toBeNull();
-    const toggle = screen.getByTestId("service-record-tips-toggle");
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(toggle.textContent).toMatch(/tips/i);
-    expect(screen.queryByText(/more options/i)).toBeNull();
-    await userEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.queryByTestId("service-record-tips")).toBeNull();
+    await userEvent.click(screen.getByTestId("service-record-more"));
+    await userEvent.click(await screen.findByTestId("service-record-tips-toggle"));
     expect(screen.getByLabelText(/tip · Laura/i)).toBeTruthy();
     expect(screen.getByLabelText(/tip · Ana/i)).toBeTruthy();
   });
@@ -182,14 +179,15 @@ describe("ServiceRecordEditor", () => {
     expect(await screen.findByText("Billing page")).toBeTruthy();
   });
 
-  it("Void is a footer button (no ⋯ menu), opens the reason form in place and needs a reason", async () => {
+  it("Void is an option of the «⋯» menu, opens the reason form in place and needs a reason", async () => {
     const voided = { ...openRecord, status: "VOIDED" as const, voidReason: "Left early" };
     femmePostJson.mockResolvedValue(voided);
     const onVoided = vi.fn();
     renderEditor(openRecord, { onVoided });
-    expect(screen.queryByTestId("service-record-actions-toggle")).toBeNull();
+    expect(screen.queryByTestId("service-record-void-open")).toBeNull();
     expect(screen.queryByTestId("service-record-void-form")).toBeNull();
-    await userEvent.click(screen.getByTestId("service-record-void-open"));
+    await userEvent.click(screen.getByTestId("service-record-more"));
+    await userEvent.click(await screen.findByTestId("service-record-void-open"));
     expect(screen.getByTestId("service-record-void-form")).toBeTruthy();
     await userEvent.click(screen.getByTestId("service-record-void-confirm"));
     expect(await screen.findByText(/enter a reason/i)).toBeTruthy();
@@ -241,7 +239,8 @@ describe("ServiceRecordEditor", () => {
 
   it("tips are a list: one professional per line (avatar, full name, amount), total in the header", async () => {
     renderEditor(openRecord);
-    await userEvent.click(screen.getByTestId("service-record-tips-toggle"));
+    await userEvent.click(screen.getByTestId("service-record-more"));
+    await userEvent.click(await screen.findByTestId("service-record-tips-toggle"));
     const tips = screen.getByTestId("service-record-tips");
     // One line under the other: no two-column grid any more.
     expect(tips.className).toMatch(/flex-col/);
@@ -257,30 +256,18 @@ describe("ServiceRecordEditor", () => {
     expect(screen.getByTestId("service-record-tips-total").textContent).toContain("5.000");
   });
 
-  it("adding a service is a plain text link, with one-tap chips for the frequent services", async () => {
-    femmeJson.mockImplementation((path: string) =>
-      String(path).includes("frequent-services")
-        ? Promise.resolve([
-            { id: 12, categoryId: 1, categoryName: "", categoryAccentKey: "", name: "Brushing", priceMinor: "60000", durationMinutes: 30, active: true },
-            { id: 21, categoryId: 1, categoryName: "", categoryAccentKey: "", name: "Corte", priceMinor: "80000", durationMinutes: 30, active: true },
-          ])
-        : Promise.resolve([]),
-    );
+  it("adding a service is a plain text link; there are no frequent-service chips any more", async () => {
     renderEditor(openRecord);
     const add = screen.getByTestId("service-record-add-line");
     expect(add.className).not.toMatch(/border-dashed/);
+    expect(add.textContent).toMatch(/add service/i);
+    expect(screen.queryByTestId("service-record-frequent")).toBeNull();
+    expect(screen.queryByTestId("service-record-frequent-chip")).toBeNull();
     const lines = screen.getAllByTestId("service-record-line");
     await userEvent.click(add);
     expect(screen.getAllByTestId("service-record-line")).toHaveLength(lines.length + 1);
-
-    const chips = await screen.findAllByTestId("service-record-frequent-chip");
-    expect(chips).toHaveLength(2);
-    // «Corte» is new: it fills the blank line just added (no extra line).
-    await userEvent.click(chips[1]);
-    expect(screen.getAllByTestId("service-record-line")).toHaveLength(lines.length + 1);
-    // «Brushing» is already in the ficha: quantity +1, no new line.
-    await userEvent.click(chips[0]);
-    expect(screen.getAllByTestId("service-record-line")).toHaveLength(lines.length + 1);
+    // Nothing asked the server for frequent services.
+    expect(femmeJson.mock.calls.some((c) => String(c[0]).includes("frequent-services"))).toBe(false);
   });
 
   it("a paid record is read-only and shows its linked invoice", async () => {
@@ -325,14 +312,18 @@ describe("ServiceRecordEditor", () => {
       expect(onViewInvoice).toHaveBeenCalledWith(77);
     });
 
-    it("an open ficha with a turno shows only the turno; one without a turno shows no line", () => {
+    it("an open ficha shows its turno as grey text under the client (the way to open it is in «⋯»)", async () => {
       const { unmount } = renderEditor({ ...openRecord, ...withTurno });
-      const line = screen.getByTestId("service-record-meta");
-      expect(within(line).getByTestId("service-record-appointment")).toBeTruthy();
-      expect(within(line).queryByTestId("service-record-invoice-line")).toBeNull();
+      const client = screen.getByLabelText(/^client$/i);
+      expect(within(client).getByTestId("service-record-appointment")).toBeTruthy();
+      expect(screen.queryByTestId("service-record-meta")).toBeNull();
+      await userEvent.click(screen.getByTestId("service-record-more"));
+      expect(await screen.findByTestId("service-record-view-appointment")).toBeTruthy();
       unmount();
       renderEditor(openRecord);
-      expect(screen.queryByTestId("service-record-meta")).toBeNull();
+      expect(screen.queryByTestId("service-record-appointment")).toBeNull();
+      await userEvent.click(screen.getByTestId("service-record-more"));
+      expect(screen.queryByTestId("service-record-view-appointment")).toBeNull();
     });
 
     it("a paid ficha without a turno shows only its comprobante", () => {

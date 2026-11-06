@@ -96,7 +96,9 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     expect(box!.width).toBeGreaterThan(450);
     expect(box!.width).toBeLessThanOrEqual(600);
 
-    // All line-item fields fit and are visible without needing horizontal scroll.
+    // All line-item fields fit and are visible without needing horizontal scroll (once the
+    // service row is opened).
+    await expandFichaLine(dialog, 0);
     await expect(dialog.locator("#service-record-line-svc-0")).toBeVisible();
     await expect(dialog.locator("#service-record-line-prof-0")).toBeVisible();
     await expect(dialog.locator("#service-record-line-price-0")).toBeVisible();
@@ -140,6 +142,8 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     await pickFichaClient(page, dlg, client.fullName);
     await pickLineService(page, 0, seed.serviceFullName);
 
+    // The picked line folds into a plain row: open it to reach its fields.
+    await expandFichaLine(dlg, 0);
     // Clear the auto-filled unit price/quantity and leave professional unselected.
     await setControlledInputValue(page.locator("#service-record-line-price-0"), "");
     await setControlledInputValue(page.locator("#service-record-line-qty-0"), "0");

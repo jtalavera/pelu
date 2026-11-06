@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import {
-  apiGetJson,
   apiPostJson,
   createAppointmentApi,
   loginAsDemoApi,
@@ -42,7 +41,7 @@ test("detalle de la ficha: agregar servicio punteado al final y propinas una deb
   // «+ Agregar otro servicio»: a plain text link after the last service, before the total.
   const add = dialog.getByTestId("service-record-add-line");
   await expect(add).not.toHaveClass(/border-dashed/);
-  await expect(add).toContainText(/Agregar otro servicio|Add another service/i);
+  await expect(add).toContainText(/Agregar servicio|Add service/i);
   const lastLine = dialog.getByTestId("service-record-line").last();
   const total = dialog.getByTestId("service-record-total");
   const [lastBox, addBox, totalBox] = await Promise.all([lastLine.boundingBox(), add.boundingBox(), total.boundingBox()]);
@@ -50,8 +49,11 @@ test("detalle de la ficha: agregar servicio punteado al final y propinas una deb
   expect(addBox!.y).toBeLessThan(totalBox!.y);
   expect(addBox!.height).toBeGreaterThanOrEqual(44);
 
-  // Tips: one professional per line, full names, the second under the first.
-  await dialog.getByTestId("service-record-tips-toggle").click();
+  // Tips are no longer a fixed section: they open from the «⋯» menu. One professional per line,
+  // full names, the second under the first.
+  await expect(dialog.getByTestId("service-record-tips")).toHaveCount(0);
+  await dialog.getByTestId("service-record-more").click();
+  await page.getByTestId("service-record-tips-toggle").click();
   const tip1 = dialog.locator(`#service-record-tip-${seed.professionalId}`);
   const tip2 = dialog.locator(`#service-record-tip-${second.professionalId}`);
   const [b1, b2] = await Promise.all([tip1.boundingBox(), tip2.boundingBox()]);
@@ -72,35 +74,27 @@ test("detalle de la ficha: agregar servicio punteado al final y propinas una deb
   await page.screenshot({ path: process.env.SHOT_FICHA ?? "test-results/ficha.png" });
 });
 
-test("detalle de la ficha: chips de servicios frecuentes (máx. 3) agregan el servicio con un toque", async ({ page, request }) => {
+test("detalle de la ficha: ya no hay servicios frecuentes (ni se piden al abrir)", async ({ page, request }) => {
   const admin = await loginAsDemoApi(request);
   const seed = await seedCategoryServiceProfessional(request, admin);
-  const client = await seedClient(request, admin, `E2E Frecuentes ${Date.now()}`);
-  // The salon already has fichas (other specs + this one): make sure there is at least one.
-  const ficha = await apiPostJson<{ id: number }>(request, admin, "/api/service-records", {
+  const client = await seedClient(request, admin, `E2E SinFrecuentes ${Date.now()}`);
+  await apiPostJson(request, admin, "/api/service-records", {
     clientId: client.id,
     lines: [{ serviceId: seed.serviceId, professionalId: seed.professionalId, quantity: 1, unitPrice: 30_000 }],
     tips: [],
   });
-  const frequent = await apiGetJson<{ id: number; name: string }[]>(request, admin, "/api/service-records/frequent-services?limit=3");
-  expect(frequent.length).toBeGreaterThan(0);
-  expect(frequent.length).toBeLessThanOrEqual(3);
 
   await loginAsDemo(page);
   const card = page.getByTestId("dashboard-service-record-card").filter({ hasText: client.fullName });
   await expect(card).toBeVisible({ timeout: 20_000 });
+  const requested: string[] = [];
+  page.on("request", (r) => requested.push(new URL(r.url()).pathname));
   await card.click({ position: { x: 40, y: 20 } });
   const dialog = page.getByRole("dialog");
-
-  const chips = dialog.getByTestId("service-record-frequent-chip");
-  await expect(chips).toHaveCount(frequent.length);
-  await expect(chips.first()).toContainText(frequent[0].name);
-  const before = await dialog.getByTestId("service-record-line").count();
-  await chips.first().click();
-  // New service → one more line; already in the ficha → quantity +1 (same count).
-  const after = await dialog.getByTestId("service-record-line").count();
-  expect([before, before + 1]).toContain(after);
-  expect(ficha.id).toBeGreaterThan(0);
+  await expect(dialog.getByTestId("service-record-add-line")).toBeVisible({ timeout: 15_000 });
+  await expect(dialog.getByTestId("service-record-frequent")).toHaveCount(0);
+  await expect(dialog.getByTestId("service-record-frequent-chip")).toHaveCount(0);
+  expect(requested.some((u) => u.includes("frequent-services"))).toBe(false);
 });
 
 test("Nuevo turno: horarios rápidos bajo la hora y la duración al final, en su tarjeta", async ({ page, request }) => {

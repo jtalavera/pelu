@@ -19,8 +19,9 @@ import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
 test.describe.configure({ mode: "serial" });
 
 function turnoSlot(): string {
-  const slot = new Date();
-  slot.setHours(Math.min(23, slot.getHours() + 1), 0, 0, 0);
+  // A few minutes from now: in the future at any hour, and (almost always) still today.
+  const slot = new Date(Date.now() + 5 * 60_000);
+  slot.setSeconds(0, 0);
   return slot.toISOString();
 }
 

@@ -212,9 +212,10 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
     await loginAsDemo(page);
     const dialog = await openFichaDialog(page, client.fullName);
 
-    const voidBtn = dialog.getByTestId("service-record-void-open");
-    await expect(voidBtn).toBeVisible();
-    await voidBtn.click();
+    // «Anular ficha» lives in the «⋯» menu now.
+    await dialog.getByTestId("service-record-more").click();
+    await expect(page.getByTestId("service-record-void-open")).toBeVisible();
+    await page.getByTestId("service-record-void-open").click();
 
     // Redesign: the reason form opens in place of "Void record", with Cancel right next to
     // "Confirm void".
@@ -231,7 +232,10 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
 
     await cancelBtn.click();
     await expect(form).toHaveCount(0);
-    await expect(voidBtn).toBeVisible();
+    // «Anular ficha» is back in the «⋯» menu.
+    await dialog.getByTestId("service-record-more").click();
+    await expect(page.getByTestId("service-record-void-open")).toBeVisible();
+    await page.keyboard.press("Escape");
 
     const refreshed = await request.get(`${API_BASE}/api/service-records/${record.id}`, {
       headers: { Authorization: `Bearer ${token}` },

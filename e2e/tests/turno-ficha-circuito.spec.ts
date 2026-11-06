@@ -185,7 +185,8 @@ test.describe("Turno y ficha de servicio", () => {
     await expect(card).toBeVisible({ timeout: 20_000 });
     await card.click({ position: { x: 40, y: 20 } });
     const dialog = page.getByRole("dialog");
-    await dialog.getByTestId("service-record-view-appointment").click();
+    await dialog.getByTestId("service-record-more").click();
+    await page.getByTestId("service-record-view-appointment").click();
     await expect(page).toHaveURL(/\/app\/calendar/);
     await expect(page.getByTestId("calendar-appointment-ficha-go")).toBeVisible({ timeout: 20_000 });
   });
@@ -255,7 +256,14 @@ test.describe("Turno y ficha de servicio", () => {
     await chargeFicha(request, admin, client.id, ficha, seed);
 
     await loginAsDemo(page);
-    await page.getByTestId("dashboard-service-record-card").filter({ hasText: new RegExp(clientName, "i") }).first().click({ position: { x: 40, y: 20 } });
+    // Inicio shows 12 fichas at a time (open ones first): reveal more until this one is listed.
+    const card = page.getByTestId("dashboard-service-record-card").filter({ hasText: new RegExp(clientName, "i") }).first();
+    const more = page.getByTestId("dashboard-service-records-more");
+    for (let i = 0; i < 10 && !(await card.isVisible()); i++) {
+      if (await more.isVisible()) await more.click();
+      else await page.waitForTimeout(500);
+    }
+    await card.click({ position: { x: 40, y: 20 } });
     const dialog = page.getByRole("dialog");
     const line = dialog.getByTestId("service-record-meta");
     await expect(line).toBeVisible({ timeout: 20_000 });
