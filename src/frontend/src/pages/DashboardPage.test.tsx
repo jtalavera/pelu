@@ -5,7 +5,7 @@ import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
 import i18n from "../i18n";
 import DashboardPage from "./DashboardPage";
-import { listAppointments } from "../api/appointments";
+import { listAppointments, type AppointmentStatus } from "../api/appointments";
 
 const femmeJson = vi.fn();
 
@@ -196,5 +196,88 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
     expect(
       await screen.findByText("Active clients with no completed visit in the last 45 days"),
     ).toBeTruthy();
+  });
+});
+
+describe("DashboardPage · Turnos de hoy (por atender o cobrar, cobrados plegados)", () => {
+  const todayAt = (hour: number) => {
+    const d = new Date();
+    d.setHours(hour, 0, 0, 0);
+    return d.toISOString();
+  };
+  const appt = (id: number, hour: number, name: string, status: AppointmentStatus, invoiceId: number | null) => ({
+    id,
+    clientId: id,
+    clientName: name,
+    professionalId: 3,
+    professionalName: "Maria",
+    serviceId: 11,
+    serviceName: "SPA DE PIES",
+    durationMinutes: 60,
+    startAt: todayAt(hour),
+    endAt: todayAt(hour + 1),
+    status,
+    cancelReason: null,
+    reminderSentAt: null,
+    serviceRecordId: null,
+    invoiceId,
+  });
+
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    listAppointmentsMock.mockReset();
+    femmeJson.mockReset();
+    femmeJson.mockResolvedValue({
+      appointmentsToday: { total: 4, pending: 1, confirmed: 0, inProgress: 1, completed: 2 },
+      revenueDay: { invoiced: "0", collected: "0" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+    });
+    listAppointmentsMock.mockResolvedValue([
+      appt(1, 8, "ANA DUARTE", "COMPLETED", 501), // charged
+      appt(2, 9, "PEDRO LÓPEZ", "COMPLETED", null), // completed, not charged yet
+      appt(3, 10, "TANIA NUÑEZ Z", "IN_PROGRESS", null),
+      appt(4, 12, "LUCÍA GÓMEZ", "PENDING", null),
+    ]);
+  });
+
+  it("keeps what is still to attend or charge on view and folds only the charged ones", async () => {
+    renderPage();
+    await screen.findAllByTestId("dashboard-appointment-row");
+    const rows = screen.getAllByTestId("dashboard-appointment-row").map((r) => r.textContent ?? "");
+    expect(rows).toHaveLength(3);
+    expect(rows.some((r) => r.includes("ANA DUARTE"))).toBe(false);
+    // The completed one without a comprobante stays visible, marked as not charged.
+    const pedro = screen.getAllByTestId("dashboard-appointment-row").find((r) => r.textContent?.includes("PEDRO"));
+    expect(pedro?.querySelector('[data-testid="dashboard-appointment-uncharged-tag"]')?.textContent).toContain("not charged");
+    // The title counts what is on view; the fold counts the charged ones.
+    expect(screen.getByTestId("dashboard-appointments-count").textContent).toBe("3");
+    expect(screen.getByTestId("dashboard-appointments-charged-count").textContent).toBe("1");
+  });
+
+  it("the «Charged» fold opens to show the charged turnos with their mark", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByTestId("dashboard-appointments-charged-toggle"));
+    const list = await screen.findByTestId("dashboard-appointments-charged-list");
+    expect(list.textContent).toContain("ANA DUARTE");
+    expect(list.querySelector('[data-testid="dashboard-appointment-charged-tag"]')?.textContent).toContain("Charged");
+  });
+
+  it("the search opens the fold by itself when the match is a charged turno", async () => {
+    renderPage();
+    await screen.findAllByTestId("dashboard-appointment-row");
+    fireEvent.change(screen.getByLabelText(/filter list/i), { target: { value: "ana duarte" } });
+    const list = await screen.findByTestId("dashboard-appointments-charged-list");
+    expect(list.textContent).toContain("ANA DUARTE");
+  });
+
+  it("with everything charged, shows «nothing left to attend or charge» and the fold", async () => {
+    listAppointmentsMock.mockResolvedValue([appt(1, 8, "ANA DUARTE", "COMPLETED", 501)]);
+    renderPage();
+    expect(await screen.findByTestId("dashboard-appointments-all-done")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-appointments-charged-count").textContent).toBe("1");
   });
 });

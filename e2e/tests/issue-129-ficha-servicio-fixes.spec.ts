@@ -163,7 +163,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     await expect(dialog.locator("#service-record-line-price-0")).toHaveValue("0");
   });
 
-  test("Fix 4 · el panel muestra las fichas de hoy en una grilla limitada a 12 con botón Más", async ({
+  test("Fix 4 · el panel muestra todas las fichas abiertas de hoy, sin tope de 12 y sin botón Más", async ({
     page,
     request,
   }) => {
@@ -189,21 +189,18 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
       timeout: 15_000,
     });
 
+    // Every OPEN ficha of the day is on view (the 12-at-a-time «Más» only pages the paid / voided ones).
     const allCards = page.getByTestId("dashboard-service-record-card");
-    await expect(allCards).toHaveCount(12);
     const markedCards = allCards.filter({ hasText: marker });
+    await expect(markedCards).toHaveCount(15);
 
-    // Cards lay out in a multi-row grid, not a single horizontally-scrolling row.
-    const firstBox = await allCards.nth(0).boundingBox();
-    const lastBox = await allCards.nth(11).boundingBox();
+    // The rows are a vertical list, one under the other.
+    const firstBox = await markedCards.nth(0).boundingBox();
+    const lastBox = await markedCards.nth(14).boundingBox();
     expect(firstBox && lastBox).toBeTruthy();
     expect(lastBox!.y).toBeGreaterThan(firstBox!.y);
 
-    const moreButton = page.getByTestId("dashboard-service-records-more");
-    await expect(moreButton).toBeVisible();
-    await moreButton.click();
-
-    await expect(markedCards).toHaveCount(15);
+    await expect(page.getByTestId("dashboard-service-records-more")).toHaveCount(0);
     await expect(page).toHaveURL(/\/app\/?$/);
   });
 });

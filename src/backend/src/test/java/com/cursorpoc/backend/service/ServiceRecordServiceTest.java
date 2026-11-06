@@ -320,6 +320,25 @@ class ServiceRecordServiceTest {
   }
 
   @Test
+  void listServiceRecords_notOpenStatus_asksForThePaidAndVoidedOnes() {
+    when(serviceRecordRepository.findNotOpenWithFiltersPaged(
+            org.mockito.ArgumentMatchers.eq(1L),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.eq(ServiceRecordStatus.OPEN),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.any()))
+        .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+
+    var page =
+        serviceRecordService.listServiceRecords(1L, null, null, null, "NOT_OPEN", null, 0, 10);
+
+    assertThat(page.content()).isEmpty();
+    assertThat(page.totalElements()).isZero();
+  }
+
+  @Test
   void toDetailDto_includesClientRuc() {
     client.setRuc("80000005-6");
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
