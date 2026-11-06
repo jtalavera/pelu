@@ -262,9 +262,11 @@ test.describe("Turno y ficha de servicio", () => {
     await page.goto("/app/calendar?view=week");
     const blockB = page.getByTestId(`calendar-appt-${turnoB.id}`);
     await expect(blockB).toHaveAttribute("data-done", "charged", { timeout: 20_000 });
-    await expect(blockB.getByTestId(`calendar-done-badge-${turnoB.id}`)).toHaveText("✓ Charged");
+    await expect(blockB.getByTestId(`calendar-done-badge-${turnoB.id}`)).toHaveAttribute("aria-label", "Charged");
+    await expect(page.getByTestId(`calendar-done-badge-${turnoA.id}`)).toHaveAttribute("aria-label", "Completed");
+    await expect(page.getByTestId("calendar-week-legend")).toBeVisible();
     await expect(page.getByTestId(`calendar-appt-${turnoA.id}`)).toHaveAttribute("data-done", "completed");
-    // Outlined, not filled: the block background is the page surface, not the professional's colour.
+    // Clean card, not filled: the block background is the page surface, not the professional's colour.
     const bg = await blockB.evaluate((el) => getComputedStyle(el).backgroundColor);
     expect(bg).toBe("rgb(255, 255, 255)");
 

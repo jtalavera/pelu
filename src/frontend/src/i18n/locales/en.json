@@ -3017,6 +3017,13 @@
         "sun": "Sun"
       },
       "badge": { "charged": "Charged", "completed": "Completed" },
+      "legend": {
+        "COMPLETED_CHARGED": "Charged",
+        "COMPLETED": "Completed, not charged",
+        "IN_PROGRESS": "In progress",
+        "CONFIRMED": "Confirmed",
+        "PENDING": "Pending"
+      },
       "status": {
         "PENDING": "Pending",
         "CONFIRMED": "Confirmed",

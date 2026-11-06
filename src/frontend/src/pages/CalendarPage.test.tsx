@@ -381,16 +381,19 @@ describe("CalendarPage · turnos completados siguen en la agenda", () => {
     expect(screen.queryByTestId("calendar-appt-103")).toBeNull();
   });
 
-  it("the Week grid draws them outlined with the same badge", async () => {
+  it("the Week grid draws them as clean cards with a status icon", async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click((await screen.findAllByTestId("calendar-view-week"))[0]);
     const block = await screen.findByTestId("calendar-appt-101");
     expect(block.getAttribute("data-done")).toBe("charged");
-    expect(within(block).getByTestId("calendar-done-badge-101").textContent).toContain("Charged");
+    expect(within(block).getByTestId("calendar-done-badge-101").getAttribute("aria-label")).toBe("Charged");
     const other = await screen.findByTestId("calendar-appt-102");
     expect(other.getAttribute("data-done")).toBe("completed");
-    expect(within(other).getByTestId("calendar-done-badge-102").textContent).toContain("Completed");
+    expect(within(other).getByTestId("calendar-done-badge-102").getAttribute("aria-label")).toBe("Completed");
+    // Clean-grid week: legend for the icons and a «N turnos»/«libre» caption under each day.
+    expect(screen.getByTestId("calendar-week-legend")).toBeTruthy();
+    expect(screen.getAllByTestId(/^calendar-day-head-/).length).toBe(7);
     expect(screen.queryByTestId("calendar-appt-103")).toBeNull();
   });
 
