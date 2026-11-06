@@ -3,7 +3,6 @@ package com.cursorpoc.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -68,9 +67,6 @@ class AppointmentServiceRecordServiceTest {
     appointment.setStatus(AppointmentStatus.CONFIRMED);
     when(appointmentRepository.findByIdAndTenant_Id(100L, TENANT))
         .thenReturn(Optional.of(appointment));
-    lenient()
-        .when(serviceRecordRepository.findByTenant_IdAndAppointment_Id(TENANT, 100L))
-        .thenReturn(Optional.empty());
   }
 
   private ServiceRecord openRecord(long id, Long clientId) {
@@ -100,7 +96,8 @@ class AppointmentServiceRecordServiceTest {
     assertThat(req.getValue().lines()).hasSize(1);
     assertThat(req.getValue().lines().get(0).serviceId()).isEqualTo(11L);
     assertThat(req.getValue().lines().get(0).professionalId()).isEqualTo(3L);
-    assertThat(record.getAppointment()).isSameAs(appointment);
+    assertThat(appointment.getServiceRecord()).isSameAs(record);
+    assertThat(record.getAppointments()).containsExactly(appointment);
     assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.IN_PROGRESS);
   }
 
@@ -112,7 +109,8 @@ class AppointmentServiceRecordServiceTest {
 
     service.assign(TENANT, 100L, 9L);
 
-    assertThat(record.getAppointment()).isSameAs(appointment);
+    assertThat(appointment.getServiceRecord()).isSameAs(record);
+    assertThat(record.getAppointments()).containsExactly(appointment);
     assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.IN_PROGRESS);
   }
 
@@ -126,12 +124,40 @@ class AppointmentServiceRecordServiceTest {
   }
 
   @Test
-  void assign_rejectsAFichaAlreadyLinkedToAnotherTurno() {
+  void assign_acceptsAFichaAlreadyLinkedToAnotherTurno_soAFichaCanServeSeveralTurnos() {
     ServiceRecord record = openRecord(9L, 5L);
-    record.setAppointment(new Appointment());
+    Appointment other = new Appointment();
+    other.setId(200L);
+    other.setServiceRecord(record);
+    record.getAppointments().add(other);
     when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
-    assertThatThrownBy(() -> service.assign(TENANT, 100L, 9L))
-        .hasMessageContaining("SERVICE_RECORD_ALREADY_LINKED");
+
+    service.assign(TENANT, 100L, 9L);
+
+    assertThat(appointment.getServiceRecord()).isSameAs(record);
+    assertThat(record.getAppointments()).containsExactlyInAnyOrder(other, appointment);
+    assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.IN_PROGRESS);
+  }
+
+  @Test
+  void assign_toAFichaOfAnotherTurno_doesNotTakeOverThatTurnosProfessionalLine() {
+    ServiceRecord record = openRecord(9L, 5L);
+    ServiceRecordLine existing = line(11L, 4L, 1, "50000");
+    existing.setServiceRecord(record);
+    record.getLines().add(existing);
+    Appointment other = new Appointment();
+    other.setId(200L);
+    other.setServiceRecord(record);
+    record.getAppointments().add(other);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.assign(TENANT, 100L, 9L);
+
+    // Same service, but professional 4 already has it for the other turno: this turno (professional
+    // 3) gets its own line instead of overwriting that one.
+    assertThat(record.getLines()).hasSize(2);
+    assertThat(existing.getProfessional().getId()).isEqualTo(4L);
+    assertThat(record.getLines().get(1).getProfessional().getId()).isEqualTo(3L);
   }
 
   @Test
@@ -145,9 +171,10 @@ class AppointmentServiceRecordServiceTest {
 
   @Test
   void aTurnoWithAFichaCannotGetAnother() {
-    when(serviceRecordRepository.findByTenant_IdAndAppointment_Id(TENANT, 100L))
-        .thenReturn(Optional.of(openRecord(1L, 5L)));
+    appointment.setServiceRecord(openRecord(1L, 5L));
     assertThatThrownBy(() -> service.createFromAppointment(TENANT, 100L))
+        .hasMessageContaining("APPOINTMENT_ALREADY_HAS_SERVICE_RECORD");
+    assertThatThrownBy(() -> service.assign(TENANT, 100L, 9L))
         .hasMessageContaining("APPOINTMENT_ALREADY_HAS_SERVICE_RECORD");
   }
 
@@ -177,7 +204,8 @@ class AppointmentServiceRecordServiceTest {
     org.mockito.Mockito.verify(serviceRecordService)
         .createServiceRecord(any(Long.class), req.capture());
     assertThat(req.getValue().clientId()).isEqualTo(77L);
-    assertThat(record.getAppointment()).isSameAs(appointment);
+    assertThat(appointment.getServiceRecord()).isSameAs(record);
+    assertThat(record.getAppointments()).containsExactly(appointment);
     assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.IN_PROGRESS);
   }
 

@@ -326,6 +326,24 @@ describe("ServiceRecordEditor", () => {
       expect(screen.queryByTestId("service-record-view-appointment")).toBeNull();
     });
 
+    it("a ficha with several turnos lists all their times and offers each one in «⋯»", async () => {
+      renderEditor({
+        ...openRecord,
+        ...withTurno,
+        appointments: [
+          { id: 9, startAt: "2026-11-05T17:00:00Z" },
+          { id: 10, startAt: "2026-11-05T19:00:00Z" },
+        ],
+      });
+      const client = screen.getByLabelText(/^client$/i);
+      expect(within(client).getByTestId("service-record-appointment").textContent).toMatch(
+        /^Appointments .+ · .+$/,
+      );
+      await userEvent.click(screen.getByTestId("service-record-more"));
+      expect(await screen.findByTestId("service-record-view-appointment")).toBeTruthy();
+      expect(screen.getByTestId("service-record-view-appointment-10")).toBeTruthy();
+    });
+
     it("a paid ficha without a turno shows only its comprobante", () => {
       renderEditor({ ...openRecord, status: "CLOSED", invoiceId: 77, invoiceNumberFormatted: "0001144" });
       const line = screen.getByTestId("service-record-meta");

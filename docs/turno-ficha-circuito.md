@@ -1,7 +1,8 @@
 # Circuito turno ↔ ficha de servicio
 
-Un turno tiene **como máximo una ficha** y una ficha pertenece **a un solo turno** (`service_records.appointment_id`,
-nullable, índice único filtrado; migración `V91`). Las fichas sin turno (clientas sin reserva) siguen igual.
+Un turno tiene **como máximo una ficha**, pero una ficha **puede pertenecer a varios turnos** (`appointments.service_record_id`,
+nullable; migración `V96`, que reemplaza a `service_records.appointment_id` de `V91`). Las fichas sin turno (clientas sin
+reserva) siguen igual.
 
 ## Qué ve cada pantalla
 - **Inicio · Turnos de hoy**: sin ficha → «Crear o asignar ficha»; con ficha → «Ir a la ficha». Ya no hay «Cobrar» en la
@@ -19,14 +20,18 @@ nullable, índice único filtrado; migración `V91`). Las fichas sin turno (clie
   profesional del turno (sin duplicar ni tocar cantidades); si no, se agrega (cantidad 1, precio del catálogo, profesional
   del turno). Las demás líneas no se tocan. Una propina solo se conserva mientras su profesional siga en alguna línea.
 - Crear o asignar pasa un turno Pendiente / Confirmado a **En curso**.
-- **Cobrar la ficha** (emitir la factura con `serviceRecordId`) cierra la ficha y marca el turno **Completado**.
-- **Cancelar / No vino**: la ficha abierta se suelta (queda abierta, sin turno). Una ficha cobrada conserva su turno.
+- **Cobrar la ficha** (emitir la factura con `serviceRecordId`) cierra la ficha y marca **todos sus turnos** como **Completado**.
+- Asignar una ficha que ya tiene otro turno es válido: el servicio del turno se suma a la ficha (o toma su línea solo si esa
+  línea no tiene profesional o ya es la del mismo profesional; no pisa la línea de otro turno). Un turno que ya tiene ficha no
+  puede tomar otra.
+- **Cancelar / No vino**: el turno suelta su ficha si sigue abierta (la ficha queda abierta y conserva sus otros turnos). Una
+  ficha cobrada conserva sus turnos.
 - Anular una ficha cobrada no reabre el turno.
 - Una profesional solo opera los turnos propios y nunca recibe montos.
 
 ## Turno cobrado y su comprobante
 `invoices.appointment_id` (migración `V93`, con relleno de lo ya cobrado por ficha) enlaza el comprobante con el turno que
-cobró: el de su ficha o, sin ficha, el turno desde el que se tocó «Cobrar» o el que se dejó tildado al facturar
+cobró: el más temprano de su ficha (los demás turnos de la ficha encuentran el comprobante a través de ella) o, sin ficha, el turno desde el que se tocó «Cobrar» o el que se dejó tildado al facturar
 (`InvoiceCreateRequest.appointmentId`). El servidor completa el turno junto con el comprobante (ya no lo hace el frontend).
 `AppointmentResponse.invoiceId` trae el comprobante emitido (no anulado) del turno.
 - Agenda: con comprobante, el botón principal es **«Ver comprobante»** (abre el detalle en Facturación) en lugar de
@@ -72,8 +77,9 @@ al cobrar», tildada por defecto. Si sigue tildada, al emitir la factura el turn
 | GET | `/api/appointments/{id}/service-record/candidates` | fichas asignables |
 
 Errores: `APPOINTMENT_ALREADY_HAS_SERVICE_RECORD`, `APPOINTMENT_NOT_ACTIVE`,
-`SERVICE_RECORD_CLIENT_MISMATCH`, `SERVICE_RECORD_NOT_OPEN`, `SERVICE_RECORD_ALREADY_LINKED`.
-`AppointmentResponse.serviceRecordId`, `ServiceRecordResponse/ListItem.appointmentId + appointmentStartAt`.
+`SERVICE_RECORD_CLIENT_MISMATCH`, `SERVICE_RECORD_NOT_OPEN`.
+`AppointmentResponse.serviceRecordId`; `ServiceRecordResponse/ListItem.appointmentId + appointmentStartAt` (el turno más
+temprano) y `ServiceRecordResponse.appointments` (todos los turnos de la ficha).
 
 ## Inicio de la profesional
 Con clave o en el dispositivo compartido con PIN, su Inicio muestra primero «Mis turnos de hoy»: solo los propios y por

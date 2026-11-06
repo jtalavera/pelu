@@ -34,9 +34,11 @@ export type ServiceRecordDetail = {
   invoiceNumberFormatted: string | null;
   lines: ServiceRecordLine[];
   tips: ServiceRecordTip[];
-  /** The turno this ficha belongs to (null for a ficha without turno). */
+  /** The earliest turno this ficha belongs to (null for a ficha without turno). */
   appointmentId?: number | null;
   appointmentStartAt?: string | null;
+  /** Every turno of this ficha, earliest first: one ficha may serve several turnos. */
+  appointments?: { id: number; startAt: string }[];
   /** Belongs to the generic "cliente ocasional": show the translated label, not clientFullName. */
   clientGeneric?: boolean;
 };

@@ -606,7 +606,7 @@ class InvoiceServiceTest {
     record.setId(210L);
     record.setTenant(tenant);
     record.setStatus(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.OPEN);
-    record.setAppointment(appt);
+    record.getAppointments().add(appt);
     when(serviceRecordRepository.findByIdAndTenant_Id(210L, 1L)).thenReturn(Optional.of(record));
 
     invoiceService.issueInvoice(1L, requestForTurno(210L, null));
@@ -616,6 +616,32 @@ class InvoiceServiceTest {
     org.mockito.ArgumentCaptor<Invoice> saved = org.mockito.ArgumentCaptor.forClass(Invoice.class);
     org.mockito.Mockito.verify(invoiceRepository).save(saved.capture());
     assertThat(saved.getValue().getAppointment()).isSameAs(appt);
+  }
+
+  @Test
+  void issueInvoice_forAFichaOfSeveralTurnos_completesAllAndLinksTheEarliest() {
+    stubIssuance();
+    var first = turno(80L, com.cursorpoc.backend.domain.enums.AppointmentStatus.IN_PROGRESS);
+    first.setStartAt(java.time.Instant.parse("2026-11-05T14:00:00Z"));
+    var second = turno(81L, com.cursorpoc.backend.domain.enums.AppointmentStatus.CONFIRMED);
+    second.setStartAt(java.time.Instant.parse("2026-11-05T16:00:00Z"));
+    var record = new com.cursorpoc.backend.domain.ServiceRecord();
+    record.setId(211L);
+    record.setTenant(tenant);
+    record.setStatus(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.OPEN);
+    record.getAppointments().add(second);
+    record.getAppointments().add(first);
+    when(serviceRecordRepository.findByIdAndTenant_Id(211L, 1L)).thenReturn(Optional.of(record));
+
+    invoiceService.issueInvoice(1L, requestForTurno(211L, null));
+
+    assertThat(first.getStatus())
+        .isEqualTo(com.cursorpoc.backend.domain.enums.AppointmentStatus.COMPLETED);
+    assertThat(second.getStatus())
+        .isEqualTo(com.cursorpoc.backend.domain.enums.AppointmentStatus.COMPLETED);
+    org.mockito.ArgumentCaptor<Invoice> saved = org.mockito.ArgumentCaptor.forClass(Invoice.class);
+    org.mockito.Mockito.verify(invoiceRepository).save(saved.capture());
+    assertThat(saved.getValue().getAppointment()).isSameAs(first);
   }
 
   @Test
