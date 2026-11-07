@@ -869,7 +869,7 @@ export default function CalendarPage() {
                 </div>
 
                 {/* Scrollable time grid */}
-                <div style={{ overflowY: "auto", maxHeight: "calc(100vh - 260px)" }}>
+                <div>
                   <div
                     style={{
                       display: "grid",

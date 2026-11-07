@@ -194,6 +194,14 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
     await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
     await expect(page.getByTestId("calendar-week-legend")).toHaveCount(0);
+    // The page scrolls, not the grid: no ancestor of the day columns scrolls vertically by itself.
+    const innerScroll = await page.getByTestId("calendar-day-col-mon").evaluate((el) => {
+      for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) {
+        if (n.scrollHeight > n.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(n).overflowY)) return true;
+      }
+      return false;
+    });
+    expect(innerScroll, "la grilla semanal no debe tener scroll propio").toBe(false);
     await expect(page.getByTestId(`calendar-appt-${appt.id}`).getByTestId(`status-icon-${appt.id}`)).toHaveAttribute(
       "title",
       "Pending",
