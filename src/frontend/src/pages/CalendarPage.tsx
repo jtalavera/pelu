@@ -1,5 +1,5 @@
 import { withDisplayNames } from "../lib/professionalDisplay";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Spinner } from "@design-system";
 import { useTour } from "../tour/useTour";
@@ -30,8 +30,13 @@ const PX_PER_HALF_HOUR = PX_PER_HOUR / 2;
 const MIN_DAY_COL_PX = 120;
 /** At most this many turnos are drawn side by side; the rest of a group go into a «+N» chip. */
 const MAX_SIDE_BY_SIDE = 2;
-/** Height reserved under the anchor card for the «+N» chip. */
-const MORE_CHIP_H = 20;
+/** Every turno card has the same height (45 minutes of the scale); its duration shows on hover. */
+const CARD_MINUTES = 45;
+const CARD_H = (CARD_MINUTES / 60) * PX_PER_HOUR;
+/** The «+N» chip sits inside the bottom of the card that carries it. */
+const MORE_CHIP_H = 18;
+/** Approximate height of the hover detail box, to decide whether it opens below or above the card. */
+const TIP_H = 132;
 
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
@@ -65,8 +70,13 @@ function appointmentTopPx(startAt: string, gridStart: number): number {
   return Math.max(0, (hours - gridStart) * PX_PER_HOUR);
 }
 
-function appointmentHeightPx(durationMinutes: number): number {
-  return Math.max(20, (durationMinutes / 60) * PX_PER_HOUR);
+/** «TANIA NUÑEZ Z» → «Tania N.»; a client without a record uses `occasional`. */
+function shortClientName(name: string | null | undefined, occasional: string): string {
+  if (!name) return occasional;
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return occasional;
+  const cap = (w: string) => w.charAt(0).toLocaleUpperCase() + w.slice(1).toLocaleLowerCase();
+  return words.length > 1 ? `${cap(words[0])} ${words[1].charAt(0).toLocaleUpperCase()}.` : cap(words[0]);
 }
 
 function isSameDay(isoString: string, day: Date): boolean {
@@ -262,6 +272,25 @@ export default function CalendarPage() {
       document.removeEventListener("keydown", onKey);
     };
   }, [morePop]);
+  // Professional filter menu (inside the search field).
+  const [profOpen, setProfOpen] = useState(false);
+  const [profQuery, setProfQuery] = useState("");
+  const profFilterRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!profOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!profFilterRef.current?.contains(e.target as Node)) setProfOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setProfOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [profOpen]);
   const [hoveredApptId, setHoveredApptId] = useState<number | null>(null);
   const [dayGridHover, setDayGridHover] = useState<{
     colKey: (typeof DAY_KEYS)[number];
@@ -396,6 +425,7 @@ export default function CalendarPage() {
   const fullDayList = appointments
     .filter((a) => isSameDay(a.startAt, cursor) && CALENDAR_GRID_STATUSES.includes(a.status))
     .sort((a, b) => a.startAt.localeCompare(b.startAt));
+  const selectedProfessional = professionals.find((p) => p.id === selectedProfessionalId) ?? null;
   const searching = searchQuery.trim() !== "";
   /** The search looks at the client (or «Cliente ocasional») and the service of the turno. */
   const clientLabelOf = (a: Appointment) => a.clientName ?? t("femme.calendar.detail.occasionalClient");
@@ -409,7 +439,11 @@ export default function CalendarPage() {
     const appts = appointments
       .filter((a) => isSameDay(a.startAt, date))
       .filter((a) => CALENDAR_GRID_STATUSES.includes(a.status));
-    const { layout, groups } = layoutWithOverflow(appts, MAX_SIDE_BY_SIDE);
+    // Cards all have the same height, so two turnos share the width when their cards would touch.
+    const { layout, groups } = layoutWithOverflow(
+      appts.map((a) => ({ ...a, durationMinutes: CARD_MINUTES })),
+      MAX_SIDE_BY_SIDE,
+    );
     const hidden = new Set<number>();
     for (const g of groups) for (const m of g.members) if (!layout.has(m.id)) hidden.add(m.id);
     return { appts: appts.filter((a) => !hidden.has(a.id)), total: appts.length, layout, groups };
@@ -508,51 +542,6 @@ export default function CalendarPage() {
             {rangeLabel}
           </span>
         </div>
-        <div
-          data-tour="calendar-search"
-          className="relative order-last w-full sm:order-none sm:w-auto sm:max-w-sm sm:flex-1"
-        >
-          <label htmlFor="calendar-search" className="sr-only">
-            {t("femme.calendar.search.label")}
-          </label>
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            aria-hidden="true"
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            id="calendar-search"
-            data-testid="calendar-search"
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t("femme.calendar.search.placeholder")}
-            autoComplete="off"
-            spellCheck={false}
-            enterKeyHint="search"
-            className="h-11 w-full rounded-full border-[1.5px] border-line bg-bg pl-[42px] pr-11 text-sm text-ink placeholder:text-ink-3 focus:border-primary focus:bg-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-search-cancel-button]:hidden"
-          />
-          {searching && (
-            <button
-              type="button"
-              data-testid="calendar-search-clear"
-              aria-label={t("femme.calendar.search.clear")}
-              onClick={() => setSearchQuery("")}
-              className="absolute right-1 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-lg text-ink-3 hover:bg-primary-lt"
-            >
-              ×
-            </button>
-          )}
-        </div>
         {!isMobile && (
           <div
             role="tablist"
@@ -579,38 +568,150 @@ export default function CalendarPage() {
         )}
       </div>
 
-      {/* Professional filter (chips) — also for the professional role (issue #38 follow-up): they can
-          browse every agenda, but only modify their own appointments. */}
-      <div data-tour="calendar-prof-filter" className="flex gap-2 overflow-x-auto pb-0.5" role="group" aria-label={t("femme.calendar.filterByProfessional")}>
-        <button
-          type="button"
-          aria-pressed={selectedProfessionalId === null}
-          data-testid="calendar-prof-chip-all"
-          onClick={() => setSelectedProfessionalId(null)}
-          className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold ${
-            selectedProfessionalId === null
-              ? "border-primary bg-primary-lt text-primary"
-              : "border-line bg-surface text-ink"
-          }`}
+      {/* One field for both filters: the search box with the professional filter inside it (issue: too many
+          filters). The professional role can browse every agenda but only modify her own appointments. */}
+      <div className="flex w-full">
+        <div
+          data-tour="calendar-search"
+          className="relative flex min-h-[46px] w-full min-w-0 max-w-xl items-center gap-2 rounded-full border-[1.5px] border-line bg-bg pl-4 pr-1.5 focus-within:border-primary focus-within:bg-surface"
         >
-          {t("femme.calendar.allProfessionals")}
-        </button>
-        {professionals.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            aria-pressed={selectedProfessionalId === p.id}
-            data-testid={`calendar-prof-chip-${p.id}`}
-            onClick={() => setSelectedProfessionalId(p.id)}
-            className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-bold ${
-              selectedProfessionalId === p.id
-                ? "border-primary bg-primary-lt text-primary"
-                : "border-line bg-surface text-ink"
-            }`}
+          <label htmlFor="calendar-search" className="sr-only">
+            {t("femme.calendar.search.label")}
+          </label>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+            className="pointer-events-none shrink-0 text-ink-3"
           >
-            {p.fullName}
-          </button>
-        ))}
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          {selectedProfessional && (
+            <span
+              data-testid="calendar-prof-pill"
+              className="inline-flex min-h-8 max-w-[45%] shrink-0 items-center gap-1 rounded-full bg-primary-lt pl-3 pr-1 text-sm font-bold text-primary"
+            >
+              <span className="truncate">{selectedProfessional.fullName}</span>
+              <button
+                type="button"
+                data-testid="calendar-prof-pill-clear"
+                aria-label={t("femme.calendar.profClear", { name: selectedProfessional.fullName })}
+                onClick={() => setSelectedProfessionalId(null)}
+                className="flex size-6 items-center justify-center rounded-full bg-surface text-base leading-none hover:bg-primary-lt"
+              >
+                ×
+              </button>
+            </span>
+          )}
+          <input
+            id="calendar-search"
+            data-testid="calendar-search"
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t("femme.calendar.search.placeholder")}
+            autoComplete="off"
+            spellCheck={false}
+            enterKeyHint="search"
+            className="h-10 min-w-0 flex-1 bg-transparent text-sm text-ink placeholder:text-ink-3 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+          />
+          {searching && (
+            <button
+              type="button"
+              data-testid="calendar-search-clear"
+              aria-label={t("femme.calendar.search.clear")}
+              onClick={() => setSearchQuery("")}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full text-lg text-ink-3 hover:bg-primary-lt"
+            >
+              ×
+            </button>
+          )}
+          <span aria-hidden className="h-6 w-px shrink-0 bg-line" />
+          <div data-tour="calendar-prof-filter" className="shrink-0" ref={profFilterRef}>
+            <button
+              type="button"
+              data-testid="calendar-prof-trigger"
+              aria-haspopup="listbox"
+              aria-expanded={profOpen}
+              onClick={() => {
+                setProfOpen((o) => !o);
+                setProfQuery("");
+              }}
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-sm font-bold text-ink hover:bg-primary-lt"
+            >
+              {t("femme.calendar.profTrigger")}
+              <span aria-hidden>▾</span>
+            </button>
+            {profOpen && (
+              <div
+                data-testid="calendar-prof-panel"
+                role="group"
+                aria-label={t("femme.calendar.filterByProfessional")}
+                className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-32px)] rounded-xl border border-line bg-surface p-2 shadow-xl"
+              >
+                <input
+                  data-testid="calendar-prof-search"
+                  type="search"
+                  value={profQuery}
+                  onChange={(e) => setProfQuery(e.target.value)}
+                  placeholder={t("femme.calendar.profSearch")}
+                  aria-label={t("femme.calendar.profSearch")}
+                  autoComplete="off"
+                  autoFocus
+                  className="mb-1 h-10 w-full rounded-lg border border-line bg-bg px-3 text-sm text-ink placeholder:text-ink-3 focus:border-primary focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+                />
+                <div className="max-h-72 overflow-y-auto">
+                  {profQuery.trim() === "" && (
+                    <button
+                      type="button"
+                      aria-pressed={selectedProfessionalId === null}
+                      data-testid="calendar-prof-chip-all"
+                      onClick={() => {
+                        setSelectedProfessionalId(null);
+                        setProfOpen(false);
+                      }}
+                      className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-semibold hover:bg-primary-lt ${
+                        selectedProfessionalId === null ? "bg-primary-lt text-primary" : "text-ink"
+                      }`}
+                    >
+                      <span aria-hidden className="h-[18px] w-1 rounded-sm bg-ink-3" />
+                      {t("femme.calendar.allProfessionals")}
+                    </button>
+                  )}
+                  {professionals
+                    .filter((p) => matchesListQuery(p.fullName, profQuery))
+                    .map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        aria-pressed={selectedProfessionalId === p.id}
+                        data-testid={`calendar-prof-chip-${p.id}`}
+                        onClick={() => {
+                          setSelectedProfessionalId(p.id);
+                          setProfOpen(false);
+                        }}
+                        className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm font-semibold hover:bg-primary-lt ${
+                          selectedProfessionalId === p.id ? "bg-primary-lt text-primary" : "text-ink"
+                        }`}
+                      >
+                        <span aria-hidden className="h-[18px] w-1 rounded-sm" style={{ background: profColor(p.id, professionals).border }} />
+                        <span className="min-w-0 truncate">{p.fullName}</span>
+                      </button>
+                    ))}
+                  {profQuery.trim() !== "" && professionals.every((p) => !matchesListQuery(p.fullName, profQuery)) && (
+                    <p className="px-2 py-3 text-sm text-ink-3">{t("femme.calendar.profNone")}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Week strip: jump between the days of the week, with how busy each one is */}
@@ -999,7 +1100,6 @@ export default function CalendarPage() {
                           {/* Appointment blocks: clean cards, the professional's colour is the left stripe */}
                           {dayAppts.map((appt) => {
                             const top = appointmentTopPx(appt.startAt, gridStart);
-                            const minBlockH = appointmentHeightPx(appt.durationMinutes);
                             const pc = profColor(appt.professionalId, professionals);
                             const slot = overlapLayout.get(appt.id) ?? { col: 0, slotCount: 1 };
                             const { col, slotCount } = slot;
@@ -1007,13 +1107,13 @@ export default function CalendarPage() {
                             const widthPct = 100 / slotCount;
                             const hovered = hoveredApptId === appt.id;
                             const isAnchor = overflowGroups.some((g) => g.anchorId === appt.id);
-                            const cardH = isAnchor ? Math.max(24, minBlockH - MORE_CHIP_H - 2) : minBlockH;
                             const done = appt.status === "COMPLETED";
                             const charged = done && appt.invoiceId != null;
                             const dimmed = searching && !matchesSearch(appt);
                             const start = new Date(appt.startAt);
                             const timeLabel = `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
                             const clientLabel = clientLabelOf(appt);
+                            const shortName = shortClientName(appt.clientName, t("femme.calendar.occasionalShort"));
                             return (
                               <button
                                 key={appt.id}
@@ -1027,44 +1127,43 @@ export default function CalendarPage() {
                                 }}
                                 onMouseEnter={() => setHoveredApptId(appt.id)}
                                 onMouseLeave={() => setHoveredApptId(null)}
+                                onFocus={() => setHoveredApptId(appt.id)}
+                                onBlur={() => setHoveredApptId(null)}
                                 style={{
                                   position: "absolute",
                                   left: `${leftPct}%`,
                                   width: `calc(${widthPct}% - 4px)`,
                                   marginLeft: 2,
                                   top,
-                                  height: hovered ? "auto" : cardH,
-                                  minHeight: cardH,
-                                  zIndex: hovered ? 60 : 10,
+                                  height: CARD_H,
+                                  zIndex: hovered ? 40 : 10,
                                   opacity: dimmed && !hovered ? 0.3 : 1,
                                   transition: "opacity 0.15s",
                                   borderRadius: "var(--radius-md)",
-                                  padding: "4px 6px 4px 7px",
+                                  padding: "3px 5px 3px 6px",
                                   fontSize: 12,
+                                  lineHeight: 1.2,
                                   cursor: "pointer",
                                   background: "rgb(var(--fb-surface))",
                                   border: "1px solid rgb(var(--fb-border))",
                                   borderLeft: `4px solid ${pc.border}`,
                                   color: "rgb(var(--fb-ink))",
                                   textAlign: "left",
-                                  overflow: hovered ? "visible" : "hidden",
-                                  boxShadow: hovered ? "0 10px 28px rgba(0, 0, 0, 0.18)" : undefined,
+                                  overflow: "hidden",
                                 }}
                                 aria-label={`${clientLabel} – ${appt.serviceName}${appt.clientBirthdayOnDay ? ` – ${t("femme.calendar.clientBirthday")}` : ""}`}
                               >
-                                <span
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "space-between",
-                                    gap: 4,
-                                    marginBottom: 2,
-                                  }}
-                                >
-                                  <span style={{ fontSize: 11, fontWeight: 600, color: "rgb(var(--fb-ink-2))" }}>
+                                <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                                  <span style={{ fontSize: 10.5, fontWeight: 600, color: "rgb(var(--fb-ink-2))", flex: "none" }}>
                                     {timeLabel}
                                   </span>
-                                  <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                                  <b
+                                    data-testid={`calendar-appt-name-${appt.id}`}
+                                    style={{ flex: 1, minWidth: 0, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                                  >
+                                    {highlight(shortName)}
+                                  </b>
+                                  <span style={{ display: "flex", alignItems: "center", gap: 3, flex: "none" }}>
                                     {appt.clientBirthdayOnDay && (
                                       <span
                                         role="img"
@@ -1109,21 +1208,97 @@ export default function CalendarPage() {
                                     />
                                   </span>
                                 </span>
-                                <p style={{ margin: 0, fontWeight: 700, fontSize: 12.5, lineHeight: 1.25, wordBreak: "break-word" }}>
-                                  {highlight(clientLabel)}
-                                </p>
-                                <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.25, color: "rgb(var(--fb-ink-3))", wordBreak: "break-word" }}>
-                                  {highlight(appt.serviceName)} · {appt.professionalName}
-                                </p>
+                                {!isAnchor && (
+                                  <span
+                                    style={{
+                                      display: "block",
+                                      marginTop: 2,
+                                      fontSize: 11,
+                                      color: "rgb(var(--fb-ink-3))",
+                                      whiteSpace: "nowrap",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                    }}
+                                  >
+                                    {highlight(appt.serviceName)}
+                                  </span>
+                                )}
                               </button>
                             );
                           })}
 
+                          {/* Full detail of the hovered turno: a floating box, the card never changes size */}
+                          {(() => {
+                            const hv = dayAppts.find((a) => a.id === hoveredApptId);
+                            if (!hv || morePop) return null;
+                            const slot = overlapLayout.get(hv.id) ?? { col: 0, slotCount: 1 };
+                            const cardTop = appointmentTopPx(hv.startAt, gridStart);
+                            const above = cardTop + CARD_H + TIP_H > gridHeight && cardTop - TIP_H - 4 >= 0;
+                            const hvStart = new Date(hv.startAt);
+                            const hvEnd = new Date(hvStart.getTime() + hv.durationMinutes * 60_000);
+                            const hm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                            const hvCharged = hv.status === "COMPLETED" && hv.invoiceId != null;
+                            return (
+                              <div
+                                role="tooltip"
+                                data-testid={`calendar-appt-tip-${hv.id}`}
+                                style={{
+                                  position: "absolute",
+                                  top: above ? cardTop - TIP_H - 4 : cardTop + CARD_H + 4,
+                                  ...(dayIdx < 4
+                                    ? { left: `calc(${(slot.col / slot.slotCount) * 100}% + 2px)` }
+                                    : { right: 2 }),
+                                  width: 232,
+                                  maxWidth: "calc(100vw - 32px)",
+                                  minHeight: TIP_H - 40,
+                                  zIndex: 60,
+                                  pointerEvents: "none",
+                                  background: "rgb(var(--fb-surface))",
+                                  border: "1px solid rgb(var(--fb-border))",
+                                  borderRadius: "var(--radius-lg)",
+                                  boxShadow: "0 12px 30px rgba(0, 0, 0, 0.28)",
+                                  padding: "9px 11px",
+                                  fontSize: 12,
+                                  color: "rgb(var(--fb-ink-2))",
+                                }}
+                              >
+                                <b style={{ display: "block", fontSize: 13, color: "rgb(var(--fb-ink))", wordBreak: "break-word" }}>
+                                  {clientLabelOf(hv)}
+                                </b>
+                                <div style={{ marginTop: 2, wordBreak: "break-word" }}>
+                                  {hv.serviceName} · {hv.professionalName}
+                                </div>
+                                <div style={{ marginTop: 2 }}>
+                                  {hm(hvStart)} – {hm(hvEnd)} ({t("femme.calendar.minutes", { count: hv.durationMinutes })})
+                                </div>
+                                <div style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 6, fontWeight: 700, color: "rgb(var(--fb-ink))" }}>
+                                  <StatusGlyph
+                                    kind={
+                                      hv.status === "COMPLETED"
+                                        ? hvCharged
+                                          ? "COMPLETED_CHARGED"
+                                          : "COMPLETED"
+                                        : hv.status === "IN_PROGRESS"
+                                          ? "IN_PROGRESS"
+                                          : hv.status === "CONFIRMED"
+                                            ? "CONFIRMED"
+                                            : "PENDING"
+                                    }
+                                  />
+                                  {hv.status === "COMPLETED"
+                                    ? t(hvCharged ? "femme.calendar.badge.charged" : "femme.calendar.badge.completed")
+                                    : t(`femme.calendar.status.${hv.status}`)}
+                                </div>
+                                {hv.clientBirthdayOnDay && <div style={{ marginTop: 4 }}>🎂 {t("femme.calendar.clientBirthday")}</div>}
+                                {hv.reminderSentAt && <div style={{ marginTop: 2 }}>🔔 {t("femme.calendar.detail.reminderSent")}</div>}
+                              </div>
+                            );
+                          })()}
+
                           {/* «+N»: the turnos of a crowded hour that do not fit side by side */}
                           {overflowGroups.map((g) => {
                             const anchor = g.members.find((m) => m.id === g.anchorId)!;
-                            const anchorH = Math.max(24, appointmentHeightPx(anchor.durationMinutes) - MORE_CHIP_H - 2);
-                            const chipTop = appointmentTopPx(anchor.startAt, gridStart) + anchorH + 2;
+                            const chipTop = appointmentTopPx(anchor.startAt, gridStart) + CARD_H - MORE_CHIP_H - 3;
                             const first = new Date(g.members[0].startAt);
                             const timeLabel = `${String(first.getHours()).padStart(2, "0")}:${String(first.getMinutes()).padStart(2, "0")}`;
                             const open = morePop?.dayKey === key && morePop.anchorId === g.anchorId;
@@ -1143,8 +1318,8 @@ export default function CalendarPage() {
                                   style={{
                                     position: "absolute",
                                     left: "50%",
-                                    width: "calc(50% - 4px)",
-                                    marginLeft: 2,
+                                    width: "calc(50% - 15px)",
+                                    marginLeft: 9,
                                     top: chipTop,
                                     height: MORE_CHIP_H,
                                     zIndex: 12,

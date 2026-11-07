@@ -8,20 +8,27 @@ import {
   calendarVisibleWeekSlotIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { bookingAppointmentDialog, completeAppointmentFromDetail, ensureCalendarShowsAppointmentByTestId, filterAgendaByProfessional } from "../fixtures/ui";
+import { bookingAppointmentDialog, completeAppointmentFromDetail, ensureCalendarShowsAppointmentByTestId, filterAgendaByProfessional, openProfessionalFilter } from "../fixtures/ui";
 
 test.describe("HU-19 · Fixes varios del calendario", () => {
-  test("filtro de profesionales: chips «All professionals» y uno por profesional", async ({ page, request }) => {
+  test("filtro de profesionales: dentro del buscador, «All professionals» y una opción por profesional", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
-    const group = page.locator("[data-tour='calendar-prof-filter']");
-    await expect(group.getByTestId("calendar-prof-chip-all")).toHaveAttribute("aria-pressed", "true");
-    await expect(group.getByRole("button", { name: new RegExp(seed.professionalFullName) })).toHaveCount(1);
+    // No row of chips: the filter is a menu inside the search field.
+    await expect(page.getByTestId("calendar-prof-trigger")).toBeVisible();
+    await expect(page.getByTestId("calendar-prof-panel")).toHaveCount(0);
+    const panel = await openProfessionalFilter(page);
+    await expect(panel.getByTestId("calendar-prof-chip-all")).toHaveAttribute("aria-pressed", "true");
+    await expect(panel.getByRole("button", { name: new RegExp(seed.professionalFullName) })).toHaveCount(1);
+    // The menu has its own search.
+    await panel.getByTestId("calendar-prof-search").fill(seed.professionalFullName);
+    await expect(panel.getByRole("button", { name: new RegExp(seed.professionalFullName) })).toHaveCount(1);
+    await expect(panel.getByTestId("calendar-prof-chip-all")).toHaveCount(0);
   });
 
-  test("HU-19 · 4 filtro de profesional en vista principal marca el chip elegido", async ({
+  test("HU-19 · 4 filtro de profesional en vista principal muestra a la elegida como etiqueta", async ({
     page,
     request,
   }) => {
@@ -30,12 +37,18 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
     await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
-    const group = page.locator("[data-tour='calendar-prof-filter']");
-    await expect(group.getByRole("button", { name: new RegExp(seed.professionalFullName) })).toHaveAttribute(
+    // She shows up as a tag inside the search field, and the menu marks her as the chosen one.
+    await expect(page.getByTestId("calendar-prof-pill")).toContainText(seed.professionalFullName);
+    const panel = await openProfessionalFilter(page);
+    await expect(panel.getByRole("button", { name: new RegExp(seed.professionalFullName) })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    await expect(group.getByTestId("calendar-prof-chip-all")).toHaveAttribute("aria-pressed", "false");
+    await expect(panel.getByTestId("calendar-prof-chip-all")).toHaveAttribute("aria-pressed", "false");
+    // The × on the tag goes back to every professional.
+    await page.keyboard.press("Escape");
+    await page.getByTestId("calendar-prof-pill-clear").click();
+    await expect(page.getByTestId("calendar-prof-pill")).toHaveCount(0);
   });
 
   test("HU-19 · 6 turno Completado sigue en la grilla, marcado como completado", async ({ page, request }) => {
@@ -105,13 +118,14 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     await expect(page.getByRole("dialog", { name: "Calendar", exact: true }).first()).toBeVisible();
   });
 
-  test("HU-25 / HU-19 hover en tarjeta de turno puede agrandar el bloque (texto largo)", async ({
+  test("HU-25 / HU-19 tarjeta resumida: nombre corto, mismo alto, y el detalle completo en un recuadro al pasar el mouse", async ({
     page,
     request,
   }) => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
-    const longName = `E2E Longname ${"x".repeat(100)} ${Date.now()}`;
+    const stamp = Date.now();
+    const longName = `Maria Longname ${"x".repeat(100)} ${stamp}`;
     const client = await apiPostJson<{ id: number }>(request, token, "/api/clients", {
       fullName: longName,
       phone: null,
@@ -127,15 +141,22 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
     await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
     const card = page.getByTestId(`calendar-appt-${appt.id}`);
     await expect(card).toBeVisible();
+    // Short name: first name and the initial of the next word.
+    await expect(page.getByTestId(`calendar-appt-name-${appt.id}`)).toHaveText("Maria L.");
     const h0 = (await card.boundingBox())!.height;
     await card.hover();
-    const h1 = (await card.boundingBox())!.height;
-    expect(h1, "esperada expansión al hover para acomodar líneas de texto").toBeGreaterThanOrEqual(
-      h0,
-    );
+    const tip = page.getByTestId(`calendar-appt-tip-${appt.id}`);
+    await expect(tip).toBeVisible();
+    await expect(tip).toContainText(longName);
+    await expect(tip).toContainText(seed.serviceFullName);
+    // The card does not grow or move: the detail floats over the grid.
+    expect((await card.boundingBox())!.height).toBeCloseTo(h0, 0);
+    await page.mouse.move(0, 0);
+    await expect(tip).toHaveCount(0);
   });
 
   test("Semana: con 3 turnos a la misma hora se ven 2 y un chip «+1 more» abre la lista completa", async ({

@@ -57,12 +57,16 @@ async function setupProfessionalWithAccess(
   return profId;
 }
 
-/** Picks a chip of the calendar's professional filter. */
+/** Picks a professional in the calendar's professional menu (inside the search field). */
 async function pickCalendarFilter(page: Page, label: string): Promise<void> {
-  const group = page.locator("[data-tour='calendar-prof-filter']");
-  const chip = label === "All professionals" ? group.getByTestId("calendar-prof-chip-all") : group.getByRole("button", { name: label, exact: true });
-  await chip.click();
-  await expect(chip).toHaveAttribute("aria-pressed", "true");
+  const panel = page.getByTestId("calendar-prof-panel");
+  if (!(await panel.isVisible())) await page.getByTestId("calendar-prof-trigger").click();
+  await (label === "All professionals"
+    ? panel.getByTestId("calendar-prof-chip-all")
+    : panel.getByRole("button", { name: label, exact: true })
+  ).click();
+  if (label === "All professionals") await expect(page.getByTestId("calendar-prof-pill")).toHaveCount(0);
+  else await expect(page.getByTestId("calendar-prof-pill")).toContainText(label);
 }
 
 /** Logs a professional in through the API and returns her JWT. */
@@ -130,12 +134,8 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
     await advanceWeekUntilAppointment(page, own.id);
     // The filter is there, preselected on her own agenda.
-    const filter = page.locator("[data-tour='calendar-prof-filter']");
-    await expect(filter).toBeVisible();
-    await expect(filter.getByRole("button", { name: ownName.toUpperCase(), exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(page.getByTestId("calendar-prof-trigger")).toBeVisible();
+    await expect(page.getByTestId("calendar-prof-pill")).toHaveText(new RegExp(`^${ownName}`, "i"));
     await expect(page.getByTestId(`calendar-appt-${own.id}`)).toBeVisible();
     await expect(page.getByTestId(`calendar-appt-${other.id}`)).toHaveCount(0);
 

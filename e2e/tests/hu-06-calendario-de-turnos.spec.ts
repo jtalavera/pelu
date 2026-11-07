@@ -49,7 +49,9 @@ test.describe("HU-06 · Calendario de turnos", () => {
     const appointmentButton = page.getByRole("button", { name: new RegExp(client.fullName) });
     await expect(appointmentButton).toBeVisible();
     await expect(appointmentButton.getByText(/E2E Svc /)).toBeVisible();
-    await expect(appointmentButton.getByText(seed.professionalFullName)).toBeVisible();
+    // The card is a summary (time, short name, service); the professional shows in the hover box.
+    await appointmentButton.hover();
+    await expect(page.getByRole("tooltip")).toContainText(seed.professionalFullName);
   });
 
   test("HU-06 · 4 filtro por profesional reduce resultados", async ({ page, request }) => {

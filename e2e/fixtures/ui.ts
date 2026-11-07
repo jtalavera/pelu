@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 /** Appointment create/edit modal (avoids grabbing the nested date-picker dialog, `aria-label="Calendar"`). */
 export function bookingAppointmentDialog(page: Page): Locator {
@@ -160,14 +160,23 @@ export async function setControlledInputValue(locator: Locator, value: string): 
 // ── Agenda redesign: professional chips and status actions in the appointment detail ───────────
 
 /** Picks a professional chip of the Agenda ("All professionals" for no filter). */
+/** Opens the professional menu of the calendar's search field and returns it. */
+export async function openProfessionalFilter(page: Page): Promise<Locator> {
+  const panel = page.getByTestId("calendar-prof-panel");
+  if (!(await panel.isVisible())) await page.getByTestId("calendar-prof-trigger").click();
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+/** Picks a professional («All» for everyone) in the calendar's professional menu; the menu closes. */
 export async function filterAgendaByProfessional(page: Page, name: string | RegExp): Promise<void> {
-  const group = page.locator("[data-tour='calendar-prof-filter']");
+  const panel = await openProfessionalFilter(page);
   if (name === "All") {
-    await group.getByTestId("calendar-prof-chip-all").click();
-    return;
+    await panel.getByTestId("calendar-prof-chip-all").click();
+  } else {
+    await panel.getByRole("button", { name }).first().click();
   }
-  const chip = group.getByRole("button", { name }).first();
-  await chip.click();
+  await expect(panel).toHaveCount(0);
 }
 
 async function openAppointmentActions(page: Page): Promise<void> {

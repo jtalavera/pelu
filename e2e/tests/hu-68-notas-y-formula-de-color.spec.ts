@@ -63,12 +63,16 @@ async function loginToken(request: APIRequestContext, email: string): Promise<st
   return ((await res.json()) as { accessToken: string }).accessToken;
 }
 
-/** Picks a chip of the calendar's professional filter. */
+/** Picks a professional in the calendar's professional menu (inside the search field). */
 async function pickCalendarFilter(page: Page, label: string): Promise<void> {
-  const group = page.locator("[data-tour='calendar-prof-filter']");
-  const chip = label === "All professionals" ? group.getByTestId("calendar-prof-chip-all") : group.getByRole("button", { name: label, exact: true });
-  await chip.click();
-  await expect(chip).toHaveAttribute("aria-pressed", "true");
+  const panel = page.getByTestId("calendar-prof-panel");
+  if (!(await panel.isVisible())) await page.getByTestId("calendar-prof-trigger").click();
+  await (label === "All professionals"
+    ? panel.getByTestId("calendar-prof-chip-all")
+    : panel.getByRole("button", { name: label, exact: true })
+  ).click();
+  if (label === "All professionals") await expect(page.getByTestId("calendar-prof-pill")).toHaveCount(0);
+  else await expect(page.getByTestId("calendar-prof-pill")).toContainText(label);
 }
 
 test.describe("HU-68 · Notas y fórmula de color de la cliente", () => {

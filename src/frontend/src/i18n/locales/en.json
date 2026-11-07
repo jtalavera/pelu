@@ -3017,6 +3017,12 @@
         "sun": "Sun"
       },
       "badge": { "charged": "Charged", "completed": "Completed" },
+      "occasionalShort": "Occasional",
+      "minutes": "{{count}} min",
+      "profTrigger": "Professional",
+      "profSearch": "Search professional",
+      "profNone": "No professional matches.",
+      "profClear": "Remove the {{name}} filter",
       "moreCount": "+{{count}} more",
       "morePopTitle": "{{count}} appointments at {{time}}",
       "moreAria": "See the {{count}} appointments at {{time}}",

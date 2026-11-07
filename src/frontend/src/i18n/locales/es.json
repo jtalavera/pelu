@@ -3017,6 +3017,12 @@
         "sun": "Dom"
       },
       "badge": { "charged": "Cobrado", "completed": "Completado" },
+      "occasionalShort": "Ocasional",
+      "minutes": "{{count}} min",
+      "profTrigger": "Profesional",
+      "profSearch": "Buscar profesional",
+      "profNone": "Ninguna profesional coincide.",
+      "profClear": "Quitar el filtro de {{name}}",
       "moreCount": "+{{count}} más",
       "morePopTitle": "{{count}} turnos a las {{time}}",
       "moreAria": "Ver los {{count}} turnos de las {{time}}",

@@ -91,10 +91,19 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       });
     });
 
-    it("renders the professional filter as chips", async () => {
+    it("puts the professional filter inside the search field, with a menu of professionals", async () => {
+      const user = userEvent.setup();
       renderPage();
-      expect(await screen.findByRole("button", { name: /^all professionals$/i })).toBeTruthy();
-      expect(await screen.findByRole("button", { name: /^ana gomez$/i })).toBeTruthy();
+      const trigger = await screen.findByTestId("calendar-prof-trigger");
+      // One field: the search box and the filter live in the same container, and there is no row of chips.
+      expect(trigger.closest("[data-tour='calendar-search']")).toBe(
+        screen.getByTestId("calendar-search").closest("[data-tour='calendar-search']"),
+      );
+      expect(screen.queryByTestId("calendar-prof-panel")).toBeNull();
+      await user.click(trigger);
+      const panel = await screen.findByTestId("calendar-prof-panel");
+      expect(within(panel).getByTestId("calendar-prof-chip-all").getAttribute("aria-pressed")).toBe("true");
+      expect(within(panel).getByRole("button", { name: /^ana gomez$/i })).toBeTruthy();
     });
 
     it("opens on the Day view and switches to the Week grid with one tap", async () => {
@@ -125,17 +134,34 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       });
     });
 
-    it("filters the day by professional with the chips (HU-19)", async () => {
+    it("filters the day by professional from the menu, shows her as a tag and removes it with ×", async () => {
       const user = userEvent.setup();
       renderPage();
-      const chip = await screen.findByRole("button", { name: /^ana gomez$/i });
-      expect(chip.getAttribute("aria-pressed")).toBe("false");
-      await user.click(chip);
-      expect(chip.getAttribute("aria-pressed")).toBe("true");
+      await user.click(await screen.findByTestId("calendar-prof-trigger"));
+      const option = await screen.findByRole("button", { name: /^ana gomez$/i });
+      expect(option.getAttribute("aria-pressed")).toBe("false");
+      await user.click(option);
+      // The menu closes and her name stays in the field as a tag.
+      expect(screen.queryByTestId("calendar-prof-panel")).toBeNull();
+      expect(screen.getByTestId("calendar-prof-pill").textContent).toContain("Ana Gomez");
       await waitFor(() => {
         const urls = femmeJsonMock.mock.calls.map((c) => String(c[0]));
         expect(urls.some((u) => u.includes("/api/appointments") && u.includes("professionalId=10"))).toBe(true);
       });
+      await user.click(screen.getByTestId("calendar-prof-pill-clear"));
+      expect(screen.queryByTestId("calendar-prof-pill")).toBeNull();
+    });
+
+    it("searches inside the professional menu", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByTestId("calendar-prof-trigger"));
+      await user.type(await screen.findByTestId("calendar-prof-search"), "zzz");
+      expect(screen.queryByTestId("calendar-prof-chip-10")).toBeNull();
+      expect(screen.queryByTestId("calendar-prof-chip-all")).toBeNull();
+      await user.clear(screen.getByTestId("calendar-prof-search"));
+      await user.type(screen.getByTestId("calendar-prof-search"), "gom");
+      expect(screen.getByTestId("calendar-prof-chip-10")).toBeTruthy();
     });
 
     it("does not list non-grid statuses (HU-19)", async () => {
@@ -531,5 +557,52 @@ describe("CalendarPage · vista semanal con horarios muy ocupados", () => {
     // Escape closes the list.
     await user.keyboard("{Escape}");
     expect(screen.queryByTestId("calendar-more-popover")).toBeNull();
+  });
+});
+
+describe("CalendarPage · tarjetas resumidas de la semana", () => {
+  const at = (h: number) => {
+    const d = new Date();
+    d.setHours(h, 0, 0, 0);
+    return d;
+  };
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
+    femmeJsonMock.mockReset();
+    femmeJsonMock.mockImplementation((url: string) => {
+      if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
+      if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
+      if (url.includes("/api/appointments")) {
+        return Promise.resolve([
+          { ...MOCK_APPOINTMENT, id: 301, clientName: "TANIA NUÑEZ Z", startAt: at(10).toISOString(), durationMinutes: 60 },
+          { ...MOCK_APPOINTMENT, id: 302, clientName: null, startAt: at(13).toISOString(), durationMinutes: 90 },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+  });
+
+  it("shows a short name, gives every card the same height and keeps the full detail for the hover", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click((await screen.findAllByTestId("calendar-view-week"))[0]);
+    const a = await screen.findByTestId("calendar-appt-301");
+    const b = await screen.findByTestId("calendar-appt-302");
+    expect(screen.getByTestId("calendar-appt-name-301").textContent).toBe("Tania N.");
+    expect(screen.getByTestId("calendar-appt-name-302").textContent).toBe("Occasional");
+    // Same height whatever the duration (60 vs 90 min).
+    expect(a.style.height).toBe(b.style.height);
+    // The accessible name keeps the full client name.
+    expect(a.getAttribute("aria-label")).toContain("TANIA NUÑEZ Z");
+    // Hover: a floating box with everything; the card does not change size.
+    const h0 = a.style.height;
+    await user.hover(a);
+    const tip = await screen.findByTestId("calendar-appt-tip-301");
+    expect(tip.textContent).toContain("TANIA NUÑEZ Z");
+    expect(tip.textContent).toContain("Haircut");
+    expect(tip.textContent).toContain("60 min");
+    expect(a.style.height).toBe(h0);
+    await user.unhover(a);
+    expect(screen.queryByTestId("calendar-appt-tip-301")).toBeNull();
   });
 });

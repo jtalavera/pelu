@@ -187,10 +187,12 @@ test.describe("Apodo de la profesional", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar");
-    const chip = page.getByTestId(`calendar-prof-chip-${withNick.id}`);
-    await expect(chip).toHaveText(nick, { timeout: 20_000 });
+    await page.getByTestId("calendar-prof-trigger").click();
+    const panel = page.getByTestId("calendar-prof-panel");
+    await expect(panel.getByTestId(`calendar-prof-chip-${withNick.id}`)).toHaveText(nick, { timeout: 20_000 });
     // One without a nickname keeps the full name.
-    await expect(page.getByTestId(`calendar-prof-chip-${seed.professionalId}`)).toHaveText(seed.professionalFullName);
+    await expect(panel.getByTestId(`calendar-prof-chip-${seed.professionalId}`)).toHaveText(seed.professionalFullName);
+    await page.keyboard.press("Escape");
 
     // The turno form's picker offers her by nickname (the option text is exactly the nickname).
     await page.getByRole("button", { name: "New appointment" }).first().click();
