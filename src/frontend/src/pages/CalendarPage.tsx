@@ -299,17 +299,30 @@ export default function CalendarPage() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMorePop(null);
     };
-    // The list is placed from the card's position on the screen, so it closes when the page moves.
-    const close = () => setMorePop(null);
+    // The list is placed from the card's position on the screen, so it follows the card when the page moves
+    // (and closes if the card leaves the screen).
+    const follow = () => {
+      const el = document.querySelector(`[data-testid='calendar-more-chip'][data-group='${morePop.dayKey}-${morePop.anchorId}']`);
+      const r = el?.getBoundingClientRect();
+      if (!r || r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth) {
+        setMorePop(null);
+        return;
+      }
+      setMorePop((cur) =>
+        cur && (cur.rect.top !== r.top || cur.rect.left !== r.left)
+          ? { ...cur, rect: { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
+          : cur,
+      );
+    };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
     };
   }, [morePop]);
   // Professional filter menu (inside the search field).
@@ -1398,6 +1411,7 @@ export default function CalendarPage() {
                                   type="button"
                                   data-testid="calendar-more-chip"
                                   data-appt-ids={`,${g.members.map((m) => m.id).join(",")},`}
+                                  data-group={`${key}-${g.anchorId}`}
                                   data-dimmed={groupDimmed ? "true" : undefined}
                                   aria-expanded={open}
                                   aria-label={t("femme.calendar.moreAria", { count: g.members.length, time: timeLabel })}
