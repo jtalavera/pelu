@@ -129,12 +129,13 @@ for (const vp of VIEWPORTS) {
         await expectTouchTarget(page, "[data-tour='calendar-new-appointment']");
         await expectTouchTarget(page, "[data-tour='calendar-week-nav'] button");
       }
-      // Search field with the professional filter inside: fits the screen and the filter button is touch-sized.
+      // Search field with the professional filter button next to it: both fit the screen and the button is touch-sized.
       const searchBox = await page.locator("[data-tour='calendar-search']").boundingBox();
       expect(searchBox!.width).toBeGreaterThanOrEqual(160);
       expect(searchBox!.x + searchBox!.width).toBeLessThanOrEqual(vp.width);
       const filterBox = await page.getByTestId("calendar-prof-trigger").boundingBox();
-      expect(filterBox!.height).toBeGreaterThanOrEqual(40);
+      expect(filterBox!.height).toBeGreaterThanOrEqual(44);
+      expect(filterBox!.width).toBeGreaterThanOrEqual(44);
       expect(filterBox!.x + filterBox!.width).toBeLessThanOrEqual(vp.width);
       // Phones only have the Day view; tablets can switch to the Week grid with its 7 days.
       if (vp.phone) {

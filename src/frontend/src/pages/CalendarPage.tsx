@@ -566,12 +566,12 @@ export default function CalendarPage() {
         )}
       </div>
 
-      {/* One field for both filters: the search box with the professional filter inside it (issue: too many
-          filters). The professional role can browse every agenda but only modify her own appointments. */}
-      <div className="flex w-full">
+      {/* Search field and professional filter: two controls of the same height (the filter is a button of its
+          own, next to the field). The professional role can browse every agenda but only modify her own. */}
+      <div className="flex w-full max-w-2xl items-center gap-2">
         <div
           data-tour="calendar-search"
-          className="relative flex min-h-[46px] w-full min-w-0 max-w-xl items-center gap-2 rounded-full border-[1.5px] border-line bg-bg pl-4 pr-1.5 focus-within:border-primary focus-within:bg-surface"
+          className="relative flex h-12 min-w-0 flex-1 items-center gap-2 rounded-full border-[1.5px] border-line bg-bg pl-4 pr-2 focus-within:border-primary focus-within:bg-surface"
         >
           <label htmlFor="calendar-search" className="sr-only">
             {t("femme.calendar.search.label")}
@@ -590,23 +590,6 @@ export default function CalendarPage() {
             <circle cx="11" cy="11" r="7" />
             <path d="m20 20-3.5-3.5" />
           </svg>
-          {selectedProfessional && (
-            <span
-              data-testid="calendar-prof-pill"
-              className="inline-flex min-h-8 max-w-[45%] shrink-0 items-center gap-1 rounded-full bg-primary-lt pl-3 pr-1 text-sm font-bold text-primary"
-            >
-              <span className="truncate">{selectedProfessional.fullName}</span>
-              <button
-                type="button"
-                data-testid="calendar-prof-pill-clear"
-                aria-label={t("femme.calendar.profClear", { name: selectedProfessional.fullName })}
-                onClick={() => setSelectedProfessionalId(null)}
-                className="flex size-6 items-center justify-center rounded-full bg-surface text-base leading-none hover:bg-primary-lt"
-              >
-                ×
-              </button>
-            </span>
-          )}
           <input
             id="calendar-search"
             data-testid="calendar-search"
@@ -630,22 +613,71 @@ export default function CalendarPage() {
               ×
             </button>
           )}
-          <span aria-hidden className="h-6 w-px shrink-0 bg-line" />
-          <div data-tour="calendar-prof-filter" className="shrink-0" ref={profFilterRef}>
+        </div>
+        <div data-tour="calendar-prof-filter" className="relative shrink-0" ref={profFilterRef}>
+          <div
+            className={`relative flex h-12 items-center rounded-full border-[1.5px] ${
+              selectedProfessional || profOpen ? "border-primary text-primary" : "border-line text-ink"
+            } ${selectedProfessional ? "bg-primary-lt" : "bg-surface"}`}
+          >
             <button
               type="button"
               data-testid="calendar-prof-trigger"
               aria-haspopup="listbox"
               aria-expanded={profOpen}
+              aria-label={
+                selectedProfessional
+                  ? `${t("femme.calendar.profTrigger")}: ${selectedProfessional.fullName}`
+                  : t("femme.calendar.profTrigger")
+              }
               onClick={() => {
                 setProfOpen((o) => !o);
                 setProfQuery("");
               }}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-sm font-bold text-ink hover:bg-primary-lt"
+              className={`relative inline-flex h-full min-w-12 items-center justify-center gap-2 rounded-full text-sm font-bold hover:bg-primary-lt/60 sm:pl-3.5 ${
+                selectedProfessional ? "sm:pr-1" : "sm:pr-4"
+              }`}
             >
-              {t("femme.calendar.profTrigger")}
-              <span aria-hidden>▾</span>
+              {selectedProfessional ? (
+                <span
+                  aria-hidden
+                  className="hidden h-4 w-1 rounded-sm sm:inline-block"
+                  style={{ background: profColor(selectedProfessional.id, professionals).border }}
+                />
+              ) : null}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className={selectedProfessional ? "sm:hidden" : ""}>
+                <circle cx="9" cy="8" r="3.5" />
+                <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.3c2 .8 3.5 2.7 3.5 5.7" />
+              </svg>
+              {selectedProfessional ? (
+                <>
+                  <span data-testid="calendar-prof-pill" className="hidden max-w-40 truncate sm:inline">
+                    {selectedProfessional.fullName}
+                  </span>
+                  {/* On a phone the button is only the icon; this dot says a filter is on. */}
+                  <span aria-hidden className="absolute right-2 top-2 size-2.5 rounded-full border-2 border-bg bg-primary sm:hidden" />
+                </>
+              ) : (
+                <>
+                  <span className="hidden sm:inline">{t("femme.calendar.profTrigger")}</span>
+                  <span aria-hidden className="hidden text-[10px] text-ink-3 sm:inline">
+                    ▾
+                  </span>
+                </>
+              )}
             </button>
+            {selectedProfessional && (
+              <button
+                type="button"
+                data-testid="calendar-prof-pill-clear"
+                aria-label={t("femme.calendar.profClear", { name: selectedProfessional.fullName })}
+                onClick={() => setSelectedProfessionalId(null)}
+                className="mr-2 hidden size-7 items-center justify-center rounded-full bg-surface text-base leading-none text-ink-2 hover:bg-primary-lt sm:flex"
+              >
+                ×
+              </button>
+            )}
+          </div>
             {profOpen && (
               <div
                 data-testid="calendar-prof-panel"
@@ -708,7 +740,6 @@ export default function CalendarPage() {
                 </div>
               </div>
             )}
-          </div>
         </div>
       </div>
 

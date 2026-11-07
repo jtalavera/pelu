@@ -91,14 +91,14 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       });
     });
 
-    it("puts the professional filter inside the search field, with a menu of professionals", async () => {
+    it("puts the professional filter in a button next to the search field, with a menu of professionals", async () => {
       const user = userEvent.setup();
       renderPage();
       const trigger = await screen.findByTestId("calendar-prof-trigger");
-      // One field: the search box and the filter live in the same container, and there is no row of chips.
-      expect(trigger.closest("[data-tour='calendar-search']")).toBe(
-        screen.getByTestId("calendar-search").closest("[data-tour='calendar-search']"),
-      );
+      // Two controls side by side (the button is not inside the field), and no row of chips.
+      const field = screen.getByTestId("calendar-search").closest("[data-tour='calendar-search']")!;
+      expect(field.contains(trigger)).toBe(false);
+      expect(trigger.closest("[data-tour='calendar-prof-filter']")).toBeTruthy();
       expect(screen.queryByTestId("calendar-prof-panel")).toBeNull();
       await user.click(trigger);
       const panel = await screen.findByTestId("calendar-prof-panel");
@@ -144,6 +144,7 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       // The menu closes and her name stays in the field as a tag.
       expect(screen.queryByTestId("calendar-prof-panel")).toBeNull();
       expect(screen.getByTestId("calendar-prof-pill").textContent).toContain("Ana Gomez");
+      expect(screen.getByTestId("calendar-prof-trigger").getAttribute("aria-label")).toContain("Ana Gomez");
       await waitFor(() => {
         const urls = femmeJsonMock.mock.calls.map((c) => String(c[0]));
         expect(urls.some((u) => u.includes("/api/appointments") && u.includes("professionalId=10"))).toBe(true);

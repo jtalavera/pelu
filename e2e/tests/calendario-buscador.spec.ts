@@ -123,7 +123,7 @@ test.describe("Calendario · buscador", () => {
     await expect(blockA).not.toHaveAttribute("data-dimmed", "true");
   });
 
-  test("el buscador está en la en un solo campo con el filtro de profesional, debajo de la fecha y «Día | Semana»| Semana»", async ({ page, request }) => {
+  test("el buscador está en la con el botón de profesional al lado, debajo de la fecha y «Día | Semana»| Semana»", async ({ page, request }) => {
     await loginAsDemoApi(request);
     await loginAsDemo(page);
     await page.goto("/app/calendar");
@@ -136,14 +136,14 @@ test.describe("Calendario · buscador", () => {
       page.getByTestId("calendar-view-day").boundingBox(),
       page.getByTestId("calendar-prof-trigger").boundingBox(),
     ]);
-    // One field below the date row and the Día | Semana switch, with the professional filter inside it
-    // (there is no separate row of professional chips).
+    // Search field and professional button: two controls of the same height, side by side, below the date
+    // row and the Día | Semana switch (there is no separate row of professional chips).
     expect(f!.y).toBeGreaterThan(label!.y + label!.height - 2);
     expect(f!.y).toBeGreaterThan(tabs!.y + tabs!.height - 2);
-    expect(trigger!.x).toBeGreaterThan(f!.x);
-    expect(trigger!.x + trigger!.width).toBeLessThanOrEqual(f!.x + f!.width + 1);
-    expect(trigger!.y).toBeGreaterThanOrEqual(f!.y);
-    expect(trigger!.y + trigger!.height).toBeLessThanOrEqual(f!.y + f!.height + 1);
+    expect(trigger!.x).toBeGreaterThanOrEqual(f!.x + f!.width);
+    const btn = await page.locator("[data-tour='calendar-prof-filter'] > div").boundingBox();
+    expect(Math.abs(btn!.height - f!.height)).toBeLessThanOrEqual(1);
+    expect(Math.abs(btn!.y - f!.y)).toBeLessThanOrEqual(1);
     expect(f!.height).toBeGreaterThanOrEqual(44);
     await expect(page.locator("[data-testid^='calendar-prof-chip-']")).toHaveCount(0);
   });
