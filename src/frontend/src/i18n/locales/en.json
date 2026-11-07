@@ -3023,7 +3023,7 @@
       "profSearch": "Search professional",
       "profNone": "No professional matches.",
       "profClear": "Remove the {{name}} filter",
-      "moreCount": "+{{count}} more",
+      "groupTitle": "{{count}} appointments · {{time}}",
       "morePopTitle": "{{count}} appointments at {{time}}",
       "moreAria": "See the {{count}} appointments at {{time}}",
       "status": {

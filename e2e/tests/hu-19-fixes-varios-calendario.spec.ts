@@ -160,7 +160,7 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     await expect(tip).toHaveCount(0);
   });
 
-  test("Semana: con 3 turnos a la misma hora se ven 2 y un chip «+1 more» abre la lista completa", async ({
+  test("Semana: con 3 turnos a la misma hora se ve UNA tarjeta de grupo que abre la lista completa", async ({
     page,
     request,
   }) => {
@@ -186,8 +186,11 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     // The chip that lists our three turnos (other turnos of the week may share the hour).
     const chip = page.locator(`[data-testid="calendar-more-chip"][data-appt-ids*=",${ids[0]},"]`);
     await expect(chip).toBeVisible({ timeout: 20_000 });
-    await expect(chip).toHaveText(/^\+\d+ more$/);
-    // Only two of the group are drawn on the grid; the list shows every turno.
+    await expect(chip).toContainText(/\d+ appointments · \d\d:\d\d/);
+    // None of the group is drawn on its own (the whole card is the button); the list shows every turno.
+    await expect(page.getByTestId(`calendar-appt-${ids[0]}`)).toHaveCount(0);
+    await expect(page.getByTestId(`calendar-appt-${ids[2]}`)).toHaveCount(0);
+    expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await chip.click();
     const pop = page.getByTestId("calendar-more-popover");
     await expect(pop).toBeVisible();

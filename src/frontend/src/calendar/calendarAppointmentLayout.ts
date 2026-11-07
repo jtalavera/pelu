@@ -96,15 +96,16 @@ export function layoutOverlappingInDay(appts: AppointmentLike[]): Map<number, Ap
 export type OverflowGroup<T extends AppointmentLike> = {
   /** Every turno of the overlap group, by start time. */
   members: T[];
-  /** The visible card that carries the «+N» chip (the first one in the last visible column). */
+  /** The first turno of the group; identifies it. */
   anchorId: number;
+  /** Number of turnos folded into the group. */
   hiddenCount: number;
 };
 
 /**
- * Like {@link layoutOverlappingInDay}, but shows at most `maxCols` turnos side by side. The turnos of an
- * overlap group beyond that are left out of `layout` and counted in an {@link OverflowGroup}, so the grid
- * can show a «+N» chip that lists them instead of squeezing every card into a sliver.
+ * Like {@link layoutOverlappingInDay}, but a cluster of overlapping turnos needing more than `maxCols`
+ * columns is left out of `layout` entirely and returned as one {@link OverflowGroup}, so the grid can draw a
+ * single group card that opens the list instead of squeezing every card into a sliver.
  */
 export function layoutWithOverflow<T extends AppointmentLike>(
   appts: T[],
@@ -137,10 +138,7 @@ export function layoutWithOverflow<T extends AppointmentLike>(
       for (const m of members) layout.set(m.id, full.get(m.id) ?? { col: 0, slotCount: 1 });
       continue;
     }
-    const visible = members.filter((m) => (full.get(m.id)?.col ?? 0) < maxCols);
-    for (const m of visible) layout.set(m.id, { col: full.get(m.id)?.col ?? 0, slotCount: maxCols });
-    const anchor = visible.find((m) => (full.get(m.id)?.col ?? 0) === maxCols - 1) ?? visible[visible.length - 1];
-    groups.push({ members, anchorId: anchor.id, hiddenCount: members.length - visible.length });
+    groups.push({ members, anchorId: members[0].id, hiddenCount: members.length });
   }
   return { layout, groups };
 }

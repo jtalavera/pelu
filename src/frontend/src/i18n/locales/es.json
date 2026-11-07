@@ -3023,7 +3023,7 @@
       "profSearch": "Buscar profesional",
       "profNone": "Ninguna profesional coincide.",
       "profClear": "Quitar el filtro de {{name}}",
-      "moreCount": "+{{count}} más",
+      "groupTitle": "{{count}} turnos · {{time}}",
       "morePopTitle": "{{count}} turnos a las {{time}}",
       "moreAria": "Ver los {{count}} turnos de las {{time}}",
       "status": {

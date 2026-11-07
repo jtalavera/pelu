@@ -51,7 +51,7 @@ describe("calendarAppointmentLayout", () => {
 });
 
 describe("layoutWithOverflow", () => {
-  it("keeps up to two turnos side by side and moves the rest into one group", () => {
+  it("folds a cluster that needs more than two columns into one group and leaves the rest alone", () => {
     const list = [
       appt(1, "2026-04-15T10:00:00.000Z", 60),
       appt(2, "2026-04-15T10:00:00.000Z", 60),
@@ -59,22 +59,24 @@ describe("layoutWithOverflow", () => {
       appt(4, "2026-04-15T13:00:00.000Z", 60),
     ];
     const { layout, groups } = layoutWithOverflow(list, 2);
-    expect(layout.get(1)).toEqual({ col: 0, slotCount: 2 });
-    expect(layout.get(2)).toEqual({ col: 1, slotCount: 2 });
+    // The crowded hour is ONE group (none of its turnos is drawn on its own)...
+    expect(layout.has(1)).toBe(false);
+    expect(layout.has(2)).toBe(false);
     expect(layout.has(3)).toBe(false);
-    expect(layout.get(4)).toEqual({ col: 0, slotCount: 1 });
     expect(groups).toHaveLength(1);
-    expect(groups[0].hiddenCount).toBe(1);
-    expect(groups[0].anchorId).toBe(2);
     expect(groups[0].members.map((m) => m.id)).toEqual([1, 2, 3]);
+    expect(groups[0].anchorId).toBe(1);
+    // ...and the lone turno keeps its normal card.
+    expect(layout.get(4)).toEqual({ col: 0, slotCount: 1 });
   });
 
-  it("makes no group when two turnos are enough", () => {
+  it("makes no group when two turnos at once are enough", () => {
     const { layout, groups } = layoutWithOverflow(
       [appt(1, "2026-04-15T10:00:00.000Z", 60), appt(2, "2026-04-15T10:30:00.000Z", 60)],
       2,
     );
     expect(groups).toHaveLength(0);
-    expect(layout.size).toBe(2);
+    expect(layout.get(1)).toEqual({ col: 0, slotCount: 2 });
+    expect(layout.get(2)).toEqual({ col: 1, slotCount: 2 });
   });
 });

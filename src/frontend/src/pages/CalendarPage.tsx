@@ -28,13 +28,11 @@ const PX_PER_HOUR = 64;
 const PX_PER_HALF_HOUR = PX_PER_HOUR / 2;
 /** Below this day-column width the week grid scrolls sideways instead of squeezing the cards. */
 const MIN_DAY_COL_PX = 120;
-/** At most this many turnos are drawn side by side; the rest of a group go into a «+N» chip. */
+/** More than this many turnos at once fold into ONE group card that opens the list of that hour. */
 const MAX_SIDE_BY_SIDE = 2;
 /** Every turno card has the same height (45 minutes of the scale); its duration shows on hover. */
 const CARD_MINUTES = 45;
 const CARD_H = (CARD_MINUTES / 60) * PX_PER_HOUR;
-/** The «+N» chip sits inside the bottom of the card that carries it. */
-const MORE_CHIP_H = 18;
 /** Approximate height of the hover detail box, to decide whether it opens below or above the card. */
 const TIP_H = 132;
 
@@ -1107,7 +1105,6 @@ export default function CalendarPage() {
                             const leftPct = (col / slotCount) * 100;
                             const widthPct = 100 / slotCount;
                             const hovered = hoveredApptId === appt.id;
-                            const isAnchor = overflowGroups.some((g) => g.anchorId === appt.id);
                             const done = appt.status === "COMPLETED";
                             const charged = done && appt.invoiceId != null;
                             const dimmed = searching && !matchesSearch(appt);
@@ -1223,7 +1220,7 @@ export default function CalendarPage() {
                                   </span>
                                 </span>
                                 {narrow && <span style={{ display: "flex", marginTop: 1 }}>{nameEl}</span>}
-                                {!isAnchor && !narrow && (
+                                {!narrow && (
                                   <span
                                     style={{
                                       display: "block",
@@ -1310,19 +1307,25 @@ export default function CalendarPage() {
                             );
                           })()}
 
-                          {/* «+N»: the turnos of a crowded hour that do not fit side by side */}
+                          {/* Crowded hour (more than two at once): ONE stacked card; the whole card opens the list */}
                           {overflowGroups.map((g) => {
-                            const anchor = g.members.find((m) => m.id === g.anchorId)!;
-                            const chipTop = appointmentTopPx(anchor.startAt, gridStart) + CARD_H - MORE_CHIP_H - 3;
+                            const cardTop = appointmentTopPx(g.members[0].startAt, gridStart);
                             const first = new Date(g.members[0].startAt);
                             const timeLabel = `${String(first.getHours()).padStart(2, "0")}:${String(first.getMinutes()).padStart(2, "0")}`;
                             const open = morePop?.dayKey === key && morePop.anchorId === g.anchorId;
+                            const groupDimmed = searching && !g.members.some(matchesSearch);
+                            const names = g.members
+                              .slice(0, 3)
+                              .map((m) => shortClientName(m.clientName, t("femme.calendar.occasionalShort")).split(" ")[0])
+                              .join(", ");
+                            const title = t("femme.calendar.groupTitle", { count: g.members.length, time: timeLabel });
                             return (
                               <div key={`more-${g.anchorId}`}>
                                 <button
                                   type="button"
                                   data-testid="calendar-more-chip"
                                   data-appt-ids={`,${g.members.map((m) => m.id).join(",")},`}
+                                  data-dimmed={groupDimmed ? "true" : undefined}
                                   aria-expanded={open}
                                   aria-label={t("femme.calendar.moreAria", { count: g.members.length, time: timeLabel })}
                                   title={t("femme.calendar.moreAria", { count: g.members.length, time: timeLabel })}
@@ -1332,23 +1335,62 @@ export default function CalendarPage() {
                                   }}
                                   style={{
                                     position: "absolute",
-                                    left: "50%",
-                                    width: "calc(50% - 15px)",
-                                    marginLeft: 9,
-                                    top: chipTop,
-                                    height: MORE_CHIP_H,
+                                    left: 0,
+                                    right: 0,
+                                    marginInline: 2,
+                                    top: cardTop,
+                                    height: CARD_H + 4,
                                     zIndex: 12,
-                                    borderRadius: "var(--radius-md)",
-                                    border: "1px dashed rgb(var(--fb-ink-3))",
-                                    background: "rgb(var(--fb-bg))",
-                                    color: "rgb(var(--fb-ink-2))",
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    cursor: "pointer",
                                     padding: 0,
+                                    border: 0,
+                                    background: "none",
+                                    cursor: "pointer",
+                                    textAlign: "left",
+                                    color: "rgb(var(--fb-ink))",
+                                    opacity: groupDimmed ? 0.3 : 1,
+                                    transition: "opacity 0.15s",
                                   }}
                                 >
-                                  {t("femme.calendar.moreCount", { count: g.hiddenCount })}
+                                  {/* The two cards «behind» the face give the stacked look */}
+                                  <span
+                                    aria-hidden
+                                    style={{ position: "absolute", left: 6, right: 6, top: 4, height: CARD_H, borderRadius: "var(--radius-md)", border: "1px solid rgb(var(--fb-border))", background: "rgb(var(--fb-surface))", opacity: 0.6 }}
+                                  />
+                                  <span
+                                    aria-hidden
+                                    style={{ position: "absolute", left: 3, right: 3, top: 2, height: CARD_H, borderRadius: "var(--radius-md)", border: "1px solid rgb(var(--fb-border))", background: "rgb(var(--fb-surface))", opacity: 0.85 }}
+                                  />
+                                  <span
+                                    style={{
+                                      position: "absolute",
+                                      left: 0,
+                                      right: 0,
+                                      top: 0,
+                                      height: CARD_H,
+                                      zIndex: 2,
+                                      display: "flex",
+                                      flexDirection: "column",
+                                      justifyContent: "center",
+                                      gap: 2,
+                                      padding: "3px 8px",
+                                      borderRadius: "var(--radius-md)",
+                                      border: `1.5px solid ${open ? "rgb(var(--fb-primary))" : "rgb(var(--fb-primary-md))"}`,
+                                      background: open ? "rgb(var(--fb-surface))" : "rgb(var(--fb-primary-lt))",
+                                      overflow: "hidden",
+                                    }}
+                                  >
+                                    <b style={{ fontSize: 12.5, color: "rgb(var(--fb-primary))", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                      {title}
+                                    </b>
+                                    <span style={{ fontSize: 11, color: "rgb(var(--fb-ink-2))", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                      {names}…
+                                    </span>
+                                    <span aria-hidden style={{ display: "flex", gap: 3 }}>
+                                      {g.members.slice(0, 8).map((m) => (
+                                        <i key={m.id} style={{ width: 14, height: 4, borderRadius: 2, background: profColor(m.professionalId, professionals).border }} />
+                                      ))}
+                                    </span>
+                                  </span>
                                 </button>
                                 {open && (
                                   <div
@@ -1358,7 +1400,7 @@ export default function CalendarPage() {
                                     aria-label={t("femme.calendar.morePopTitle", { count: g.members.length, time: timeLabel })}
                                     style={{
                                       position: "absolute",
-                                      top: chipTop + MORE_CHIP_H + 4,
+                                      top: cardTop + CARD_H + 8,
                                       ...(dayIdx < 4 ? { left: 2 } : { right: 2 }),
                                       width: 250,
                                       maxWidth: "90vw",

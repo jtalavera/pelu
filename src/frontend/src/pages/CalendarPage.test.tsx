@@ -539,17 +539,19 @@ describe("CalendarPage · vista semanal con horarios muy ocupados", () => {
     });
   });
 
-  it("shows two turnos side by side and a «+1 more» chip that lists all three", async () => {
+  it("folds three turnos at the same hour into one group card that opens the list", async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click((await screen.findAllByTestId("calendar-view-week"))[0]);
-    expect(await screen.findByTestId("calendar-appt-201")).toBeTruthy();
-    expect(screen.getByTestId("calendar-appt-202")).toBeTruthy();
+    // One group card instead of three (or two + a button): none of them is drawn on its own.
+    const group = await screen.findByTestId("calendar-more-chip");
+    expect(group.textContent).toContain("3 appointments · ");
+    expect(group.textContent).toContain("Uno");
+    expect(screen.queryByTestId("calendar-appt-201")).toBeNull();
     expect(screen.queryByTestId("calendar-appt-203")).toBeNull();
-    const chip = await screen.findByTestId("calendar-more-chip");
-    expect(chip.textContent).toBe("+1 more");
     expect(screen.queryByTestId("calendar-more-popover")).toBeNull();
-    await user.click(chip);
+    // The whole card is the button.
+    await user.click(group);
     const pop = await screen.findByTestId("calendar-more-popover");
     expect(within(pop).getByTestId("calendar-more-row-201")).toBeTruthy();
     expect(within(pop).getByTestId("calendar-more-row-202")).toBeTruthy();
