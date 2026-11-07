@@ -1030,7 +1030,8 @@ export default function CalendarPage() {
                             borderLeft: "var(--border-default)",
                             background: today ? "var(--color-rose-lt)" : undefined,
                             overflow: "visible",
-                            zIndex: 0,
+                            // The hover box and the «+N» list float over the next columns.
+                            zIndex: dayAppts.some((a) => a.id === hoveredApptId) || morePop?.dayKey === key ? 50 : 0,
                           }}
                         >
                           {/* Hour lines */}
@@ -1114,6 +1115,24 @@ export default function CalendarPage() {
                             const timeLabel = `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
                             const clientLabel = clientLabelOf(appt);
                             const shortName = shortClientName(appt.clientName, t("femme.calendar.occasionalShort"));
+                            // Half-width cards put the name on its own line so it is never squeezed out by the icons.
+                            const narrow = slotCount > 1;
+                            const nameEl = (
+                              <b
+                                data-testid={`calendar-appt-name-${appt.id}`}
+                                style={{
+                                  display: "block",
+                                  flex: 1,
+                                  minWidth: 0,
+                                  fontWeight: 700,
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
+                              >
+                                {highlight(shortName)}
+                              </b>
+                            );
                             return (
                               <button
                                 key={appt.id}
@@ -1153,16 +1172,11 @@ export default function CalendarPage() {
                                 }}
                                 aria-label={`${clientLabel} – ${appt.serviceName}${appt.clientBirthdayOnDay ? ` – ${t("femme.calendar.clientBirthday")}` : ""}`}
                               >
-                                <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                                <span style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, justifyContent: "space-between" }}>
                                   <span style={{ fontSize: 10.5, fontWeight: 600, color: "rgb(var(--fb-ink-2))", flex: "none" }}>
                                     {timeLabel}
                                   </span>
-                                  <b
-                                    data-testid={`calendar-appt-name-${appt.id}`}
-                                    style={{ flex: 1, minWidth: 0, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                                  >
-                                    {highlight(shortName)}
-                                  </b>
+                                  {!narrow && nameEl}
                                   <span style={{ display: "flex", alignItems: "center", gap: 3, flex: "none" }}>
                                     {appt.clientBirthdayOnDay && (
                                       <span
@@ -1208,7 +1222,8 @@ export default function CalendarPage() {
                                     />
                                   </span>
                                 </span>
-                                {!isAnchor && (
+                                {narrow && <span style={{ display: "flex", marginTop: 1 }}>{nameEl}</span>}
+                                {!isAnchor && !narrow && (
                                   <span
                                     style={{
                                       display: "block",
