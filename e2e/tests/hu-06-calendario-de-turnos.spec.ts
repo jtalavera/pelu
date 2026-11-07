@@ -44,7 +44,8 @@ test.describe("HU-06 · Calendario de turnos", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
-
+    // Only her turnos: other tests' turnos of the same hour would otherwise share (or fold into «+N») the grid.
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     const appointmentButton = page.getByRole("button", { name: new RegExp(client.fullName) });
     await expect(appointmentButton).toBeVisible();

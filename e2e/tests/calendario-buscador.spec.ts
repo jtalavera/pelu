@@ -7,6 +7,7 @@ import {
   soonTodaySlot,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { filterAgendaByProfessional } from "../fixtures/ui";
 
 /**
  * Calendario · buscador por cliente o servicio, en la barra de arriba (entre la fecha y Día | Semana):
@@ -97,44 +98,53 @@ test.describe("Calendario · buscador", () => {
     page,
     request,
   }) => {
-    const { tag, turnoA, turnoB } = await seedTwoTurnos(request);
+    const { tag, a, turnoA } = await seedTwoTurnos(request);
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
     const search = page.getByTestId("calendar-search");
     await expect(search).toBeVisible({ timeout: 20_000 });
+    // Only her turno: other tests' turnos of the same hour would otherwise fold into «+N».
+    await filterAgendaByProfessional(page, new RegExp(a.professionalFullName));
     const blockA = page.getByTestId(`calendar-appt-${turnoA.id}`);
-    const blockB = page.getByTestId(`calendar-appt-${turnoB.id}`);
     await expect(blockA).toBeAttached({ timeout: 20_000 });
-    await expect(blockB).toBeAttached();
     await expect(blockA).not.toHaveAttribute("data-dimmed", "true");
 
+    // A search that matches her client leaves the block normal.
     await search.fill(`nunez buscar ${tag}`);
-    await expect(blockB).toHaveAttribute("data-dimmed", "true");
     await expect(blockA).not.toHaveAttribute("data-dimmed", "true");
-    // Dimmed, not removed: the grid keeps its shape.
-    await expect(blockB).toBeAttached();
-    expect(await blockB.evaluate((el) => getComputedStyle(el).opacity)).toBe("0.3");
+    // One that matches someone else dims it (not removes: the grid keeps its shape).
+    await search.fill(`zapata otro ${tag}`);
+    await expect(blockA).toHaveAttribute("data-dimmed", "true");
+    await expect(blockA).toBeAttached();
+    expect(await blockA.evaluate((el) => getComputedStyle(el).opacity)).toBe("0.3");
     await expect(page.getByTestId("calendar-search-count")).toContainText(/this week$/);
 
     await page.getByTestId("calendar-search-clear").click();
-    await expect(blockB).not.toHaveAttribute("data-dimmed", "true");
+    await expect(blockA).not.toHaveAttribute("data-dimmed", "true");
   });
 
-  test("el buscador está en la barra de arriba, entre la fecha y «Día | Semana»", async ({ page, request }) => {
+  test("el buscador está en la en un solo campo con el filtro de profesional, debajo de la fecha y «Día | Semana»| Semana»", async ({ page, request }) => {
     await loginAsDemoApi(request);
     await loginAsDemo(page);
     await page.goto("/app/calendar");
     const search = page.getByTestId("calendar-search");
     await expect(search).toBeVisible({ timeout: 20_000 });
-    const [s, label, tabs] = await Promise.all([
-      search.boundingBox(),
+    const field = page.locator("[data-tour='calendar-search']");
+    const [f, label, tabs, trigger] = await Promise.all([
+      field.boundingBox(),
       page.getByTestId("calendar-range-label").boundingBox(),
       page.getByTestId("calendar-view-day").boundingBox(),
+      page.getByTestId("calendar-prof-trigger").boundingBox(),
     ]);
-    // Same row as the date and the Día | Semana switch, between them.
-    expect(Math.abs(s!.y + s!.height / 2 - (label!.y + label!.height / 2))).toBeLessThan(24);
-    expect(s!.x).toBeGreaterThan(label!.x);
-    expect(s!.x + s!.width).toBeLessThan(tabs!.x + 2);
-    expect(Math.round(s!.height)).toBe(44);
+    // One field below the date row and the Día | Semana switch, with the professional filter inside it
+    // (there is no separate row of professional chips).
+    expect(f!.y).toBeGreaterThan(label!.y + label!.height - 2);
+    expect(f!.y).toBeGreaterThan(tabs!.y + tabs!.height - 2);
+    expect(trigger!.x).toBeGreaterThan(f!.x);
+    expect(trigger!.x + trigger!.width).toBeLessThanOrEqual(f!.x + f!.width + 1);
+    expect(trigger!.y).toBeGreaterThanOrEqual(f!.y);
+    expect(trigger!.y + trigger!.height).toBeLessThanOrEqual(f!.y + f!.height + 1);
+    expect(f!.height).toBeGreaterThanOrEqual(44);
+    await expect(page.locator("[data-testid^='calendar-prof-chip-']")).toHaveCount(0);
   });
 });

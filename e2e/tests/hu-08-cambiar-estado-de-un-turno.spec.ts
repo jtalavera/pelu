@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { createAppointmentApi, calendarVisibleWeekSlotIso, loginAsDemoApi, seedCategoryServiceProfessional, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { cancelAppointmentFromDetail, completeAppointmentFromDetail, ensureCalendarShowsClientCard } from "../fixtures/ui";
+import { cancelAppointmentFromDetail, completeAppointmentFromDetail, ensureCalendarShowsClientCard, filterAgendaByProfessional } from "../fixtures/ui";
 
 test.describe("HU-08 · Cambiar estado de un turno", () => {
   test("HU-08 · 1 y 2 cambiar estado desde detalle a Completado", async ({ page, request }) => {
@@ -56,6 +56,7 @@ test.describe("HU-08 · Cambiar estado de un turno", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
     await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await completeAppointmentFromDetail(page);

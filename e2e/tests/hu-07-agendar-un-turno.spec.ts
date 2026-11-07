@@ -8,14 +8,7 @@ import {
   tomorrowLocalIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import {
-  bookingAppointmentDialog,
-  ensureCalendarShowsClientCard,
-  fillAppointmentDateIso,
-  fillAppointmentTime,
-  localDatePlusDays,
-  pickSearchableOption,
-} from "../fixtures/ui";
+import { bookingAppointmentDialog, ensureCalendarShowsClientCard, fillAppointmentDateIso, fillAppointmentTime, localDatePlusDays, pickSearchableOption, filterAgendaByProfessional } from "../fixtures/ui";
 
 function rxExact(s: string): RegExp {
   return new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -66,6 +59,7 @@ test.describe("HU-07 · Agendar un turno", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await expect(page.getByRole("dialog", { name: "Appointment detail" }).getByText("Pending", { exact: true })).toBeVisible();
   });

@@ -11,13 +11,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { goToCatalog } from "../fixtures/catalog";
-import {
-  bookingAppointmentDialog,
-  fillAppointmentDateIso,
-  fillAppointmentTime,
-  localDatePlusDays,
-  pickSearchableOption,
-} from "../fixtures/ui";
+import { bookingAppointmentDialog, fillAppointmentDateIso, fillAppointmentTime, localDatePlusDays, pickSearchableOption, filterAgendaByProfessional } from "../fixtures/ui";
 
 /**
  * Turnos: (1) el día elegido de la tira se lee en blanco, (2) la duración del turno se puede
@@ -116,6 +110,7 @@ test.describe("Duración del turno", () => {
     await page.goto("/app/calendar", { state: { selectedDate: start.toLocaleDateString("sv-SE"), openAppointmentId: turno.id } } as never);
     // Open the turno from the Inicio's navigation state: go through the day strip instead.
     await page.goto("/app/calendar?view=week");
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).first().click({ timeout: 20_000 });
     await page.getByTestId("calendar-more-actions").click();
     await page.getByTestId("calendar-action-edit").click();

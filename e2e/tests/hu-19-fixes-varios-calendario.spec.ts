@@ -151,7 +151,8 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     await card.hover();
     const tip = page.getByTestId(`calendar-appt-tip-${appt.id}`);
     await expect(tip).toBeVisible();
-    await expect(tip).toContainText(longName);
+    // The backend stores client names in upper case.
+    await expect(tip).toContainText(longName, { ignoreCase: true });
     await expect(tip).toContainText(seed.serviceFullName);
     // The card does not grow or move: the detail floats over the grid.
     expect((await card.boundingBox())!.height).toBeCloseTo(h0, 0);

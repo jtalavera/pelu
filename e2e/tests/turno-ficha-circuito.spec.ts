@@ -14,6 +14,7 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { filterAgendaByProfessional } from "../fixtures/ui";
 import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
 import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome } from "../fixtures/billing";
 import { revealAppointmentRow, revealFichaCard } from "../fixtures/dashboard";
@@ -260,17 +261,21 @@ test.describe("Turno y ficha de servicio", () => {
 
     // Week grid: outlined block with the same mark.
     await page.goto("/app/calendar?view=week");
+    // One professional at a time: other tests' turnos of the same hour would otherwise fold into «+N».
+    await filterAgendaByProfessional(page, new RegExp(seedB.professionalFullName));
     const blockB = page.getByTestId(`calendar-appt-${turnoB.id}`);
     await expect(blockB).toHaveAttribute("data-done", "charged", { timeout: 20_000 });
     await expect(blockB.getByTestId(`calendar-done-badge-${turnoB.id}`)).toHaveAttribute("aria-label", "Charged");
-    await expect(page.getByTestId(`calendar-done-badge-${turnoA.id}`)).toHaveAttribute("aria-label", "Completed");
     // No legend: each icon explains itself on hover.
     await expect(page.getByTestId("calendar-week-legend")).toHaveCount(0);
     await expect(blockB.getByTestId(`calendar-done-badge-${turnoB.id}`)).toHaveAttribute("title", "Charged");
-    await expect(page.getByTestId(`calendar-appt-${turnoA.id}`)).toHaveAttribute("data-done", "completed");
     // Clean card, not filled: the block background is the page surface, not the professional's colour.
     const bg = await blockB.evaluate((el) => getComputedStyle(el).backgroundColor);
     expect(bg).toBe("rgb(255, 255, 255)");
+    // A (another professional): completed, not charged.
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
+    await expect(page.getByTestId(`calendar-appt-${turnoA.id}`)).toHaveAttribute("data-done", "completed");
+    await expect(page.getByTestId(`calendar-done-badge-${turnoA.id}`)).toHaveAttribute("aria-label", "Completed");
 
   });
 
