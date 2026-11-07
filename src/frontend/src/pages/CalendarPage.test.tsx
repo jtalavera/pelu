@@ -554,6 +554,8 @@ describe("CalendarPage · vista semanal con horarios muy ocupados", () => {
     // The whole card is the button.
     await user.click(group);
     const pop = await screen.findByTestId("calendar-more-popover");
+    // Placed from the card's position on the screen (beside it), so it never depends on scrolling.
+    expect(pop.style.position).toBe("fixed");
     expect(within(pop).getByTestId("calendar-more-row-201")).toBeTruthy();
     expect(within(pop).getByTestId("calendar-more-row-202")).toBeTruthy();
     expect(within(pop).getByTestId("calendar-more-row-203").textContent).toContain("TRES");
@@ -607,5 +609,21 @@ describe("CalendarPage · tarjetas resumidas de la semana", () => {
     expect(a.style.height).toBe(h0);
     await user.unhover(a);
     expect(screen.queryByTestId("calendar-appt-tip-301")).toBeNull();
+  });
+});
+
+describe("CalendarPage · lista del grupo: dónde se abre", () => {
+  it("opens beside the group card inside the screen: to its right when there is room, to its left when not", async () => {
+    const { __testPopoverPlacement: place } = await import("./CalendarPage");
+    Object.assign(window, { innerWidth: 1000, innerHeight: 600 });
+    // Room on the right: beside the card, aligned with its top.
+    expect(place({ left: 300, right: 424, top: 165, bottom: 217 }, 4)).toEqual({ left: 432, top: 165 });
+    // Last column: no room on the right, so to the left of the card.
+    expect(place({ left: 850, right: 980, top: 165, bottom: 217 }, 4)).toEqual({ left: 850 - 8 - 260, top: 165 });
+    // Low on the screen: moved up just enough to fit (4 members ≈ 232 px + 8 px margin).
+    const low = place({ left: 300, right: 424, top: 560, bottom: 612 }, 4);
+    expect(low.left).toBe(432);
+    expect(low.top + 232).toBeLessThanOrEqual(600 - 8);
+    expect(low.top).toBeGreaterThanOrEqual(8);
   });
 });

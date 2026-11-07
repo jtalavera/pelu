@@ -68,6 +68,37 @@ function appointmentTopPx(startAt: string, gridStart: number): number {
   return Math.max(0, (hours - gridStart) * PX_PER_HOUR);
 }
 
+const MORE_POP_W = 260;
+
+/**
+ * Where the group list opens, in screen coordinates: beside the group card (to its right, or to its left when
+ * there is no room), aligned with the card's top and moved up just enough to fit; on a screen too narrow for
+ * either side it goes under the card. It never needs the page to scroll.
+ */
+function popoverPlacement(
+  rect: { left: number; right: number; top: number; bottom: number },
+  members: number,
+): { left: number; top: number } {
+  const gap = 8;
+  const margin = 8;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const h = Math.min(vh - 2 * margin, 40 + members * 48);
+  let left: number;
+  let sideways = true;
+  if (rect.right + gap + MORE_POP_W <= vw - margin) left = rect.right + gap;
+  else if (rect.left - gap - MORE_POP_W >= margin) left = rect.left - gap - MORE_POP_W;
+  else {
+    left = Math.max(margin, Math.min(rect.left, vw - MORE_POP_W - margin));
+    sideways = false;
+  }
+  const top = Math.max(margin, Math.min(sideways ? rect.top : rect.bottom + gap, vh - h - margin));
+  return { left, top };
+}
+
+/** Exposed for the unit test of the placement rule. */
+export const __testPopoverPlacement = popoverPlacement;
+
 /** «TANIA NUÑEZ Z» → «Tania N.»; a client without a record uses `occasional`. */
 function shortClientName(name: string | null | undefined, occasional: string): string {
   if (!name) return occasional;
@@ -254,7 +285,12 @@ export default function CalendarPage() {
   const [formInitialHour, setFormInitialHour] = useState<number | undefined>(undefined);
 
   // Week grid «+N» chip: the overlap group whose list is open.
-  const [morePop, setMorePop] = useState<{ dayKey: string; anchorId: number } | null>(null);
+  const [morePop, setMorePop] = useState<{
+    dayKey: string;
+    anchorId: number;
+    /** The group card's position on the screen, to place the list beside it. */
+    rect: { left: number; right: number; top: number; bottom: number };
+  } | null>(null);
   useEffect(() => {
     if (!morePop) return;
     const onDown = (e: MouseEvent) => {
@@ -263,11 +299,17 @@ export default function CalendarPage() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMorePop(null);
     };
+    // The list is placed from the card's position on the screen, so it closes when the page moves.
+    const close = () => setMorePop(null);
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
     };
   }, [morePop]);
   // Professional filter menu (inside the search field).
@@ -1362,7 +1404,12 @@ export default function CalendarPage() {
                                   title={t("femme.calendar.moreAria", { count: g.members.length, time: timeLabel })}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setMorePop(open ? null : { dayKey: key, anchorId: g.anchorId });
+                                    const r = e.currentTarget.getBoundingClientRect();
+                                    setMorePop(
+                                      open
+                                        ? null
+                                        : { dayKey: key, anchorId: g.anchorId, rect: { left: r.left, right: r.right, top: r.top, bottom: r.bottom } },
+                                    );
                                   }}
                                   style={{
                                     position: "absolute",
@@ -1430,11 +1477,11 @@ export default function CalendarPage() {
                                     role="dialog"
                                     aria-label={t("femme.calendar.morePopTitle", { count: g.members.length, time: timeLabel })}
                                     style={{
-                                      position: "absolute",
-                                      top: cardTop + CARD_H + 8,
-                                      ...(dayIdx < 4 ? { left: 2 } : { right: 2 }),
-                                      width: 250,
-                                      maxWidth: "90vw",
+                                      position: "fixed",
+                                      ...popoverPlacement(morePop!.rect, g.members.length),
+                                      width: MORE_POP_W,
+                                      maxHeight: "calc(100vh - 16px)",
+                                      overflowY: "auto",
                                       zIndex: 70,
                                       background: "rgb(var(--fb-surface))",
                                       border: "1px solid rgb(var(--fb-border))",

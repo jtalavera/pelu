@@ -195,6 +195,16 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
     const pop = page.getByTestId("calendar-more-popover");
     await expect(pop).toBeVisible();
     for (const id of ids) await expect(pop.getByTestId(`calendar-more-row-${id}`)).toBeVisible();
+    // The list opens beside the card, entirely inside the screen (no scrolling to reach it), without covering it.
+    const box = (await pop.boundingBox())!;
+    const cbox = (await chip.boundingBox())!;
+    const vp = page.viewportSize()!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(vp.width);
+    expect(box.y + box.height).toBeLessThanOrEqual(vp.height);
+    const overlapsCard = box.x < cbox.x + cbox.width && box.x + box.width > cbox.x && box.y < cbox.y + cbox.height && box.y + box.height > cbox.y;
+    expect(overlapsCard, "la lista no debe tapar la tarjeta del grupo").toBe(false);
     // Tapping a row opens that turno's detail and closes the list.
     await pop.getByTestId(`calendar-more-row-${ids[2]}`).click();
     await expect(page.getByRole("dialog", { name: "Appointment detail" })).toContainText(names[2]);
