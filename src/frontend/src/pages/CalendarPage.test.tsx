@@ -391,8 +391,9 @@ describe("CalendarPage · turnos completados siguen en la agenda", () => {
     const other = await screen.findByTestId("calendar-appt-102");
     expect(other.getAttribute("data-done")).toBe("completed");
     expect(within(other).getByTestId("calendar-done-badge-102").getAttribute("aria-label")).toBe("Completed");
-    // Clean-grid week: legend for the icons and a «N turnos»/«libre» caption under each day.
-    expect(screen.getByTestId("calendar-week-legend")).toBeTruthy();
+    // Clean-grid week: no legend (each icon explains itself on hover) and a «N turnos»/«libre» caption per day.
+    expect(screen.queryByTestId("calendar-week-legend")).toBeNull();
+    expect(within(block).getByTestId("calendar-done-badge-101").getAttribute("title")).toBe("Charged");
     expect(screen.getAllByTestId(/^calendar-day-head-/).length).toBe(7);
     expect(screen.queryByTestId("calendar-appt-103")).toBeNull();
   });
@@ -479,5 +480,56 @@ describe("CalendarPage · turnos completados siguen en la agenda", () => {
       expect(screen.getByTestId("calendar-appt-201").getAttribute("data-dimmed")).toBe("true");
       expect(screen.getByTestId("calendar-search-count").textContent).toBe("1 of 3 appointments this week");
     });
+  });
+});
+
+describe("CalendarPage · vista semanal con horarios muy ocupados", () => {
+  const at = (h: number) => {
+    const d = new Date();
+    d.setHours(h, 0, 0, 0);
+    return d;
+  };
+  const at10 = (id: number, professionalId: number, clientName: string) => ({
+    ...MOCK_APPOINTMENT,
+    id,
+    professionalId,
+    professionalName: `Prof ${professionalId}`,
+    clientName,
+    status: "PENDING",
+    startAt: at(10).toISOString(),
+    endAt: at(11).toISOString(),
+  });
+
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
+    femmeJsonMock.mockReset();
+    femmeJsonMock.mockImplementation((url: string) => {
+      if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
+      if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
+      if (url.includes("/api/appointments")) {
+        return Promise.resolve([at10(201, 10, "UNO"), at10(202, 11, "DOS"), at10(203, 12, "TRES")]);
+      }
+      return Promise.resolve([]);
+    });
+  });
+
+  it("shows two turnos side by side and a «+1 more» chip that lists all three", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click((await screen.findAllByTestId("calendar-view-week"))[0]);
+    expect(await screen.findByTestId("calendar-appt-201")).toBeTruthy();
+    expect(screen.getByTestId("calendar-appt-202")).toBeTruthy();
+    expect(screen.queryByTestId("calendar-appt-203")).toBeNull();
+    const chip = await screen.findByTestId("calendar-more-chip");
+    expect(chip.textContent).toBe("+1 more");
+    expect(screen.queryByTestId("calendar-more-popover")).toBeNull();
+    await user.click(chip);
+    const pop = await screen.findByTestId("calendar-more-popover");
+    expect(within(pop).getByTestId("calendar-more-row-201")).toBeTruthy();
+    expect(within(pop).getByTestId("calendar-more-row-202")).toBeTruthy();
+    expect(within(pop).getByTestId("calendar-more-row-203").textContent).toContain("TRES");
+    // Escape closes the list.
+    await user.keyboard("{Escape}");
+    expect(screen.queryByTestId("calendar-more-popover")).toBeNull();
   });
 });

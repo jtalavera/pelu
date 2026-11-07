@@ -5,7 +5,7 @@ import { Alert, Button, Spinner } from "@design-system";
 import { useTour } from "../tour/useTour";
 import { calendarSteps } from "../tour/steps/calendar";
 import { Appointment, CALENDAR_GRID_STATUSES, listAppointments } from "../api/appointments";
-import { layoutOverlappingInDay } from "../calendar/calendarAppointmentLayout";
+import { layoutWithOverflow } from "../calendar/calendarAppointmentLayout";
 import { femmeJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { AppointmentDetailModal } from "../components/AppointmentDetailModal";
@@ -18,15 +18,20 @@ import { isPinSession } from "../auth/sharedDevice";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 // ── Calendar constants ────────────────────────────────────────────────────────
-// The week grid always offers 08:00–18:00 (click-to-create) and grows to fit turnos outside it, within 07–21.
-const CORE_START = 8;
-const CORE_END = 18;
+// Week grid hour range: one hour before the first turno of the week to one hour after the last one
+// (08:00–18:00 when the week is empty), always within 07–21.
+const DEFAULT_START = 8;
+const DEFAULT_END = 18;
 const MIN_HOUR = 7;
 const MAX_HOUR = 21;
 const PX_PER_HOUR = 64;
 const PX_PER_HALF_HOUR = PX_PER_HOUR / 2;
-/** Each turno card keeps at least this width when several share the same hour. */
-const MIN_PX_PER_SLOT = 96;
+/** Below this day-column width the week grid scrolls sideways instead of squeezing the cards. */
+const MIN_DAY_COL_PX = 120;
+/** At most this many turnos are drawn side by side; the rest of a group go into a «+N» chip. */
+const MAX_SIDE_BY_SIDE = 2;
+/** Height reserved under the anchor card for the «+N» chip. */
+const MORE_CHIP_H = 20;
 
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
 
@@ -240,6 +245,23 @@ export default function CalendarPage() {
   const [formInitialDate, setFormInitialDate] = useState<string | undefined>(undefined);
   const [formInitialHour, setFormInitialHour] = useState<number | undefined>(undefined);
 
+  // Week grid «+N» chip: the overlap group whose list is open.
+  const [morePop, setMorePop] = useState<{ dayKey: string; anchorId: number } | null>(null);
+  useEffect(() => {
+    if (!morePop) return;
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest?.("[data-more-pop], [data-testid='calendar-more-chip']")) setMorePop(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMorePop(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [morePop]);
   const [hoveredApptId, setHoveredApptId] = useState<number | null>(null);
   const [dayGridHover, setDayGridHover] = useState<{
     colKey: (typeof DAY_KEYS)[number];
@@ -382,31 +404,36 @@ export default function CalendarPage() {
   const dayList = searching ? fullDayList.filter(matchesSearch) : fullDayList;
   const weekAppts = appointments.filter((a) => CALENDAR_GRID_STATUSES.includes(a.status));
   const weekMatchCount = searching ? weekAppts.filter(matchesSearch).length : weekAppts.length;
-  // Week grid: per-day layout, hour range and column widths.
+  // Week grid: per-day layout (at most two turnos side by side) and hour range.
   const weekDayData = weekDays.map(({ date }) => {
     const appts = appointments
       .filter((a) => isSameDay(a.startAt, date))
       .filter((a) => CALENDAR_GRID_STATUSES.includes(a.status));
-    const layout = layoutOverlappingInDay(appts);
-    const maxSlots = Math.max(1, ...Array.from(layout.values()).map((l) => l.slotCount));
-    return { appts, layout, maxSlots };
+    const { layout, groups } = layoutWithOverflow(appts, MAX_SIDE_BY_SIDE);
+    const hidden = new Set<number>();
+    for (const g of groups) for (const m of g.members) if (!layout.has(m.id)) hidden.add(m.id);
+    return { appts: appts.filter((a) => !hidden.has(a.id)), total: appts.length, layout, groups };
   });
-  let gridStart = CORE_START;
-  let gridEnd = CORE_END;
-  for (const a of weekAppts) {
-    const s = new Date(a.startAt);
-    const startH = s.getHours();
-    const endH = Math.ceil((startH * 60 + s.getMinutes() + a.durationMinutes) / 60);
-    gridStart = Math.min(gridStart, startH);
-    gridEnd = Math.max(gridEnd, endH);
+  let gridStart = DEFAULT_START;
+  let gridEnd = DEFAULT_END;
+  if (weekAppts.length > 0) {
+    gridStart = MAX_HOUR;
+    gridEnd = MIN_HOUR;
+    for (const a of weekAppts) {
+      const s = new Date(a.startAt);
+      const startMin = s.getHours() * 60 + s.getMinutes();
+      gridStart = Math.min(gridStart, Math.floor(startMin / 60) - 1);
+      gridEnd = Math.max(gridEnd, Math.ceil((startMin + a.durationMinutes) / 60) + 1);
+    }
   }
   gridStart = Math.max(MIN_HOUR, gridStart);
-  gridEnd = Math.min(MAX_HOUR, Math.max(gridEnd, gridStart + 1));
+  gridEnd = Math.min(MAX_HOUR, Math.max(gridEnd, gridStart + 4));
+  gridStart = Math.min(gridStart, gridEnd - 4);
   const totalHours = gridEnd - gridStart;
   const gridHeight = totalHours * PX_PER_HOUR;
   const slotsPerDay = totalHours * 2;
-  const weekGridColumns = `52px ${weekDayData.map((d) => `minmax(${d.maxSlots * MIN_PX_PER_SLOT}px, 1fr)`).join(" ")}`;
-  const weekGridMinWidth = 52 + weekDayData.reduce((n, d) => n + d.maxSlots * MIN_PX_PER_SLOT, 0);
+  const weekGridColumns = `52px repeat(${weekDays.length}, minmax(0, 1fr))`;
+  const weekGridMinWidth = 52 + weekDays.length * MIN_DAY_COL_PX;
   /** The text with the part that matches the search highlighted. */
   const highlight = (text: string) => {
     const range = searching ? findQueryMatch(text, searchQuery) : null;
@@ -792,7 +819,7 @@ export default function CalendarPage() {
                   />
                   {visibleDays.map(({ key, label, date }, dayIdx) => {
                     const today = isToday(date);
-                    const count = weekDayData[dayIdx].appts.length;
+                    const count = weekDayData[dayIdx].total;
                     return (
                       <div
                         key={key}
@@ -877,7 +904,7 @@ export default function CalendarPage() {
 
                     {/* Day columns */}
                     {visibleDays.map(({ key, date }, dayIdx) => {
-                      const { appts: dayAppts, layout: overlapLayout } = weekDayData[dayIdx];
+                      const { appts: dayAppts, layout: overlapLayout, groups: overflowGroups } = weekDayData[dayIdx];
                       const today = isToday(date);
                       return (
                         <div
@@ -979,6 +1006,8 @@ export default function CalendarPage() {
                             const leftPct = (col / slotCount) * 100;
                             const widthPct = 100 / slotCount;
                             const hovered = hoveredApptId === appt.id;
+                            const isAnchor = overflowGroups.some((g) => g.anchorId === appt.id);
+                            const cardH = isAnchor ? Math.max(24, minBlockH - MORE_CHIP_H - 2) : minBlockH;
                             const done = appt.status === "COMPLETED";
                             const charged = done && appt.invoiceId != null;
                             const dimmed = searching && !matchesSearch(appt);
@@ -1004,8 +1033,8 @@ export default function CalendarPage() {
                                   width: `calc(${widthPct}% - 4px)`,
                                   marginLeft: 2,
                                   top,
-                                  height: hovered ? "auto" : minBlockH,
-                                  minHeight: minBlockH,
+                                  height: hovered ? "auto" : cardH,
+                                  minHeight: cardH,
                                   zIndex: hovered ? 60 : 10,
                                   opacity: dimmed && !hovered ? 0.3 : 1,
                                   transition: "opacity 0.15s",
@@ -1089,6 +1118,125 @@ export default function CalendarPage() {
                               </button>
                             );
                           })}
+
+                          {/* «+N»: the turnos of a crowded hour that do not fit side by side */}
+                          {overflowGroups.map((g) => {
+                            const anchor = g.members.find((m) => m.id === g.anchorId)!;
+                            const anchorH = Math.max(24, appointmentHeightPx(anchor.durationMinutes) - MORE_CHIP_H - 2);
+                            const chipTop = appointmentTopPx(anchor.startAt, gridStart) + anchorH + 2;
+                            const first = new Date(g.members[0].startAt);
+                            const timeLabel = `${String(first.getHours()).padStart(2, "0")}:${String(first.getMinutes()).padStart(2, "0")}`;
+                            const open = morePop?.dayKey === key && morePop.anchorId === g.anchorId;
+                            return (
+                              <div key={`more-${g.anchorId}`}>
+                                <button
+                                  type="button"
+                                  data-testid="calendar-more-chip"
+                                  data-appt-ids={`,${g.members.map((m) => m.id).join(",")},`}
+                                  aria-expanded={open}
+                                  aria-label={t("femme.calendar.moreAria", { count: g.members.length, time: timeLabel })}
+                                  title={t("femme.calendar.moreAria", { count: g.members.length, time: timeLabel })}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMorePop(open ? null : { dayKey: key, anchorId: g.anchorId });
+                                  }}
+                                  style={{
+                                    position: "absolute",
+                                    left: "50%",
+                                    width: "calc(50% - 4px)",
+                                    marginLeft: 2,
+                                    top: chipTop,
+                                    height: MORE_CHIP_H,
+                                    zIndex: 12,
+                                    borderRadius: "var(--radius-md)",
+                                    border: "1px dashed rgb(var(--fb-ink-3))",
+                                    background: "rgb(var(--fb-bg))",
+                                    color: "rgb(var(--fb-ink-2))",
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    padding: 0,
+                                  }}
+                                >
+                                  {t("femme.calendar.moreCount", { count: g.hiddenCount })}
+                                </button>
+                                {open && (
+                                  <div
+                                    data-more-pop
+                                    data-testid="calendar-more-popover"
+                                    role="dialog"
+                                    aria-label={t("femme.calendar.morePopTitle", { count: g.members.length, time: timeLabel })}
+                                    style={{
+                                      position: "absolute",
+                                      top: chipTop + MORE_CHIP_H + 4,
+                                      ...(dayIdx < 4 ? { left: 2 } : { right: 2 }),
+                                      width: 250,
+                                      maxWidth: "90vw",
+                                      zIndex: 70,
+                                      background: "rgb(var(--fb-surface))",
+                                      border: "1px solid rgb(var(--fb-border))",
+                                      borderRadius: "var(--radius-lg)",
+                                      boxShadow: "0 12px 30px rgba(0, 0, 0, 0.25)",
+                                      padding: 6,
+                                    }}
+                                  >
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: "rgb(var(--fb-ink-2))", padding: "2px 4px 6px" }}>
+                                      {t("femme.calendar.morePopTitle", { count: g.members.length, time: timeLabel })}
+                                    </div>
+                                    {g.members.map((m) => {
+                                      const mp = profColor(m.professionalId, professionals);
+                                      const mStart = new Date(m.startAt);
+                                      const mCharged = m.status === "COMPLETED" && m.invoiceId != null;
+                                      return (
+                                        <button
+                                          key={m.id}
+                                          type="button"
+                                          data-testid={`calendar-more-row-${m.id}`}
+                                          onClick={() => {
+                                            setMorePop(null);
+                                            openDetail(m);
+                                          }}
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: 7,
+                                            width: "100%",
+                                            minHeight: 44,
+                                            marginTop: 3,
+                                            padding: "6px 6px 6px 8px",
+                                            borderRadius: "var(--radius-md)",
+                                            border: "none",
+                                            borderLeft: `4px solid ${mp.border}`,
+                                            background: "rgb(var(--fb-bg))",
+                                            color: "rgb(var(--fb-ink))",
+                                            textAlign: "left",
+                                            cursor: "pointer",
+                                          }}
+                                        >
+                                          <span style={{ fontSize: 11, fontWeight: 600, color: "rgb(var(--fb-ink-2))" }}>
+                                            {`${String(mStart.getHours()).padStart(2, "0")}:${String(mStart.getMinutes()).padStart(2, "0")}`}
+                                          </span>
+                                          <StatusIcon
+                                            status={m.status}
+                                            charged={mCharged}
+                                            apptId={m.id}
+                                            label={t(`femme.calendar.status.${m.status}`)}
+                                            doneLabel={t(mCharged ? "femme.calendar.badge.charged" : "femme.calendar.badge.completed")}
+                                          />
+                                          <span style={{ minWidth: 0 }}>
+                                            <b style={{ display: "block", fontSize: 12, wordBreak: "break-word" }}>{clientLabelOf(m)}</b>
+                                            <span style={{ display: "block", fontSize: 11, color: "rgb(var(--fb-ink-3))", wordBreak: "break-word" }}>
+                                              {m.serviceName} · {m.professionalName}
+                                            </span>
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       );
                     })}
@@ -1098,36 +1246,6 @@ export default function CalendarPage() {
             </div>
           </div>
 
-          {/* Legend: what each icon and each stripe colour means */}
-          <ul
-            data-testid="calendar-week-legend"
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "6px 16px",
-              listStyle: "none",
-              margin: "10px 0 0",
-              padding: 0,
-              fontSize: 12,
-              color: "var(--color-ink-3)",
-            }}
-          >
-            {(["COMPLETED_CHARGED", "COMPLETED", "IN_PROGRESS", "CONFIRMED", "PENDING"] as const).map((k) => (
-              <li key={k} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <StatusGlyph kind={k} />
-                {t(`femme.calendar.legend.${k}`)}
-              </li>
-            ))}
-            {professionals.map((p) => (
-              <li key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span
-                  aria-hidden
-                  style={{ width: 4, height: 14, borderRadius: 2, background: profColor(p.id, professionals).border }}
-                />
-                {p.displayName ?? p.fullName}
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 

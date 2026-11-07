@@ -92,3 +92,55 @@ export function layoutOverlappingInDay(appts: AppointmentLike[]): Map<number, Ap
 
   return result;
 }
+
+export type OverflowGroup<T extends AppointmentLike> = {
+  /** Every turno of the overlap group, by start time. */
+  members: T[];
+  /** The visible card that carries the «+N» chip (the first one in the last visible column). */
+  anchorId: number;
+  hiddenCount: number;
+};
+
+/**
+ * Like {@link layoutOverlappingInDay}, but shows at most `maxCols` turnos side by side. The turnos of an
+ * overlap group beyond that are left out of `layout` and counted in an {@link OverflowGroup}, so the grid
+ * can show a «+N» chip that lists them instead of squeezing every card into a sliver.
+ */
+export function layoutWithOverflow<T extends AppointmentLike>(
+  appts: T[],
+  maxCols = 2,
+): { layout: Map<number, AppointmentLayoutSlot>; groups: OverflowGroup<T>[] } {
+  const full = layoutOverlappingInDay(appts);
+  const layout = new Map<number, AppointmentLayoutSlot>();
+  const groups: OverflowGroup<T>[] = [];
+
+  const sorted = [...appts].sort(
+    (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+  );
+  // Connected overlap groups, walking in start order.
+  const clusters: T[][] = [];
+  let clusterEnd = -Infinity;
+  for (const a of sorted) {
+    const startMs = new Date(a.startAt).getTime();
+    if (clusters.length === 0 || startMs >= clusterEnd) {
+      clusters.push([a]);
+      clusterEnd = appointmentEndMs(a);
+    } else {
+      clusters[clusters.length - 1].push(a);
+      clusterEnd = Math.max(clusterEnd, appointmentEndMs(a));
+    }
+  }
+
+  for (const members of clusters) {
+    const slotCount = full.get(members[0].id)?.slotCount ?? 1;
+    if (slotCount <= maxCols) {
+      for (const m of members) layout.set(m.id, full.get(m.id) ?? { col: 0, slotCount: 1 });
+      continue;
+    }
+    const visible = members.filter((m) => (full.get(m.id)?.col ?? 0) < maxCols);
+    for (const m of visible) layout.set(m.id, { col: full.get(m.id)?.col ?? 0, slotCount: maxCols });
+    const anchor = visible.find((m) => (full.get(m.id)?.col ?? 0) === maxCols - 1) ?? visible[visible.length - 1];
+    groups.push({ members, anchorId: anchor.id, hiddenCount: members.length - visible.length });
+  }
+  return { layout, groups };
+}

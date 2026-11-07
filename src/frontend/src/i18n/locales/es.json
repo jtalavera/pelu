@@ -3017,13 +3017,9 @@
         "sun": "Dom"
       },
       "badge": { "charged": "Cobrado", "completed": "Completado" },
-      "legend": {
-        "COMPLETED_CHARGED": "Cobrado",
-        "COMPLETED": "Completado sin cobrar",
-        "IN_PROGRESS": "En curso",
-        "CONFIRMED": "Confirmado",
-        "PENDING": "Pendiente"
-      },
+      "moreCount": "+{{count}} más",
+      "morePopTitle": "{{count}} turnos a las {{time}}",
+      "moreAria": "Ver los {{count}} turnos de las {{time}}",
       "status": {
         "PENDING": "Pendiente",
         "CONFIRMED": "Confirmado",

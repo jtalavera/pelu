@@ -264,7 +264,9 @@ test.describe("Turno y ficha de servicio", () => {
     await expect(blockB).toHaveAttribute("data-done", "charged", { timeout: 20_000 });
     await expect(blockB.getByTestId(`calendar-done-badge-${turnoB.id}`)).toHaveAttribute("aria-label", "Charged");
     await expect(page.getByTestId(`calendar-done-badge-${turnoA.id}`)).toHaveAttribute("aria-label", "Completed");
-    await expect(page.getByTestId("calendar-week-legend")).toBeVisible();
+    // No legend: each icon explains itself on hover.
+    await expect(page.getByTestId("calendar-week-legend")).toHaveCount(0);
+    await expect(blockB.getByTestId(`calendar-done-badge-${turnoB.id}`)).toHaveAttribute("title", "Charged");
     await expect(page.getByTestId(`calendar-appt-${turnoA.id}`)).toHaveAttribute("data-done", "completed");
     // Clean card, not filled: the block background is the page surface, not the professional's colour.
     const bg = await blockB.evaluate((el) => getComputedStyle(el).backgroundColor);

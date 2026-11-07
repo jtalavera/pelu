@@ -137,4 +137,66 @@ test.describe("HU-19 · Fixes varios del calendario", () => {
       h0,
     );
   });
+
+  test("Semana: con 3 turnos a la misma hora se ven 2 y un chip «+1 more» abre la lista completa", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const startAt = calendarVisibleWeekSlotIso(16, 45);
+    const names: string[] = [];
+    const ids: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const seed = await seedCategoryServiceProfessional(request, token);
+      const client = await seedClient(request, token, `E2E Mas${i} ${Date.now()}`);
+      names.push(client.fullName);
+      const appt = await createAppointmentApi(request, token, {
+        clientId: client.id,
+        professionalId: seed.professionalId,
+        serviceId: seed.serviceId,
+        startAt,
+      });
+      ids.push(appt.id);
+    }
+
+    await loginAsDemo(page);
+    await page.goto("/app/calendar?view=week");
+    // The chip that lists our three turnos (other turnos of the week may share the hour).
+    const chip = page.locator(`[data-testid="calendar-more-chip"][data-appt-ids*=",${ids[0]},"]`);
+    await expect(chip).toBeVisible({ timeout: 20_000 });
+    await expect(chip).toHaveText(/^\+\d+ more$/);
+    // Only two of the group are drawn on the grid; the list shows every turno.
+    await chip.click();
+    const pop = page.getByTestId("calendar-more-popover");
+    await expect(pop).toBeVisible();
+    for (const id of ids) await expect(pop.getByTestId(`calendar-more-row-${id}`)).toBeVisible();
+    // Tapping a row opens that turno's detail and closes the list.
+    await pop.getByTestId(`calendar-more-row-${ids[2]}`).click();
+    await expect(page.getByRole("dialog", { name: "Appointment detail" })).toContainText(names[2]);
+    await expect(pop).toHaveCount(0);
+  });
+
+  test("Semana: los iconos de estado no usan leyenda, explican su significado al pasar el mouse", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const client = await seedClient(request, token, `E2E Icono ${Date.now()}`);
+    const appt = await createAppointmentApi(request, token, {
+      clientId: client.id,
+      professionalId: seed.professionalId,
+      serviceId: seed.serviceId,
+      startAt: calendarVisibleWeekSlotIso(8, 15),
+    });
+    await loginAsDemo(page);
+    await page.goto("/app/calendar?view=week");
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
+    await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
+    await expect(page.getByTestId("calendar-week-legend")).toHaveCount(0);
+    await expect(page.getByTestId(`calendar-appt-${appt.id}`).getByTestId(`status-icon-${appt.id}`)).toHaveAttribute(
+      "title",
+      "Pending",
+    );
+  });
 });

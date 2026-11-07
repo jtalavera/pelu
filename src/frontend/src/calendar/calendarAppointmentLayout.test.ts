@@ -3,6 +3,7 @@ import {
   appointmentEndMs,
   appointmentsOverlap,
   layoutOverlappingInDay,
+  layoutWithOverflow,
   type AppointmentLike,
 } from "./calendarAppointmentLayout";
 
@@ -46,5 +47,34 @@ describe("calendarAppointmentLayout", () => {
     expect(layout.get(2)?.slotCount).toBe(1);
     expect(layout.get(1)?.col).toBe(0);
     expect(layout.get(2)?.col).toBe(0);
+  });
+});
+
+describe("layoutWithOverflow", () => {
+  it("keeps up to two turnos side by side and moves the rest into one group", () => {
+    const list = [
+      appt(1, "2026-04-15T10:00:00.000Z", 60),
+      appt(2, "2026-04-15T10:00:00.000Z", 60),
+      appt(3, "2026-04-15T10:00:00.000Z", 60),
+      appt(4, "2026-04-15T13:00:00.000Z", 60),
+    ];
+    const { layout, groups } = layoutWithOverflow(list, 2);
+    expect(layout.get(1)).toEqual({ col: 0, slotCount: 2 });
+    expect(layout.get(2)).toEqual({ col: 1, slotCount: 2 });
+    expect(layout.has(3)).toBe(false);
+    expect(layout.get(4)).toEqual({ col: 0, slotCount: 1 });
+    expect(groups).toHaveLength(1);
+    expect(groups[0].hiddenCount).toBe(1);
+    expect(groups[0].anchorId).toBe(2);
+    expect(groups[0].members.map((m) => m.id)).toEqual([1, 2, 3]);
+  });
+
+  it("makes no group when two turnos are enough", () => {
+    const { layout, groups } = layoutWithOverflow(
+      [appt(1, "2026-04-15T10:00:00.000Z", 60), appt(2, "2026-04-15T10:30:00.000Z", 60)],
+      2,
+    );
+    expect(groups).toHaveLength(0);
+    expect(layout.size).toBe(2);
   });
 });
