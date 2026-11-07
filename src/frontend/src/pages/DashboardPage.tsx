@@ -1,3 +1,4 @@
+import { TodayEmptyState } from "../components/TodayEmptyState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
@@ -567,7 +568,7 @@ export default function DashboardPage() {
         }
       />
       <Card className="p-0">
-        <div className="h-3" aria-hidden="true" />
+        {todayAppts.length > 0 && <div className="h-3" aria-hidden="true" />}
         {todayAppts.length > 0 && (
           <div data-tour="dashboard-appt-filter" className="px-4 pb-2 sm:px-5">
             <ListSearchField
@@ -581,12 +582,13 @@ export default function DashboardPage() {
         )}
 
         {todayAppts.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 px-5 pb-6 pt-4 text-center">
-            <p className="text-ink-3">{t("femme.dashboard.noAppts")}</p>
-            <Button type="button" variant="primary" onClick={() => setNewApptOpen(true)}>
-              {t("femme.dashboard.newAppointment")}
-            </Button>
-          </div>
+          <TodayEmptyState
+            message={t("femme.dashboard.noAppts")}
+            actionLabel={t("femme.dashboard.newAppointment")}
+            onAction={() => setNewApptOpen(true)}
+            testId="dashboard-appointments-empty"
+            actionTestId="dashboard-appointments-create-first"
+          />
         ) : visibleTodayAppts.length === 0 ? (
           <div className="px-5 pb-5 pt-2 text-sm text-ink-3">{t("femme.listFilter.noMatches")}</div>
         ) : (
