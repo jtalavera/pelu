@@ -83,7 +83,7 @@ function popoverPlacement(
   const margin = 8;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const h = Math.min(vh - 2 * margin, 40 + members * 48);
+  const h = Math.min(vh - 2 * margin, 44 + members * 52);
   let left: number;
   let sideways = true;
   if (rect.right + gap + MORE_POP_W <= vw - margin) left = rect.right + gap;
@@ -1490,6 +1490,13 @@ export default function CalendarPage() {
                                     data-testid="calendar-more-popover"
                                     role="dialog"
                                     aria-label={t("femme.calendar.morePopTitle", { count: g.members.length, time: timeLabel })}
+                                    // Measured once on screen: the list moves up so it never goes past the bottom.
+                                    ref={(el) => {
+                                      if (!el) return;
+                                      const top = parseFloat(el.style.top);
+                                      const fit = Math.max(8, Math.min(top, window.innerHeight - el.offsetHeight - 8));
+                                      if (Number.isFinite(fit) && Math.abs(fit - top) > 0.5) el.style.top = `${fit}px`;
+                                    }}
                                     style={{
                                       position: "fixed",
                                       ...popoverPlacement(morePop!.rect, g.members.length),
