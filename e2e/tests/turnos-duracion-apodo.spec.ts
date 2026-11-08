@@ -12,7 +12,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { goToCatalog } from "../fixtures/catalog";
-import { bookingAppointmentDialog, fillAppointmentDateIso, fillAppointmentTime, localDatePlusDays, pickSearchableOption, filterAgendaByProfessional } from "../fixtures/ui";
+import { bookingAppointmentDialog, ensureCalendarShowsClientCard, fillAppointmentDateIso, fillAppointmentTime, localDatePlusDays, pickSearchableOption, filterAgendaByProfessional } from "../fixtures/ui";
 
 /**
  * Turnos: (1) el día elegido de la tira se lee en blanco, (2) la duración del turno se puede
@@ -112,6 +112,8 @@ test.describe("Duración del turno", () => {
     // Open the turno from the Inicio's navigation state: go through the day strip instead.
     await page.goto("/app/calendar?view=week");
     await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
+    // On a Sunday afternoon the slot lands in next week: navigate to it instead of assuming this week.
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).first().click({ timeout: 20_000 });
     await page.getByTestId("calendar-more-actions").click();
     await page.getByTestId("calendar-action-edit").click();
