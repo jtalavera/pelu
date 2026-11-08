@@ -139,10 +139,13 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await expect(page.getByTestId(`calendar-appt-${own.id}`)).toBeVisible();
     await expect(page.getByTestId(`calendar-appt-${other.id}`)).toHaveCount(0);
 
-    // "All professionals" shows the other professional's appointment too.
+    // "All professionals" shows the other professional's appointment too — as its own card, or inside a
+    // «+N» group card when other specs' turnos share the hour.
     await pickCalendarFilter(page, "All professionals");
-    await expect(page.getByTestId(`calendar-appt-${own.id}`)).toBeVisible();
-    await expect(page.getByTestId(`calendar-appt-${other.id}`)).toBeVisible();
+    const shown = (id: number) =>
+      page.locator(`[data-testid="calendar-appt-${id}"], [data-testid="calendar-more-chip"][data-appt-ids*=",${id},"]`).first();
+    await expect(shown(own.id)).toBeVisible();
+    await expect(shown(other.id)).toBeVisible();
 
     // Filtering by the other professional shows only hers.
     await pickCalendarFilter(page, salon.professionalFullName);

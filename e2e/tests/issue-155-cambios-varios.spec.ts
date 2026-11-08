@@ -154,7 +154,7 @@ test.describe("Issue #155 · Cambios varios", () => {
     ).toHaveCount(0);
   });
 
-  test("AC6 · click en un turno del Panel principal abre su detalle en el Calendario", async ({
+  test("AC6 · click en un turno del Panel principal abre su detalle (en el mismo Inicio)", async ({
     page,
     request,
   }) => {
@@ -182,10 +182,11 @@ test.describe("Issue #155 · Cambios varios", () => {
     const row = page.getByRole("button", { name: new RegExp(client.fullName) });
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.click();
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    // Since the Inicio redesign the detail opens right there, without going to the Calendar.
     await expect(page.getByRole("dialog", { name: "Appointment detail" })).toBeVisible({
       timeout: 15_000,
     });
+    await expect(page).toHaveURL(/\/app\/?$/);
   });
 
   // Redesign: the "Unnamed invoice" checkbox is gone — an invoice with no client is "No name" by

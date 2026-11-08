@@ -149,8 +149,14 @@ test.describe("Flowbit · identidad de marca", () => {
     await openWeekWithAppointment(page, id);
     const block = page.getByTestId(`calendar-appt-${id}`);
     await expect(block).toBeVisible({ timeout: 15_000 });
-    const bg = await block.evaluate((el) => getComputedStyle(el).backgroundColor);
-    // teal, durazno, celeste or rosa (the professional's slot in the 4-color cycle).
-    expect([TEAL, DURAZNO, "rgb(201, 217, 230)", "rgb(241, 175, 194)"]).toContain(bg);
+    // Week grid redesign: white card, the brand color is the left stripe — a darker teal, durazno,
+    // celeste or rosa (the professional's slot in the 4-color cycle).
+    const look = await block.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { bg: cs.backgroundColor, stripe: cs.borderLeftColor, width: cs.borderLeftWidth };
+    });
+    expect(look.bg).toBe("rgb(255, 255, 255)");
+    expect(look.width).toBe("4px");
+    expect(["rgb(10, 84, 91)", "rgb(217, 151, 111)", "rgb(127, 163, 192)", "rgb(217, 112, 143)"]).toContain(look.stripe);
   });
 });

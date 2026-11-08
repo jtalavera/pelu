@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import {
+  API_BASE,
   apiGetJson,
   apiPostJson,
+  authHeaders,
   calendarVisibleWeekSlotIso,
   ensureActiveFiscalStampForInvoices,
   ensureCashSessionOpenApi,
@@ -11,7 +13,7 @@ import {
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAsDemo } from "../fixtures/auth";
 import { ensureCashSessionOpen, goToBillingHome, openMoreOptions, openLineMoreOptions } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
-import { ensureCalendarShowsAppointmentByTestId, pickSearchableOption } from "../fixtures/ui";
+import { ensureCalendarShowsAppointmentByTestId, filterAgendaByProfessional, pickSearchableOption } from "../fixtures/ui";
 import { openItemMoreOptions } from "../fixtures/catalog";
 
 test.describe("HU-28 · Fixes varios", () => {
@@ -268,7 +270,7 @@ test.describe("HU-28 · Fixes varios", () => {
   });
 
   // AC11 — Calendar blocks: PENDING has dotted border, CONFIRMED has check icon
-  test("HU-28 · AC11 bloques del calendario: PENDING tiene borde punteado y CONFIRMED tiene ícono de check", async ({
+  test("HU-28 · AC11 bloques del calendario: PENDING lleva su ícono de estado y CONFIRMED el ícono de check", async ({
     page,
     request,
   }) => {
@@ -283,15 +285,27 @@ test.describe("HU-28 · Fixes varios", () => {
     });
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
+    // Only this professional's turnos: others of the same hour would fold ours into «+N».
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
     await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
-    // Check PENDING block has dotted border style (status is reflected via inline borderLeft style)
+    // Week grid redesign: the status is an icon on the card (no dotted border any more).
     const pendingBlock = page.getByTestId(`calendar-appt-${appt.id}`);
-    if (await pendingBlock.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      const borderStyle = await pendingBlock.evaluate(
-        (el) => window.getComputedStyle(el).borderLeftStyle,
-      );
-      expect(borderStyle).toBe("dotted");
-    }
+    await expect(pendingBlock).toBeVisible();
+    await expect(pendingBlock.getByTestId(`status-icon-${appt.id}`)).toHaveAttribute("data-status", "PENDING");
+    await expect(pendingBlock.getByTestId(`status-icon-${appt.id}`)).toHaveAttribute("aria-label", "Pending");
+    expect(await pendingBlock.evaluate((el) => getComputedStyle(el).borderLeftStyle)).toBe("solid");
+
+    // Once confirmed, the card shows the check icon instead.
+    const res = await request.patch(`${API_BASE}/api/appointments/${appt.id}/status`, {
+      headers: authHeaders(token),
+      data: { status: "CONFIRMED", cancelReason: null },
+    });
+    expect(res.ok(), await res.text()).toBeTruthy();
+    await page.reload();
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
+    await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
+    await expect(page.getByTestId(`confirmed-check-${appt.id}`)).toBeVisible();
+    await expect(page.getByTestId(`status-icon-${appt.id}`)).toHaveCount(0);
   });
 
   // AC12 — Tour persistence: seen state persisted to backend

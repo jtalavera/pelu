@@ -75,7 +75,15 @@ test.describe("Inicio · listas del panel", () => {
     await expect(more).toHaveText(/^More \(\d+\)$/);
     const voided = cards.filter({ hasText: `${marker} anulada` });
     await expect(voided).toHaveCount(12);
-    for (let i = 0; i < 40 && (await more.isVisible()); i++) await more.click();
+    // Page through: wait for each page to load (the button is disabled meanwhile, and gone after the last).
+    for (let i = 0; i < 40 && (await more.isVisible()); i++) {
+      await expect(more).toBeEnabled();
+      const before = await more.innerText();
+      await more.click();
+      await expect
+        .poll(async () => (await more.count()) === 0 || ((await more.isEnabled()) && (await more.innerText()) !== before))
+        .toBe(true);
+    }
     await expect(voided).toHaveCount(14);
     await expect(more).toHaveCount(0);
     expect(voidedNames.length).toBe(14);

@@ -116,7 +116,8 @@ test.describe("Calendario · buscador", () => {
     await search.fill(`zapata otro ${tag}`);
     await expect(blockA).toHaveAttribute("data-dimmed", "true");
     await expect(blockA).toBeAttached();
-    expect(await blockA.evaluate((el) => getComputedStyle(el).opacity)).toBe("0.3");
+    // The card fades (0.15 s transition): wait for the final opacity instead of reading it mid-fade.
+    await expect(blockA).toHaveCSS("opacity", "0.3");
     await expect(page.getByTestId("calendar-search-count")).toContainText(/this week$/);
 
     await page.getByTestId("calendar-search-clear").click();

@@ -100,6 +100,23 @@ type InvoiceView = {
   sifenCancellationNotifiedAt: string | null;
 };
 
+/**
+ * Issuing queues a real SIFEN submission that an in-process worker picks up asynchronously (and, with
+ * no SIFEN reachable, parks as PENDING_VERIFICATION). Faking a SIFEN result before that worker is done
+ * races it: the worker saves the invoice it loaded earlier and wipes the faked state (seen under the
+ * load of the full suite). Wait until the worker has let go of the invoice first.
+ */
+async function waitForSubmissionSettled(request: APIRequestContext, token: string, invoiceId: number) {
+  await expect
+    .poll(
+      async () =>
+        (await apiGetJson<{ sifenSubmissionStatus: string | null }>(request, token, `/api/invoices/${invoiceId}`))
+          .sifenSubmissionStatus,
+      { timeout: 20_000 },
+    )
+    .not.toBe("QUEUED");
+}
+
 test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
   test.afterEach(async ({ request }) => {
     await setTenantFeatureFlag(request, DEMO_TENANT_ID, FLAG_KEY, false);
@@ -315,6 +332,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
       lines: [line(seed.serviceId, seed.serviceFullName)],
       payments: [payment],
     });
+    await waitForSubmissionSettled(request, token, approved.id);
     await post(request, `/api/admin/sifen-test-support/invoices/${approved.id}/prepare-as-approved`);
     await post(request, `/api/admin/sifen-test-support/invoices/${approved.id}/run-approval-notifications`);
     const approvedView = await apiGetJson<InvoiceView>(request, token, `/api/invoices/${approved.id}`);
@@ -356,6 +374,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
         lines: [line(seed.serviceId, seed.serviceFullName)],
         payments: [payment],
       });
+      await waitForSubmissionSettled(request, token, inv.id);
       await post(request, `/api/admin/sifen-test-support/invoices/${inv.id}/prepare-as-approved`);
       return inv.id;
     }
@@ -392,6 +411,7 @@ test.describe("Issue #173 · Cambios en factura electrónica (Parte 1)", () => {
       lines: [line(seed.serviceId, seed.serviceFullName)],
       payments: [payment],
     });
+    await waitForSubmissionSettled(request, token, invoice.id);
     await post(request, `/api/admin/sifen-test-support/invoices/${invoice.id}/prepare-as-approved`);
 
     const res = await request.get(`${apiBaseUrl()}/api/invoices/${invoice.id}/sifen/kude`, {
