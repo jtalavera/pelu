@@ -1784,14 +1784,6 @@ export function InvoiceDetailModal({
                 <span data-testid="invoice-status-badge">
                   <InvoiceStatePill invoice={invoice} />
                 </span>
-                {invoice.status === "ISSUED" && !sifenEnabled && receiptEnabled && (
-                  <span
-                    data-testid="invoice-non-fiscal-badge"
-                    className="rounded-full border border-warning/40 bg-warning-lt px-2.5 py-0.5 text-[11px] font-extrabold text-warning"
-                  >
-                    {t("femme.billing.receipt.nonFiscalBadge")}
-                  </span>
-                )}
               </div>
             </div>
             {invoice.status === "VOIDED" && invoice.voidReason && (
@@ -2083,11 +2075,24 @@ export function InvoiceDetailModal({
       open
       onClose={onClose}
       title={
-        invoice
-          ? t("femme.billing.history.detail.title", {
+        invoice ? (
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {t("femme.billing.history.detail.title", {
               number: invoice.invoiceNumberFormatted,
-            })
-          : t("femme.billing.history.detail.loading")
+            })}
+            {/* Without SIFEN the comprobante is the NON-fiscal receipt: say so right beside its number. */}
+            {invoice.status === "ISSUED" && !sifenEnabled && receiptEnabled && (
+              <span
+                data-testid="invoice-non-fiscal-badge"
+                className="rounded-full border border-warning/40 bg-warning-lt px-2.5 py-0.5 text-[11px] font-extrabold text-warning"
+              >
+                {t("femme.billing.receipt.nonFiscalBadge")}
+              </span>
+            )}
+          </span>
+        ) : (
+          t("femme.billing.history.detail.loading")
+        )
       }
     >
       <div className="flex flex-col gap-4">

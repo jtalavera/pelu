@@ -306,7 +306,11 @@ test.describe("Comprobante no fiscal", () => {
     await row.click();
     const dialog = page.getByRole("dialog").filter({ hasText: inv.invoiceNumberFormatted });
     await expect(dialog).toBeVisible({ timeout: 10_000 });
-    await expect(dialog.getByTestId("invoice-non-fiscal-badge")).toHaveText("No fiscal value");
+    // «Sin valor fiscal» goes in the title, right beside the number, and no longer under the state.
+    const title = dialog.getByRole("heading").filter({ hasText: inv.invoiceNumberFormatted });
+    await expect(title.getByTestId("invoice-non-fiscal-badge")).toHaveText("No fiscal value");
+    await expect(dialog.getByTestId("invoice-status-badge").getByTestId("invoice-non-fiscal-badge")).toHaveCount(0);
+    await expect(dialog.getByTestId("invoice-non-fiscal-badge")).toHaveCount(1);
     await expect(dialog.getByRole("button", { name: "Download PDF" })).toHaveCount(0);
 
     await dialog.getByTestId("invoice-download-pdf-button").click();
