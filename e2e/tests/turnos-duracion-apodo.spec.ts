@@ -4,6 +4,7 @@ import {
   apiGetJson,
   apiPostJson,
   authHeaders,
+  calendarVisibleWeekSlotIso,
   createAppointmentApi,
   loginAsDemoApi,
   seedCategoryServiceProfessional,
@@ -97,8 +98,8 @@ test.describe("Duración del turno", () => {
     const admin = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, admin);
     const client = await seedClient(request, admin, `E2E DurEdit ${Date.now()}`);
-    const start = new Date(Date.now() + 24 * 3600_000);
-    start.setHours(15, 0, 0, 0);
+    // A slot inside the week the calendar shows (tomorrow falls in next week when the suite runs on a Sunday).
+    const start = new Date(calendarVisibleWeekSlotIso(15, 0));
     const turno = await createAppointmentApi(request, admin, {
       clientId: client.id,
       professionalId: seed.professionalId,
