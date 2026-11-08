@@ -24,7 +24,7 @@ export function TodayEmptyState({
       <div className="flex flex-col items-center gap-3 px-5 pb-6 pt-4 text-center">
         <p className="text-ink-3">{message}</p>
         {onAction && actionLabel ? (
-          <Button type="button" variant="primary" className="min-h-11" data-testid={actionTestId} onClick={onAction}>
+          <Button type="button" variant="primary" className="min-h-11 sm:h-11 sm:min-h-11" data-testid={actionTestId} onClick={onAction}>
             {actionLabel}
           </Button>
         ) : null}

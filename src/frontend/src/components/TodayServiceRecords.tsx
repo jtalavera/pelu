@@ -1,7 +1,8 @@
+import { TodayEmptyState } from "./TodayEmptyState";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import { Button, Card, Toast } from "@design-system";
+import { Card, Toast } from "@design-system";
 import {
   getServiceRecord,
   listServiceRecordsPaged,
@@ -349,28 +350,17 @@ export function TodayServiceRecords({
           ) : undefined
         }
       />
-      <Card className="p-4 sm:p-5">
+      <Card className={nothingToday ? "p-0" : "p-4 sm:p-5"}>
         {nothingToday ? (
-          <div
-            className="flex flex-col items-center gap-3 rounded-card border-[1.5px] border-dashed border-line px-4 py-6 text-center"
-            data-testid="dashboard-service-records-empty"
-          >
-            <p className="text-sm text-ink-3">
-              {professionalMode
-                ? t("femme.serviceRecords.today.emptyOpen")
-                : t("femme.serviceRecords.dashboard.empty")}
-            </p>
-            {onNewRecord ? (
-              <Button
-                type="button"
-                className="min-h-11"
-                data-testid="dashboard-service-records-create-first"
-                onClick={onNewRecord}
-              >
-                {t("femme.serviceRecords.today.createFirst")}
-              </Button>
-            ) : null}
-          </div>
+          <TodayEmptyState
+            message={
+              professionalMode ? t("femme.serviceRecords.today.emptyOpen") : t("femme.serviceRecords.dashboard.empty")
+            }
+            actionLabel={onNewRecord ? t("femme.serviceRecords.today.createFirst") : undefined}
+            onAction={onNewRecord}
+            testId="dashboard-service-records-empty"
+            actionTestId="dashboard-service-records-create-first"
+          />
         ) : (
           <>
             {!professionalMode ? (
