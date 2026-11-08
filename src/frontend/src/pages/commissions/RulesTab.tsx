@@ -31,8 +31,8 @@ const key = (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) =>
 
 /** The item as it would look once the pending changes are saved. */
 /** Rows per page in the rules list (services / products). */
-const PAGE_SIZES = [10, 20, 50];
-const PAGE_SIZE_DEFAULT = 20;
+const PAGE_SIZES = [10, 25, 50];
+const PAGE_SIZE_DEFAULT = 10;
 
 function effectiveItem(item: RuleItem, general: number, pending: Pending, professionals: { id: number; fullName: string }[]) {
   const own = pending[key({ scope: "RULE", serviceId: item.serviceId, professionalId: null })];
