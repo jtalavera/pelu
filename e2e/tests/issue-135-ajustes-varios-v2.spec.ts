@@ -199,7 +199,44 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     await expect(page.getByTestId("dashboard-record-toast")).toBeInViewport();
   });
 
-  test("2 · los movimientos muestran el retiro de cada profesional como una fila con signo menos", async ({
+  test("1c · al anular una ficha desde el Panel, el aviso «Ficha anulada» queda a la vista y la ficha deja de figurar abierta", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const client = await seedClient(request, token, `E2E135 Anular ${Date.now()}`);
+    await seedOpenRecordWithLines(request, token, {
+      clientId: client.id,
+      serviceId: seed.serviceId,
+      professionalId: seed.professionalId,
+      unitPrice: 50000,
+      lineCount: 1,
+    });
+
+    await loginAsDemo(page);
+    await page.goto("/app");
+    await openDashboardMore(page, "records");
+    const grid = page.getByTestId("dashboard-service-records-grid");
+    await expect(grid).toBeVisible({ timeout: 15_000 });
+    const card = grid.getByTestId("dashboard-service-record-card").filter({ hasText: client.fullName });
+    await card.first().click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await clickFichaMenuItem(page, dialog, "service-record-void-open");
+    await dialog.getByLabel("Reason").fill("E2E anulada desde el Panel");
+    await dialog.getByTestId("service-record-void-confirm").click();
+
+    await expect(page.getByRole("dialog")).toHaveCount(0, { timeout: 15_000 });
+    const toast = page.getByTestId("dashboard-record-toast");
+    await expect(toast).toContainText("Record voided.");
+    await expect(toast).not.toContainText("Changes saved.");
+    await expect(toast).toBeInViewport();
+    // The list is reloaded: the ficha is no longer listed as open.
+    await expect(card.and(page.locator('[data-status="OPEN"]'))).toHaveCount(0, { timeout: 15_000 });
+  });
+
+  test("2 · los movimientos muestran el retiro de cada profesional como una fila con signo menos, con su hora", async ({
     page,
     request,
   }) => {
@@ -227,6 +264,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     await page.goto("/app/propinas");
 
     // Withdraw part of each professional's balance from the balances card.
+    const withdrawStartedAt = Date.now();
     await openWithdrawDialog(page, seed.professionalId);
     await expect(page.getByTestId("propinas-dialog-balance")).toHaveText("Gs. 10.000", { timeout: 15_000 });
     await setControlledInputValue(page.locator("#propinas-withdrawal-amount"), "4000");
@@ -252,6 +290,19 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     await expect(rowA).toContainText("Gs. 4.000");
     await expect(rowA).toContainText("−");
     await expect(rowA).toContainText(seed.professionalFullName);
+    // The date cell also shows the time of the movement (HH:MM, in the browser's own clock).
+    const timeA = (await rowA.locator("td").first().locator("span").innerText()).trim();
+    const expectedTimes = await page.evaluate(
+      ([from, to]) => {
+        const fmt = new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit" });
+        const out: string[] = [];
+        for (let t = from - 60_000; t <= to + 60_000; t += 30_000) out.push(fmt.format(new Date(t)));
+        return out;
+      },
+      [withdrawStartedAt, Date.now()],
+    );
+    expect(timeA).toMatch(/\d{1,2}:\d{2}/);
+    expect(expectedTimes).toContain(timeA);
 
     await filterPropinasByProfessional(page, profB.fullName);
     const rowB = propinasMovements(page).filter({ hasText: "Withdrawal" });

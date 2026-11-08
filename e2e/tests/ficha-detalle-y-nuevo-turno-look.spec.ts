@@ -11,7 +11,7 @@ import { bookingAppointmentDialog } from "../fixtures/ui";
 
 /**
  * Look and feel: (1) detalle de la ficha: «+ Agregar otro servicio» es un enlace de texto al final de la
- * lista (con chips de servicios frecuentes) y las propinas son una lista vertical (una profesional por línea, nombre completo, total
+ * lista (sin servicios frecuentes) y las propinas son una lista vertical (una profesional por línea, nombre completo, total
  * en el encabezado); (2) «Nuevo turno»: los horarios rápidos van justo bajo la Hora y la duración,
  * en su tarjeta, al final.
  */
