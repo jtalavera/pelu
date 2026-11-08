@@ -24,16 +24,51 @@ validación de columnas.
 
    Cada importación muestra un informe por fila. Si alguna fila se rechaza, el informe dice el motivo.
 3. **Crear el usuario administrador del tenant** (Tenants → el tenant → Administradores) para poder entrar.
+4. **Sembrar turnos, fichas y comprobantes** con `seed_demo_activity.py` (ver la sección siguiente).
 
-## Lo que no se puede importar por Excel
+## Actividad de demostración (turnos, fichas y comprobantes)
 
-Estas cosas hay que cargarlas a mano en el tenant Demo (o pedir un script de siembra):
+Estas cosas no se importan por Excel, pero las crea el script `seed_demo_activity.py` usando la API del backend
+(solo biblioteca estándar de Python 3.9+, sin instalar nada). Corrélo **después** de importar los 4 Excel y de
+crear el usuario administrador del tenant:
 
-- **Datos del negocio** (nombre comercial, RUC, dirección, logo) y **timbrado fiscal** de prueba.
-- **Turnos, fichas de servicio y comprobantes.** No tienen importación. Para que la agenda y el Panel principal
-  no se vean vacíos en una demo conviene sembrarlos con un script que use fechas relativas a hoy.
-- **Acceso y PIN de las profesionales**, y los horarios de trabajo de cada una.
-- **Caja del día**: abrirla antes de la demo.
+```bash
+python3 seed_demo_activity.py \
+  --base-url https://URL-DEL-BACKEND \
+  --email admin@tu-demo.example.com \
+  --tz America/Asuncion
+# pide la contraseña por teclado; agregá --dry-run para ver qué haría sin escribir nada
+```
+
+Qué hace:
+
+- Si faltan: carga los datos del negocio («Salón Demo»), crea un timbrado de prueba y abre la caja.
+- Da horario de trabajo (lun-sáb, 08:00 a 18:00) a las profesionales que no lo tengan.
+- **Historial:** unos 100 comprobantes cobrados repartidos en los últimos 28 días (efectivo, tarjeta y
+  transferencia, con algunas propinas), con la fecha en que "ocurrieron".
+- **Agenda:** turnos de hoy y de los próximos 7 días, sin superposición por profesional, con alrededor del 45 %
+  confirmados.
+- **Hoy en vivo:** cuatro turnos para mostrar cada estado: En curso, Completado sin cobrar, con ficha abierta y
+  Cobrado.
+
+Opciones útiles: `--only history|agenda|live` (se puede repetir) para correr solo una parte, `--days-ahead N`,
+`--history-days N` (máximo 30), `--seed N` para variar los datos y `--yes` para no pedir confirmación.
+
+Conviene saber:
+
+- **Un turno no puede empezar en el pasado** (lo rechaza el backend). Por eso el pasado se muestra con
+  comprobantes, y los turnos de hoy se crean desde ahora hacia adelante: corré el script **a primera hora del día
+  de la demo** para que la agenda de hoy no quede casi vacía.
+- Correrlo dos veces suma más datos (los turnos que chocan se saltan, los comprobantes se duplican). Para
+  repetir la demo desde cero, creá un tenant nuevo.
+- Los comprobantes se emiten de verdad en el tenant: dejá desactivada la facturación electrónica SIFEN en el
+  tenant Demo para que no intente enviarlos.
+- Los productos no se venden en los comprobantes de la siembra (para no mover stock).
+
+## Lo que sigue siendo manual
+
+- El **PIN y el acceso al sistema** de las profesionales.
+- El **logo** del negocio.
 
 ## Reglas que cumplen los archivos (por si los editás)
 
