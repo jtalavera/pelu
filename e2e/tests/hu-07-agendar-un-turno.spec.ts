@@ -60,6 +60,8 @@ test.describe("HU-07 · Agendar un turno", () => {
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
     await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
+    // On a Sunday afternoon the slot lands in next week: navigate to it instead of assuming this week.
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
     await expect(page.getByRole("dialog", { name: "Appointment detail" }).getByText("Pending", { exact: true })).toBeVisible();
   });
