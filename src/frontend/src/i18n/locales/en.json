@@ -1528,6 +1528,15 @@
       "body": "This area will be wired to the API in the next iteration."
     },
     "billing": {
+      "receipt": {
+              "download": "Download receipt",
+              "chooseFormat": "Choose the format",
+              "a4": "A4 sheet",
+              "a4Hint": "To print or send",
+              "ticket": "80 mm ticket",
+              "ticketHint": "For a thermal printer",
+              "nonFiscalBadge": "No fiscal value"
+      },
       "home": {
         "today": "Today",
         "invoiceCount_one": "{{count}} invoice",
@@ -1843,7 +1852,6 @@
           "voidCancel": "Cancel",
           "voiding": "Voiding…",
           "voidSuccess": "Invoice voided.",
-          "downloadPdf": "Download PDF",
           "fiscalStamp": "Timbrado",
           "issuedAt": "Issued at",
           "client": "Client",
@@ -2591,7 +2599,8 @@
       "INVOICE_ISSUE_DATE_OUT_OF_RANGE": "The issue date must be backdated at most 30 days and future-dated at most 5 days from now.",
       "INVOICE_ISSUE_DATE_INVALID": "The issue date is not valid.",
       "INVOICE_NOT_FOUND": "Invoice not found.",
-      "BUSINESS_RUC_REQUIRED_FOR_PDF": "Configure your business RUC in Settings before generating invoice PDFs.",
+      "NON_FISCAL_RECEIPT_NOT_ENABLED": "Your plan does not include the non-fiscal receipt.",
+      "RECEIPT_FORMAT_INVALID": "Invalid receipt format. Choose A4 or ticket.",
       "INVOICE_PDF_ONLY_FOR_ISSUED": "Invoice PDF is only available for issued invoices.",
       "BUSINESS_PROFILE_NOT_FOUND": "Business profile not found.",
       "INVALID_REQUEST": "The request is invalid. Please review your input.",

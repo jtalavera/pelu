@@ -17,7 +17,8 @@ import {
 } from "@design-system";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { isValidParaguayRuc } from "../util/paraguayRuc";
-import { downloadInvoicePdf } from "../api/downloadInvoicePdf";
+import { downloadInvoicePdf, type ReceiptFormat } from "../api/downloadInvoicePdf";
+import { ReceiptDownloadButton } from "./ReceiptDownloadButton";
 import {
   downloadSifenKude,
   fetchSifenEnvironment,
@@ -287,6 +288,8 @@ export function InvoiceDetailModal({
   /** HU-33 AC-01/AC-03: once SIFEN is active, the traditional PDF format is retired — only the
    * KuDE download (already gated on the invoice's own Approved status further below) remains. */
   const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
+  /** Without SIFEN the comprobante is the NON-fiscal receipt (A4 or 80 mm ticket) — a tier feature. */
+  const receiptEnabled = useFeatureFlag("NON_FISCAL_RECEIPT");
   // "Asignar profesional": assigning a professional accrues a commission, so it needs the
   // commissions module and an ADMIN (same as HU-COM-13).
   const commissionsEnabled = useFeatureFlag("COMMISSIONS");
@@ -428,10 +431,10 @@ export function InvoiceDetailModal({
     };
   }, []);
 
-  async function handleDownloadPdf() {
+  async function handleDownloadPdf(format: ReceiptFormat) {
     setPdfError(null);
     try {
-      await downloadInvoicePdf(invoiceId);
+      await downloadInvoicePdf(invoiceId, format);
     } catch (err) {
       setPdfError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     }
@@ -1781,6 +1784,14 @@ export function InvoiceDetailModal({
                 <span data-testid="invoice-status-badge">
                   <InvoiceStatePill invoice={invoice} />
                 </span>
+                {invoice.status === "ISSUED" && !sifenEnabled && receiptEnabled && (
+                  <span
+                    data-testid="invoice-non-fiscal-badge"
+                    className="rounded-full border border-warning/40 bg-warning-lt px-2.5 py-0.5 text-[11px] font-extrabold text-warning"
+                  >
+                    {t("femme.billing.receipt.nonFiscalBadge")}
+                  </span>
+                )}
               </div>
             </div>
             {invoice.status === "VOIDED" && invoice.voidReason && (
@@ -1920,16 +1931,13 @@ export function InvoiceDetailModal({
                 </Button>
               ) : (
                 invoice.status === "ISSUED" &&
-                !sifenEnabled && (
-                  <Button
-                    variant="primary"
-                    size="md"
+                !sifenEnabled &&
+                receiptEnabled && (
+                  <ReceiptDownloadButton
+                    testId="invoice-download-pdf-button"
                     className={`${ACTION_BUTTON} w-full`}
-                    data-testid="invoice-download-pdf-button"
-                    onClick={() => void handleDownloadPdf()}
-                  >
-                    {t("femme.billing.history.detail.downloadPdf")}
-                  </Button>
+                    onDownload={(format) => handleDownloadPdf(format)}
+                  />
                 )
               )}
               {/* «Cerrar» on the left like every dialog, then «Compartir» and, at the far right, the «⋯»

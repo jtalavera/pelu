@@ -1528,6 +1528,15 @@
       "body": "Esta sección se conectará a la API en la siguiente iteración."
     },
     "billing": {
+      "receipt": {
+              "download": "Descargar comprobante",
+              "chooseFormat": "Elegí el formato",
+              "a4": "Hoja A4",
+              "a4Hint": "Para imprimir o enviar",
+              "ticket": "Ticket 80 mm",
+              "ticketHint": "Para impresora térmica",
+              "nonFiscalBadge": "Sin valor fiscal"
+      },
       "home": {
         "today": "Hoy",
         "invoiceCount_one": "{{count}} factura",
@@ -1843,7 +1852,6 @@
           "voidCancel": "Cancelar",
           "voiding": "Anulando…",
           "voidSuccess": "Comprobante anulado.",
-          "downloadPdf": "Descargar PDF",
           "fiscalStamp": "Timbrado",
           "issuedAt": "Emitido el",
           "client": "Cliente",
@@ -2593,7 +2601,8 @@
       "INVOICE_ISSUE_DATE_OUT_OF_RANGE": "La fecha de emisión debe estar atrasada hasta 30 días y adelantada hasta 5 días respecto de hoy.",
       "INVOICE_ISSUE_DATE_INVALID": "La fecha de emisión no es válida.",
       "INVOICE_NOT_FOUND": "Factura no encontrada.",
-      "BUSINESS_RUC_REQUIRED_FOR_PDF": "Configurá el RUC de tu negocio en Configuración antes de generar facturas en PDF.",
+      "NON_FISCAL_RECEIPT_NOT_ENABLED": "Tu plan no incluye el comprobante no fiscal.",
+      "RECEIPT_FORMAT_INVALID": "Formato de comprobante inválido. Elegí A4 o ticket.",
       "INVOICE_PDF_ONLY_FOR_ISSUED": "El PDF de factura solo está disponible para facturas emitidas.",
       "BUSINESS_PROFILE_NOT_FOUND": "Perfil del negocio no encontrado.",
       "INVALID_REQUEST": "La solicitud no es válida. Revisá los datos ingresados.",
