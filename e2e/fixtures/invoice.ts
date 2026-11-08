@@ -72,13 +72,14 @@ export async function clickIssueInvoiceAndExpectSuccess(
 }
 
 /**
- * Expected invoice PDF filename per issue #84: FACTURA-<yyyymmdd>-<timbrado>-<numero>.pdf, where
- * the date is the emission date rendered in the business timezone (America/Asuncion).
+ * Expected receipt PDF filename: COMPROBANTE-NO-FISCAL-<yyyymmdd>-<001-001-0000123>.pdf (suffix -TICKET for the
+ * 80 mm format), where the date is the emission date rendered in the business timezone (America/Asuncion) and
+ * the number is establishment-expedition point-invoice number.
  */
 export function expectedInvoiceFilename(
   issuedAtIso: string,
-  fiscalStampNumber: string,
   invoiceNumberFormatted: string,
+  format: "A4" | "TICKET" = "A4",
 ): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Asuncion",
@@ -87,35 +88,57 @@ export function expectedInvoiceFilename(
     day: "2-digit",
   }).formatToParts(new Date(issuedAtIso));
   const get = (type: string) => parts.find((p) => p.type === type)?.value;
-  return `FACTURA-${get("year")}${get("month")}${get("day")}-${fiscalStampNumber}-${invoiceNumberFormatted}.pdf`;
+  return `COMPROBANTE-NO-FISCAL-${get("year")}${get("month")}${get("day")}-${invoiceNumberFormatted}${format === "TICKET" ? "-TICKET" : ""}.pdf`;
+}
+
+/** Every FlateDecode stream of the PDF, inflated (streams that are not text, such as images, are skipped). */
+function inflateAllStreams(pdf: Buffer): string[] {
+  const out: string[] = [];
+  const marker = Buffer.from("stream", "ascii");
+  const end = Buffer.from("endstream", "ascii");
+  let from = 0;
+  for (;;) {
+    const at = pdf.indexOf(marker, from);
+    if (at < 0) break;
+    // skip the «endstream» keyword itself
+    if (at >= 3 && pdf.subarray(at - 3, at).toString("ascii") === "end") {
+      from = at + marker.length;
+      continue;
+    }
+    let start = at + marker.length;
+    if (pdf[start] === 0x0d) start += 1;
+    if (pdf[start] === 0x0a) start += 1;
+    const stop = pdf.indexOf(end, start);
+    if (stop < 0) break;
+    try {
+      out.push(zlib.inflateSync(pdf.subarray(start, stop)).toString("latin1"));
+    } catch {
+      // not a Flate text stream: ignore
+    }
+    from = stop + end.length;
+  }
+  return out;
+}
+
+function unescapePdfString(raw: string): string {
+  return raw.replace(/\\([()\\])/g, "$1");
 }
 
 /**
- * Decompresses the first FlateDecode content stream in a PDF and returns its raw operator text
- * (mirrors `InvoicePdfServiceTest.decodePdfContentStream` on the backend).
+ * `true` when `searchText` is drawn as one whole text item (`(text)Tj`, or one string of a `[(..)..]TJ` array) in
+ * any content stream of the PDF. Whole-item equality, like the previous `(text)Tj` check, so «8.000» does not
+ * match «18.000».
  */
-function decodePdfContentStream(pdf: Buffer): string {
-  const lf = Buffer.from("stream\n", "ascii");
-  const crlf = Buffer.from("stream\r\n", "ascii");
-  let start = pdf.indexOf(lf);
-  let headerLen = lf.length;
-  if (start < 0) {
-    start = pdf.indexOf(crlf);
-    headerLen = crlf.length;
-  }
-  if (start < 0) throw new Error("No stream marker found in PDF");
-  const contentStart = start + headerLen;
-  const end = Buffer.from("endstream", "ascii");
-  const contentEnd = pdf.indexOf(end, contentStart);
-  if (contentEnd < 0) throw new Error("No endstream marker found in PDF");
-  const compressed = pdf.subarray(contentStart, contentEnd);
-  return zlib.inflateSync(compressed).toString("latin1");
-}
-
-/** `true` when `searchText` is drawn as a `(searchText)Tj` operator in the PDF's first content stream. */
 export function pdfContainsText(pdf: Buffer, searchText: string): boolean {
-  const stream = decodePdfContentStream(pdf);
-  // Plain substring check — avoids building a RegExp from dynamic input (semgrep
-  // detect-non-literal-regexp / ReDoS): we only need a literal match, not a pattern.
-  return stream.includes(`(${searchText})Tj`);
+  for (const stream of inflateAllStreams(pdf)) {
+    for (const m of stream.matchAll(/\(((?:\\.|[^\\)])*)\)\s*Tj/g)) {
+      if (unescapePdfString(m[1]) === searchText) return true;
+    }
+    for (const arr of stream.matchAll(/\[((?:\\.|[^\]\\])*)\]\s*TJ/g)) {
+      for (const str of arr[1].matchAll(/\(((?:\\.|[^\\)])*)\)/g)) {
+        if (unescapePdfString(str[1]) === searchText) return true;
+      }
+    }
+  }
+  return false;
 }

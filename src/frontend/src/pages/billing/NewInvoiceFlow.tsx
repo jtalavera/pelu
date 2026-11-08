@@ -8,7 +8,8 @@ import { listAppointments, type Appointment } from "../../api/appointments";
 import { formatParaguayTime } from "../../lib/paraguayDateTime";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { translateApiError } from "../../api/parseApiErrorMessage";
-import { downloadInvoicePdf } from "../../api/downloadInvoicePdf";
+import { downloadInvoicePdf, type ReceiptFormat } from "../../api/downloadInvoicePdf";
+import { ReceiptDownloadButton } from "../../components/ReceiptDownloadButton";
 import {
   getServiceRecord,
   listServiceRecordsPaged,
@@ -148,6 +149,8 @@ export function NewInvoiceFlow({
   const navigate = useNavigate();
   /** HU-33 AC-01: once SIFEN is active, "Download PDF" always downloads the KuDE format. */
   const sifenEnabled = useFeatureFlag("SIFEN_ELECTRONIC_INVOICING");
+  /** Without SIFEN the comprobante is the NON-fiscal receipt (A4 or 80 mm ticket) — a tier feature. */
+  const receiptEnabled = useFeatureFlag("NON_FISCAL_RECEIPT");
   // HU-COM-10: professional / seller per line. The commission only accrues when the commissions
   // module is enabled, but the professional is always selectable: the "Propinas" section tips the
   // professionals who served the lines.
@@ -1075,14 +1078,14 @@ export function NewInvoiceFlow({
     }
   }
 
-  async function handleDownloadLastPdf() {
+  async function handleDownloadLastPdf(format: ReceiptFormat = "A4") {
     if (!lastInvoiceId) return;
     setPdfError(null);
     try {
       if (sifenEnabled) {
         await downloadSifenKude(lastInvoiceId);
       } else {
-        await downloadInvoicePdf(lastInvoiceId);
+        await downloadInvoicePdf(lastInvoiceId, format);
       }
     } catch (err) {
       setPdfError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
@@ -1176,7 +1179,7 @@ export function NewInvoiceFlow({
             </section>
           )}
           <div className="flex flex-col gap-3">
-            {lastInvoiceId && (
+            {lastInvoiceId && sifenEnabled && (
               <Button
                 type="button"
                 variant="primary"
@@ -1187,6 +1190,14 @@ export function NewInvoiceFlow({
               >
                 {t("femme.billing.invoice.downloadPdf")}
               </Button>
+            )}
+            {lastInvoiceId && !sifenEnabled && receiptEnabled && (
+              <ReceiptDownloadButton
+                testId="billing-success-download-pdf"
+                size="lg"
+                className="min-h-12 w-full"
+                onDownload={(format) => handleDownloadLastPdf(format)}
+              />
             )}
             <div className="flex gap-3">
               {lastInvoiceId && (

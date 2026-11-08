@@ -91,6 +91,7 @@ jobs:
           tests/filtros-fecha-un-anio.spec.ts
           tests/inicio-listas-panel.spec.ts
           tests/inicio-vacios-unificados.spec.ts
+          tests/comprobante-no-fiscal.spec.ts
 
       - name: Upload report on failure
         if: failure()

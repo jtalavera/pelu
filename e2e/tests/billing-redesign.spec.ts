@@ -270,7 +270,7 @@ test.describe("Facturación rediseñada · nueva factura", () => {
 
     const success = page.getByTestId("billing-invoice-success");
     await expect(success).toContainText(`Invoice ${invoice.invoiceNumberFormatted} issued successfully.`);
-    await expect(success.getByRole("button", { name: "Download PDF" })).toBeVisible();
+    await expect(success.getByRole("button", { name: "Download receipt" })).toBeVisible();
     await expect(success.getByRole("button", { name: "+ New invoice" })).toBeVisible();
     await expect(success.getByRole("button", { name: "Back to start" })).toBeVisible();
 

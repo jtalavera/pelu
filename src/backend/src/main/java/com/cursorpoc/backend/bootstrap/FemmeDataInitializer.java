@@ -120,6 +120,13 @@ public class FemmeDataInitializer {
           "Commissions module (rules, accrual on invoice issue, settlements). Off -> API answers"
               + " 403 FEATURE_NOT_ENABLED.");
 
+      // Comprobante no fiscal (tier Estándar): same flag as V97 (Flyway is disabled for `e2e`).
+      seedFlag(
+          "NON_FISCAL_RECEIPT",
+          true,
+          "Comprobante no fiscal (A4 o ticket 80 mm) cuando SIFEN no esta activo. Off -> el PDF del"
+              + " comprobante responde 409 NON_FISCAL_RECEIPT_NOT_ENABLED.");
+
       // HU-37: the "create tenant" form needs at least one existing Tier to select from (HU-45's
       // full tier CRUD hasn't landed yet). V41's Flyway INSERT only reaches dev/prod the same way
       // V28's flag INSERT does above — Flyway is disabled for the `e2e` profile — so this runner
