@@ -24,11 +24,11 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import http.client
 import json
 import random
 import sys
-import urllib.error
-import urllib.request
+from urllib.parse import urlsplit
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Optional
 
@@ -43,22 +43,32 @@ class ApiError(Exception):
 
 class Api:
     def __init__(self, base_url: str):
-        self.base = base_url.rstrip("/")
+        parts = urlsplit(base_url.rstrip("/"))
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            sys.exit("--base-url debe ser una URL http:// o https:// (p. ej. https://mi-backend.example)")
+        self.scheme = parts.scheme
+        self.host = parts.hostname
+        self.port = parts.port
+        self.prefix = parts.path  # por si el backend vive bajo un prefijo
         self.token: Optional[str] = None
 
     def call(self, method: str, path: str, body: Any = None) -> Any:
-        data = None if body is None else json.dumps(body).encode()
-        req = urllib.request.Request(self.base + path, data=data, method=method)
-        req.add_header("Content-Type", "application/json")
-        req.add_header("Accept", "application/json")
+        # http.client (y no urllib) a propósito: solo habla http/https, nunca file://
+        conn_cls = http.client.HTTPSConnection if self.scheme == "https" else http.client.HTTPConnection
+        conn = conn_cls(self.host, self.port, timeout=60)
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
         if self.token:
-            req.add_header("Authorization", f"Bearer {self.token}")
+            headers["Authorization"] = f"Bearer {self.token}"
+        data = None if body is None else json.dumps(body).encode()
         try:
-            with urllib.request.urlopen(req, timeout=60) as res:
-                raw = res.read().decode()
-                return json.loads(raw) if raw else None
-        except urllib.error.HTTPError as e:
-            raise ApiError(e.code, e.read().decode(errors="replace"), method, path) from None
+            conn.request(method, self.prefix + path, body=data, headers=headers)
+            res = conn.getresponse()
+            raw = res.read().decode(errors="replace")
+        finally:
+            conn.close()
+        if res.status >= 400:
+            raise ApiError(res.status, raw, method, path)
+        return json.loads(raw) if raw else None
 
     def get(self, path: str) -> Any:
         return self.call("GET", path)
