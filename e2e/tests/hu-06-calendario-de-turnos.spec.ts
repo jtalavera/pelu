@@ -136,6 +136,8 @@ test.describe("HU-06 · Calendario de turnos", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
+    // Only her turnos: other tests' turnos of the same hour would otherwise fold into a group card.
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
 
     await ensureCalendarShowsClientCard(page, remindedClient.fullName);
     const remindedButton = page.getByRole("button", { name: remindedClient.fullName, exact: false });

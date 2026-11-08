@@ -90,6 +90,7 @@ jobs:
           tests/ajustes-estado-y-turnos-cliente.spec.ts
           tests/filtros-fecha-un-anio.spec.ts
           tests/inicio-listas-panel.spec.ts
+          tests/inicio-vacios-unificados.spec.ts
 
       - name: Upload report on failure
         if: failure()
