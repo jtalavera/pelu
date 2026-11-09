@@ -77,6 +77,9 @@ public class TipsReportPdfService {
 
       Map<Long, List<TipReportRowResponse>> rowsByProfessional = new LinkedHashMap<>();
       for (TipReportRowResponse row : report.rows()) {
+        if (row.voided()) {
+          continue;
+        }
         rowsByProfessional.computeIfAbsent(row.professionalId(), k -> new ArrayList<>()).add(row);
       }
       Map<Long, TipReportProfessionalTotalResponse> withdrawalsById = new LinkedHashMap<>();

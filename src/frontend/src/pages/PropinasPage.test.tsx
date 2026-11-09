@@ -9,14 +9,23 @@ import PropinasPage from "./PropinasPage";
 
 const femmeJson = vi.fn();
 const femmePostJson = vi.fn();
+const femmePutJson = vi.fn();
 
 vi.mock("../api/femmeClient", () => ({
   femmeJson: (...args: unknown[]) => femmeJson(...args),
   femmePostJson: (...args: unknown[]) => femmePostJson(...args),
-  femmePutJson: vi.fn(),
+  femmePutJson: (...args: unknown[]) => femmePutJson(...args),
 }));
 
 vi.mock("../api/authHeaders", () => ({ authHeaders: () => ({}) }));
+
+/** `useMe` reads /api/me with a plain fetch: answer it with the given role. */
+function stubMe(role: "ADMIN" | "PROFESSIONAL") {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({ ok: true, json: async () => ({ userId: 1, role, email: "a@b.c" }) })),
+  );
+}
 
 const pros = [
   { id: 1, fullName: "Laura", active: true },
@@ -64,6 +73,8 @@ describe("PropinasPage", () => {
     void i18n.changeLanguage("en");
     femmeJson.mockReset();
     femmePostJson.mockReset();
+    femmePutJson.mockReset();
+    stubMe("ADMIN");
     balances = { 1: 180000, 2: 95000, 3: 0 };
     femmeJson.mockImplementation((url: unknown) => {
       const s = String(url);
@@ -98,7 +109,10 @@ describe("PropinasPage", () => {
     });
   });
 
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
 
   it("is one screen (no tabs) with a card per active professional showing the accumulated tips", async () => {
     renderPage();
@@ -253,7 +267,7 @@ describe("PropinasPage", () => {
     });
     renderPage();
     const table = await screen.findByTestId("propinas-table");
-    expect(within(table).getAllByRole("columnheader").map((th) => th.textContent)).toEqual([
+    expect(within(table).getAllByRole("columnheader").map((th) => th.textContent).filter(Boolean)).toEqual([
       "Date",
       "Concept",
       "Professional",
@@ -339,5 +353,171 @@ describe("PropinasPage", () => {
     // Balances and movements appear together, already sorted — no later re-ordering.
     expect(screen.getByTestId("propinas-balance-1").textContent).toMatch(/180\.000/);
     expect(screen.queryByTestId("propinas-initial-loading")).toBeNull();
+  });
+
+  describe("search over the professionals' accumulated tips", () => {
+    it("filters the list on submit, ignoring case and accents, and totals what it shows", async () => {
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId("propinas-balance-1").textContent).toMatch(/180\.000/));
+      // 180.000 + 95.000 + 0 over the three active professionals.
+      expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/275\.000/);
+
+      await userEvent.type(screen.getByTestId("propinas-balances-search-input"), "LAU{Enter}");
+
+      expect(screen.getByTestId("propinas-card-1")).toBeTruthy();
+      expect(screen.queryByTestId("propinas-card-2")).toBeNull();
+      expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/180\.000/);
+      expect(screen.getByTestId("propinas-balances-total").textContent).toMatch(/1 of 3 professionals/);
+
+      await userEvent.click(screen.getByTestId("propinas-balances-search-clear"));
+      expect(screen.getByTestId("propinas-card-2")).toBeTruthy();
+      expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/275\.000/);
+    });
+
+    it("says so when nobody matches and the total is Gs. 0", async () => {
+      renderPage();
+      await screen.findByTestId("propinas-card-1");
+      await userEvent.type(screen.getByTestId("propinas-balances-search-input"), "zzz{Enter}");
+      expect(screen.getByTestId("propinas-balances-no-match").textContent).toMatch(/zzz/);
+      expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/0/);
+      expect(screen.queryByTestId("propinas-card-1")).toBeNull();
+    });
+  });
+
+  describe("manual tips", () => {
+    it("the administrator adds one from the + of a row, with the professional preselected", async () => {
+      femmePostJson.mockResolvedValue({ tip: { id: 1 }, newBalance: 200000 });
+      renderPage();
+      await userEvent.click(await screen.findByTestId("propinas-add-1"));
+
+      expect((screen.getByTestId("propinas-manual-professional") as HTMLSelectElement).value).toBe("1");
+      await userEvent.type(screen.getByTestId("propinas-manual-amount"), "20000");
+      // 180.000 accumulated + 20.000
+      expect(screen.getByTestId("propinas-manual-new-balance-amount").textContent).toMatch(/200\.000/);
+      await userEvent.type(screen.getByTestId("propinas-manual-note"), "Efectivo");
+      await userEvent.click(screen.getByTestId("propinas-manual-confirm"));
+
+      await waitFor(() => expect(femmePostJson).toHaveBeenCalledTimes(1));
+      const [url, body] = femmePostJson.mock.calls[0] as [string, Record<string, unknown>];
+      expect(url).toBe("/api/propinas/manual");
+      expect(body).toMatchObject({ professionalId: 1, amount: 20000, note: "Efectivo" });
+      expect(typeof body.tippedAt).toBe("string");
+      await waitFor(() => expect(screen.queryByTestId("propinas-manual-dialog")).toBeNull());
+    });
+
+    it("validates professional and amount before calling the API", async () => {
+      renderPage();
+      await userEvent.click(await screen.findByTestId("propinas-add-manual"));
+      await userEvent.click(screen.getByTestId("propinas-manual-confirm"));
+      expect(screen.getByText("Select a professional.")).toBeTruthy();
+      expect(screen.getByText(/The amount must be greater than 0\. Example: 20\.000/)).toBeTruthy();
+      expect(femmePostJson).not.toHaveBeenCalled();
+    });
+
+    it("shows manual tips tagged, lets the admin edit and void them, and strikes voided ones", async () => {
+      const base = femmeJson.getMockImplementation()!;
+      femmeJson.mockImplementation((url: unknown) => {
+        if (String(url).startsWith("/api/propinas/report?")) {
+          return Promise.resolve({
+            ...report([]),
+            rows: [
+              {
+                professionalId: 1,
+                professionalName: "Laura",
+                amount: 20000,
+                clientName: null,
+                serviceDateTime: recent.toISOString(),
+                manualTipId: 7,
+                note: "Efectivo",
+                createdByName: "Tania",
+                voided: false,
+              },
+              {
+                professionalId: 2,
+                professionalName: "Ana",
+                amount: 50000,
+                clientName: null,
+                serviceDateTime: wdDate.toISOString(),
+                manualTipId: 8,
+                note: "Error",
+                createdByName: "Tania",
+                voided: true,
+                voidReason: "Monto mal cargado",
+                voidedByName: "Tania",
+              },
+            ],
+          });
+        }
+        return base(url);
+      });
+      femmePutJson.mockResolvedValue({ tip: { id: 7 }, newBalance: 1 });
+      femmePostJson.mockResolvedValue({ tip: { id: 7 }, newBalance: 1 });
+      renderPage();
+
+      const rows = await screen.findAllByTestId("propinas-movement");
+      const manualRows = rows.filter((r) => r.getAttribute("data-manual") === "true");
+      expect(manualRows).toHaveLength(2);
+      const voidedRow = manualRows.find((r) => r.getAttribute("data-voided") === "true")!;
+      expect(within(voidedRow).getByTestId("propinas-voided-tag")).toBeTruthy();
+      expect(voidedRow.textContent).toMatch(/Monto mal cargado/);
+      // A voided tip has no actions left.
+      expect(within(voidedRow).queryByRole("button")).toBeNull();
+
+      const liveRow = manualRows.find((r) => r.getAttribute("data-voided") !== "true")!;
+      await userEvent.click(within(liveRow).getByRole("button"));
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
+      expect((screen.getByTestId("propinas-manual-professional") as HTMLSelectElement).disabled).toBe(true);
+      expect((screen.getByTestId("propinas-manual-amount") as HTMLInputElement).value).toBe("20.000");
+      await userEvent.clear(screen.getByTestId("propinas-manual-amount"));
+      await userEvent.type(screen.getByTestId("propinas-manual-amount"), "25000");
+      await userEvent.click(screen.getByTestId("propinas-manual-confirm"));
+      await waitFor(() => expect(femmePutJson).toHaveBeenCalledTimes(1));
+      expect(femmePutJson.mock.calls[0][0]).toBe("/api/propinas/manual/7");
+      expect(femmePutJson.mock.calls[0][1]).toMatchObject({ amount: 25000, note: "Efectivo" });
+
+      await waitFor(() => expect(screen.queryByTestId("propinas-manual-dialog")).toBeNull());
+      const liveRow2 = (await screen.findAllByTestId("propinas-movement")).find(
+        (r) => r.getAttribute("data-manual") === "true" && r.getAttribute("data-voided") !== "true",
+      )!;
+      await userEvent.click(within(liveRow2).getByRole("button"));
+      await userEvent.click(await screen.findByRole("menuitem", { name: "Void" }));
+      // The reason is mandatory.
+      await userEvent.click(screen.getByTestId("propinas-void-confirm"));
+      expect(screen.getByText(/Enter the reason for voiding/)).toBeTruthy();
+      expect(femmePostJson).not.toHaveBeenCalled();
+      await userEvent.type(screen.getByTestId("propinas-void-reason"), "Monto mal cargado");
+      await userEvent.click(screen.getByTestId("propinas-void-confirm"));
+      await waitFor(() => expect(femmePostJson).toHaveBeenCalledTimes(1));
+      expect(femmePostJson.mock.calls[0][0]).toBe("/api/propinas/manual/7/void");
+      expect(femmePostJson.mock.calls[0][1]).toEqual({ reason: "Monto mal cargado" });
+    });
+
+    it("a non-admin sees no way to add, edit or void tips", async () => {
+      stubMe("PROFESSIONAL");
+      renderPage();
+      await screen.findByTestId("propinas-card-1");
+      expect(screen.queryByTestId("propinas-add-1")).toBeNull();
+      expect(screen.queryByTestId("propinas-add-manual")).toBeNull();
+    });
+  });
+
+  it("waits for the user's role too, so the admin buttons do not pop in after the page", async () => {
+    let releaseMe: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseMe = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        await gate;
+        return { ok: true, json: async () => ({ userId: 1, role: "ADMIN", email: "a@b.c" }) };
+      }),
+    );
+    renderPage();
+    expect(await screen.findByTestId("propinas-initial-loading")).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByTestId("propinas-cards")).toBeNull();
+    releaseMe();
+    expect(await screen.findByTestId("propinas-add-1")).toBeTruthy();
   });
 });

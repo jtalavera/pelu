@@ -14,6 +14,7 @@ import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
+import com.cursorpoc.backend.repository.ManualTipRepository;
 import com.cursorpoc.backend.repository.PasswordResetTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalActivationTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalPinLockRepository;
@@ -72,6 +73,7 @@ public class SeedResetService {
   private final PasswordResetTokenRepository passwordResetTokenRepository;
   private final AppUserTourStateRepository appUserTourStateRepository;
   private final TipWithdrawalRepository tipWithdrawalRepository;
+  private final ManualTipRepository manualTipRepository;
   private final SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository;
   private final SifenCertificateRepository sifenCertificateRepository;
   private final FemmeDataInitializer femmeDataInitializer;
@@ -99,6 +101,7 @@ public class SeedResetService {
       PasswordResetTokenRepository passwordResetTokenRepository,
       AppUserTourStateRepository appUserTourStateRepository,
       TipWithdrawalRepository tipWithdrawalRepository,
+      ManualTipRepository manualTipRepository,
       SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository,
       SifenCertificateRepository sifenCertificateRepository,
       FemmeDataInitializer femmeDataInitializer) {
@@ -124,6 +127,7 @@ public class SeedResetService {
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.appUserTourStateRepository = appUserTourStateRepository;
     this.tipWithdrawalRepository = tipWithdrawalRepository;
+    this.manualTipRepository = manualTipRepository;
     this.sifenNumberVoidingEventRepository = sifenNumberVoidingEventRepository;
     this.sifenCertificateRepository = sifenCertificateRepository;
     this.femmeDataInitializer = femmeDataInitializer;
@@ -171,6 +175,10 @@ public class SeedResetService {
     // Must run before deleting professionals below: tip_withdrawals has a FK to professionals.
     long deletedTipWithdrawals = tipWithdrawalRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} tip_withdrawals", deletedTipWithdrawals);
+
+    // Same reason: manual_tips has FKs to professionals and app_users.
+    long deletedManualTips = manualTipRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} manual_tips", deletedManualTips);
 
     // HU-66: PIN locks reference professionals and shared devices; devices reference the tenant.
     long deletedPinLocks =

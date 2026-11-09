@@ -4,6 +4,7 @@ import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.CashMovement;
 import com.cursorpoc.backend.domain.CashSession;
 import com.cursorpoc.backend.domain.Invoice;
+import com.cursorpoc.backend.domain.ManualTip;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ServiceRecordTip;
 import com.cursorpoc.backend.domain.Tenant;
@@ -15,11 +16,14 @@ import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.CashMovementRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.InvoiceTipRepository;
+import com.cursorpoc.backend.repository.ManualTipRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.ServiceRecordTipRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TipWithdrawalRepository;
 import com.cursorpoc.backend.web.dto.CreateTipWithdrawalResponse;
+import com.cursorpoc.backend.web.dto.ManualTipMutationResponse;
+import com.cursorpoc.backend.web.dto.ManualTipResponse;
 import com.cursorpoc.backend.web.dto.PagedTipWithdrawalsResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalTipBalanceResponse;
 import com.cursorpoc.backend.web.dto.TipReportProfessionalTotalResponse;
@@ -27,6 +31,7 @@ import com.cursorpoc.backend.web.dto.TipReportResponse;
 import com.cursorpoc.backend.web.dto.TipReportRowResponse;
 import com.cursorpoc.backend.web.dto.TipWithdrawalHistoryItemResponse;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -55,6 +60,7 @@ public class TipsService {
   private final AppUserRepository appUserRepository;
   private final CashSessionRepository cashSessionRepository;
   private final CashMovementRepository cashMovementRepository;
+  private final ManualTipRepository manualTipRepository;
 
   public TipsService(
       ServiceRecordTipRepository serviceRecordTipRepository,
@@ -64,7 +70,8 @@ public class TipsService {
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
       CashSessionRepository cashSessionRepository,
-      CashMovementRepository cashMovementRepository) {
+      CashMovementRepository cashMovementRepository,
+      ManualTipRepository manualTipRepository) {
     this.serviceRecordTipRepository = serviceRecordTipRepository;
     this.invoiceTipRepository = invoiceTipRepository;
     this.tipWithdrawalRepository = tipWithdrawalRepository;
@@ -73,6 +80,7 @@ public class TipsService {
     this.appUserRepository = appUserRepository;
     this.cashSessionRepository = cashSessionRepository;
     this.cashMovementRepository = cashMovementRepository;
+    this.manualTipRepository = manualTipRepository;
   }
 
   @Transactional(readOnly = true)
@@ -113,6 +121,10 @@ public class TipsService {
                         t.getAmount(),
                         invoiceClientName(t.getInvoice()),
                         t.getInvoice().getIssuedAt())));
+    // Tips loaded by hand by the administrator; voided ones are listed (flagged) but not counted.
+    manualTipRepository
+        .findForReport(tenantId, fromDate, toDate, resolvedProfessionalIds)
+        .forEach(m -> rows.add(toReportRow(m)));
     rows.sort(
         Comparator.comparing(
                 TipReportRowResponse::professionalName,
@@ -124,6 +136,9 @@ public class TipsService {
     Map<Long, TipReportProfessionalTotalResponse> totalsByProfessional = new LinkedHashMap<>();
     BigDecimal grandTotal = BigDecimal.ZERO;
     for (TipReportRowResponse row : rows) {
+      if (row.voided()) {
+        continue;
+      }
       TipReportProfessionalTotalResponse existing = totalsByProfessional.get(row.professionalId());
       BigDecimal newTotal =
           (existing != null ? existing.total() : BigDecimal.ZERO).add(row.amount());
@@ -282,13 +297,189 @@ public class TipsService {
         content, page, size, result.getTotalElements(), result.getTotalPages());
   }
 
+  /** Longest note / void reason accepted (matches the column length). */
+  static final int MANUAL_TIP_TEXT_MAX = 200;
+
+  /**
+   * Loads a tip by hand (salon administrator only — enforced by the controller). It adds to the
+   * professional's accumulated balance right away.
+   */
+  @Transactional
+  public ManualTipMutationResponse createManualTip(
+      long tenantId,
+      long userId,
+      long professionalId,
+      BigDecimal amount,
+      Instant tippedAt,
+      String note) {
+    Professional professional = requireProfessional(tenantId, professionalId);
+    if (!professional.isActive()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "MANUAL_TIP_PROFESSIONAL_INACTIVE");
+    }
+    requireValidAmount(amount);
+    requireValidDate(tippedAt);
+    String cleanNote = cleanText(note, "MANUAL_TIP_NOTE_TOO_LONG");
+
+    Tenant tenant =
+        tenantRepository
+            .findById(tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
+    ManualTip tip = new ManualTip();
+    tip.setTenant(tenant);
+    tip.setProfessional(professional);
+    tip.setAmount(amount);
+    tip.setTippedAt(tippedAt);
+    tip.setNote(cleanNote);
+    tip.setCreatedBy(appUserRepository.findById(userId).orElse(null));
+    tip.setCreatedAt(Instant.now());
+    manualTipRepository.save(tip);
+    return new ManualTipMutationResponse(toResponse(tip), computeBalance(tenantId, professionalId));
+  }
+
+  /**
+   * Edits amount, date or note of a manual tip that is not voided. The balance can never be left
+   * negative: lowering the amount below what the professional already withdrew is refused.
+   */
+  @Transactional
+  public ManualTipMutationResponse updateManualTip(
+      long tenantId,
+      long userId,
+      long manualTipId,
+      BigDecimal amount,
+      Instant tippedAt,
+      String note) {
+    ManualTip tip = requireManualTip(tenantId, manualTipId);
+    if (tip.isVoided()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "MANUAL_TIP_ALREADY_VOIDED");
+    }
+    requireValidAmount(amount);
+    requireValidDate(tippedAt);
+    String cleanNote = cleanText(note, "MANUAL_TIP_NOTE_TOO_LONG");
+
+    long professionalId = tip.getProfessional().getId();
+    BigDecimal newBalance =
+        computeBalance(tenantId, professionalId).subtract(tip.getAmount()).add(amount);
+    if (newBalance.signum() < 0) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "MANUAL_TIP_EDIT_BELOW_WITHDRAWN");
+    }
+    tip.setAmount(amount);
+    tip.setTippedAt(tippedAt);
+    tip.setNote(cleanNote);
+    tip.setUpdatedBy(appUserRepository.findById(userId).orElse(null));
+    tip.setUpdatedAt(Instant.now());
+    manualTipRepository.save(tip);
+    return new ManualTipMutationResponse(toResponse(tip), newBalance);
+  }
+
+  /**
+   * Voids a manual tip (it is never deleted): it stops counting in the balance but stays visible
+   * with who voided it and why. Refused when the professional already withdrew that money.
+   */
+  @Transactional
+  public ManualTipMutationResponse voidManualTip(
+      long tenantId, long userId, long manualTipId, String reason) {
+    ManualTip tip = requireManualTip(tenantId, manualTipId);
+    if (tip.isVoided()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "MANUAL_TIP_ALREADY_VOIDED");
+    }
+    String cleanReason = cleanText(reason, "MANUAL_TIP_VOID_REASON_TOO_LONG");
+    if (cleanReason == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MANUAL_TIP_VOID_REASON_REQUIRED");
+    }
+    long professionalId = tip.getProfessional().getId();
+    BigDecimal newBalance = computeBalance(tenantId, professionalId).subtract(tip.getAmount());
+    if (newBalance.signum() < 0) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "MANUAL_TIP_VOID_EXCEEDS_BALANCE");
+    }
+    tip.setVoidedAt(Instant.now());
+    tip.setVoidedBy(appUserRepository.findById(userId).orElse(null));
+    tip.setVoidReason(cleanReason);
+    manualTipRepository.save(tip);
+    return new ManualTipMutationResponse(toResponse(tip), newBalance);
+  }
+
+  private ManualTip requireManualTip(long tenantId, long manualTipId) {
+    return manualTipRepository
+        .findByIdAndTenant_Id(manualTipId, tenantId)
+        .orElseThrow(
+            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "MANUAL_TIP_NOT_FOUND"));
+  }
+
+  private static void requireValidAmount(BigDecimal amount) {
+    if (amount == null || amount.compareTo(BigDecimal.ONE) < 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MANUAL_TIP_AMOUNT_INVALID");
+    }
+  }
+
+  /** A tip cannot be dated in the future (one day of slack covers timezone differences). */
+  private static void requireValidDate(Instant tippedAt) {
+    if (tippedAt == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MANUAL_TIP_DATE_REQUIRED");
+    }
+    if (tippedAt.isAfter(Instant.now().plus(Duration.ofDays(1)))) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MANUAL_TIP_DATE_IN_FUTURE");
+    }
+  }
+
+  /** Trims; blank becomes null; longer than the column allows is rejected with {@code tooLong}. */
+  private static String cleanText(String value, String tooLongCode) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+    String trimmed = value.trim();
+    if (trimmed.length() > MANUAL_TIP_TEXT_MAX) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, tooLongCode);
+    }
+    return trimmed;
+  }
+
+  private static String userName(AppUser user) {
+    if (user == null) {
+      return null;
+    }
+    return user.getFullName() != null && !user.getFullName().isBlank()
+        ? user.getFullName()
+        : user.getEmail();
+  }
+
+  private static ManualTipResponse toResponse(ManualTip m) {
+    return new ManualTipResponse(
+        m.getId(),
+        m.getProfessional().getId(),
+        m.getProfessional().getDisplayName(),
+        m.getAmount(),
+        m.getTippedAt(),
+        m.getNote(),
+        userName(m.getCreatedBy()),
+        m.isVoided(),
+        m.getVoidReason(),
+        userName(m.getVoidedBy()));
+  }
+
+  private static TipReportRowResponse toReportRow(ManualTip m) {
+    return new TipReportRowResponse(
+        m.getProfessional().getId(),
+        m.getProfessional().getDisplayName(),
+        m.getAmount(),
+        null,
+        m.getTippedAt(),
+        m.getId(),
+        m.getNote(),
+        userName(m.getCreatedBy()),
+        m.isVoided(),
+        m.getVoidReason(),
+        userName(m.getVoidedBy()));
+  }
+
   private BigDecimal computeBalance(long tenantId, long professionalId) {
     BigDecimal tipsTotal =
         serviceRecordTipRepository
             .sumForProfessional(tenantId, professionalId, ServiceRecordStatus.CLOSED)
             .add(
                 invoiceTipRepository.sumForProfessional(
-                    tenantId, professionalId, InvoiceStatus.ISSUED));
+                    tenantId, professionalId, InvoiceStatus.ISSUED))
+            .add(manualTipRepository.sumForProfessional(tenantId, professionalId));
     BigDecimal withdrawalsTotal =
         tipWithdrawalRepository.sumForProfessional(tenantId, professionalId);
     return tipsTotal.subtract(withdrawalsTotal);
