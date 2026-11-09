@@ -14,9 +14,9 @@ test.describe("Barra inferior de navegación", () => {
     await expect(bar).toBeVisible();
     await expect(bar.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
 
-    await bar.getByRole("link", { name: "Calendar" }).click();
+    await bar.getByRole("link", { name: "Agenda" }).click();
     await expect(page).toHaveURL(/\/app\/calendar/);
-    await expect(bar.getByRole("link", { name: "Calendar" })).toHaveAttribute("aria-current", "page");
+    await expect(bar.getByRole("link", { name: "Agenda" })).toHaveAttribute("aria-current", "page");
 
     const more = bar.getByTestId("bottom-nav-more");
     await expect(more).toBeVisible();

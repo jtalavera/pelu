@@ -41,7 +41,7 @@ test.describe("HU-65 · Entrar a Stock desde Femme", () => {
   test("el profesional NO ve Stock y el SSO le responde 403", async ({ page }) => {
     const world = getStockWorld();
     await loginAs(page, world.s1.professionalEmail, world.s1.professionalPassword);
-    await expect(page.getByRole("link", { name: /Calendar|Calendario/ }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /Agenda/ }).first()).toBeVisible();
     await expect(page.getByTestId("nav-stock")).toHaveCount(0);
     const sso = await pelu("/api/sso/stock", {
       method: "POST",
@@ -66,7 +66,7 @@ test.describe("HU-65 · Entrar a Stock desde Femme", () => {
   test("sin STOCK_MODULE no hay botón y el SSO responde STOCK_MODULE_DISABLED", async ({ page }) => {
     const world = getStockWorld();
     await loginAs(page, world.s3.adminEmail, world.s3.adminPassword);
-    await expect(page.getByRole("link", { name: /Calendar/ }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /Agenda/ }).first()).toBeVisible();
     await expect(page.getByTestId("nav-stock")).toHaveCount(0);
     const r = await pelu("/api/sso/stock", {
       method: "POST",

@@ -82,7 +82,7 @@ test.describe("Facturación rediseñada · inicio", () => {
     await expect(page.getByRole("tab")).toHaveCount(0);
   });
 
-  test("RD-2 'Facturas de hoy' y 'Ver historial' están plegados hasta que el usuario los despliega", async ({
+  test("RD-2 'Facturas de hoy' arranca desplegada (todas las facturas visibles) y se puede plegar (issue 384)", async ({
     page,
     request,
   }) => {
@@ -94,20 +94,22 @@ test.describe("Facturación rediseñada · inicio", () => {
     await page.goto("/app/billing");
     await goToBillingHome(page);
 
+    // Open by default: the day's invoices and the history link are visible without any click.
     const toggle = page.getByTestId("billing-today-toggle");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId(`billing-today-row-${inv.id}`)).toContainText(name);
+    await expect(page.getByTestId(`billing-today-row-${inv.id}`)).toContainText("Approved");
+    await expect(page.getByRole("button", { name: "View full history" })).toBeVisible();
+
+    // The user can still fold it away and open it again.
+    await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByRole("button", { name: "View full history" })).toHaveCount(0);
     await expect(page.getByTestId(`billing-today-row-${inv.id}`)).toHaveCount(0);
 
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(page.getByTestId(`billing-today-row-${inv.id}`)).toContainText(name);
-    await expect(page.getByTestId(`billing-today-row-${inv.id}`)).toContainText("Approved");
-    await expect(page.getByRole("button", { name: "View full history" })).toBeVisible();
-
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await expect(page.getByTestId(`billing-today-row-${inv.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`billing-today-row-${inv.id}`)).toBeVisible();
   });
 
   test("RD-3 el chip abre el panel de caja con los datos de la apertura, movimientos y cierre", async ({

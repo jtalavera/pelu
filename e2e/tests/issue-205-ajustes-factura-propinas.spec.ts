@@ -267,7 +267,7 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
             discountValue: null,
           },
         ],
-        payments: [{ method: "CASH", amount: 50000 }],
+        payments: [{ method: "CASH", amount: 50000 + tipAmount }],
         serviceRecordId: record.id,
         tipsAmount: tipAmount,
       });

@@ -215,8 +215,7 @@ test.describe("Issue #59 · Table 3 — Today's Invoices", () => {
     // Wait for session card to show (session is already open)
     await expect(page.getByText(/cash register is open/i)).toBeVisible({ timeout: 30_000 });
 
-    // Today's invoices are folded by default on the redesigned home — expand them, then wait for a row.
-    await page.getByTestId("billing-today-toggle").click();
+    // Today's invoices are open by default on the home (issue #384) — wait for a row.
     await expect(
       page.locator('[data-testid^="billing-today-row-"]').first(),
     ).toBeVisible({ timeout: 30_000 });

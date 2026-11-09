@@ -201,7 +201,7 @@ export function BillingHome({
   }
 
   // ── Today's invoices (folded by default) ──
-  const [todayOpen, setTodayOpen] = useState(false);
+  const [todayOpen, setTodayOpen] = useState(true);
   const [todayPage, setTodayPage] = useState<PagedInvoicesResponse | null>(null);
   const [todayLoading, setTodayLoading] = useState(false);
   const [todayPageNum, setTodayPageNum] = useState(0);

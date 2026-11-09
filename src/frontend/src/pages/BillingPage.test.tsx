@@ -135,15 +135,15 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       expect(screen.getByText(/admin@demo\.com/i)).toBeTruthy();
     });
 
-    it("keeps today's invoices folded until the user expands them", async () => {
+    it("shows today's invoices open by default and lets the user fold them (issue #384)", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
       const toggle = await screen.findByTestId("billing-today-toggle");
-      expect(toggle.getAttribute("aria-expanded")).toBe("false");
-      expect(screen.queryByTestId("billing-view-history")).toBeNull();
-      fireEvent.click(toggle);
       expect(toggle.getAttribute("aria-expanded")).toBe("true");
       expect(await screen.findByTestId("billing-view-history")).toBeTruthy();
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.queryByTestId("billing-view-history")).toBeNull();
     });
 
     it("renders the New Invoice button inside the Cash Register tab (HU-14, HU-15, issue #153)", async () => {
@@ -164,7 +164,6 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
     it("reaches the invoice history from the expanded list of today (HU-16)", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
-      fireEvent.click(await screen.findByTestId("billing-today-toggle"));
       expect(await screen.findByRole("button", { name: /view full history/i })).toBeTruthy();
     });
 
@@ -378,10 +377,11 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       await openFormWithServiceLine();
       expect(screen.queryByTestId("billing-line-professional-name-0")).toBeNull();
       fireEvent.click(screen.getByTestId("billing-line-more-0"));
-      await waitFor(() => expect(document.querySelectorAll("#line-professional-0 option").length).toBeGreaterThan(1));
-      fireEvent.change(document.querySelector("#line-professional-0") as HTMLSelectElement, {
-        target: { value: "3" },
-      });
+      // Issue #384: the professional is a searchable combobox that filters while typing.
+      const professionalInput = document.querySelector("#line-professional-0") as HTMLInputElement;
+      fireEvent.focus(professionalInput);
+      fireEvent.change(professionalInput, { target: { value: "Lau" } });
+      fireEvent.mouseDown(await screen.findByRole("button", { name: /Laura/ }));
       expect((await screen.findByTestId("billing-line-professional-name-0")).textContent).toMatch(/Laura/);
       const more = screen.getByTestId("billing-more-options") as HTMLDetailsElement;
       fireEvent.click(more.querySelector("summary") as HTMLElement);
@@ -570,7 +570,6 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
 
-      fireEvent.click(await screen.findByTestId("billing-today-toggle"));
       fireEvent.click(await screen.findByRole("button", { name: /view full history/i }));
 
       expect(await screen.findByText("0000001")).toBeTruthy();

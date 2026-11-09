@@ -234,8 +234,7 @@ test.describe("HU-29 · Fixes varios", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
     await goToBillingHome(page);
-    // Today's invoices are folded by default on the redesigned home.
-    await page.getByTestId("billing-today-toggle").click();
+    // Today's invoices are open by default on the home (issue #384).
     const row = page.getByTestId(`billing-today-row-${inv.id}`);
     await expect(row).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId(`billing-today-view-${inv.id}`)).toHaveCount(0);

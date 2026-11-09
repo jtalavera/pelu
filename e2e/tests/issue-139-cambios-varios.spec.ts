@@ -91,7 +91,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     await expect(toast).toHaveClass(/success/);
   });
 
-  test("AC4+AC5 · la propina se muestra en rojo y no se incluye en Pendiente ni en el Monto por defecto", async ({
+  test("AC4+AC5 · la propina se muestra en rojo (el cobro por defecto la incluye desde el issue 384)", async ({
     page,
     request,
   }) => {
@@ -120,10 +120,10 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     await expect(tipLabel).toHaveClass(/text-danger/);
     await expect(page.locator("#billing-tips-amount")).toHaveText("4.000");
 
-    // AC5: the default Efectivo (CASH) amount and "Remaining" both exclude the tip —
-    // they cover only the 50.000 fiscal total, not 54.000 (total + tip).
+    // AC5 (superseded by issue #384): the default Efectivo (CASH) amount covers the 50.000 fiscal
+    // total PLUS the 4.000 tip = 54.000, and "Remaining" is 0.
     await showPaymentAmounts(page);
-    await expect(page.locator("#pay-amount-0")).toHaveValue("50.000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("54.000");
     const remainingRow = page.getByText("Remaining", { exact: true }).locator("xpath=..");
     await expect(remainingRow.getByText("0", { exact: true })).toBeVisible();
   });
@@ -254,7 +254,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
           discountValue: null,
         },
       ],
-      payments: [{ method: "CASH", amount: 40000 }],
+      payments: [{ method: "CASH", amount: 40000 + 8000 }],
       serviceRecordId: record.id,
       tipsAmount: 8000,
     });
