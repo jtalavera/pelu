@@ -154,6 +154,15 @@ test.describe("Issue #284 · ajuste 3 · método de pago vacío", () => {
     await fillPaymentAmount(page, "4000");
     await page.locator("#pay-amount-1").fill("6000");
     await expect(page.locator("#pay-method-err-1")).toHaveText("Select a payment method.");
+
+    // Forgetting the 2nd method: submitting is blocked client-side with the clear message (and
+    // focus on the missing select) instead of the API's generic "invalid request" error.
+    await page.getByRole("button", { name: "Issue invoice" }).click();
+    await expect(page.locator("#pay-method-err-1")).toHaveText("Select a payment method.");
+    await expect(page.locator("#pay-method-1")).toBeFocused();
+    await expect(page.getByText(/issued successfully/i)).toHaveCount(0);
+    await expect(page.getByText(/request is invalid|La solicitud no es válida/i)).toHaveCount(0);
+
     await page.locator("#pay-method-1").selectOption("TRANSFER");
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(page.getByText(/issued successfully/i)).toBeVisible();

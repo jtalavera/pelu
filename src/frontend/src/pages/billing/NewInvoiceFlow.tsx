@@ -827,6 +827,12 @@ export function NewInvoiceFlow({
         newPaymentErrors[i] = t("femme.billing.invoice.paymentAmountInvalid");
         return;
       }
+      // A row with an amount but no method (e.g. a forgotten 2nd method in a split payment) must be
+      // caught here: otherwise the API answers with a generic "invalid request" error.
+      if (!p.method.trim()) {
+        newPaymentErrors[i] = t("femme.billing.invoice.paymentMethodRequired");
+        return;
+      }
       // Issue #170: SIFEN rejects card payments missing the mandatory card brand group.
       if (CARD_PAYMENT_METHODS.has(p.method) && !p.cardBrand.trim()) {
         newPaymentErrors[i] = t("femme.billing.invoice.cardBrandRequired");
@@ -944,7 +950,12 @@ export function NewInvoiceFlow({
           if (validationResult.lineErrors[i]?.discountValue) return `line-disc-val-${i}`;
         }
         for (let i = 0; i < payments.length; i++) {
-          if (validationResult.paymentErrors[i]) return `pay-amount-${i}`;
+          if (validationResult.paymentErrors[i]) {
+            if (payments[i].method.trim() === "") {
+              return splitPayments ? `pay-method-${i}` : `pay-method-${PAYMENT_METHODS[0]}`;
+            }
+            return `pay-amount-${i}`;
+          }
         }
         return null;
       })();
