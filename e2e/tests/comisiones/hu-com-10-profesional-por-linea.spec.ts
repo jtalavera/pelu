@@ -11,7 +11,7 @@ import {
   setTenantFlag,
   type CommissionWorld,
 } from "../../fixtures/commissions";
-import { fillPaymentAmount, goToBillingHome, goToInvoiceHistory, openLineMoreOptions } from "../../fixtures/billing";
+import { fillPaymentAmount, goToBillingHome, goToInvoiceHistory, openLineMoreOptions, pickInvoiceLineProfessional } from "../../fixtures/billing";
 import { openFichaByText } from "../../fixtures/ui";
 
 /** HU-COM-10 · Asignar profesional / vendedor a las líneas del comprobante (modifica HU-14). */
@@ -48,9 +48,9 @@ test("venta suelta: cada línea (servicio y producto) tiene Profesional / Vended
   await pickServiceLine(page, w.product.name, 0);
   // Starts empty and lists only active professionals; empty line shows the warning.
   await openLineMoreOptions(page, 0);
-  await expect(page.locator("#line-professional-0")).toHaveValue("");
+  await expect(page.locator("#line-professional-0")).toHaveValue("No professional");
   await expect(page.getByTestId("line-no-commission-0")).toHaveText("This line will not generate a commission.");
-  await page.locator("#line-professional-0").selectOption({ label: w.bea.name });
+  await pickInvoiceLineProfessional(page, 0, w.bea.name);
   await expect(page.getByTestId("line-no-commission-0")).toHaveCount(0);
 
   await pickServiceLine(page, w.service.name, 1);
@@ -84,8 +84,8 @@ test("desde una ficha de servicio el profesional se precarga y se puede cambiar"
   await expect(page).toHaveURL(/\/app\/billing/);
   await openLineMoreOptions(page, 0);
   const select = page.locator("#line-professional-0");
-  await expect(select).toHaveValue(String(w.ana.id));
-  await select.selectOption({ label: w.bea.name });
+  await expect(select).toHaveValue(w.ana.name);
+  await pickInvoiceLineProfessional(page, 0, w.bea.name);
   const inv = await clickIssueInvoiceAndExpectSuccess(page);
   const [e] = await entriesOfInvoice(request, w.adminToken, inv.id, 1);
   expect(e.professionalId).toBe(w.bea.id);
@@ -133,7 +133,7 @@ test("con la flag deshabilitada el campo es opcional, sin aviso de comisión, y 
     await openNewInvoice(page);
     await pickServiceLine(page, w.service.name, 0);
     await openLineMoreOptions(page, 0);
-    await expect(page.locator("#line-professional-0")).toHaveValue("");
+    await expect(page.locator("#line-professional-0")).toHaveValue("No professional");
     await expect(page.getByTestId("line-no-commission-0")).toHaveCount(0);
     await fillPaymentAmount(page, "110000");
     await clickIssueInvoiceAndExpectSuccess(page);

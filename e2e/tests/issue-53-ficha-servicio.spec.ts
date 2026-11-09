@@ -235,10 +235,9 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await expect(page.locator("#line-price-0")).toHaveValue("50.000");
     // Issue #137: Propinas is a read-only text value (like Subtotal/Pendiente), not an input.
     await expect(page.locator("#billing-tips-amount")).toHaveText("4.000");
-    // Issue #139: the tip is never included in the amount to collect — payment auto-fills
-    // to cover only the invoice total (50.000), not total + tips.
+    // Issue #384: the payment auto-fills to cover the invoice total (50.000) plus the tip (4.000).
     await showPaymentAmounts(page);
-    await expect(page.locator("#pay-amount-0")).toHaveValue("50.000");
+    await expect(page.locator("#pay-amount-0")).toHaveValue("54.000");
 
     await ensurePaymentMethodChosen(page);
     const [res] = await Promise.all([

@@ -65,7 +65,7 @@ async function seedClosedTip(
         discountValue: null,
       },
     ],
-    payments: [{ method: "CASH", amount: params.unitPrice }],
+    payments: [{ method: "CASH", amount: params.unitPrice + params.tipAmount }],
     serviceRecordId: record.id,
     tipsAmount: params.tipAmount,
   });

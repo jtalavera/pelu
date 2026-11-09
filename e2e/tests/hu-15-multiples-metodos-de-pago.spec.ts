@@ -61,7 +61,7 @@ test.describe("HU-15 · Múltiples métodos de pago", () => {
     await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(
-      page.getByText("The sum of payment amounts must equal the invoice total.", { exact: true }),
+      page.getByText("The sum of payment amounts must equal the invoice total plus the tip (if any).", { exact: true }),
     ).toBeVisible();
   });
 

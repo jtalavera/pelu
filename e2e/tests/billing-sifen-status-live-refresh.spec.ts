@@ -82,9 +82,8 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    // Home: today's invoices are folded by default — expand them.
+    // Home: today's invoices are open by default (issue #384).
     await goToBillingHome(page);
-    await page.getByTestId("billing-today-toggle").click();
     const row = page
       .locator('[data-testid^="billing-today-row-"]')
       .filter({ hasText: clientName })

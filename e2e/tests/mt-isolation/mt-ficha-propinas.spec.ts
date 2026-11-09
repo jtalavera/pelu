@@ -157,7 +157,7 @@ async function closeFichaViaInvoice(
         discountValue: null,
       },
     ],
-    payments: [{ method: "CASH", amount: params.unitPrice }],
+    payments: [{ method: "CASH", amount: params.unitPrice + params.tipsAmount }],
     serviceRecordId: params.fichaId,
     tipsAmount: params.tipsAmount,
     ...(params.sifenEmail ? { email: params.sifenEmail } : {}),

@@ -8,7 +8,7 @@ import {
   voidInvoice,
   type CommissionWorld,
 } from "../fixtures/commissions";
-import { goToBillingHome, openLineMoreOptions, openMoreOptions, showPaymentAmounts } from "../fixtures/billing";
+import { goToBillingHome, openLineMoreOptions, pickInvoiceLineProfessional, openMoreOptions, showPaymentAmounts } from "../fixtures/billing";
 import { openFichaByText } from "../fixtures/ui";
 
 /**
@@ -63,15 +63,15 @@ test("propinas por profesional que atendió: debajo de Métodos de pago, total e
   await pickServiceLine(page, w.service.name, 0);
   // Without the commissions module the professional is still selectable, with no commission hint.
   await openLineMoreOptions(page, 0);
-  await page.locator("#line-professional-0").selectOption({ label: w.ana.name });
+  await pickInvoiceLineProfessional(page, 0, w.ana.name);
   await expect(page.getByTestId("line-no-commission-0")).toHaveCount(0);
   await pickServiceLine(page, w.service2.name, 1);
   await openLineMoreOptions(page, 1);
-  await page.locator("#line-professional-1").selectOption({ label: w.bea.name });
+  await pickInvoiceLineProfessional(page, 1, w.bea.name);
   // A product line's seller does not get a tip row.
   await pickServiceLine(page, w.product.name, 2);
   await openLineMoreOptions(page, 2);
-  await page.locator("#line-professional-2").selectOption({ label: w.ana.name });
+  await pickInvoiceLineProfessional(page, 2, w.ana.name);
 
   await expect(page.getByTestId("billing-tips-empty")).toHaveCount(0);
   await expect(tipsSection.locator('input[id^="billing-tip-"]')).toHaveCount(2);
@@ -86,7 +86,9 @@ test("propinas por profesional que atendió: debajo de Métodos de pago, total e
   await expect(page.locator("#billing-tips-amount")).toHaveClass(/text-danger/);
   await expect(page.getByText("Tip (non-invoiceable)", { exact: true })).toHaveClass(/text-danger/);
   await showPaymentAmounts(page);
-  await expect(page.locator("#pay-amount-0")).toHaveValue("330.000");
+  // Issue #384: the amount to collect is the 330.000 total plus the 8.000 of tips.
+  await expect(page.locator("#pay-amount-0")).toHaveValue("338.000");
+  await expect(page.getByTestId("billing-amount-to-collect")).toHaveText("338.000");
 
   const inv = await clickIssueInvoiceAndExpectSuccess(page);
   const issued = await apiGetJson<{ total: number; tipsAmount: number }>(
@@ -136,7 +138,8 @@ test("desde una ficha: las propinas se precargan, se pueden corregir y reemplaza
   await page.locator(`#billing-tip-${w.ana.id}`).fill("6000");
   await expect(page.locator("#billing-tips-amount")).toHaveText("6.000");
   await showPaymentAmounts(page);
-  await expect(page.locator("#pay-amount-0")).toHaveValue("110.000");
+  // Issue #384: the payment covers the 110.000 invoiced plus the (corrected) 6.000 tip.
+  await expect(page.locator("#pay-amount-0")).toHaveValue("116.000");
   await clickIssueInvoiceAndExpectSuccess(page);
 
   const closed = await apiGetJson<{ status: string; tips: { professionalId: number; amount: number }[] }>(

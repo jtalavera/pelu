@@ -257,6 +257,15 @@ export function ServiceRecordEditor({
   }
 
   function addLine() {
+    // Only adding another service closes the previous (already chosen) service areas; a line still
+    // without a service stays open, and the new blank line opens itself.
+    setOpenLines((o) => {
+      const next = { ...o };
+      lines.forEach((l) => {
+        if (l.pickedService) next[l.key] = false;
+      });
+      return next;
+    });
     setLines((prev) => [...prev, emptyLine()]);
   }
 
@@ -269,6 +278,8 @@ export function ServiceRecordEditor({
   }
 
   function updateLineService(key: string, service: SalonServiceOption | null) {
+    // Picking a service keeps its area open so the professional field stays reachable.
+    setOpenLines((o) => ({ ...o, [key]: true }));
     setLines((prev) =>
       prev.map((l) =>
         l.key === key

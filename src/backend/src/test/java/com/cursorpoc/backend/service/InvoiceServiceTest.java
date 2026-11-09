@@ -464,7 +464,7 @@ class InvoiceServiceTest {
   }
 
   @Test
-  void issueInvoice_withTipsAmount_paymentsMustCoverTotalOnly() {
+  void issueInvoice_withTipsAmount_paymentsMustCoverTotalPlusTips() {
     when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
         .thenReturn(Optional.of(openSession));
     when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
@@ -473,9 +473,9 @@ class InvoiceServiceTest {
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
 
     var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
-    var paymentIncludingTip =
-        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"), null, null);
-    var requestTooHigh =
+    var paymentWithoutTip =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    var requestMissingTip =
         new InvoiceCreateRequest(
             null,
             null,
@@ -483,13 +483,13 @@ class InvoiceServiceTest {
             null,
             null,
             List.of(line),
-            List.of(paymentIncludingTip),
+            List.of(paymentWithoutTip),
             null,
             new BigDecimal("10000.00"));
 
-    // Issue #139: tips never factor into the amount to reconcile — paying total + tip
-    // (60000, ignoring that only 50000 is the fiscal total) must be rejected.
-    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, requestTooHigh))
+    // Issue #384: the payments must add up to total + tip — paying only the 50000 fiscal total,
+    // without the 10000 tip, is rejected.
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, requestMissingTip))
         .isInstanceOf(ResponseStatusException.class)
         .satisfies(
             ex -> {
@@ -498,8 +498,8 @@ class InvoiceServiceTest {
             });
 
     when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
-    var paymentCoveringTotalOnly =
-        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    var paymentCoveringTotalAndTip =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"), null, null);
     var requestOk =
         new InvoiceCreateRequest(
             null,
@@ -508,14 +508,14 @@ class InvoiceServiceTest {
             null,
             null,
             List.of(line),
-            List.of(paymentCoveringTotalOnly),
+            List.of(paymentCoveringTotalAndTip),
             null,
             new BigDecimal("10000.00"));
 
     InvoiceResponse result = invoiceService.issueInvoice(1L, requestOk);
 
-    // Tips are collected/stored but never touch the fiscal subtotal/total nor the
-    // required payment sum.
+    // Tips are collected/stored but never touch the fiscal subtotal/total; the payments cover
+    // total + tip.
     assertThat(result.total()).isEqualByComparingTo(new BigDecimal("50000.00"));
     assertThat(result.tipsAmount()).isEqualByComparingTo(new BigDecimal("10000.00"));
   }
@@ -2001,8 +2001,14 @@ class InvoiceServiceTest {
       Long serviceRecordId,
       List<InvoiceLineRequest> lines,
       List<com.cursorpoc.backend.web.dto.InvoiceTipRequest> tips) {
+    // Issue #384: the payments cover the 50000 invoiced plus the tips.
+    BigDecimal tipsSum =
+        tips.stream()
+            .map(com.cursorpoc.backend.web.dto.InvoiceTipRequest::amount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
     var payment =
-        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+        new InvoicePaymentAllocationRequest(
+            "CASH", new BigDecimal("50000.00").add(tipsSum), null, null);
     return new InvoiceCreateRequest(
         null,
         null,

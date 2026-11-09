@@ -98,7 +98,7 @@ async function seedProfessionalWithClosedTip(
         discountValue: null,
       },
     ],
-    payments: [{ method: "CASH", amount: 45_000 }],
+    payments: [{ method: "CASH", amount: 45_000 + tipAmount }],
     serviceRecordId: record.id,
     tipsAmount: tipAmount,
   });
@@ -268,9 +268,10 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     const detailJsonAfterFirst = (await detailAfterFirst.json()) as {
       expectedCashAmount: number | string;
     };
-    // seedProfessionalWithClosedTip also issues a 45.000 CASH invoice (to close the ficha the tip
-    // lives on) against this same open session, so expected cash = 45.000 (sales) - 3.000 (retiro).
-    expect(Number(detailJsonAfterFirst.expectedCashAmount)).toBe(42_000);
+    // seedProfessionalWithClosedTip also issues a CASH invoice (to close the ficha the tip lives on)
+    // against this same open session: 45.000 invoiced + the 8.000 tip it is paid together with
+    // (issue #384), so expected cash = 53.000 (sales) - 3.000 (retiro).
+    expect(Number(detailJsonAfterFirst.expectedCashAmount)).toBe(50_000);
 
     // AC11: closing the session, then withdrawing again, records the withdrawal on that last closed
     // register flagged "after close": it is listed, but never changes its closing figures.
@@ -297,7 +298,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
       })
     ).json()) as { expectedCashAmount: number | string };
     // The closed register's expected cash is frozen: the after-close withdrawal does not change it.
-    expect(Number(detailAfterClose.expectedCashAmount)).toBe(42_000);
+    expect(Number(detailAfterClose.expectedCashAmount)).toBe(50_000);
   });
 
   test("AC12+AC13 · el efectivo esperado al cerrar suma ventas y movimientos manuales y resta retiros de propina", async ({
@@ -339,10 +340,11 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
       data: { professionalId: professional.id, amount: 2_000 },
     });
 
-    // (50.000 + 45.000) ventas + 10.000 ingreso - 3.000 egreso - 2.000 retiro = 100.000
+    // (50.000 + 45.000 + 6.000 propina cobrada junto con la factura, issue #384) ventas
+    // + 10.000 ingreso - 3.000 egreso - 2.000 retiro = 106.000
     const closeRes = await request.post(`${API_BASE}/api/cash-sessions/close`, {
       headers: authHeaders(token),
-      data: { countedCashAmount: 100_000 },
+      data: { countedCashAmount: 106_000 },
     });
     expect(closeRes.ok(), await closeRes.text()).toBeTruthy();
     const closeJson = (await closeRes.json()) as {
@@ -352,7 +354,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
       movements: unknown[];
     };
     expect(closeJson.id).toBe(session.id);
-    expect(Number(closeJson.expectedCashAmount)).toBe(100_000);
+    expect(Number(closeJson.expectedCashAmount)).toBe(106_000);
     expect(Number(closeJson.cashDifference)).toBe(0);
     // Two manual movements (ingreso + egreso) plus the auto-linked tip-withdrawal cash-out.
     expect(closeJson.movements.length).toBe(3);

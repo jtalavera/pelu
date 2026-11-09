@@ -19,6 +19,7 @@ import { downloadSifenKude } from "../../api/downloadSifenKude";
 import { validateRuc } from "../../lib/validateRuc";
 import { isValidEmail } from "../../lib/validateEmail";
 import { ClientSearchField, type ClientSelection } from "../../components/ClientSearchField";
+import { SearchableSelect } from "../../components/SearchableSelect";
 import { ServiceSearchField, type SalonServiceOption } from "../../components/ServiceSearchField";
 import { FieldValidationError } from "../../components/FieldValidationError";
 import { FiscalRucWarning } from "../../components/FiscalRucWarning";
@@ -540,8 +541,8 @@ export function NewInvoiceFlow({
   const discountAmount = perItemDiscountTotal + globalDiscount;
   const total = Math.max(0, subtotal - discountAmount);
   // Tips are collected alongside the invoice but never affect subtotal/discount/total
-  // (fiscal fields), the printed comprobante, the amount to collect, or the default
-  // cash payment fill — they're shown separately and settled outside the invoice math.
+  // (fiscal fields) or the printed comprobante — they're shown separately. They DO count toward
+  // the amount to collect (issue #384): the payments must add up to total + tips.
   // One tip per distinct professional who served a service line (same as the ficha de servicio).
   const tipProfessionalIds = Array.from(
     new Set(
@@ -557,7 +558,7 @@ export function NewInvoiceFlow({
     0,
   );
   const showTips = serviceRecordId != null || tipsTotal > 0;
-  const amountToCollect = total;
+  const amountToCollect = total + tipsTotal;
 
   const assignedPayments = payments.reduce(
     (acc, p) => acc + parseMaskedMoney(p.amount),
@@ -1735,27 +1736,26 @@ export function NewInvoiceFlow({
                               className="grid grid-cols-1 gap-3 pb-2 sm:grid-cols-2 sm:items-end"
                             >
                               <div className="flex flex-col gap-1">
-                                <Label htmlFor={`line-professional-${idx}`}>
+                                <span aria-hidden="true" className="text-sm font-semibold text-ink-2">
                                   {t("femme.billing.invoice.lineProfessional")}
-                                </Label>
-                                <Select
+                                </span>
+                                <SearchableSelect<number>
                                   id={`line-professional-${idx}`}
-                                  value={line.professionalId}
-                                  onChange={(e) =>
+                                  label={t("femme.billing.invoice.lineProfessional")}
+                                  labelSrOnly
+                                  value={line.professionalId === "" ? "" : Number(line.professionalId)}
+                                  onChange={(v) =>
                                     setLines((prev) =>
                                       prev.map((l, i) =>
-                                        i === idx ? { ...l, professionalId: e.target.value } : l,
+                                        i === idx ? { ...l, professionalId: v === "" ? "" : String(v) } : l,
                                       ),
                                     )
                                   }
-                                >
-                                  <option value="">{t("femme.billing.invoice.lineProfessionalNone")}</option>
-                                  {lineProfessionals.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                      {p.fullName}
-                                    </option>
-                                  ))}
-                                </Select>
+                                  options={lineProfessionals.map((p) => ({ value: p.id, label: p.fullName }))}
+                                  emptyOption={{ value: "", label: t("femme.billing.invoice.lineProfessionalNone") }}
+                                  filterPlaceholder={t("femme.billing.invoice.lineProfessionalPlaceholder")}
+                                  noResultsText={t("femme.billing.invoice.lineProfessionalNoResults")}
+                                />
                               </div>
                               <div className="flex flex-col gap-1">
                                 <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-ink-2">
@@ -2110,6 +2110,14 @@ export function NewInvoiceFlow({
                 <span className="text-danger">{t("femme.billing.invoice.tips")}</span>
                 <span id="billing-tips-amount" className="tabular-nums text-danger">
                   {formatAmountDecimal(tipsTotal.toFixed(2))}
+                </span>
+              </div>
+            )}
+            {tipsTotal > 0 && (
+              <div className="flex justify-between font-semibold">
+                <span>{t("femme.billing.invoice.amountToCollect")}</span>
+                <span data-testid="billing-amount-to-collect" className="tabular-nums">
+                  {formatAmountDecimal(amountToCollect.toFixed(2))}
                 </span>
               </div>
             )}

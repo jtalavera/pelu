@@ -6,7 +6,7 @@ import { openSummaryMore } from "../fixtures/ui";
  * "Dashboards" screen — the revenue-trend, top-services, payment-method-mix,
  * appointments-by-day-of-week and tips-by-professional charts moved off the main dashboard
  * (`/app`) onto their own screen (`/app/dashboards`), reached via a "Dashboards" nav item placed
- * right below "Calendar" in the sidebar.
+ * right below "Agenda" in the sidebar.
  */
 test.describe("Summary screen (ex Dashboards)", () => {
   test("the Summary nav item sits right below Calendar and opens the charts screen", async ({
@@ -14,7 +14,7 @@ test.describe("Summary screen (ex Dashboards)", () => {
   }) => {
     await loginAsDemo(page);
 
-    const calendarLink = page.getByRole("link", { name: "Calendar" });
+    const calendarLink = page.getByRole("link", { name: "Agenda", exact: true });
     const summaryLink = page.getByRole("link", { name: "Summary" });
     await expect(calendarLink).toBeVisible();
     await expect(summaryLink).toBeVisible();

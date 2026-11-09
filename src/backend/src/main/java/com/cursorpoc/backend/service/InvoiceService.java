@@ -317,7 +317,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     BigDecimal total =
         applyGlobalDiscount(invoice, request.discountType(), request.discountValue(), subtotal);
     requireClientIdentificationForThreshold(invoice, total);
-    rebuildPayments(invoice, request.payments(), total);
+    rebuildPayments(invoice, request.payments(), total, false);
 
     // 9. Save and increment stamp
     invoiceRepository.save(invoice);
@@ -400,7 +400,9 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     BigDecimal total =
         applyGlobalDiscount(invoice, request.discountType(), request.discountValue(), subtotal);
     requireClientIdentificationForThreshold(invoice, total);
-    rebuildPayments(invoice, request.payments(), total);
+    // The correction form doesn't edit tips, and invoices issued before issue #384 were paid for
+    // the total only, so a correction may keep either shape of payment sum.
+    rebuildPayments(invoice, request.payments(), total, true);
     // A closed register's cash is frozen: the payments of its invoices can no longer change (the
     // transaction rolls back, so nothing of the correction is kept).
     if (invoice.getCashSession().getClosedAt() != null
@@ -785,7 +787,10 @@ public class InvoiceService implements ApplicationEventPublisherAware {
 
   /** Steps 7 + 8 of {@code issueInvoice}: rebuilds payment allocations and validates the sum. */
   private static void rebuildPayments(
-      Invoice invoice, List<InvoicePaymentAllocationRequest> paymentRequests, BigDecimal total) {
+      Invoice invoice,
+      List<InvoicePaymentAllocationRequest> paymentRequests,
+      BigDecimal total,
+      boolean allowPaymentsWithoutTips) {
     if (paymentRequests == null || paymentRequests.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PAYMENTS_REQUIRED");
     }
@@ -826,8 +831,13 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       invoice.getPaymentAllocations().add(allocation);
       paymentsSum = paymentsSum.add(pr.amount());
     }
-    // Issue #139: tips are collected/stored separately and never factor into this reconciliation.
-    if (paymentsSum.setScale(2, RoundingMode.HALF_UP).compareTo(total) != 0) {
+    // Issue #384: the payments cover the invoiced total plus the tips (which stay out of the fiscal
+    // total; they are only collected together with it).
+    BigDecimal tips = invoice.getTipsAmount() != null ? invoice.getTipsAmount() : BigDecimal.ZERO;
+    BigDecimal paid = paymentsSum.setScale(2, RoundingMode.HALF_UP);
+    boolean coversTotalAndTips = paid.compareTo(total.add(tips)) == 0;
+    boolean coversTotalOnly = allowPaymentsWithoutTips && paid.compareTo(total) == 0;
+    if (!coversTotalAndTips && !coversTotalOnly) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PAYMENT_SUM_MISMATCH");
     }
   }

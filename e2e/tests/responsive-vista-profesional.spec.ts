@@ -101,7 +101,7 @@ for (const vp of VIEWPORTS) {
         await expect(sidebar).toBeHidden();
         // Navigating from the drawer closes it.
         await toggle.click();
-        await sidebar.getByRole("link", { name: "Calendar" }).click();
+        await sidebar.getByRole("link", { name: "Agenda" }).click();
         await expect(sidebar).toBeHidden();
       } else {
         await expect(toggle).toHaveCount(0);

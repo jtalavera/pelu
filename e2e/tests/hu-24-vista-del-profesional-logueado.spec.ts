@@ -88,7 +88,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     // A professional lands on the Inicio (open fichas of the day); her calendar is in the menu.
     await expect(page).toHaveURL(/\/app\/?$/);
     await expect(page.getByTestId("professional-home")).toBeVisible();
-    await page.getByRole("link", { name: "Calendar" }).click();
+    await page.getByRole("link", { name: "Agenda" }).click();
     await expect(page).toHaveURL(/\/app\/calendar/);
   });
 
@@ -178,7 +178,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
 
     await loginAs(page, email, "ValidPass1!");
     // She lands on the Inicio; open her calendar (AppShell rendered with the role loaded).
-    await page.getByRole("link", { name: "Calendar" }).click();
+    await page.getByRole("link", { name: "Agenda" }).click();
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
     // Professionals nav link should not be in the DOM for professional role
     await expect(page.getByRole("link", { name: /^professionals$/i })).not.toBeVisible();
@@ -211,7 +211,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
 
     await loginAs(page, email, "ValidPass1!");
     // She lands on the Inicio; open her calendar (AppShell rendered with the role loaded).
-    await page.getByRole("link", { name: "Calendar" }).click();
+    await page.getByRole("link", { name: "Agenda" }).click();
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
     // The Inicio (the "Dashboard" item) is hers; Summary, Settings and Billing are not.
     await expect(page.getByRole("link", { name: /^dashboard$/i })).toBeVisible();

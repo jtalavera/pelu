@@ -78,9 +78,8 @@ test.describe("Estado SIFEN en las listas de facturas", () => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
 
-    // Home — today's invoices (folded by default, so expand them first).
+    // Home — today's invoices are open by default (issue #384).
     await goToBillingHome(page);
-    await page.getByTestId("billing-today-toggle").click();
     const todayRow = page
       .locator('[data-testid^="billing-today-row-"]')
       .filter({ hasText: client.fullName })

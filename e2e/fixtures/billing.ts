@@ -193,3 +193,16 @@ export async function openLineMoreOptions(page: Page, idx: number) {
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
   await expect(page.locator(`#line-professional-${idx}`)).toBeVisible();
 }
+
+/** Picks the professional of an invoice line by typing in the searchable combobox (needs the line's «Más opciones» open). */
+export async function pickInvoiceLineProfessional(page: Page, idx: number, fullName: string) {
+  const input = page.locator(`#line-professional-${idx}`);
+  await input.click();
+  await input.fill(fullName);
+  await page
+    .locator(`#line-professional-${idx}-listbox`)
+    .getByRole("button", { name: fullName, exact: false })
+    .first()
+    .click();
+  await expect(input).toHaveValue(fullName);
+}
