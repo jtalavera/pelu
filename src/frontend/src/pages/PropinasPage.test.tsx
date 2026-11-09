@@ -313,4 +313,31 @@ describe("PropinasPage", () => {
     renderPage();
     expect(await screen.findByTestId("propinas-empty")).toBeTruthy();
   });
+
+  it("loads in one go: movements stay hidden until the balances card is ready", async () => {
+    let releaseBalances: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseBalances = resolve;
+    });
+    const base = femmeJson.getMockImplementation()!;
+    femmeJson.mockImplementation((url: unknown) => {
+      if (String(url).startsWith("/api/propinas/balance")) {
+        return gate.then(() => base(url));
+      }
+      return base(url);
+    });
+    renderPage();
+    // Report + withdrawals resolve right away, but the page must not show them on their own.
+    expect(await screen.findByTestId("propinas-initial-loading")).toBeTruthy();
+    await waitFor(() => expect(calls("/api/propinas/report?")).toHaveLength(1));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByTestId("propinas-movements")).toBeNull();
+    expect(screen.queryByTestId("propinas-card-1")).toBeNull();
+
+    releaseBalances();
+    expect(await screen.findByTestId("propinas-movements")).toBeTruthy();
+    // Balances and movements appear together, already sorted — no later re-ordering.
+    expect(screen.getByTestId("propinas-balance-1").textContent).toMatch(/180\.000/);
+    expect(screen.queryByTestId("propinas-initial-loading")).toBeNull();
+  });
 });

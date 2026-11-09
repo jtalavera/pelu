@@ -215,3 +215,28 @@ test.describe("Issue #131 · Ajustes en propinas", () => {
     await expect(page.getByTestId("propinas-tips-total")).toHaveText("Gs. 10.000");
   });
 });
+
+test.describe("Propinas · carga en un solo tiempo", () => {
+  test("los movimientos no aparecen antes que los saldos por profesional", async ({ page }) => {
+    // Hold the per-professional balance requests: the movements must not show up on their own.
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route("**/api/propinas/balance*", async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await loginAsDemo(page);
+    await page.goto("/app/propinas");
+    await expect(page.getByTestId("propinas-initial-loading")).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(page.getByTestId("propinas-movements")).toHaveCount(0);
+    await expect(page.getByTestId("propinas-cards")).toHaveCount(0);
+
+    release();
+    await expect(page.getByTestId("propinas-cards")).toBeVisible();
+    await expect(page.getByTestId("propinas-movements")).toBeVisible();
+    await expect(page.getByTestId("propinas-initial-loading")).toHaveCount(0);
+  });
+});

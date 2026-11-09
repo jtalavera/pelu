@@ -82,6 +82,12 @@ export default function PropinasPage() {
   const [report, setReport] = useState<TipReportResponse | null>(null);
   const [withdrawals, setWithdrawals] = useState<TipWithdrawalHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // First-load gates: the page is shown in one go (balances card + movements) instead of the
+  // movements popping in first and the balances — a professionals fetch followed by one request
+  // per professional — arriving (and re-sorting the list) afterwards.
+  const [professionalsLoaded, setProfessionalsLoaded] = useState(false);
+  const [balancesLoaded, setBalancesLoaded] = useState(false);
+  const [movementsLoaded, setMovementsLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
   const [movPage, setMovPage] = useState(0);
@@ -119,8 +125,14 @@ export default function PropinasPage() {
 
   useEffect(() => {
     femmeJson<Professional[]>("/api/professionals/options")
-      .then((list) => setProfessionals(Array.isArray(list) ? withDisplayNames(list) : []))
-      .catch(() => setProfessionals([]));
+      .then((list) => {
+        setProfessionals(Array.isArray(list) ? withDisplayNames(list) : []);
+        setProfessionalsLoaded(true);
+      })
+      .catch(() => {
+        setProfessionals([]);
+        setProfessionalsLoaded(true);
+      });
   }, []);
 
   const loadBalances = useCallback(async (list: Professional[]) => {
@@ -135,6 +147,7 @@ export default function PropinasPage() {
       }),
     );
     setBalances(Object.fromEntries(entries));
+    setBalancesLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -170,7 +183,10 @@ export default function PropinasPage() {
           setWithdrawals([]);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setMovementsLoaded(true);
+        }
       }
     })();
     return () => {
@@ -187,6 +203,9 @@ export default function PropinasPage() {
     setPeriod(null);
     setRange((prev) => ({ ...prev, ...patch }));
   }
+
+  const pageReady =
+    movementsLoaded && professionalsLoaded && (activeProfessionals.length === 0 || balancesLoaded);
 
   const movements = useMemo<Movement[]>(() => {
     const fromMs = new Date(localDateYmdToIsoStart(range.from)).getTime();
@@ -347,6 +366,15 @@ export default function PropinasPage() {
         </Alert>
       ) : null}
 
+      {!pageReady ? (
+        <div className="flex items-center gap-2 py-6" data-testid="propinas-initial-loading">
+          <Spinner size="sm" />
+          <Text>{t("femme.propinas.report.loading")}</Text>
+        </div>
+      ) : null}
+
+      {pageReady ? (
+      <>
       <section
         aria-label={t("femme.propinas.balancesTitle")}
         data-testid="propinas-cards"
@@ -641,6 +669,8 @@ export default function PropinasPage() {
           </>
         )}
       </section>
+      </>
+      ) : null}
 
       <Modal
         open={withdrawFor !== null}
