@@ -8,7 +8,9 @@ import { loginAsDemo } from "../fixtures/auth";
  */
 test.describe("Panel principal · carga en un solo tiempo", () => {
   test("no muestra el resumen ni las fichas hasta que la agenda y las fichas respondieron", async ({ page }) => {
-    // Hold the agenda and the fichas requests: nothing of the page may show up on its own.
+    // Log in first (the helper waits for the page itself), then hold the agenda and the fichas
+    // requests and reload: nothing of the page may show up on its own.
+    await loginAsDemo(page);
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -22,7 +24,6 @@ test.describe("Panel principal · carga en un solo tiempo", () => {
       await route.continue();
     });
 
-    await loginAsDemo(page);
     await page.goto("/app");
     await expect(page.getByTestId("dashboard-loading")).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(700);
