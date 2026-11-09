@@ -32,7 +32,7 @@ Decisiones tomadas: dos formatos a elegir al descargar (hoja A4 y ticket de 80 m
 
 ## Criterios de aceptación
 
-- **AC-1 · Descargar y elegir el formato.** Sin SIFEN, la pantalla del comprobante recién emitido y el detalle del comprobante ofrecen «Descargar comprobante». Al tocarlo aparecen **Hoja A4** y **Ticket 80 mm**; elegir uno lo descarga y vuelve a plegar las opciones. El detalle muestra la etiqueta «Sin valor fiscal».
+- **AC-1 · Descargar y elegir el formato.** Sin SIFEN, la pantalla del comprobante recién emitido y el detalle del comprobante ofrecen «Descargar comprobante». Al tocarlo aparecen **Hoja A4** y **Ticket 80 mm**; elegir uno lo descarga y vuelve a plegar las opciones. El detalle muestra la etiqueta «Sin valor fiscal» en el título, al lado del número del comprobante.
 - **AC-2 · Hoja A4.** Encabezado con el **logo del negocio**, nombre, RUC, dirección, teléfono y correo; recuadro «COMPROBANTE / NO FISCAL» con el número; franja «DOCUMENTO SIN VALOR FISCAL · NO ES UNA FACTURA» y marca de agua «SIN VALOR FISCAL»; fecha, condición (Contado), cliente, RUC / C.I. y quien atendió; detalle con cantidad, descripción, precio unitario y columnas **Exentas / IVA 5 % / IVA 10 %**; descuentos; subtotal, total y total en letras; **liquidación del IVA** (5 %, 10 % y total); formas de pago (con la marca de la tarjeta) y la propina aparte; mensaje de pie del negocio y aviso de que no reemplaza a la factura legal.
 - **AC-3 · Ticket de 80 mm.** El mismo contenido en una columna de 80 mm, con el logo arriba; el alto de la hoja se ajusta al contenido.
 - **AC-4 · Sin datos fiscales.** No lleva timbrado, vigencia, CDC, código QR ni las leyendas de copia de la factura preimpresa.
