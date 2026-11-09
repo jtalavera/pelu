@@ -954,6 +954,7 @@ export default function PropinasPage() {
                       </td>
                       <td className="whitespace-nowrap px-2 text-ink">{m.professional}</td>
                       <td
+                        data-testid="propinas-movement-amount"
                         className={`whitespace-nowrap px-2 text-right font-heading font-bold ${
                           m.kind === "withdrawal" ? "text-ink-2" : voided ? "text-ink-3 line-through" : "text-ink"
                         }`}
