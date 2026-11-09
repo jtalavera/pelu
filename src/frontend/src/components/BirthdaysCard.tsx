@@ -47,7 +47,11 @@ export function BirthdaysCard({
         }
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        if (!cancelled) {
+          setFailed(true);
+          // The host waits for this card too: a failure still counts as «done» (nothing to show).
+          onLoaded?.(0);
+        }
       });
     return () => {
       cancelled = true;

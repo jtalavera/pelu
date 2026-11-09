@@ -135,7 +135,7 @@ const inactiveClientsTdStyle: React.CSSProperties = {
 
 export default function DashboardPage() {
   const { t, i18n } = useTranslation();
-  const { me } = useMe();
+  const { me, loading: meLoading } = useMe();
   const navigate = useNavigate();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
   const tourRole =
@@ -144,7 +144,6 @@ export default function DashboardPage() {
       : me?.role === "PROFESSIONAL"
         ? "PROFESSIONAL"
         : "ADMIN";
-  useTour("dashboard", dashboardSteps, tourRole, guidedTourEnabled);
 
   const [data, setData]               = useState<DashboardResponse | null>(null);
   const [loading, setLoading]         = useState(true);
@@ -162,6 +161,16 @@ export default function DashboardPage() {
   const [now, setNow]                 = useState(() => new Date());
   const [apptListQuery, setApptListQuery] = useState("");
   const [chargedOpen, setChargedOpen] = useState(false);
+  // First-load gates. Every block of the page (summary, agenda, fichas, birthdays, the user's name)
+  // is fetched on its own and in parallel; the page is shown once, when all of them have answered,
+  // instead of the blocks popping in one after the other ("0 turnos hoy" first, the agenda later).
+  const [apptsLoaded, setApptsLoaded] = useState(false);
+  const [fichasLoaded, setFichasLoaded] = useState(false);
+  const [birthdaysLoaded, setBirthdaysLoaded] = useState(false);
+  const failed = !loading && (error !== null || data === null);
+  const ready = !failed && !loading && !meLoading && apptsLoaded && fichasLoaded && birthdaysLoaded;
+  // The guided tour points at elements of the page: start it only once they are on screen.
+  useTour("dashboard", dashboardSteps, tourRole, guidedTourEnabled && ready);
 
   const todayStr = useMemo(() => toLocalDateStr(now), [now]);
 
@@ -206,7 +215,8 @@ export default function DashboardPage() {
         setTodayAppts(list);
         setFichasKey((k) => k + 1);
       })
-      .catch(() => setTodayAppts([]));
+      .catch(() => setTodayAppts([]))
+      .finally(() => setApptsLoaded(true));
   }, [todayRangeIso.from, todayRangeIso.to]);
   // Keep the open detail dialog in sync with the refreshed list (ficha created / assigned, polling).
   useEffect(() => {
@@ -349,38 +359,14 @@ export default function DashboardPage() {
     ? (data?.fiscalAlerts.find((a) => a.severity !== "blocking") ?? null)
     : null;
 
-  // ── Loading / error states ────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          minHeight: "40vh",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 12,
-        }}
-      >
-        <Spinner size="lg" />
-        <Text>{t("femme.dashboard.loading")}</Text>
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <Alert variant="destructive" title={t("femme.dashboard.error")}>
-        {error}
-      </Alert>
-    );
-  }
-
-  const a = data.appointmentsToday;
-  const inactiveClients = Array.isArray(data.inactiveClients) ? data.inactiveClients : [];
+  // The blocks below are always mounted (hidden until `ready`) so that all of their requests start
+  // together; until the summary arrives they read neutral defaults that are never seen.
+  const a = data?.appointmentsToday ?? { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 };
+  const inactiveClients = Array.isArray(data?.inactiveClients) ? data.inactiveClients : [];
   // Defensive fallback only for a stale frontend build talking to a newer/older backend
   // (see auto-reload-on-stale-build) — the real value always comes from the server response,
   // never hardcoded as the source of truth.
-  const inactiveClientsThresholdDays = data.inactiveClientsThresholdDays ?? 60;
+  const inactiveClientsThresholdDays = data?.inactiveClientsThresholdDays ?? 60;
 
   const occupancyOpenKey = openMore;
   const moreSections: Array<{ key: MoreKey; label: string; count: number | null; body: React.ReactNode }> = [
@@ -486,6 +472,28 @@ export default function DashboardPage() {
   ];
 
   return (
+    <>
+    {failed ? (
+      <Alert variant="destructive" title={t("femme.dashboard.error")}>
+        {error}
+      </Alert>
+    ) : null}
+    {!ready && !failed ? (
+      <div
+        data-testid="dashboard-loading"
+        style={{
+          display: "flex",
+          minHeight: "40vh",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 12,
+        }}
+      >
+        <Spinner size="lg" />
+        <Text>{t("femme.dashboard.loading")}</Text>
+      </div>
+    ) : null}
+    <div hidden={!ready}>
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       {/* ── 1. PAGE HEADER ── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -547,7 +555,7 @@ export default function DashboardPage() {
         </span>
         <span aria-hidden className="text-line">|</span>
         <span className="font-heading text-xl font-extrabold tabular-nums text-ink" data-testid="dashboard-summary-collected">
-          {t("femme.dashboard.home.summaryCollected", { amount: formatGuaraniesGs(data.revenueDay.collected) })}
+          {t("femme.dashboard.home.summaryCollected", { amount: formatGuaraniesGs(data?.revenueDay.collected ?? 0) })}
         </span>
       </div>
 
@@ -664,7 +672,11 @@ export default function DashboardPage() {
       </section>
 
       {/* ── 5. FICHAS DE HOY: eye-catching cards, the open ones first ── */}
-      <TodayServiceRecords refreshKey={fichasKey} onNewRecord={() => setNewRecordOpen(true)} />
+      <TodayServiceRecords
+        refreshKey={fichasKey}
+        onNewRecord={() => setNewRecordOpen(true)}
+        onLoaded={() => setFichasLoaded(true)}
+      />
       <NewServiceRecordModal
         open={newRecordOpen}
         onClose={() => setNewRecordOpen(false)}
@@ -738,7 +750,13 @@ export default function DashboardPage() {
               </button>
               {sec.key === "birthdays" ? (
                 <div hidden={!open} className="px-4 pb-3 sm:px-5">
-                  <BirthdaysCard embedded onLoaded={setBirthdaysCount} />
+                  <BirthdaysCard
+                    embedded
+                    onLoaded={(count) => {
+                      setBirthdaysCount(count);
+                      setBirthdaysLoaded(true);
+                    }}
+                  />
                 </div>
               ) : (
                 open && <div className="px-4 pb-3 sm:px-5">{sec.body}</div>
@@ -749,5 +767,7 @@ export default function DashboardPage() {
       </Card>
 
     </div>
+    </div>
+    </>
   );
 }
