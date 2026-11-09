@@ -590,6 +590,48 @@ test.describe("Turno y ficha de servicio", () => {
     await expect(page.getByTestId("appointment-view-invoice")).toBeVisible();
   });
 
+  test("Inicio: un turno cobrado sin ficha ofrece «Ver comprobante» en su fila y lo abre ahí mismo, sin ir a Facturación", async ({
+    page,
+    request,
+  }) => {
+    const admin = await loginAsDemoApi(request);
+    await ensureCashSessionOpenApi(request, admin);
+    await ensureActiveFiscalStampForInvoices(request, admin);
+    const seed = await seedCategoryServiceProfessional(request, admin);
+    const clientName = `E2E TF Sin Ficha ${Date.now()}`;
+    const client = await seedClient(request, admin, clientName);
+    const turno = await seedTurno(request, admin, seed, client.id);
+    // Charged from Facturación without a ficha: the comprobante is tied to the turno directly.
+    await apiPostJson(request, admin, "/api/invoices", {
+      clientId: client.id,
+      clientDisplayName: null,
+      clientRucOverride: null,
+      discountType: null,
+      discountValue: null,
+      lines: [{ serviceId: seed.serviceId, description: "E2E sin ficha", quantity: 1, unitPrice: 50_000, discountType: null, discountValue: null }],
+      payments: [{ method: "CASH", amount: 50_000 }],
+      serviceRecordId: null,
+      tipsAmount: 0,
+      appointmentId: turno.id,
+    });
+    const charged = await getAppt(request, admin, turno.id);
+    expect(charged.status).toBe("COMPLETED");
+    expect(charged.invoiceId).not.toBeNull();
+    expect(charged.serviceRecordId).toBeNull();
+
+    await loginAsDemo(page);
+    const row = await revealAppointmentRow(page, (rows) => rows.filter({ hasText: clientName }));
+    // No ficha to go to: the row's only link is the comprobante (and there is no «Cobrar»).
+    await expect(row.getByTestId("dashboard-appointment-invoice")).toHaveText("View invoice", { timeout: 20_000 });
+    await expect(row.getByTestId("dashboard-appointment-charge")).toHaveCount(0);
+    await row.getByTestId("dashboard-appointment-invoice").click();
+    await expect(page.getByTestId("invoice-detail-view")).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/app\/?$/);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("invoice-detail-view")).toHaveCount(0);
+    await expect(page).toHaveURL(/\/app\/?$/);
+  });
+
   test("detalle del turno: «Cerrar» a la izquierda y ficha y comprobante en el pie (web); dentro de «Más acciones» (celular)", async ({
     page,
     request,

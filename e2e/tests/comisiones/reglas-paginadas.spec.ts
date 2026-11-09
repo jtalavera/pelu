@@ -9,8 +9,8 @@ import {
 } from "../../fixtures/commissions";
 
 /**
- * Comisiones · Reglas: la lista de Servicios y Productos va paginada (20 por página por defecto;
- * 10, 20 o 50), con «Mostrando…», anterior / siguiente y filas por página.
+ * Comisiones · Reglas: la lista de Servicios y Productos va paginada (10 por página por defecto;
+ * 10, 25 o 50), con «Mostrando…», anterior / siguiente y filas por página.
  */
 let w: CommissionWorld;
 
@@ -53,38 +53,42 @@ async function openRules(page: Page) {
 
 const rows = (page: Page) => page.getByTestId("rules-table").locator("ul > li");
 
-test("20 filas por página: «Mostrando 1–20 de 46», siguiente / anterior y la última página con el resto", async ({ page }) => {
+test("10 filas por página por defecto: «Mostrando 1–10 de 46», siguiente / anterior y la última página con el resto", async ({ page }) => {
   await loginAdminUi(page, w);
   await openRules(page);
-  await expect(rows(page)).toHaveCount(20);
-  await expect(page.getByTestId("rules-showing")).toHaveText("1–20 of 46");
+  await expect(rows(page)).toHaveCount(10);
+  await expect(page.getByTestId("rules-showing")).toHaveText("1–10 of 46");
+  await expect(page.getByTestId("rules-pager").getByRole("combobox")).toHaveValue("10");
 
   const nav = page.getByTestId("rules-pager").getByRole("navigation");
-  await expect(nav).toContainText("1 / 3");
+  await expect(nav).toContainText("1 / 5");
   await nav.getByRole("button", { name: "Next" }).click();
-  await expect(page.getByTestId("rules-showing")).toHaveText("21–40 of 46");
-  await expect(rows(page)).toHaveCount(20);
-  await nav.getByRole("button", { name: "Next" }).click();
+  await expect(page.getByTestId("rules-showing")).toHaveText("11–20 of 46");
+  await expect(rows(page)).toHaveCount(10);
+  for (let i = 0; i < 3; i++) await nav.getByRole("button", { name: "Next" }).click();
   await expect(page.getByTestId("rules-showing")).toHaveText("41–46 of 46");
   await expect(rows(page)).toHaveCount(6);
   await expect(nav.getByRole("button", { name: "Next" })).toBeDisabled();
   await nav.getByRole("button", { name: "Previous" }).click();
-  await expect(page.getByTestId("rules-showing")).toHaveText("21–40 of 46");
+  await expect(page.getByTestId("rules-showing")).toHaveText("31–40 of 46");
 });
 
-test("filas por página (10 / 20 / 50) vuelve a la primera página; con 50 entra todo y no hay anterior / siguiente", async ({ page }) => {
+test("filas por página (10 / 25 / 50) vuelve a la primera página; con 50 entra todo y no hay anterior / siguiente", async ({ page }) => {
   await loginAdminUi(page, w);
   await openRules(page);
+  const select = page.getByTestId("rules-pager").getByRole("combobox");
+  const options = await select.locator("option").evaluateAll((els) => els.map((e) => (e as HTMLOptionElement).value));
+  expect(options).toEqual(["10", "25", "50"]);
   const nav = page.getByTestId("rules-pager").getByRole("navigation");
   await nav.getByRole("button", { name: "Next" }).click();
-  await expect(page.getByTestId("rules-showing")).toHaveText("21–40 of 46");
+  await expect(page.getByTestId("rules-showing")).toHaveText("11–20 of 46");
 
-  await page.getByTestId("rules-pager").getByRole("combobox").selectOption("10");
-  await expect(page.getByTestId("rules-showing")).toHaveText("1–10 of 46");
-  await expect(rows(page)).toHaveCount(10);
-  await expect(nav).toContainText("1 / 5");
+  await select.selectOption("25");
+  await expect(page.getByTestId("rules-showing")).toHaveText("1–25 of 46");
+  await expect(rows(page)).toHaveCount(25);
+  await expect(nav).toContainText("1 / 2");
 
-  await page.getByTestId("rules-pager").getByRole("combobox").selectOption("50");
+  await select.selectOption("50");
   await expect(page.getByTestId("rules-showing")).toHaveText("1–46 of 46");
   await expect(rows(page)).toHaveCount(46);
   await expect(page.getByTestId("rules-pager").getByRole("navigation")).toHaveCount(0);
@@ -94,8 +98,7 @@ test("buscar vuelve a la página 1 y cuenta solo lo que coincide; Productos tien
   await loginAdminUi(page, w);
   await openRules(page);
   const nav = page.getByTestId("rules-pager").getByRole("navigation");
-  await nav.getByRole("button", { name: "Next" }).click();
-  await nav.getByRole("button", { name: "Next" }).click();
+  for (let i = 0; i < 4; i++) await nav.getByRole("button", { name: "Next" }).click();
   await expect(page.getByTestId("rules-showing")).toHaveText("41–46 of 46");
 
   await page.getByTestId("rules-search").fill("Zeta 07");
@@ -105,7 +108,7 @@ test("buscar vuelve a la página 1 y cuenta solo lo que coincide; Productos tien
   await expect(page.getByTestId("rules-pager").getByRole("navigation")).toHaveCount(0);
 
   await page.getByTestId("rules-search").fill("");
-  await expect(page.getByTestId("rules-showing")).toHaveText("1–20 of 46");
+  await expect(page.getByTestId("rules-showing")).toHaveText("1–10 of 46");
 
   // Productos: its own list (one product in this world).
   await page.getByRole("button", { name: "Products", exact: true }).click();
@@ -120,5 +123,5 @@ test("tocar una fila abre su regla sin cambiar de página", async ({ page }) => 
   await nav.getByRole("button", { name: "Next" }).click();
   await rows(page).first().click();
   await page.keyboard.press("Escape");
-  await expect(page.getByTestId("rules-showing")).toHaveText("21–40 of 46");
+  await expect(page.getByTestId("rules-showing")).toHaveText("11–20 of 46");
 });

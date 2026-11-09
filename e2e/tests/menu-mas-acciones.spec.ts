@@ -10,6 +10,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { ensureCalendarShowsClientCard, filterAgendaByProfessional } from "../fixtures/ui";
 import { goToCatalog } from "../fixtures/catalog";
 import { goToInvoiceHistory, searchInvoiceHistory } from "../fixtures/billing";
 
@@ -39,6 +40,10 @@ test.describe("Menú «Más acciones»", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/calendar?view=week");
+    // Only this professional's turnos (others of the same hour would fold ours into «+N»), and on a
+    // Sunday «tomorrow» is next week: navigate to it.
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).first().click({ timeout: 20_000 });
 
     // The trigger reads as a button: on the web it is the round «⋯» (named «More actions»), closed.

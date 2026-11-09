@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   API_BASE,
   apiPostJson,
@@ -10,10 +10,29 @@ import { loginAsDemo } from "../fixtures/auth";
 import { openDashboardMore } from "../fixtures/dashboard";
 import { openFichaDialog, openNewFichaDialog } from "../fixtures/fichas";
 
+/**
+ * «Anular ficha» and «Cerrar» share the footer's action row. Since the ficha redesign «Anular ficha»
+ * lives in that row's «⋯» menu (last item), not as a button of its own.
+ */
+async function expectVoidBesideClose(page: Page, dialog: Locator) {
+  const closeBtn = dialog.getByTestId("service-record-close");
+  const more = dialog.getByTestId("service-record-more");
+  await expect(closeBtn).toBeVisible();
+  await expect(more).toBeVisible();
+  const [c, m] = [(await closeBtn.boundingBox())!, (await more.boundingBox())!];
+  expect(Math.abs(c.y + c.height / 2 - (m.y + m.height / 2))).toBeLessThan(3);
+  await expect(dialog.getByRole("button", { name: "Void record" })).toHaveCount(0);
+  await more.click();
+  const menu = page.getByTestId("service-record-actions-panel");
+  await expect(menu.getByTestId("service-record-void-open")).toBeVisible();
+  await expect(menu.getByRole("menuitem").last()).toHaveAttribute("data-testid", "service-record-void-open");
+  await page.keyboard.press("Escape");
+}
+
 test.describe.configure({ mode: "serial" });
 
 test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
-  test("AC1a · desde la lista de fichas, Anular ficha y Cerrar quedan en la misma fila de acciones", async ({
+  test("AC1a · desde la lista de fichas, Anular ficha (en «⋯») y Cerrar quedan en la misma fila de acciones", async ({
     page,
     request,
   }) => {
@@ -36,22 +55,10 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     await loginAsDemo(page);
     const dialog = await openFichaDialog(page, client.fullName);
 
-    const voidBtn = dialog.getByRole("button", { name: "Void record" });
-    const closeBtn = dialog.getByTestId("service-record-close");
-    await expect(voidBtn).toBeVisible();
-    await expect(closeBtn).toBeVisible();
-
-    const voidBox = await voidBtn.boundingBox();
-    const closeBox = await closeBtn.boundingBox();
-    expect(voidBox).not.toBeNull();
-    expect(closeBox).not.toBeNull();
-    // "aligned to" — both sit in the same action row, so their tops line up.
-    expect(Math.abs(voidBox!.y - closeBox!.y)).toBeLessThan(5);
-    // Redesign: "Void record" sits at the left of the footer; Close / Save / Charge go right.
-    expect(voidBox!.x).toBeLessThan(closeBox!.x);
+    await expectVoidBesideClose(page, dialog);
   });
 
-  test("AC1b · desde el Panel, Anular ficha y Cerrar quedan en la misma fila de acciones", async ({
+  test("AC1b · desde el Panel, Anular ficha (en «⋯») y Cerrar quedan en la misma fila de acciones", async ({
     page,
     request,
   }) => {
@@ -85,17 +92,7 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    const voidBtn = dialog.getByRole("button", { name: "Void record" });
-    const closeBtn = dialog.getByTestId("service-record-close");
-    await expect(voidBtn).toBeVisible();
-    await expect(closeBtn).toBeVisible();
-
-    const voidBox = await voidBtn.boundingBox();
-    const closeBox = await closeBtn.boundingBox();
-    expect(voidBox).not.toBeNull();
-    expect(closeBox).not.toBeNull();
-    expect(Math.abs(voidBox!.y - closeBox!.y)).toBeLessThan(5);
-    expect(voidBox!.x).toBeLessThan(closeBox!.x);
+    await expectVoidBesideClose(page, dialog);
   });
 
   test("AC2 · cliente inactivo no aparece en el buscador de clientes de Ficha de servicio", async ({

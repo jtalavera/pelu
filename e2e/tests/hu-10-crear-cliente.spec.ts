@@ -38,9 +38,13 @@ test.describe("HU-10 · Crear cliente", () => {
     request,
   }) => {
     const token = await loginAsDemoApi(request);
-    const phone = `0981${String(Date.now()).slice(-6)}`;
+    const digits = String(Date.now()).slice(-6);
+    const phone = `0981${digits}`;
+    // The form masks the number as it is typed and saves it as «(0981) 123-456»; seed the first
+    // client the same way so both share exactly the same stored phone.
+    const formatted = `(0981) ${digits.slice(0, 3)}-${digits.slice(3)}`;
     const firstName = `E2E Dup ${Date.now()}`;
-    await seedClient(request, token, firstName, phone);
+    await seedClient(request, token, firstName, formatted);
 
     await loginAsDemo(page);
     await page.goto("/app/clients");
@@ -54,7 +58,7 @@ test.describe("HU-10 · Crear cliente", () => {
     // It saves (no «already exists» error) and both clients are found by that phone.
     await expect(dlg).toHaveCount(0, { timeout: 15_000 });
     await expect(page.getByText(/already exists/i)).toHaveCount(0);
-    await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(phone);
+    await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(formatted);
     await expect(page.getByText(firstName.toUpperCase(), { exact: true }).first()).toBeVisible();
     await expect(page.getByText(secondName.toUpperCase(), { exact: true }).first()).toBeVisible();
   });

@@ -1,7 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { API_BASE, authHeaders, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { enableCommissionsGlobally, restoreCommissionsGlobal } from "../fixtures/commissions";
+import { goToInvoiceHistory } from "../fixtures/billing";
+import {
+  enableCommissionsGlobally,
+  openCommissionsMore,
+  restoreCommissionsGlobal,
+} from "../fixtures/commissions";
 
 /**
  * Buscadores con fecha:
@@ -18,6 +23,8 @@ const monthAgo = new Date(
   Math.min(today.getDate(), new Date(today.getFullYear(), today.getMonth(), 0).getDate()),
 );
 const tooOld = new Date(today.getFullYear() - 1, today.getMonth() - 1, today.getDate());
+/** How LocalizedDateInput shows a date in English (MM/DD/YYYY). */
+const mdy = (d: Date) => `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()}`;
 const inYear = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate() + 2);
 
 test.beforeAll(async ({ request }) => {
@@ -42,6 +49,45 @@ test.describe("Buscadores con fecha · «Desde» un mes atrás y tope de 1 año"
     await page.getByTestId("service-records-filters-toggle").click();
     await page.locator("#service-record-filter-from").fill(ymd(tooOld));
     await expect(page.getByRole("alert")).toContainText(/1 year|1 año/i);
+  });
+
+  test("Facturación · Historial: un «Desde» de más de 1 año se rechaza con el mensaje de 1 año", async ({ page }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await goToInvoiceHistory(page);
+    await page.getByTestId("invoice-history-filters-toggle").click();
+    await page.locator("#invoice-history-from").fill(ymd(tooOld));
+    await expect(page.getByRole("alert").filter({ hasText: /1 year/i })).toContainText(
+      "The start date cannot be more than 1 year in the past.",
+      { timeout: 10_000 },
+    );
+  });
+
+  test("Comisiones: «Desde» arranca un mes atrás en Movimientos, Vista previa y Reportes", async ({ page }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/commissions");
+    // (Generating settlements starts from the current commission period instead, set by the backend.)
+    await page.getByRole("tab", { name: "Movements", exact: true }).click();
+    await page.getByTestId("movements-filters-toggle").click();
+    await expect(page.locator("#mov-from")).toHaveValue(mdy(monthAgo));
+
+    await openCommissionsMore(page, "Preview");
+    await expect(page.locator("#preview-from")).toHaveValue(mdy(monthAgo));
+
+    await openCommissionsMore(page, "Reports");
+    await expect(page.locator("#report-from")).toHaveValue(mdy(monthAgo));
+  });
+
+  test("Auditoría: «Desde» arranca un mes atrás y uno de más de 1 año se rechaza con el mensaje de 1 año", async ({ page }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/settings/audit");
+    await page.getByTestId("audit-filters-toggle").click();
+    const from = page.locator("#audit-from");
+    // Native date input: the value is YYYY-MM-DD.
+    await expect(from).toHaveValue(ymd(monthAgo));
+    await from.fill(ymd(tooOld));
+    await page.getByTestId("audit-search").click();
+    await expect(page.getByText("The start date cannot be more than 1 year in the past.")).toBeVisible({ timeout: 10_000 });
   });
 
   test("API: ninguna búsqueda devuelve información de más de 1 año", async ({ request }) => {

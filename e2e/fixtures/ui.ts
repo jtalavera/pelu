@@ -34,6 +34,15 @@ export async function ensureCalendarShowsAppointmentByTestId(
   await ensureLocatorVisibleByWeekNavigation(page, () => page.getByTestId(testId).first(), opts);
 }
 
+/** Same week sweep for any locator (e.g. a «+N» group card, which has no per-turno test id). */
+export async function ensureCalendarShowsLocator(
+  page: Page,
+  locate: () => Locator,
+  opts?: { maxAheadWeeks?: number; maxBackWeeks?: number },
+): Promise<void> {
+  await ensureLocatorVisibleByWeekNavigation(page, locate, opts);
+}
+
 async function ensureLocatorVisibleByWeekNavigation(
   page: Page,
   locate: () => Locator,

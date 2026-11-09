@@ -141,11 +141,11 @@ test.describe("HU-70 · Ficha de la cliente en pestañas", () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await expect(page.locator("#detail-fullname")).toBeVisible();
 
-    // Page never scrolls sideways; the tab bar scrolls inside itself.
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(1);
+    // Page never scrolls sideways; the tab bar scrolls inside itself. Poll: right after the resize the
+    // desktop layout is still settling into the phone one.
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth))
+      .toBeLessThanOrEqual(1);
     const tablist = page.getByRole("tablist");
     expect(await tablist.evaluate((el) => getComputedStyle(el).overflowX)).toBe("auto");
     const invoicesTab = page.getByRole("tab", { name: "Invoices" });

@@ -98,12 +98,20 @@ test("API: la vista previa respeta el rango pedido y valida el profesional", asy
   );
   expect(Number(ok.total)).toBe(50000);
   expect(ok.lines).toBe(2);
+  // A past range (within the 1-year search limit) before anything was accrued: nothing to settle.
   const past = await apiGetJson<{ total: number; lines: number }>(
     request,
     w.adminToken,
-    `/api/commissions/settlement-preview?professionalId=${w.ana.id}&from=2020-01-01&to=2020-01-31`,
+    `/api/commissions/settlement-preview?professionalId=${w.ana.id}&from=${ymd(-300)}&to=${ymd(-270)}`,
   );
   expect(past.lines).toBe(0);
+  // Older than 1 year: rejected.
+  const tooOld = await request.get(
+    `${API_BASE}/api/commissions/settlement-preview?professionalId=${w.ana.id}&from=2020-01-01&to=2020-01-31`,
+    { headers },
+  );
+  expect(tooOld.status()).toBe(400);
+  expect(await tooOld.text()).toContain("DATE_RANGE_TOO_OLD");
   const missing = await request.get(`${API_BASE}/api/commissions/settlement-preview?professionalId=999999`, { headers });
   expect(missing.status()).toBe(404);
   expect(await missing.text()).toContain("PROFESSIONAL_NOT_FOUND");
@@ -114,8 +122,16 @@ async function pickDay(page: import("@playwright/test").Page, inputId: string, i
   await page.locator(inputId).click();
   const next = page.getByRole("button", { name: "Next month" });
   const day = page.getByRole("button", { name: iso, exact: true });
+  // Wait for the popover to paint before looking for the day (an instant check paged past it).
+  await expect(next).toBeVisible();
+  const dayShown = () =>
+    day
+      .first()
+      .waitFor({ state: "visible", timeout: 1_000 })
+      .then(() => true)
+      .catch(() => false);
   for (let i = 0; i < 14; i++) {
-    if (await day.first().isVisible().catch(() => false)) break;
+    if (await dayShown()) break;
     await next.click();
   }
   await day.first().click({ timeout: 15_000 });

@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { apiBaseUrl, authHeaders, loginPlatformAdminApi } from "../fixtures/api";
 import { loginAsDemo, loginAsPlatformAdmin } from "../fixtures/auth";
+import { setGlobalFlag } from "../fixtures/commissions";
 
 // HU-49 · Configuración global y per-tenant de feature flags
 // requirements/multi-tenant/HU-49-configuracion-global-y-per-tenant-de-feature-flags.md
@@ -39,17 +40,25 @@ test.describe("HU-49 · Funcionalidades Globales", () => {
     const toggle = page.locator(`#global-flag-${GUIDED_TOUR}`);
     await expect(toggle).toBeChecked({ checked: before!.enabled });
 
-    await toggle.click({ force: true });
+    try {
+      await toggle.click({ force: true });
 
-    await expect
-      .poll(async () => (await getGlobalFlag(request, token, GUIDED_TOUR))?.enabled)
-      .toBe(!before!.enabled);
+      await expect
+        .poll(async () => (await getGlobalFlag(request, token, GUIDED_TOUR))?.enabled)
+        .toBe(!before!.enabled);
 
-    // Restore so the shared H2 keeps its seeded state for other specs.
-    await toggle.click({ force: true });
-    await expect
-      .poll(async () => (await getGlobalFlag(request, token, GUIDED_TOUR))?.enabled)
-      .toBe(before!.enabled);
+      // Restore so the shared H2 keeps its seeded state for other specs. Wait for the switch to settle
+      // first: a forced click while it is still saving (disabled) is silently dropped.
+      await expect(toggle).toBeChecked({ checked: !before!.enabled });
+      await expect(toggle).toBeEnabled();
+      await toggle.click({ force: true });
+      await expect
+        .poll(async () => (await getGlobalFlag(request, token, GUIDED_TOUR))?.enabled)
+        .toBe(before!.enabled);
+    } finally {
+      // Never leak a flipped global flag (it turns the guided tour off for every later spec).
+      await setGlobalFlag(request, GUIDED_TOUR, before!.enabled);
+    }
   });
 
   // AC-2: the per-tenant view ("Funcionalidades Tenants") shows the global default read-only and
