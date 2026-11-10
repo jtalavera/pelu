@@ -33,6 +33,7 @@ import {
 import { getCurrentSession, listCashSessionsPaged } from "../api/cashSessions";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { useMe } from "../hooks/useMe";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatGuaraniesGs } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
@@ -145,6 +146,8 @@ export default function PropinasPage() {
   const [balQueryDraft, setBalQueryDraft] = useState("");
   const [balQuery, setBalQuery] = useState("");
   const { me, loading: meLoading } = useMe();
+  // On a phone the movements are a list of two-line rows instead of a four-column table.
+  const isPhone = useMediaQuery("(max-width: 639px)");
   const isAdmin = me?.role === "ADMIN";
   const [manualDialog, setManualDialog] = useState<ManualDialog | null>(null);
   const [manualAmount, setManualAmount] = useState("");
@@ -358,6 +361,54 @@ export default function PropinasPage() {
       return "";
     }
   };
+
+  /**
+   * What a movement says about itself. The table stays simple: one line saying what it is; the rest
+   * (note, who loaded it, why it was voided) is a tooltip, and lives in the audit trail.
+   */
+  function describeMovement(m: Movement) {
+    const manual = m.kind === "tip" ? m.manual : undefined;
+    const voided = manual?.voided === true;
+    const conceptLabel =
+      m.kind === "withdrawal"
+        ? t("femme.propinas.concept.withdrawal")
+        : manual
+          ? t("femme.propinas.concept.manual")
+          : m.client
+            ? t("femme.propinas.concept.tipOf", { name: m.client })
+            : t("femme.propinas.concept.tip");
+    const conceptDetail = manual
+      ? [
+          manual.note,
+          manual.createdByName ? t("femme.propinas.manual.createdBy", { name: manual.createdByName }) : null,
+          voided
+            ? t("femme.propinas.manual.voidedBy", {
+                name: manual.voidedByName ?? "",
+                reason: manual.voidReason ?? "",
+              })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : "";
+    return { manual, voided, conceptLabel, conceptDetail };
+  }
+
+  /** The ⋯ menu (edit / void) of a live manual tip; admin only. */
+  function renderRowMenu(m: Movement) {
+    const { manual, voided } = describeMovement(m);
+    if (!isAdmin || !manual || voided) return null;
+    return (
+      <KebabMenu
+        id={`propinas-manual-${manual.id}`}
+        triggerAriaLabel={t("femme.propinas.manual.rowActions", { name: m.professional })}
+        items={[
+          { id: "edit", label: t("femme.propinas.manual.edit"), onSelect: () => openManualEdit(m) },
+          { id: "void", label: t("femme.propinas.manual.void"), destructive: true, onSelect: () => openVoid(m) },
+        ]}
+      />
+    );
+  }
 
   async function handleExportPdf() {
     setExportError(null);
@@ -904,6 +955,56 @@ export default function PropinasPage() {
           </Text>
         ) : (
           <>
+            {isPhone ? (
+              <ul className="flex flex-col" data-testid="propinas-movements-cards">
+                {pagedMovements.map((m) => {
+                  const { manual, voided, conceptLabel, conceptDetail } = describeMovement(m);
+                  return (
+                    <li
+                      key={m.key}
+                      data-testid="propinas-movement"
+                      data-kind={m.kind}
+                      data-manual={manual ? "true" : undefined}
+                      data-voided={voided ? "true" : undefined}
+                      title={conceptDetail || undefined}
+                      className="flex items-center gap-2 border-t border-line py-3 first:border-t-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`truncate font-semibold ${voided ? "text-ink-3 line-through" : "text-ink"}`}
+                            data-testid="propinas-movement-concept"
+                          >
+                            {conceptLabel}
+                          </span>
+                          {voided ? (
+                            <span
+                              className="shrink-0 rounded-full bg-danger-lt px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-danger"
+                              data-testid="propinas-voided-tag"
+                            >
+                              {t("femme.propinas.manual.voidedTag")}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="truncate text-xs text-ink-3">
+                          {fmtDay(m.at)} · {fmtTime(m.at)} · {m.professional}
+                        </div>
+                      </div>
+                      <b
+                        data-testid="propinas-movement-amount"
+                        className={`shrink-0 whitespace-nowrap font-heading text-sm ${
+                          m.kind === "withdrawal" ? "text-ink-2" : voided ? "text-ink-3 line-through" : "text-ink"
+                        }`}
+                      >
+                        {m.kind === "withdrawal" ? "− " : ""}
+                        {formatGuaraniesGs(m.amount)}
+                      </b>
+                      {isAdmin ? <div className="w-11 shrink-0 text-right">{renderRowMenu(m)}</div> : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[26rem] border-collapse text-sm" data-testid="propinas-table">
                 <thead>
@@ -917,34 +1018,7 @@ export default function PropinasPage() {
                 </thead>
                 <tbody>
                   {pagedMovements.map((m) => {
-                    const manual = m.kind === "tip" ? m.manual : undefined;
-                    const voided = manual?.voided === true;
-                    // The table stays simple: one line saying what the movement is. The rest (note,
-                    // who loaded it, why it was voided) is a tooltip, and lives in the audit trail.
-                    const conceptLabel =
-                      m.kind === "withdrawal"
-                        ? t("femme.propinas.concept.withdrawal")
-                        : manual
-                          ? t("femme.propinas.concept.manual")
-                          : m.client
-                            ? t("femme.propinas.concept.tipOf", { name: m.client })
-                            : t("femme.propinas.concept.tip");
-                    const conceptDetail = manual
-                      ? [
-                          manual.note,
-                          manual.createdByName
-                            ? t("femme.propinas.manual.createdBy", { name: manual.createdByName })
-                            : null,
-                          voided
-                            ? t("femme.propinas.manual.voidedBy", {
-                                name: manual.voidedByName ?? "",
-                                reason: manual.voidReason ?? "",
-                              })
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")
-                      : "";
+                    const { manual, voided, conceptLabel, conceptDetail } = describeMovement(m);
                     return (
                     <tr
                       key={m.key}
@@ -986,35 +1060,14 @@ export default function PropinasPage() {
                         {m.kind === "withdrawal" ? "− " : ""}
                         {formatGuaraniesGs(m.amount)}
                       </td>
-                      {isAdmin ? (
-                        <td className="px-1 text-right">
-                          {manual && !voided ? (
-                            <KebabMenu
-                              id={`propinas-manual-${manual.id}`}
-                              triggerAriaLabel={t("femme.propinas.manual.rowActions", { name: m.professional })}
-                              items={[
-                                {
-                                  id: "edit",
-                                  label: t("femme.propinas.manual.edit"),
-                                  onSelect: () => openManualEdit(m),
-                                },
-                                {
-                                  id: "void",
-                                  label: t("femme.propinas.manual.void"),
-                                  destructive: true,
-                                  onSelect: () => openVoid(m),
-                                },
-                              ]}
-                            />
-                          ) : null}
-                        </td>
-                      ) : null}
+                      {isAdmin ? <td className="px-1 text-right">{renderRowMenu(m)}</td> : null}
                     </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
+            )}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
               <PageSizeSelect
                 value={movPageSize}
