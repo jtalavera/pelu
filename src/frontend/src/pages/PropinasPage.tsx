@@ -123,6 +123,12 @@ export default function PropinasPage() {
   const [report, setReport] = useState<TipReportResponse | null>(null);
   const [withdrawals, setWithdrawals] = useState<TipWithdrawalHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // The period/range the table currently on screen was loaded for. While a new one loads, the old
+  // rows stay put (dimmed) instead of being replaced by a spinner: the card keeps its height and the
+  // page does not jump.
+  const [shown, setShown] = useState<{ range: { from: string; to: string }; period: Period | null }>(
+    () => ({ range: periodRange(30), period: 30 }),
+  );
   // First-load gates: the page is shown in one go (balances card + movements) instead of the
   // movements popping in first and the balances — a professionals fetch followed by one request
   // per professional — arriving (and re-sorting the list) afterwards.
@@ -245,6 +251,7 @@ export default function PropinasPage() {
         if (cancelled) return;
         setReport(rep);
         setWithdrawals(wds.content);
+        setShown({ range, period });
         setMovPage(0);
       } catch (err) {
         if (!cancelled) {
@@ -283,8 +290,10 @@ export default function PropinasPage() {
     (activeProfessionals.length === 0 || balancesLoaded);
 
   const movements = useMemo<Movement[]>(() => {
-    const fromMs = new Date(localDateYmdToIsoStart(range.from)).getTime();
-    const toMs = new Date(localDateYmdToIsoEnd(range.to)).getTime();
+    // Withdrawals are filtered by the range the report on screen was loaded for, not by the one just
+    // picked (its data is still on its way).
+    const fromMs = new Date(localDateYmdToIsoStart(shown.range.from)).getTime();
+    const toMs = new Date(localDateYmdToIsoEnd(shown.range.to)).getTime();
     const tips: Movement[] = (report?.rows ?? []).map((row, i) => ({
       kind: "tip",
       key: `tip-${row.manualTipId ?? ""}-${row.professionalId}-${row.serviceDateTime}-${i}`,
@@ -318,7 +327,7 @@ export default function PropinasPage() {
         amount: Number(w.amount),
       }));
     return [...tips, ...wds].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-  }, [report, withdrawals, range]);
+  }, [report, withdrawals, shown]);
 
   const movPages = Math.max(1, Math.ceil(movements.length / movPageSize));
   const safeMovPage = Math.min(movPage, movPages - 1);
@@ -330,7 +339,9 @@ export default function PropinasPage() {
   // of the period are the net plus what was withdrawn — the two figures shown are tips and withdrawals.
   const withdrawnTotal = Number(report?.withdrawalsTotal ?? 0);
   const tipsTotal = Number(report?.grandTotal ?? 0) + withdrawnTotal;
-  const periodDays = period ?? 0;
+  // The summary line describes what is on screen; the active-filter chip follows the live choice.
+  const periodDays = shown.period ?? 0;
+  const livePeriodDays = period ?? 0;
 
   const fmtDay = (iso: string) => {
     try {
@@ -789,7 +800,7 @@ export default function PropinasPage() {
               {t("femme.propinas.withdrawnLabel")}
             </span>
             <span className="text-ink-3">
-              {period ? t("femme.propinas.inPeriod", { count: periodDays }) : t("femme.propinas.inRange")}
+              {shown.period ? t("femme.propinas.inPeriod", { count: periodDays }) : t("femme.propinas.inRange")}
             </span>
           </div>
         </div>
@@ -799,7 +810,7 @@ export default function PropinasPage() {
         >
           {t("femme.propinas.activeFilter", {
             period: period
-              ? t("femme.propinas.lastDays", { count: periodDays })
+              ? t("femme.propinas.lastDays", { count: livePeriodDays })
               : `${range.from} – ${range.to}`,
             professional:
               professionalId === ""
@@ -882,12 +893,12 @@ export default function PropinasPage() {
           </div>
         ) : null}
       </div>
-        {loading ? (
-          <div className="flex items-center gap-2 py-4">
-            <Spinner size="sm" />
-            <Text>{t("femme.propinas.report.loading")}</Text>
-          </div>
-        ) : movements.length === 0 ? (
+        <div
+          aria-busy={loading}
+          data-testid="propinas-movements-list"
+          className={loading ? "pointer-events-none opacity-60 transition-opacity" : "transition-opacity"}
+        >
+        {movements.length === 0 ? (
           <Text variant="muted" className="py-3" data-testid="propinas-empty">
             {t("femme.propinas.emptyMovements")}
           </Text>
@@ -1030,6 +1041,7 @@ export default function PropinasPage() {
             </div>
           </>
         )}
+        </div>
       </section>
       </>
       ) : null}

@@ -586,4 +586,41 @@ describe("PropinasPage", () => {
     releaseMe();
     expect(await screen.findByTestId("propinas-add-1")).toBeTruthy();
   });
+
+  it("changing the period keeps the movements on screen (dimmed) while the new ones load: no jump", async () => {
+    const base = femmeJson.getMockImplementation()!;
+    let calls = 0;
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    femmeJson.mockImplementation((url: unknown) => {
+      if (String(url).startsWith("/api/propinas/report?")) {
+        calls += 1;
+        // The first (initial) request answers at once; the one after picking a period waits.
+        if (calls > 1) return gate.then(() => base(url));
+      }
+      return base(url);
+    });
+    renderPage();
+    const table = await screen.findByTestId("propinas-table");
+    expect(screen.getByTestId("propinas-movements-list").getAttribute("aria-busy")).toBe("false");
+
+    await userEvent.click(screen.getByTestId("propinas-period-7"));
+
+    // While the 7-day request is pending the same table is still there (not replaced by a spinner),
+    // marked busy; the chip already shows the new choice.
+    await waitFor(() =>
+      expect(screen.getByTestId("propinas-movements-list").getAttribute("aria-busy")).toBe("true"),
+    );
+    expect(screen.getByTestId("propinas-table")).toBe(table);
+    expect(screen.queryByText(/loading/i)).toBeNull();
+    expect(screen.getByTestId("propinas-period-7").getAttribute("aria-pressed")).toBe("true");
+
+    release();
+    await waitFor(() =>
+      expect(screen.getByTestId("propinas-movements-list").getAttribute("aria-busy")).toBe("false"),
+    );
+    expect(screen.getByTestId("propinas-table")).toBeTruthy();
+  });
 });
