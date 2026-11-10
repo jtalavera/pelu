@@ -153,6 +153,8 @@ test.describe("Issue #120 · Propinas", () => {
     const rowA = propinasMovements(page).filter({ hasText: clientA.fullName });
     await expect(rowA).toHaveCount(1, { timeout: 15_000 });
     await expect(rowA).toContainText("Gs. 5.000");
+    // The concept is simple and says what it is: «Tip from <client>».
+    await expect(rowA.getByTestId("propinas-movement-concept")).toContainText(/^Tip from /i);
     await expect(rowA).toContainText(seed.professionalFullName);
     await expect(propinasMovements(page).filter({ hasText: clientB.fullName })).toHaveCount(0);
 

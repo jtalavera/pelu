@@ -3269,6 +3269,12 @@
       "balancesNoMatch": "No professional matches “{{query}}”.",
       "balancesNoMatchHint": "Check the name or clear the search.",
       "initialLoading": "Loading tips…",
+      "concept": {
+        "tipOf": "Tip from {{name}}",
+        "tip": "Tip",
+        "manual": "Manual tip",
+        "withdrawal": "Tips withdrawal"
+      },
       "manual": {
         "addButton": "Add tip",
         "addFor": "Add tip to {{name}}",
@@ -3294,7 +3300,6 @@
         "submitting": "Saving…",
         "added": "Manual tip added.",
         "edited": "Manual tip updated.",
-        "tag": "Manual",
         "voidedTag": "Voided",
         "createdBy": "loaded by {{name}}",
         "voidedBy": "Voided by {{name}} · {{reason}}",
@@ -3333,7 +3338,6 @@
       "withdrawnInRange": "Withdrawn in range",
       "movementsTitle": "Movements",
       "emptyMovements": "No movements in this period.",
-      "withdrawalTag": "Withdrawal",
       "showMore": "Show more",
       "withdrawTitle": "Withdraw tips",
       "withdrawAll": "Withdraw all ({{amount}})",
