@@ -65,3 +65,51 @@ test.describe("Propinas · cambio de período sin salto", () => {
     await expect(page.getByTestId("propinas-table")).toBeVisible();
   });
 });
+
+test.describe("Propinas · Movimientos en celular", () => {
+  test("son una lista de filas de dos líneas y el monto se ve sin deslizar", async ({ page, request }) => {
+    test.setTimeout(90_000);
+    const token = await loginAsDemoApi(request);
+    const pro = await apiPostJson<{ id: number }>(request, token, "/api/professionals", {
+      fullName: `Zzcelu ${Date.now()}`,
+      phone: null,
+      email: null,
+      photoDataUrl: null,
+    });
+    await apiPostJson(request, token, "/api/propinas/manual", {
+      professionalId: pro.id,
+      amount: 12000,
+      tippedAt: new Date(Date.now() - 3_600_000).toISOString(),
+      note: "Efectivo",
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAsDemo(page);
+    await page.goto("/app/propinas");
+    const cards = page.getByTestId("propinas-movements-cards");
+    await expect(cards).toBeVisible({ timeout: 20_000 });
+    // No four-column table that has to be scrolled sideways.
+    await expect(page.getByTestId("propinas-table")).toHaveCount(0);
+
+    const row = cards.getByTestId("propinas-movement").first();
+    await row.scrollIntoViewIfNeeded();
+    await expect(row.getByTestId("propinas-movement-concept")).toBeVisible();
+    // The amount is fully inside the screen (it used to be cut off on the right).
+    const amount = await row.getByTestId("propinas-movement-amount").boundingBox();
+    expect(amount).not.toBeNull();
+    expect(amount!.x).toBeGreaterThanOrEqual(0);
+    expect(amount!.x + amount!.width).toBeLessThanOrEqual(390);
+    // Nothing makes the page wider than the phone.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+
+    // The manual tip's menu is there for the admin and opens inside the screen.
+    // (a voided tip from another spec has no menu: take a live one)
+    const manualRow = cards.locator('[data-manual="true"]:not([data-voided="true"])').first();
+    await manualRow.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await manualRow.getByRole("button").click();
+    await expect(page.getByRole("menuitem", { name: "Edit" })).toBeVisible();
+  });
+});

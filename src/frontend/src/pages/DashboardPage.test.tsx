@@ -318,4 +318,31 @@ describe("DashboardPage loads in one go", () => {
     await waitFor(() => expect(screen.queryByTestId("dashboard-loading")).toBeNull());
     expect(screen.getByTestId("dashboard-summary").closest("[hidden]")).toBeNull();
   });
+
+  it("never mounts the summary with placeholder zeros: it exists only once the numbers arrived", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    femmeJson.mockImplementation(() =>
+      gate.then(() => ({
+        appointmentsToday: { total: 3, pending: 3, confirmed: 0, inProgress: 0, completed: 0 },
+        revenueDay: { invoiced: "0", collected: "890000" },
+        revenueWeek: { invoiced: "0", collected: "0" },
+        clientsThisMonth: 0,
+        fiscalAlerts: [],
+        inactiveClients: [],
+        inactiveClientsThresholdDays: 60,
+      })),
+    );
+    renderPage();
+    await screen.findByTestId("dashboard-loading");
+    await new Promise((r) => setTimeout(r, 30));
+    // Still waiting for /api/dashboard: no «Gs. 0 collected» (hidden or not) can be queried yet.
+    expect(screen.queryByTestId("dashboard-summary-collected")).toBeNull();
+
+    release();
+    // The first thing a query can ever find is already the real figure.
+    expect((await screen.findByTestId("dashboard-summary-collected")).textContent).toMatch(/890/);
+  });
 });

@@ -548,7 +548,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── 3. ONE-LINE SUMMARY ── */}
+      {/* ── 3. ONE-LINE SUMMARY ── (only once the numbers are there: never a placeholder «0») */}
+      {data ? (
       <div data-tour="dashboard-metrics" data-testid="dashboard-summary" className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
         <span className="font-heading text-xl font-extrabold tabular-nums text-ink" data-testid="dashboard-summary-appointments">
           {t("femme.dashboard.home.summaryAppointments", { count: a.total })}
@@ -558,6 +559,7 @@ export default function DashboardPage() {
           {t("femme.dashboard.home.summaryCollected", { amount: formatGuaraniesGs(data?.revenueDay.collected ?? 0) })}
         </span>
       </div>
+      ) : null}
 
       {/* ── 4. TODAY'S APPOINTMENTS ── */}
       <section data-tour="dashboard-appt-list" className="flex flex-col gap-2.5">
