@@ -623,4 +623,73 @@ describe("PropinasPage", () => {
     );
     expect(screen.getByTestId("propinas-table")).toBeTruthy();
   });
+
+  describe("on a phone", () => {
+    const original = window.matchMedia;
+    beforeEach(() => {
+      window.matchMedia = ((query: string) => ({
+        matches: query === "(max-width: 639px)",
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })) as unknown as typeof window.matchMedia;
+    });
+    afterEach(() => {
+      window.matchMedia = original;
+    });
+
+    it("movements are a list of two-line rows (no table that overflows the screen)", async () => {
+      const base = femmeJson.getMockImplementation()!;
+      femmeJson.mockImplementation((url: unknown) => {
+        if (String(url).startsWith("/api/propinas/report?")) {
+          return Promise.resolve({
+            ...report([]),
+            rows: [
+              {
+                professionalId: 1,
+                professionalName: "Laura",
+                amount: 20000,
+                clientName: "Marta Benítez",
+                serviceDateTime: recent.toISOString(),
+              },
+              {
+                professionalId: 2,
+                professionalName: "Ana",
+                amount: 50000,
+                clientName: null,
+                serviceDateTime: wdDate.toISOString(),
+                manualTipId: 8,
+                note: "Error",
+                createdByName: "Tania",
+                voided: true,
+                voidReason: "Monto mal cargado",
+                voidedByName: "Tania",
+              },
+            ],
+          });
+        }
+        return base(url);
+      });
+      renderPage();
+
+      const cards = await screen.findByTestId("propinas-movements-cards");
+      expect(screen.queryByTestId("propinas-table")).toBeNull();
+      const items = within(cards).getAllByTestId("propinas-movement");
+      const tip = items.find((el) => el.getAttribute("data-kind") === "tip" && el.getAttribute("data-manual") !== "true")!;
+      // Line 1: what it is + the amount; line 2: date · time · professional.
+      expect(within(tip).getByTestId("propinas-movement-concept").textContent).toBe("Tip from Marta Benítez");
+      expect(within(tip).getByTestId("propinas-movement-amount").textContent).toMatch(/20\.000/);
+      expect(tip.textContent).toMatch(/Laura/);
+
+      const voided = items.find((el) => el.getAttribute("data-voided") === "true")!;
+      expect(within(voided).getByTestId("propinas-voided-tag")).toBeTruthy();
+      expect(voided.getAttribute("title")).toMatch(/Monto mal cargado/);
+      // A voided manual tip has no menu.
+      expect(within(voided).queryByRole("button")).toBeNull();
+    });
+  });
 });
