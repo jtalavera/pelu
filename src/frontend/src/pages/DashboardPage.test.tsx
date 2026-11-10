@@ -281,3 +281,41 @@ describe("DashboardPage · Turnos de hoy (por atender o cobrar, cobrados plegado
     expect(screen.getByTestId("dashboard-appointments-charged-count").textContent).toBe("1");
   });
 });
+
+describe("DashboardPage loads in one go", () => {
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    femmeJson.mockReset();
+    femmeJson.mockResolvedValue({
+      appointmentsToday: { total: 3, pending: 3, confirmed: 0, inProgress: 0, completed: 0 },
+      revenueDay: { invoiced: "0", collected: "41000" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+    });
+  });
+
+  it("keeps the whole page hidden behind one loading state until the agenda has answered", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    listAppointmentsMock.mockReset();
+    listAppointmentsMock.mockImplementation(() => gate.then(() => []));
+
+    renderPage();
+    expect(await screen.findByTestId("dashboard-loading")).toBeTruthy();
+    // The summary request answered long ago, but its numbers (e.g. «0 turnos hoy» while the agenda
+    // is still loading) must not be on screen yet.
+    await waitFor(() => expect(femmeJson).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.getByTestId("dashboard-loading")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-summary").closest("[hidden]")).not.toBeNull();
+
+    release();
+    await waitFor(() => expect(screen.queryByTestId("dashboard-loading")).toBeNull());
+    expect(screen.getByTestId("dashboard-summary").closest("[hidden]")).toBeNull();
+  });
+});

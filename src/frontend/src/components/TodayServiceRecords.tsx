@@ -66,12 +66,15 @@ export function TodayServiceRecords({
   professionalMode = false,
   refreshKey = 0,
   onNewRecord,
+  onLoaded,
 }: {
   professionalMode?: boolean;
   /** Opens "Nueva ficha" (adds the "+ Nueva ficha" row and the empty-state button); omit to hide them. */
   onNewRecord?: () => void;
   /** Bumped by the host when something outside changed (a ficha was created / assigned). */
   refreshKey?: number;
+  /** Called once, when the first load has finished (so the host can show the page in one go). */
+  onLoaded?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -172,6 +175,12 @@ export function TodayServiceRecords({
   const closedShown = closedExpanded || (searching && visibleClosed.length > 0);
   const showOlder = !professionalMode && olderOpen > 0 && !searching;
   const nothingToday = loaded && openRecords.length === 0 && closedTotal === 0;
+
+  const onLoadedRef = useRef(onLoaded);
+  onLoadedRef.current = onLoaded;
+  useEffect(() => {
+    if (loaded) onLoadedRef.current?.();
+  }, [loaded]);
 
   async function loadMore() {
     setLoadingMore(true);
