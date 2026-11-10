@@ -204,7 +204,9 @@ test.describe("Propina manual (solo admin)", () => {
     await expect(row).toHaveCount(1);
     await expect(row.getByTestId("propinas-movement-concept")).toHaveText("Manual tip");
 
-    // Edit: the professional is fixed, the amount can change.
+    // Edit: the professional is fixed, the amount can change. The row menu opens as a floating
+    // popover under its button: centre the row first so the popover is inside the viewport.
+    await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
     await row.getByRole("button").click();
     await page.getByRole("menuitem", { name: "Edit" }).click();
     await expect(page.getByTestId("propinas-manual-professional")).toBeDisabled();
@@ -217,6 +219,7 @@ test.describe("Propina manual (solo admin)", () => {
     await expect(row).toContainText("Gs. 30.000");
 
     // Void: the reason is mandatory.
+    await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
     await row.getByRole("button").click();
     await page.getByRole("menuitem", { name: "Void" }).click();
     await page.getByTestId("propinas-void-confirm").click();
