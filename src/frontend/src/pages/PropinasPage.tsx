@@ -541,19 +541,31 @@ export default function PropinasPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl">
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-heading text-2xl font-extrabold text-ink">{t("femme.propinas.pageTitle")}</h1>
-        <KebabMenu
-          id="propinas-more"
-          triggerAriaLabel={t("femme.propinas.moreActions")}
-          items={[
-            {
-              id: "export-pdf",
-              label: t("femme.propinas.report.exportPdf"),
-              onSelect: () => void handleExportPdf(),
-            },
-          ]}
-        />
+        <div className="flex items-center gap-1 max-sm:w-full max-sm:justify-end">
+          {pageReady && isAdmin ? (
+            <Button
+              type="button"
+              className="min-h-11 max-sm:flex-1"
+              data-testid="propinas-add-manual"
+              onClick={() => openManualCreate("")}
+            >
+              + {t("femme.propinas.manual.addButton")}
+            </Button>
+          ) : null}
+          <KebabMenu
+            id="propinas-more"
+            triggerAriaLabel={t("femme.propinas.moreActions")}
+            items={[
+              {
+                id: "export-pdf",
+                label: t("femme.propinas.report.exportPdf"),
+                onSelect: () => void handleExportPdf(),
+              },
+            ]}
+          />
+        </div>
       </div>
 
       {exportError ? (
@@ -755,17 +767,6 @@ export default function PropinasPage() {
           <h2 className="font-heading text-base font-extrabold text-ink">
             {t("femme.propinas.movementsTitle")}
           </h2>
-          {isAdmin ? (
-            <Button
-              type="button"
-              variant="secondary"
-              className="min-h-11"
-              data-testid="propinas-add-manual"
-              onClick={() => openManualCreate("")}
-            >
-              + {t("femme.propinas.manual.addButton")}
-            </Button>
-          ) : null}
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2" data-testid="propinas-summary">
             <span>
               <b className="text-ink" data-testid="propinas-tips-total">
@@ -899,6 +900,32 @@ export default function PropinasPage() {
                   {pagedMovements.map((m) => {
                     const manual = m.kind === "tip" ? m.manual : undefined;
                     const voided = manual?.voided === true;
+                    // The table stays simple: one line saying what the movement is. The rest (note,
+                    // who loaded it, why it was voided) is a tooltip, and lives in the audit trail.
+                    const conceptLabel =
+                      m.kind === "withdrawal"
+                        ? t("femme.propinas.concept.withdrawal")
+                        : manual
+                          ? t("femme.propinas.concept.manual")
+                          : m.client
+                            ? t("femme.propinas.concept.tipOf", { name: m.client })
+                            : t("femme.propinas.concept.tip");
+                    const conceptDetail = manual
+                      ? [
+                          manual.note,
+                          manual.createdByName
+                            ? t("femme.propinas.manual.createdBy", { name: manual.createdByName })
+                            : null,
+                          voided
+                            ? t("femme.propinas.manual.voidedBy", {
+                                name: manual.voidedByName ?? "",
+                                reason: manual.voidReason ?? "",
+                              })
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : "";
                     return (
                     <tr
                       key={m.key}
@@ -912,45 +939,23 @@ export default function PropinasPage() {
                         {fmtDay(m.at)}
                         <span className="ml-1.5 text-xs font-normal text-ink-3">{fmtTime(m.at)}</span>
                       </td>
-                      <td className="px-2 py-1.5 text-ink">
-                        {m.kind === "tip" ? (
-                          manual ? (
-                            <span className="flex flex-col gap-0.5">
-                              <span className="flex flex-wrap items-center gap-1.5">
-                                <span className={voided ? "line-through" : undefined}>
-                                  {manual.note ?? t("femme.propinas.manual.tag")}
-                                </span>
-                                <span className="rounded-full bg-warning-lt px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-warning">
-                                  {t("femme.propinas.manual.tag")}
-                                </span>
-                                {voided ? (
-                                  <span
-                                    className="rounded-full bg-danger-lt px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-danger"
-                                    data-testid="propinas-voided-tag"
-                                  >
-                                    {t("femme.propinas.manual.voidedTag")}
-                                  </span>
-                                ) : null}
-                              </span>
-                              <span className="text-xs text-ink-3">
-                                {voided
-                                  ? t("femme.propinas.manual.voidedBy", {
-                                      name: manual.voidedByName ?? "",
-                                      reason: manual.voidReason ?? "",
-                                    })
-                                  : manual.createdByName
-                                    ? t("femme.propinas.manual.createdBy", { name: manual.createdByName })
-                                    : null}
-                              </span>
-                            </span>
-                          ) : (
-                            <span className="whitespace-nowrap">{m.client}</span>
-                          )
-                        ) : (
-                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-ink-3">
-                            {t("femme.propinas.withdrawalTag")}
+                      <td className="px-2 text-ink" title={conceptDetail || undefined}>
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={`max-w-[16rem] truncate font-semibold ${voided ? "text-ink-3 line-through" : ""}`}
+                            data-testid="propinas-movement-concept"
+                          >
+                            {conceptLabel}
                           </span>
-                        )}
+                          {voided ? (
+                            <span
+                              className="rounded-full bg-danger-lt px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-danger"
+                              data-testid="propinas-voided-tag"
+                            >
+                              {t("femme.propinas.manual.voidedTag")}
+                            </span>
+                          ) : null}
+                        </span>
                       </td>
                       <td className="whitespace-nowrap px-2 text-ink">{m.professional}</td>
                       <td

@@ -6,6 +6,7 @@ import {
   loginAsDemoApi,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { filterPropinasByProfessional, propinasMovements } from "../fixtures/propinas";
 
 /**
  * Propinas: buscador sobre «Propina acumulada por profesional» (con el total de lo que se ve) y
@@ -130,19 +131,20 @@ test.describe("Propina manual (solo admin)", () => {
     await expect(page.getByTestId("propinas-toast")).toContainText("Manual tip added.");
     await expect(dialog).toHaveCount(0);
 
-    // The accumulated balance grew and the movement is listed, flagged «Manual».
+    // The accumulated balance grew and the movement is listed; the table stays simple: «Manual tip»,
+    // without the note (that is a tooltip) or who loaded it.
     await expect(page.getByTestId(`propinas-balance-${pro.id}`)).toHaveText("Gs. 20.000");
-    const row = page
-      .getByTestId("propinas-movement")
-      .filter({ hasText: `Zzman Uno ${stamp}`.toUpperCase() })
-      .or(page.getByTestId("propinas-movement").filter({ hasText: "Propina en efectivo" }));
-    await expect(row.first()).toBeVisible();
-    await expect(row.first()).toHaveAttribute("data-manual", "true");
-    await expect(row.first()).toContainText("Manual");
-    await expect(row.first()).toContainText("Gs. 20.000");
+    await filterPropinasByProfessional(page, pro.fullName);
+    const row = propinasMovements(page);
+    await expect(row).toHaveCount(1);
+    await expect(row).toHaveAttribute("data-manual", "true");
+    await expect(row.getByTestId("propinas-movement-concept")).toHaveText("Manual tip");
+    await expect(row).not.toContainText("Propina en efectivo");
+    await expect(row.locator("td[title]")).toHaveAttribute("title", /Propina en efectivo/);
+    await expect(row).toContainText("Gs. 20.000");
   });
 
-  test("«Agregar propina» de Movimientos pide la profesional y no admite fechas futuras", async ({
+  test("«Agregar propina» del encabezado pide la profesional y no admite fechas futuras", async ({
     page,
     request,
   }) => {
@@ -152,6 +154,9 @@ test.describe("Propina manual (solo admin)", () => {
     const pro = await seedProfessional(request, token, `Zzman Dos ${stamp}`);
 
     await openPropinas(page);
+    // The button is in the page header (next to the title), not in the Movimientos card.
+    await expect(page.locator("div:has(> h1)").getByTestId("propinas-add-manual")).toBeVisible();
+    await expect(page.getByTestId("propinas-movements").getByTestId("propinas-add-manual")).toHaveCount(0);
     await page.getByTestId("propinas-add-manual").click();
     await expect(page.getByTestId("propinas-manual-professional")).toHaveValue("");
 
@@ -189,14 +194,15 @@ test.describe("Propina manual (solo admin)", () => {
     const token = await loginAsDemoApi(request);
     const stamp = Date.now();
     const pro = await seedProfessional(request, token, `Zzman Tres ${stamp}`);
-    const note = `Nota ${stamp}`;
-    await seedManualTip(request, token, pro.id, 20000, note);
+    await seedManualTip(request, token, pro.id, 20000, `Nota ${stamp}`);
 
     await openPropinas(page);
     await searchProfessional(page, `zzman tres ${stamp}`);
     await expect(page.getByTestId(`propinas-balance-${pro.id}`)).toHaveText("Gs. 20.000");
-    const row = page.getByTestId("propinas-movement").filter({ hasText: note });
+    await filterPropinasByProfessional(page, pro.fullName);
+    const row = propinasMovements(page);
     await expect(row).toHaveCount(1);
+    await expect(row.getByTestId("propinas-movement-concept")).toHaveText("Manual tip");
 
     // Edit: the professional is fixed, the amount can change.
     await row.getByRole("button").click();
@@ -208,10 +214,10 @@ test.describe("Propina manual (solo admin)", () => {
     await page.getByTestId("propinas-manual-confirm").click();
     await expect(page.getByTestId("propinas-toast")).toContainText("Manual tip updated.");
     await expect(page.getByTestId(`propinas-balance-${pro.id}`)).toHaveText("Gs. 30.000");
-    await expect(page.getByTestId("propinas-movement").filter({ hasText: note })).toContainText("Gs. 30.000");
+    await expect(row).toContainText("Gs. 30.000");
 
     // Void: the reason is mandatory.
-    await page.getByTestId("propinas-movement").filter({ hasText: note }).getByRole("button").click();
+    await row.getByRole("button").click();
     await page.getByRole("menuitem", { name: "Void" }).click();
     await page.getByTestId("propinas-void-confirm").click();
     await expect(page.locator("#propinas-void-reason-err")).toHaveText(
@@ -223,10 +229,12 @@ test.describe("Propina manual (solo admin)", () => {
 
     // It no longer counts, but stays listed as «Voided» with who and why, and has no actions left.
     await expect(page.getByTestId(`propinas-balance-${pro.id}`)).toHaveText("Gs. 0");
-    const voided = page.getByTestId("propinas-movement").filter({ hasText: note });
+    const voided = propinasMovements(page);
     await expect(voided).toHaveAttribute("data-voided", "true");
     await expect(voided.getByTestId("propinas-voided-tag")).toBeVisible();
-    await expect(voided).toContainText("Monto mal cargado");
+    // The table does not show the reason; it is in the tooltip.
+    await expect(voided).not.toContainText("Monto mal cargado");
+    await expect(voided.locator("td[title]")).toHaveAttribute("title", /Monto mal cargado/);
     await expect(voided.getByRole("button")).toHaveCount(0);
   });
 

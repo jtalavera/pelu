@@ -158,7 +158,9 @@ describe("PropinasPage", () => {
     // Newest first: the tip (1 day ago) then the withdrawal (2 days ago).
     expect(items.map((el) => el.getAttribute("data-kind"))).toEqual(["tip", "withdrawal"]);
     expect(within(items[0]).getByText(/Marta Benítez/)).toBeTruthy();
-    expect(items[1].textContent).toMatch(/Withdrawal/);
+    // One simple line per movement: what it is (and, for a tip, whose it is).
+    expect(items[0].textContent).toMatch(/Tip from Marta Benítez/);
+    expect(items[1].textContent).toMatch(/Tips withdrawal/);
     expect(items[1].textContent).toMatch(/− Gs\. 60\.000/);
   });
 
@@ -459,11 +461,16 @@ describe("PropinasPage", () => {
       expect(manualRows).toHaveLength(2);
       const voidedRow = manualRows.find((r) => r.getAttribute("data-voided") === "true")!;
       expect(within(voidedRow).getByTestId("propinas-voided-tag")).toBeTruthy();
-      expect(voidedRow.textContent).toMatch(/Monto mal cargado/);
+      // Simple table: the voided tip says only «Manual tip» + «Voided»; the reason is a tooltip.
+      expect(voidedRow.textContent).not.toMatch(/Monto mal cargado/);
+      expect(voidedRow.querySelector("td[title]")?.getAttribute("title")).toMatch(/Monto mal cargado/);
       // A voided tip has no actions left.
       expect(within(voidedRow).queryByRole("button")).toBeNull();
 
       const liveRow = manualRows.find((r) => r.getAttribute("data-voided") !== "true")!;
+      // A live manual tip reads «Manual tip»: the note and who loaded it are not in the table.
+      expect(within(liveRow).getByTestId("propinas-movement-concept").textContent).toBe("Manual tip");
+      expect(liveRow.textContent).not.toMatch(/Efectivo/);
       await userEvent.click(within(liveRow).getByRole("button"));
       await userEvent.click(await screen.findByRole("menuitem", { name: "Edit" }));
       expect((screen.getByTestId("propinas-manual-professional") as HTMLSelectElement).disabled).toBe(true);
@@ -490,6 +497,16 @@ describe("PropinasPage", () => {
       await waitFor(() => expect(femmePostJson).toHaveBeenCalledTimes(1));
       expect(femmePostJson.mock.calls[0][0]).toBe("/api/propinas/manual/7/void");
       expect(femmePostJson.mock.calls[0][1]).toEqual({ reason: "Monto mal cargado" });
+    });
+
+    it("«Agregar propina» is a button of the page header, not of the Movimientos card", async () => {
+      renderPage();
+      const button = await screen.findByTestId("propinas-add-manual");
+      expect(button.closest('[data-testid="propinas-movements"]')).toBeNull();
+      expect(button.closest("h1")).toBeNull();
+      // Same row as the page title and the ⋯ menu.
+      const header = screen.getByRole("heading", { level: 1 }).parentElement!;
+      expect(header.contains(button)).toBe(true);
     });
 
     it("a non-admin sees no way to add, edit or void tips", async () => {

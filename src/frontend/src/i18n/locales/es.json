@@ -3269,6 +3269,12 @@
       "balancesNoMatch": "Ninguna profesional coincide con «{{query}}».",
       "balancesNoMatchHint": "Revisá el nombre o limpiá la búsqueda.",
       "initialLoading": "Cargando propinas…",
+      "concept": {
+        "tipOf": "Propina de {{name}}",
+        "tip": "Propina",
+        "manual": "Propina manual",
+        "withdrawal": "Retiro de propinas"
+      },
       "manual": {
         "addButton": "Agregar propina",
         "addFor": "Agregar propina a {{name}}",
@@ -3294,7 +3300,6 @@
         "submitting": "Guardando…",
         "added": "Propina manual agregada.",
         "edited": "Propina manual actualizada.",
-        "tag": "Manual",
         "voidedTag": "Anulada",
         "createdBy": "cargada por {{name}}",
         "voidedBy": "Anulada por {{name}} · {{reason}}",
@@ -3333,7 +3338,6 @@
       "withdrawnInRange": "Retirado en el rango",
       "movementsTitle": "Movimientos",
       "emptyMovements": "No hay movimientos en este período.",
-      "withdrawalTag": "Retiro",
       "showMore": "Ver más",
       "withdrawTitle": "Retirar propina",
       "withdrawAll": "Retirar todo ({{amount}})",
