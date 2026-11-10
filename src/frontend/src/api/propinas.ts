@@ -1,4 +1,4 @@
-import { femmeJson, femmePostJson } from "./femmeClient";
+import { femmeJson, femmePostJson, femmePutJson } from "./femmeClient";
 import { authHeaders } from "./authHeaders";
 import { apiBaseUrl } from "./baseUrl";
 import type { PageResponse } from "./pagination";
@@ -7,8 +7,17 @@ export type TipReportRow = {
   professionalId: number;
   professionalName: string;
   amount: number;
-  clientName: string;
+  /** Null for a manual tip (it has no client). */
+  clientName: string | null;
   serviceDateTime: string;
+  /** Only manual tips (loaded by hand by the administrator) carry the fields below. */
+  manualTipId?: number | null;
+  note?: string | null;
+  createdByName?: string | null;
+  /** Voided manual tips are listed but never counted in any total. */
+  voided?: boolean;
+  voidReason?: string | null;
+  voidedByName?: string | null;
 };
 
 export type TipReportProfessionalTotal = {
@@ -120,4 +129,54 @@ export function listTipWithdrawalsPaged(
   if (params.page != null) qs.set("page", String(params.page));
   if (params.size != null) qs.set("size", String(params.size));
   return femmeJson<PageResponse<TipWithdrawalHistoryItem>>(`/api/propinas/withdrawals?${qs.toString()}`);
+}
+
+export type ManualTip = {
+  id: number;
+  professionalId: number;
+  professionalName: string;
+  amount: number;
+  tippedAt: string;
+  note: string | null;
+  createdByName: string | null;
+  voided: boolean;
+  voidReason: string | null;
+  voidedByName: string | null;
+};
+
+export type ManualTipMutationResponse = {
+  tip: ManualTip;
+  /** The professional's accumulated tips after the change. */
+  newBalance: number;
+};
+
+export type ManualTipPayload = {
+  amount: number;
+  /** ISO instant; the form sends noon (local time) of the chosen day. */
+  tippedAt: string;
+  note: string | null;
+};
+
+/** Salon administrator only. */
+export function createManualTip(
+  professionalId: number,
+  payload: ManualTipPayload,
+): Promise<ManualTipMutationResponse> {
+  return femmePostJson<ManualTipMutationResponse>("/api/propinas/manual", {
+    professionalId,
+    ...payload,
+  });
+}
+
+/** Salon administrator only. The professional cannot be changed once the tip exists. */
+export function updateManualTip(
+  id: number,
+  payload: ManualTipPayload,
+): Promise<ManualTipMutationResponse> {
+  return femmePutJson<ManualTipMutationResponse>(`/api/propinas/manual/${id}`, payload);
+}
+
+/** Salon administrator only; the reason is mandatory. */
+export function voidManualTip(id: number, reason: string): Promise<ManualTipMutationResponse> {
+  return femmePostJson<ManualTipMutationResponse>(`/api/propinas/manual/${id}/void`, { reason });
 }

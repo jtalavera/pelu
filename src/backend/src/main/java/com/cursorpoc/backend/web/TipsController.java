@@ -4,10 +4,14 @@ import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.TipsReportPdfService;
 import com.cursorpoc.backend.service.TipsService;
 import com.cursorpoc.backend.web.dto.CreateTipWithdrawalResponse;
+import com.cursorpoc.backend.web.dto.ManualTipMutationResponse;
+import com.cursorpoc.backend.web.dto.ManualTipRequest;
 import com.cursorpoc.backend.web.dto.PagedTipWithdrawalsResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalTipBalanceResponse;
 import com.cursorpoc.backend.web.dto.TipReportResponse;
 import com.cursorpoc.backend.web.dto.TipWithdrawalRequest;
+import com.cursorpoc.backend.web.dto.UpdateManualTipRequest;
+import com.cursorpoc.backend.web.dto.VoidManualTipRequest;
 import jakarta.validation.Valid;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -22,7 +26,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -190,6 +196,91 @@ public class TipsController {
     }
   }
 
+  /**
+   * Manual tips: only the salon administrator may load, edit or void them. Every call is recorded
+   * in the audit trail by {@code AuditLogFilter} (who, which endpoint, which record).
+   */
+  @PostMapping("/manual")
+  public ResponseEntity<ManualTipMutationResponse> createManualTip(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @Valid @RequestBody ManualTipRequest request) {
+    requireAdmin(principal);
+    log.info(
+        "POST /api/propinas/manual tenantId={} professionalId={}",
+        principal.getTenantId(),
+        request.professionalId());
+    try {
+      ManualTipMutationResponse response =
+          tipsService.createManualTip(
+              principal.getTenantId(),
+              principal.getUserId(),
+              request.professionalId(),
+              request.amount(),
+              request.tippedAt(),
+              request.note());
+      log.info("POST /api/propinas/manual tenantId={} status=201", principal.getTenantId());
+      return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/propinas/manual tenantId={} status={}",
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
+  }
+
+  @PutMapping("/manual/{id}")
+  public ManualTipMutationResponse updateManualTip(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable Long id,
+      @RequestBody UpdateManualTipRequest request) {
+    requireAdmin(principal);
+    log.info("PUT /api/propinas/manual/{} tenantId={}", id, principal.getTenantId());
+    try {
+      ManualTipMutationResponse response =
+          tipsService.updateManualTip(
+              principal.getTenantId(),
+              principal.getUserId(),
+              id,
+              request.amount(),
+              request.tippedAt(),
+              request.note());
+      log.info("PUT /api/propinas/manual/{} tenantId={} status=200", id, principal.getTenantId());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "PUT /api/propinas/manual/{} tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
+  }
+
+  @PostMapping("/manual/{id}/void")
+  public ManualTipMutationResponse voidManualTip(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable Long id,
+      @RequestBody VoidManualTipRequest request) {
+    requireAdmin(principal);
+    log.info("POST /api/propinas/manual/{}/void tenantId={}", id, principal.getTenantId());
+    try {
+      ManualTipMutationResponse response =
+          tipsService.voidManualTip(
+              principal.getTenantId(), principal.getUserId(), id, request.reason());
+      log.info(
+          "POST /api/propinas/manual/{}/void tenantId={} status=200", id, principal.getTenantId());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/propinas/manual/{}/void tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
+  }
+
   private static Instant parseInstant(String value) {
     return value != null && !value.isBlank() ? Instant.parse(value) : null;
   }
@@ -206,6 +297,13 @@ public class TipsController {
     String fromLabel = from != null ? fmt.withZone(ZoneOffset.UTC).format(from) : "inicio";
     String toLabel = to != null ? fmt.withZone(ZoneOffset.UTC).format(to) : "hoy";
     return "PROPINAS-" + fromLabel + "-" + toLabel + ".pdf";
+  }
+
+  private static void requireAdmin(FemmeUserPrincipal principal) {
+    requirePrincipal(principal);
+    if (!principal.isAdmin()) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN");
+    }
   }
 
   private static void requirePrincipal(FemmeUserPrincipal principal) {
