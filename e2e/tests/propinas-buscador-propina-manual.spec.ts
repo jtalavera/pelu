@@ -15,6 +15,17 @@ import { filterPropinasByProfessional, propinasMovements } from "../fixtures/pro
 
 test.describe.configure({ mode: "serial" });
 
+// The search only shows up when the balances need paging (more than 5 active professionals): make
+// sure the demo salon has enough of them, whatever specs ran before.
+test.beforeAll(async ({ request }) => {
+  const token = await loginAsDemoApi(request);
+  const options = await apiGetJson<Array<{ active: boolean }>>(request, token, "/api/professionals/options");
+  let missing = 7 - options.filter((p) => p.active).length;
+  for (let i = 0; missing > 0; i++, missing--) {
+    await seedProfessional(request, token, `Zzfill ${Date.now()}-${i}`);
+  }
+});
+
 type Pro = { id: number; fullName: string };
 
 async function seedProfessional(request: APIRequestContext, token: string, fullName: string): Promise<Pro> {
@@ -67,14 +78,15 @@ test.describe("Buscador de profesionales con total acumulado", () => {
     await seedManualTip(request, token, beta.id, 5000);
 
     await openPropinas(page);
-    const total = page.getByTestId("propinas-balances-total");
-    await expect(total).toContainText(/Total accumulated · \d+ professionals/);
+    // Total in the card header, with «A hoy · N profesionales» under the title.
+    const caption = page.getByTestId("propinas-balances-caption");
+    await expect(caption).toContainText(/As of today · \d+ professionals/);
 
     // Enter in the field searches, ignoring case.
     await searchProfessional(page, `zzbus alfa ${stamp}`);
     await expect(page.getByTestId(`propinas-card-${alfa.id}`)).toBeVisible();
     await expect(page.getByTestId(`propinas-card-${beta.id}`)).toHaveCount(0);
-    await expect(total).toContainText(/1 of \d+ professionals/);
+    await expect(caption).toContainText(/As of today · 1 of \d+ professionals/);
     await expect(page.getByTestId("propinas-balances-total-amount")).toHaveText("Gs. 12.000");
 
     // The button does the same; a broader term shows both and adds their totals.
@@ -92,7 +104,7 @@ test.describe("Buscador de profesionales con total acumulado", () => {
     // Clearing restores the whole list; Movimientos was never affected by the search.
     await page.getByTestId("propinas-balances-search-clear").click();
     await expect(page.getByTestId("propinas-balances-no-match")).toHaveCount(0);
-    await expect(total).toContainText(/Total accumulated · \d+ professionals/);
+    await expect(caption).toContainText(/As of today · \d+ professionals/);
     await expect(page.getByTestId("propinas-movements")).toBeVisible();
   });
 });

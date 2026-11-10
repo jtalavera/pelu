@@ -592,22 +592,39 @@ export default function PropinasPage() {
       <section
         aria-label={t("femme.propinas.balancesTitle")}
         data-testid="propinas-cards"
-        className="mb-4 rounded-card border border-line bg-surface px-4"
+        className="mb-4 flex flex-col gap-4 rounded-card bg-surface p-4 shadow-sm sm:p-6"
       >
-        <div className="pt-3">
-          <h2 className="font-heading text-base font-extrabold text-ink">{t("femme.propinas.balancesTitle")}</h2>
-          <p className="text-sm text-ink-3" data-testid="propinas-balances-caption">
-            {t("femme.propinas.balancesCaption")}
-          </p>
+        <div className="flex items-end justify-between gap-4" data-testid="propinas-balances-total">
+          <div className="min-w-0">
+            <h2 className="font-heading text-lg font-extrabold text-ink">{t("femme.propinas.balancesTitle")}</h2>
+            <p className="text-sm text-ink-3" data-testid="propinas-balances-caption">
+              {balQuery.trim() !== ""
+                ? t("femme.propinas.balancesSubtitleFiltered", {
+                    shown: visibleProfessionals.length,
+                    total: sortedProfessionals.length,
+                  })
+                : t("femme.propinas.balancesSubtitle", { total: sortedProfessionals.length })}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-col items-end">
+            <span className="text-xs text-ink-3">{t("femme.propinas.balancesTotalLabel")}</span>
+            <b
+              className="font-heading text-xl font-extrabold text-primary sm:text-2xl"
+              data-testid="propinas-balances-total-amount"
+            >
+              {formatGuaraniesGs(visibleTotal)}
+            </b>
+          </div>
         </div>
-        <form
-          onSubmit={submitBalanceSearch}
-          className="mt-3 flex items-center gap-2"
-          role="search"
-          data-testid="propinas-balances-search"
-        >
-          <div className="relative min-w-0 flex-1">
-            <Input
+        {/* The search only earns its place when the list does not fit on one page. */}
+        {sortedProfessionals.length > BALANCES_PAGE || balQuery !== "" ? (
+          <form
+            onSubmit={submitBalanceSearch}
+            role="search"
+            data-testid="propinas-balances-search"
+            className="flex h-11 items-center gap-1 rounded-full bg-page pl-4 pr-1"
+          >
+            <input
               id="propinas-balances-search-input"
               type="search"
               value={balQueryDraft}
@@ -615,113 +632,104 @@ export default function PropinasPage() {
               placeholder={t("femme.propinas.balancesSearchPlaceholder")}
               aria-label={t("femme.propinas.balancesSearchLabel")}
               data-testid="propinas-balances-search-input"
-              className="w-full"
+              className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-3 [&::-webkit-search-cancel-button]:hidden"
             />
-          </div>
-          {balQuery !== "" ? (
-            <Button
-              type="button"
-              variant="secondary"
-              className="min-h-11"
-              data-testid="propinas-balances-search-clear"
-              onClick={clearBalanceSearch}
+            {balQuery !== "" ? (
+              <button
+                type="button"
+                aria-label={t("femme.propinas.balancesSearchClear")}
+                data-testid="propinas-balances-search-clear"
+                onClick={clearBalanceSearch}
+                className="flex size-9 shrink-0 items-center justify-center rounded-full text-lg leading-none text-ink-3 hover:text-ink"
+              >
+                ×
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              aria-label={t("femme.propinas.balancesSearchSubmit")}
+              data-testid="propinas-balances-search-submit"
+              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-surface text-primary"
             >
-              {t("femme.propinas.balancesSearchClear")}
-            </Button>
-          ) : null}
-          <Button type="submit" className="min-h-11" data-testid="propinas-balances-search-submit">
-            {t("femme.propinas.balancesSearchSubmit")}
-          </Button>
-        </form>
-        <div
-          className="mt-3 flex items-baseline justify-between gap-3 rounded-xl bg-primary-lt px-4 py-2.5 text-primary"
-          data-testid="propinas-balances-total"
-        >
-          <span className="text-sm font-bold">
-            {balQuery.trim() !== ""
-              ? t("femme.propinas.balancesTotalFiltered", {
-                  shown: visibleProfessionals.length,
-                  total: sortedProfessionals.length,
-                })
-              : t("femme.propinas.balancesTotal", { total: sortedProfessionals.length })}
-          </span>
-          <b className="font-heading text-lg font-extrabold" data-testid="propinas-balances-total-amount">
-            {formatGuaraniesGs(visibleTotal)}
-          </b>
-        </div>
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                <circle cx="8" cy="8" r="5.5" />
+                <path d="M12.5 12.5L16 16" />
+              </svg>
+            </button>
+          </form>
+        ) : null}
         {visibleProfessionals.length === 0 && balQuery.trim() !== "" ? (
-          <div className="py-4" data-testid="propinas-balances-no-match">
+          <div data-testid="propinas-balances-no-match">
             <p className="font-bold text-ink">
               {t("femme.propinas.balancesNoMatch", { query: balQuery.trim() })}
             </p>
             <p className="text-sm text-ink-3">{t("femme.propinas.balancesNoMatchHint")}</p>
           </div>
         ) : null}
-        <div
-          aria-hidden="true"
-          className={`hidden gap-3 pb-1 pt-2 text-[11px] font-extrabold uppercase tracking-wider text-ink-3 sm:grid ${
-            isAdmin ? "grid-cols-[minmax(0,1fr)_auto_2.75rem_6rem]" : "grid-cols-[minmax(0,1fr)_auto_6rem]"
-          }`}
-        >
-          <span>{t("femme.propinas.colProfessional")}</span>
-          <span className="text-right">{t("femme.propinas.withdrawal.balanceLabel")}</span>
-          {isAdmin ? <span /> : null}
-          <span />
-        </div>
-        {shownProfessionals.map((p) => {
-          const balance = balances[p.id] ?? 0;
-          return (
-            <div
-              key={p.id}
-              data-testid={`propinas-card-${p.id}`}
-              className={`grid min-h-[3.25rem] items-center gap-3 border-t border-line max-sm:[&:nth-child(2)]:border-t-0 ${
-                isAdmin ? "grid-cols-[minmax(0,1fr)_auto_2.75rem_6rem]" : "grid-cols-[minmax(0,1fr)_auto_6rem]"
-              }`}
-            >
-              <span className="flex min-w-0 items-center gap-2.5 font-bold text-ink">
-                <span
-                  aria-hidden="true"
-                  className="flex size-[30px] shrink-0 items-center justify-center rounded-full bg-primary-lt font-heading text-[13px] font-extrabold text-primary"
-                >
-                  {getInitials(p.fullName).slice(0, 1)}
-                </span>
-                <span className="truncate">{p.fullName}</span>
-              </span>
-              <b
-                className="whitespace-nowrap text-right font-heading text-ink"
-                data-testid={`propinas-balance-${p.id}`}
+        <div>
+          {shownProfessionals.map((p) => {
+            const balance = balances[p.id] ?? 0;
+            return (
+              <div
+                key={p.id}
+                data-testid={`propinas-card-${p.id}`}
+                className={`grid min-h-[3.75rem] items-center gap-2 border-t border-line/60 first:border-t-0 sm:gap-3 ${
+                  isAdmin
+                    ? "grid-cols-[minmax(0,1fr)_2.75rem_5.5rem] sm:grid-cols-[minmax(0,1fr)_auto_2.75rem_6.5rem]"
+                    : "grid-cols-[minmax(0,1fr)_5.5rem] sm:grid-cols-[minmax(0,1fr)_auto_6.5rem]"
+                }`}
               >
-                {formatGuaraniesGs(balance)}
-              </b>
-              {isAdmin ? (
+                <span className="flex min-w-0 items-center gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-lt font-heading text-sm font-extrabold text-primary"
+                  >
+                    {getInitials(p.fullName).slice(0, 1)}
+                  </span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate font-bold text-ink">{p.fullName}</span>
+                    {/* On a phone the amount sits under the name; from sm up it has its own column. */}
+                    <span className="font-heading text-sm font-extrabold text-ink-2 sm:hidden">
+                      {formatGuaraniesGs(balance)}
+                    </span>
+                  </span>
+                </span>
+                <b
+                  className="hidden whitespace-nowrap text-right font-heading text-ink sm:block"
+                  data-testid={`propinas-balance-${p.id}`}
+                >
+                  {formatGuaraniesGs(balance)}
+                </b>
+                {isAdmin ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="size-11 min-h-11 min-w-11 p-0 text-xl"
+                    data-testid={`propinas-add-${p.id}`}
+                    aria-label={t("femme.propinas.manual.addFor", { name: p.fullName })}
+                    onClick={() => openManualCreate(p.id)}
+                  >
+                    +
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="secondary"
-                  className="size-11 min-h-11 min-w-11 p-0 text-lg"
-                  data-testid={`propinas-add-${p.id}`}
-                  aria-label={t("femme.propinas.manual.addFor", { name: p.fullName })}
-                  onClick={() => openManualCreate(p.id)}
+                  className="min-h-11"
+                  disabled={balance <= 0}
+                  data-testid={`propinas-withdraw-${p.id}`}
+                  aria-label={t("femme.propinas.withdrawFor", { name: p.fullName })}
+                  onClick={() => openWithdraw(p)}
                 >
-                  +
+                  {t("femme.propinas.withdrawal.submit")}
                 </Button>
-              ) : null}
-              <Button
-                type="button"
-                variant={balance > 0 ? "primary" : "secondary"}
-                className="min-h-11"
-                disabled={balance <= 0}
-                data-testid={`propinas-withdraw-${p.id}`}
-                aria-label={t("femme.propinas.withdrawFor", { name: p.fullName })}
-                onClick={() => openWithdraw(p)}
-              >
-                {t("femme.propinas.withdrawal.submit")}
-              </Button>
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
+        </div>
         {visibleProfessionals.length > BALANCES_PAGE ? (
           <div
-            className="flex items-center justify-between gap-3 border-t border-line py-2 text-sm text-ink-3"
+            className="flex items-center justify-between gap-3 text-sm text-ink-3"
             data-testid="propinas-balances-pager"
           >
             <span>
@@ -734,8 +742,8 @@ export default function PropinasPage() {
             <span className="flex gap-1">
               <Button
                 type="button"
-                variant="secondary"
-                className="min-h-11 min-w-11"
+                variant="ghost"
+                className="min-h-11 min-w-11 text-xl"
                 aria-label={t("femme.pagination.previous")}
                 disabled={safeBalPage === 0}
                 data-testid="propinas-balances-prev"
@@ -745,8 +753,8 @@ export default function PropinasPage() {
               </Button>
               <Button
                 type="button"
-                variant="secondary"
-                className="min-h-11 min-w-11"
+                variant="ghost"
+                className="min-h-11 min-w-11 text-xl text-primary"
                 aria-label={t("femme.pagination.next")}
                 disabled={safeBalPage >= balPages - 1}
                 data-testid="propinas-balances-next"
@@ -760,7 +768,7 @@ export default function PropinasPage() {
       </section>
 
       <section
-        className="mb-4 flex flex-col gap-2 rounded-card border border-line bg-surface px-4 py-3"
+        className="mb-4 flex flex-col gap-2 rounded-card bg-surface px-4 py-3 shadow-sm sm:px-6 sm:py-4"
         data-testid="propinas-movements"
       >
         <div className="flex flex-wrap items-baseline justify-between gap-2">

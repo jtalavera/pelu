@@ -179,7 +179,7 @@ describe("PropinasPage", () => {
     // The filter belongs to «Movimientos»: the balances list is untouched and the active filter is labelled.
     expect(screen.getByTestId("propinas-card-1")).toBeTruthy();
     expect(screen.getByTestId("propinas-card-2")).toBeTruthy();
-    expect(screen.getByTestId("propinas-balances-caption").textContent).toMatch(/does not change with the period/i);
+    expect(screen.getByTestId("propinas-balances-caption").textContent).toMatch(/As of today · 3 professionals/);
     expect(screen.getByTestId("propinas-active-filter").textContent).toMatch(/Last 30 days/);
     expect(within(screen.getByTestId("propinas-movements")).getByTestId("propinas-filters-toggle")).toBeTruthy();
   });
@@ -306,7 +306,7 @@ describe("PropinasPage", () => {
     expect(cards).toHaveLength(5);
     expect(cards[0].getAttribute("data-testid")).toBe("propinas-card-16");
     expect(screen.queryByTestId("propinas-card-10")).toBeNull();
-    expect(screen.getByTestId("propinas-balances-pager").textContent).toMatch(/1.?5 of 7 professionals/);
+    expect(screen.getByTestId("propinas-balances-pager").textContent).toMatch(/1.?5 of 7/);
     await userEvent.click(screen.getByTestId("propinas-balances-next"));
     await waitFor(() => expect(screen.getAllByTestId(/^propinas-card-/)).toHaveLength(2));
     expect(screen.getByTestId("propinas-card-10")).toBeTruthy();
@@ -358,22 +358,50 @@ describe("PropinasPage", () => {
   });
 
   describe("search over the professionals' accumulated tips", () => {
+    // The search only shows up when the list needs paging (more than five professionals).
+    const many = [
+      { id: 1, fullName: "Laura", active: true },
+      { id: 2, fullName: "Ana", active: true },
+      { id: 3, fullName: "Rosa", active: true },
+      { id: 4, fullName: "Elena", active: true },
+      { id: 5, fullName: "Lucía", active: true },
+      { id: 6, fullName: "Mónica", active: true },
+    ];
+    const manyBalances: Record<number, number> = { 1: 180000, 2: 95000, 3: 0, 4: 5000, 5: 4000, 6: 1000 };
+    beforeEach(() => {
+      femmeJson.mockImplementation((url: unknown) => {
+        const s = String(url);
+        if (s === "/api/professionals/options") return Promise.resolve(many);
+        if (s.startsWith("/api/propinas/balance")) {
+          const id = Number(new URL(s, "http://x").searchParams.get("professionalId"));
+          return Promise.resolve({ professionalId: id, professionalName: "x", balance: manyBalances[id] ?? 0 });
+        }
+        if (s.startsWith("/api/propinas/report?")) return Promise.resolve(report([]));
+        if (s.startsWith("/api/propinas/withdrawals?")) {
+          return Promise.resolve({ content: [], page: 0, size: 200, totalElements: 0, totalPages: 0 });
+        }
+        return Promise.resolve([]);
+      });
+    });
+
     it("filters the list on submit, ignoring case and accents, and totals what it shows", async () => {
       renderPage();
       await waitFor(() => expect(screen.getByTestId("propinas-balance-1").textContent).toMatch(/180\.000/));
-      // 180.000 + 95.000 + 0 over the three active professionals.
-      expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/275\.000/);
+      // 180.000 + 95.000 + 0 + 5.000 + 4.000 + 1.000 over the six active professionals.
+      expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/285\.000/);
+      expect(screen.getByTestId("propinas-balances-caption").textContent).toMatch(/6 professionals/);
 
-      await userEvent.type(screen.getByTestId("propinas-balances-search-input"), "LAU{Enter}");
+      // «luc» finds «Lucía» (accent-insensitive); «lau» would find «Laura».
+      await userEvent.type(screen.getByTestId("propinas-balances-search-input"), "LUCIA{Enter}");
 
-      expect(screen.getByTestId("propinas-card-1")).toBeTruthy();
+      expect(screen.getByTestId("propinas-card-5")).toBeTruthy();
       expect(screen.queryByTestId("propinas-card-2")).toBeNull();
-      expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/180\.000/);
-      expect(screen.getByTestId("propinas-balances-total").textContent).toMatch(/1 of 3 professionals/);
+      expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/4\.000/);
+      expect(screen.getByTestId("propinas-balances-caption").textContent).toMatch(/1 of 6 professionals/);
 
       await userEvent.click(screen.getByTestId("propinas-balances-search-clear"));
       expect(screen.getByTestId("propinas-card-2")).toBeTruthy();
-      expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/275\.000/);
+      expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/285\.000/);
     });
 
     it("says so when nobody matches and the total is Gs. 0", async () => {
@@ -383,6 +411,27 @@ describe("PropinasPage", () => {
       expect(screen.getByTestId("propinas-balances-no-match").textContent).toMatch(/zzz/);
       expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/0/);
       expect(screen.queryByTestId("propinas-card-1")).toBeNull();
+    });
+
+    it("is hidden while everybody fits on one page", async () => {
+      femmeJson.mockImplementation((url: unknown) => {
+        const s = String(url);
+        if (s === "/api/professionals/options") return Promise.resolve(pros);
+        if (s.startsWith("/api/propinas/balance")) {
+          const id = Number(new URL(s, "http://x").searchParams.get("professionalId"));
+          return Promise.resolve({ professionalId: id, professionalName: "x", balance: balances[id] ?? 0 });
+        }
+        if (s.startsWith("/api/propinas/report?")) return Promise.resolve(report([]));
+        if (s.startsWith("/api/propinas/withdrawals?")) {
+          return Promise.resolve({ content: [], page: 0, size: 200, totalElements: 0, totalPages: 0 });
+        }
+        return Promise.resolve([]);
+      });
+      renderPage();
+      await screen.findByTestId("propinas-card-1");
+      expect(screen.queryByTestId("propinas-balances-search")).toBeNull();
+      // The total and the subtitle are there regardless.
+      expect(screen.getByTestId("propinas-balances-total-amount").textContent).toMatch(/275\.000/);
     });
   });
 
