@@ -35,6 +35,10 @@ locals {
     ["https://${azurerm_static_web_app.frontend.default_host_name}"],
     [for d in var.frontend_custom_domains : "https://${d}"]
   ))
+
+  # Single base URL the backend uses to build links in emails (activation, password reset):
+  # var.frontend_primary_domain when set, otherwise the SWA default host.
+  frontend_primary_url = var.frontend_primary_domain != "" ? "https://${var.frontend_primary_domain}" : "https://${azurerm_static_web_app.frontend.default_host_name}"
   # Per-type sender addresses: once var.email_custom_domain is set (and verified — see the
   # "Azure Communication Services — email" section below), each sends from its own mailbox on
   # that domain; until then every one falls back to the single AzureManaged address, unchanged
@@ -584,6 +588,11 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "APP_FRONTEND_URL"
         value = local.frontend_allowed_origins
+      }
+
+      env {
+        name  = "APP_FRONTEND_PRIMARY_URL"
+        value = local.frontend_primary_url
       }
 
       env {

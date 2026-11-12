@@ -154,6 +154,12 @@ variable "frontend_custom_domains" {
   default     = []
 }
 
+variable "frontend_primary_domain" {
+  description = "Domain (must be listed in frontend_custom_domains) used as the base URL of links in emails (activation, password reset), e.g. \"sistema.flowbit.tech\". Empty (default) uses the SWA default host. Exposed to the backend as APP_FRONTEND_PRIMARY_URL."
+  type        = string
+  default     = ""
+}
+
 variable "website_swa_name" {
   description = "Name of the separate marketing-website Static Web App (managed outside this Terraform). Empty (default) skips the website custom domain."
   type        = string

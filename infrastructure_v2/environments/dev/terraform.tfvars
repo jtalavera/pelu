@@ -33,6 +33,13 @@ log_analytics_daily_quota_gb = 0.5
 key_vault_soft_delete_retention_days = 7
 key_vault_purge_protection_enabled   = false
 
+# Custom domain on the pelu Static Web App (DNS is manual at the external provider): create the
+# CNAME demo -> the SWA default hostname (terraform output) before applying. Also added to the
+# backend's allowed CORS origins.
+frontend_custom_domains = ["demo.flowbit.tech"]
+# Base URL for links in emails (activation, password reset).
+frontend_primary_domain = "demo.flowbit.tech"
+
 # Per-type ACS Email sender addresses (turnos@/factura@/no-reply@flowbit.tech). Step 1 of the
 # rollout: this alone only creates the domain resource + computes verification_records (see
 # `terraform output email_domain_verification_records`) — add those at flowbit.tech's DNS

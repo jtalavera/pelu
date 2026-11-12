@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
+import com.cursorpoc.backend.config.FrontendUrl;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.AppUserActivationToken;
 import com.cursorpoc.backend.domain.AppUserStatusChange;
@@ -47,7 +48,7 @@ public class PlatformUserAdminService {
 
   private static final Logger log = LoggerFactory.getLogger(PlatformUserAdminService.class);
 
-  @Value("${app.frontend.url}")
+  @Value(FrontendUrl.PRIMARY_EXPR)
   private String frontendUrl;
 
   private final TenantRepository tenantRepository;
