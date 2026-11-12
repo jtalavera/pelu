@@ -1,0 +1,341 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "../test/renderWithTour";
+import { I18nextProvider } from "react-i18next";
+import { MemoryRouter } from "react-router-dom";
+import { ThemeProvider } from "@design-system";
+import i18n from "../i18n";
+import BillingPage from "./BillingPage";
+
+const femmeJson = vi.fn();
+const femmePostJson = vi.fn();
+const downloadSifenKude = vi.fn();
+const sendSifenKudeByEmail = vi.fn();
+const sendKudeByWhatsapp = vi.fn();
+
+vi.mock("../api/femmeClient", () => ({
+  femmeJson: (...args: unknown[]) => femmeJson(...args),
+  femmePostJson: (...args: unknown[]) => femmePostJson(...args),
+}));
+vi.mock("../api/baseUrl", () => ({ apiBaseUrl: () => "http://localhost:8080" }));
+vi.mock("../api/authHeaders", () => ({ authHeaders: () => ({ Authorization: "Bearer test" }) }));
+vi.mock("../hooks/useFeatureFlags", () => ({ useFeatureFlag: () => false }));
+vi.mock("../api/downloadSifenKude", () => ({
+  downloadSifenKude: (...args: unknown[]) => downloadSifenKude(...args),
+  sendSifenKudeByEmail: (...args: unknown[]) => sendSifenKudeByEmail(...args),
+}));
+vi.mock("../lib/invoiceKudeShare", async () => {
+  const actual = await vi.importActual<typeof import("../lib/invoiceKudeShare")>("../lib/invoiceKudeShare");
+  return { ...actual, sendKudeByWhatsapp: (...args: unknown[]) => sendKudeByWhatsapp(...args) };
+});
+// The detail dialog is its own feature: here it only matters when it opens and closes.
+vi.mock("../components/InvoiceDetailModal", () => ({
+  InvoiceDetailModal: ({ invoiceId, onClose }: { invoiceId: number; onClose: () => void }) => (
+    <div role="dialog" data-testid="detail-stub">
+      <span>detail-{invoiceId}</span>
+      <button type="button" onClick={onClose}>
+        close-detail
+      </button>
+    </div>
+  ),
+}));
+
+const openSession = {
+  id: 1,
+  tenantId: 1,
+  openedByUserId: 10,
+  openedByEmail: "admin@demo.com",
+  openedAt: "2026-04-09T08:00:00Z",
+  openingCashAmount: "50000",
+  isOpen: true,
+};
+
+// Newest first, like the server. issuedAt is UTC; Paraguay is GMT-3 (13:58 / 14:20 / 14:32 local).
+const rejected = {
+  id: 3,
+  invoiceNumber: 125,
+  invoiceNumberFormatted: "001-001-0000125",
+  clientDisplayName: "Rosa Benítez",
+  status: "ISSUED",
+  total: "250000",
+  issuedAt: "2026-11-12T17:32:00Z",
+  paymentMethodsSummary: "CASH",
+  sifenSubmissionStatus: "REJECTED",
+};
+const inProcess = {
+  id: 2,
+  invoiceNumber: 124,
+  invoiceNumberFormatted: "001-001-0000124",
+  clientDisplayName: "",
+  status: "ISSUED",
+  total: "120000",
+  issuedAt: "2026-11-12T17:20:00Z",
+  paymentMethodsSummary: "DEBIT_CARD",
+  sifenSubmissionStatus: "PENDING_VERIFICATION",
+};
+const approved = {
+  id: 1,
+  invoiceNumber: 123,
+  invoiceNumberFormatted: "001-001-0000123",
+  clientDisplayName: "María Gómez",
+  status: "ISSUED",
+  total: "370000",
+  issuedAt: "2026-11-12T16:58:00Z",
+  paymentMethodsSummary: "CASH",
+  sifenSubmissionStatus: "APPROVED",
+};
+const detailOfApproved = {
+  id: 1,
+  invoiceNumberFormatted: "001-001-0000123",
+  clientDisplayName: "María Gómez",
+  clientPhone: "0981123456",
+  total: "370000",
+};
+
+/** Next answer of the list endpoint, when a test wants to control it (otherwise the three rows). */
+let nextListAnswer: (() => Promise<unknown>) | null = null;
+const listCalls = () =>
+  femmeJson.mock.calls.filter((c) => String(c[0]).startsWith("/api/invoices?")).length;
+
+function renderPage() {
+  return render(
+    <I18nextProvider i18n={i18n}>
+      <MemoryRouter>
+        <ThemeProvider>
+          <BillingPage />
+        </ThemeProvider>
+      </MemoryRouter>
+    </I18nextProvider>,
+  );
+}
+
+async function renderHome() {
+  renderPage();
+  await screen.findByTestId("billing-today-row-1");
+}
+
+describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu", () => {
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    femmeJson.mockReset();
+    femmePostJson.mockReset();
+    downloadSifenKude.mockReset().mockResolvedValue(undefined);
+    sendSifenKudeByEmail.mockReset().mockResolvedValue(undefined);
+    sendKudeByWhatsapp.mockReset().mockResolvedValue(undefined);
+    nextListAnswer = null;
+    femmeJson.mockImplementation((url: string) => {
+      if (url.includes("/api/cash-sessions/current")) return Promise.resolve(openSession);
+      if (url.startsWith("/api/invoices?")) {
+        if (nextListAnswer) {
+          const answer = nextListAnswer;
+          nextListAnswer = null;
+          return answer();
+        }
+        return Promise.resolve({
+          content: [rejected, inProcess, approved],
+          page: 0,
+          size: 10,
+          totalElements: 3,
+          totalPages: 1,
+          issuedTotal: 740000,
+        });
+      }
+      if (url === "/api/invoices/1") return Promise.resolve(detailOfApproved);
+      return Promise.resolve(undefined);
+    });
+  });
+
+  describe("issue date and time", () => {
+    it("shows each invoice's issue date and time (Paraguay time) instead of the payment method", async () => {
+      await renderHome();
+      const row = screen.getByTestId("billing-today-row-1");
+      expect(within(row).getByTestId("billing-today-issued-at-1").textContent).toMatch(/13:58/);
+      expect(screen.getByTestId("billing-today-issued-at-2").textContent).toMatch(/14:20/);
+      expect(screen.getByTestId("billing-today-issued-at-3").textContent).toMatch(/14:32/);
+      expect(row.textContent).not.toMatch(/cash/i);
+      expect(screen.getByTestId("billing-today-row-2").textContent).not.toMatch(/debit/i);
+    });
+  });
+
+  describe("refresh", () => {
+    it("shows when the list was last updated", async () => {
+      await renderHome();
+      expect((await screen.findByTestId("billing-today-updated-at")).textContent).toMatch(
+        /^Updated at \d{2}:\d{2}$/,
+      );
+    });
+
+    it("«Actualizar» re-reads the list, stays disabled as «Refreshing…» meanwhile and keeps the rows on screen", async () => {
+      await renderHome();
+      const before = listCalls();
+      let finish: (v: unknown) => void = () => undefined;
+      nextListAnswer = () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        });
+
+      const button = screen.getByTestId("billing-today-refresh") as HTMLButtonElement;
+      expect(button.getAttribute("aria-label")).toBe("Refresh");
+      fireEvent.click(button);
+
+      await waitFor(() => expect(button.disabled).toBe(true));
+      expect(button.getAttribute("aria-label")).toBe("Refreshing…");
+      expect(listCalls()).toBe(before + 1);
+      // No «Loading…» swap: the rows are still there while it runs.
+      expect(screen.getByTestId("billing-today-row-1")).toBeTruthy();
+
+      await act(async () => {
+        finish({
+          content: [rejected, inProcess, { ...approved, sifenSubmissionStatus: "CANCELLED" }],
+          page: 0,
+          size: 10,
+          totalElements: 3,
+          totalPages: 1,
+          issuedTotal: 370000,
+        });
+      });
+      await waitFor(() => expect(button.disabled).toBe(false));
+      expect(button.getAttribute("aria-label")).toBe("Refresh");
+      // The new state is shown.
+      expect(
+        within(screen.getByTestId("billing-today-row-1")).getByText("Voided"),
+      ).toBeTruthy();
+    });
+
+    it("tells the user when the refresh fails and keeps the rows", async () => {
+      await renderHome();
+      nextListAnswer = () => Promise.reject(new Error("boom"));
+      fireEvent.click(screen.getByTestId("billing-today-refresh"));
+
+      const notice = await screen.findByTestId("billing-today-notice");
+      expect(notice.textContent).toMatch(/unexpected error/i);
+      expect(screen.getByTestId("billing-today-row-1")).toBeTruthy();
+      expect((screen.getByTestId("billing-today-refresh") as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("reloads the list, without a loading swap, when the invoice detail is closed", async () => {
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-row-1"));
+      expect(await screen.findByTestId("detail-stub")).toBeTruthy();
+      const before = listCalls();
+
+      fireEvent.click(screen.getByText("close-detail"));
+
+      expect(screen.queryByTestId("detail-stub")).toBeNull();
+      // Silent: the rows never leave the screen.
+      expect(screen.getByTestId("billing-today-row-1")).toBeTruthy();
+      await waitFor(() => expect(listCalls()).toBe(before + 1));
+    });
+  });
+
+  describe("row menu «Más acciones»", () => {
+    it("offers WhatsApp, email, KuDE download and view details for an approved invoice", async () => {
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+
+      const whatsapp = (await screen.findByTestId("billing-today-menu-whatsapp-1")) as HTMLButtonElement;
+      const email = screen.getByTestId("billing-today-menu-email-1") as HTMLButtonElement;
+      const download = screen.getByTestId("billing-today-menu-download-1") as HTMLButtonElement;
+      const detail = screen.getByTestId("billing-today-menu-detail-1") as HTMLButtonElement;
+      expect(whatsapp.textContent).toMatch(/Send by WhatsApp/);
+      expect(email.textContent).toMatch(/Send by email/);
+      expect(email.textContent).toMatch(/To the client's email/);
+      expect(download.textContent).toMatch(/Download KuDE/);
+      expect(detail.textContent).toMatch(/View details/);
+      for (const b of [whatsapp, email, download, detail]) expect(b.disabled).toBe(false);
+    });
+
+    it("keeps the KuDE actions enabled while SIFEN is still validating", async () => {
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-menu-2"));
+      expect(((await screen.findByTestId("billing-today-menu-download-2")) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("disables the KuDE actions, with a hint, when SIFEN rejected the invoice; view details stays available", async () => {
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-menu-3"));
+
+      for (const id of ["whatsapp", "email", "download"]) {
+        const item = (await screen.findByTestId(`billing-today-menu-${id}-3`)) as HTMLButtonElement;
+        expect(item.disabled).toBe(true);
+        expect(item.textContent).toMatch(/Not available: no approved KuDE/);
+      }
+      expect((screen.getByTestId("billing-today-menu-detail-3") as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("opening the menu does not open the invoice detail, and «View details» does", async () => {
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      await screen.findByTestId("billing-today-menu-detail-1");
+      expect(screen.queryByTestId("detail-stub")).toBeNull();
+
+      fireEvent.click(screen.getByTestId("billing-today-menu-detail-1"));
+      expect((await screen.findByTestId("detail-stub")).textContent).toMatch(/detail-1/);
+    });
+
+    it("«Descargar KuDE» downloads the KuDE of that invoice", async () => {
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+
+      await waitFor(() => expect(downloadSifenKude).toHaveBeenCalledWith(1));
+      // Picking an option closes the menu, and it must not open the detail either.
+      expect(screen.queryByTestId("billing-today-menu-panel-1")).toBeNull();
+      expect(screen.queryByTestId("detail-stub")).toBeNull();
+    });
+
+    it("«Enviar por correo» sends it to the client's email on file and confirms", async () => {
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-email-1"));
+
+      await waitFor(() => expect(sendSifenKudeByEmail).toHaveBeenCalledWith(1, ""));
+      const notice = await screen.findByTestId("billing-today-notice");
+      expect(notice.textContent).toMatch(/KuDE sent by email/i);
+    });
+
+    it("«Enviar por WhatsApp» reads the invoice (for the client's phone) and hands it to the WhatsApp flow", async () => {
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-whatsapp-1"));
+
+      await waitFor(() => expect(sendKudeByWhatsapp).toHaveBeenCalledTimes(1));
+      expect(sendKudeByWhatsapp.mock.calls[0][0]).toEqual(detailOfApproved);
+      expect(femmeJson.mock.calls.some((c) => c[0] === "/api/invoices/1")).toBe(true);
+    });
+
+    it("disables the row's menu button while the KuDE is being prepared", async () => {
+      await renderHome();
+      let finish: () => void = () => undefined;
+      downloadSifenKude.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+
+      await waitFor(() =>
+        expect((screen.getByTestId("billing-today-menu-1") as HTMLButtonElement).disabled).toBe(true),
+      );
+      // Only that row: the others stay usable.
+      expect((screen.getByTestId("billing-today-menu-2") as HTMLButtonElement).disabled).toBe(false);
+
+      await act(async () => finish());
+      await waitFor(() =>
+        expect((screen.getByTestId("billing-today-menu-1") as HTMLButtonElement).disabled).toBe(false),
+      );
+    });
+
+    it("shows an error notice above the list when the KuDE action fails", async () => {
+      await renderHome();
+      downloadSifenKude.mockRejectedValue(new Error("boom"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+
+      const notice = await screen.findByTestId("billing-today-notice");
+      expect(notice.textContent).toMatch(/unexpected error/i);
+      expect((screen.getByTestId("billing-today-menu-1") as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+});

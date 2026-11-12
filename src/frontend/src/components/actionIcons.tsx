@@ -56,6 +56,13 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   code: <path d="m8 8-5 4 5 4M16 8l5 4-5 4M14 5l-4 14" />,
+  whatsapp: <path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 20.5l1.7-5.4A8.4 8.4 0 1 1 21 11.5Z" />,
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" />
+    </>
+  ),
 };
 
 export type ActionIconName = keyof typeof PATHS;

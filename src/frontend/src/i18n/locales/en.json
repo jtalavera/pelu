@@ -1544,6 +1544,14 @@
         "attentionCount_one": "{{count}} needs attention",
         "attentionCount_other": "{{count}} need attention",
         "viewHistory": "View full history",
+        "refreshing": "Refreshing…",
+        "updatedAt": "Updated at {{time}}",
+        "rowMenu": {
+          "email": "Send by email",
+          "emailHint": "To the client's email",
+          "viewDetail": "View details",
+          "kudeUnavailable": "Not available: no approved KuDE"
+        },
         "viewHistoryShort": "View history",
         "closedTitle": "The cash register is closed"
       },
