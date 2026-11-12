@@ -1544,6 +1544,14 @@
         "attentionCount_one": "{{count}} requiere atención",
         "attentionCount_other": "{{count}} requieren atención",
         "viewHistory": "Ver historial completo",
+        "refreshing": "Actualizando…",
+        "updatedAt": "Actualizado a las {{time}}",
+        "rowMenu": {
+          "email": "Enviar por correo",
+          "emailHint": "Al correo del cliente",
+          "viewDetail": "Ver detalle",
+          "kudeUnavailable": "No disponible: sin KuDE aprobado"
+        },
         "viewHistoryShort": "Ver historial",
         "closedTitle": "La caja está cerrada"
       },
