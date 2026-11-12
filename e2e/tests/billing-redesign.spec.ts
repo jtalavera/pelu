@@ -368,7 +368,7 @@ test.describe("Facturación rediseñada · nueva factura", () => {
     await expect(page.locator("#pay-card-brand-0")).toHaveCount(0);
   });
 
-  test("RD-10 fecha, descuento, propinas y profesional viven en 'Más opciones', plegado por defecto", async ({
+  test("RD-10 el profesional y las propinas están siempre visibles; 'Más opciones' (plegado) solo trae el descuento", async ({
     page,
     request,
   }) => {
@@ -380,25 +380,58 @@ test.describe("Facturación rediseñada · nueva factura", () => {
     await page.getByRole("button", { name: "+ New invoice" }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
 
+    // The issue date is a header control («Date: today · Change»), not part of «More options».
+    await expect(page.getByTestId("billing-issue-date-control")).toBeVisible();
+    // Who served the service is visible on the item itself, with nothing to unfold.
+    await expect(page.locator("#line-professional-0")).toBeVisible();
+    // Tips are their own card, visible by default.
+    await expect(page.getByTestId("billing-tips-section")).toBeVisible();
+
+    // «More options» is folded by default and only holds the global discount.
     const more = page.getByTestId("billing-more-options");
     await expect(more).not.toHaveAttribute("open", "");
     await expect(page.locator("#discount-type")).toBeHidden();
-    // The issue date is a header control («Date: today · Change»), not part of «More options».
-    await expect(page.getByTestId("billing-issue-date-control")).toBeVisible();
-    await expect(page.getByTestId("billing-tips-section")).toBeHidden();
-
+    await expect(more.getByTestId("billing-tips-section")).toHaveCount(0);
     await openMoreOptions(page);
     await expect(page.locator("#discount-type")).toBeVisible();
-    await expect(page.getByTestId("billing-tips-section")).toBeVisible();
-    // Who served the service and the item's own discount live in each service's «More options».
+    await expect(more.locator("section")).toHaveCount(1);
+
+    // The item's own discount stays folded under the item.
+    await expect(page.locator("#line-disc-toggle-0")).toBeHidden();
     await page.getByTestId("billing-line-more-0").click();
-    await expect(page.locator("#line-professional-0")).toBeVisible();
     await expect(page.locator("#line-disc-toggle-0")).toBeVisible();
 
     // A global discount typed there updates the total shown in the always-visible bar.
     await page.locator("#discount-type").selectOption("PERCENT");
     await page.locator("#discount-value").fill("10");
     await expect(page.getByTestId("billing-total")).toHaveText("45.000");
+  });
+
+  test("RD-10b orden de la pantalla: cliente, servicios, propinas, forma de pago y Más opciones", async ({
+    page,
+    request,
+  }) => {
+    const token = await prepare(request);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    await loginAsDemo(page);
+    await page.goto("/app/billing");
+    await goToBillingHome(page);
+    await page.getByRole("button", { name: "+ New invoice" }).click();
+    await pickServiceLine(page, seed.serviceFullName, 0);
+
+    const ys: number[] = [];
+    for (const id of [
+      "billing-step-client",
+      "billing-step-items",
+      "billing-tips-section",
+      "billing-step-payment",
+      "billing-more-options",
+    ]) {
+      const box = await page.getByTestId(id).boundingBox();
+      expect(box, id).not.toBeNull();
+      ys.push(box!.y);
+    }
+    for (let i = 0; i < ys.length - 1; i++) expect(ys[i]).toBeLessThan(ys[i + 1]);
   });
 
   test("RD-11 con total de Gs. 7.000.000 o más, 'Sin nombre' avisa que hay que identificar al cliente", async ({

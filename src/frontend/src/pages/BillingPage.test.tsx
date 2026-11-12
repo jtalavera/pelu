@@ -223,7 +223,7 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       methodButtons.forEach((b) => expect(b.getAttribute("aria-pressed")).toBe("false"));
     });
 
-    it("lays the new invoice out as three steps and keeps the extras in More options", async () => {
+    it("lays the new invoice out as client, services, tips and payment, and keeps only the discount in More options", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
 
@@ -232,12 +232,14 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       expect(screen.getByTestId("billing-step-payment")).toBeTruthy();
       const more = screen.getByTestId("billing-more-options") as HTMLDetailsElement;
       expect(more.open).toBe(false);
-      // Discount and tips live inside the folded section; the date and the professional do not.
-      for (const selector of ["#discount-type", '[data-testid="billing-tips-section"]']) {
-        expect(more.querySelector(selector)).not.toBeNull();
-      }
+      // Only the global discount lives inside the folded section: tips, the date and the professional do not.
+      expect(more.querySelector("#discount-type")).not.toBeNull();
+      expect(more.querySelector('[data-testid="billing-tips-section"]')).toBeNull();
       expect(more.querySelector("#billing-issue-date")).toBeNull();
       expect(more.querySelector('[data-testid="billing-per-item-options"]')).toBeNull();
+      expect(more.querySelectorAll("section").length).toBe(1);
+      // Tips are their own always-visible card.
+      expect(screen.getByTestId("billing-tips-section")).toBeTruthy();
     });
 
     it("issues the invoice 'No name' by default and blocks Issue until a payment method is chosen", async () => {
@@ -334,12 +336,16 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       await screen.findByTestId("billing-line-0");
     }
 
-    it("orders the steps Client, then Services, then Payment", async () => {
+    it("orders the steps Client, then Services, then Tips, then Payment, then More options", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
-      const order = ["billing-step-client", "billing-step-items", "billing-step-payment"].map((id) =>
-        screen.getByTestId(id),
-      );
+      const order = [
+        "billing-step-client",
+        "billing-step-items",
+        "billing-tips-section",
+        "billing-step-payment",
+        "billing-more-options",
+      ].map((id) => screen.getByTestId(id));
       for (let i = 0; i < order.length - 1; i++) {
         expect(order[i].compareDocumentPosition(order[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       }
@@ -362,30 +368,30 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       expect(screen.getByTestId("billing-issue-date-label")).toBeTruthy();
     });
 
-    it("each service has its own folded 'More options' with the professional and the item discount", async () => {
+    it("each service shows its professional always, and folds only the item discount", async () => {
       await openFormWithServiceLine();
+      // The professional is visible without opening anything.
+      expect(document.querySelector("#line-professional-0")).not.toBeNull();
       const toggle = screen.getByTestId("billing-line-more-0");
       expect(toggle.getAttribute("aria-expanded")).toBe("false");
-      expect(document.querySelector("#line-professional-0")).toBeNull();
+      expect(document.querySelector("#line-disc-toggle-0")).toBeNull();
       fireEvent.click(toggle);
       expect(toggle.getAttribute("aria-expanded")).toBe("true");
-      expect(document.querySelector("#line-professional-0")).not.toBeNull();
       expect(document.querySelector("#line-disc-toggle-0")).not.toBeNull();
     });
 
-    it("an assigned professional is named next to the service and unlocks their tip in the general More options", async () => {
+    it("an assigned professional unlocks their tip in the Tips section, which is visible without opening More options", async () => {
       await openFormWithServiceLine();
-      expect(screen.queryByTestId("billing-line-professional-name-0")).toBeNull();
-      fireEvent.click(screen.getByTestId("billing-line-more-0"));
+      expect(screen.getByTestId("billing-tips-empty")).toBeTruthy();
       // Issue #384: the professional is a searchable combobox that filters while typing.
       const professionalInput = document.querySelector("#line-professional-0") as HTMLInputElement;
       fireEvent.focus(professionalInput);
       fireEvent.change(professionalInput, { target: { value: "Lau" } });
       fireEvent.mouseDown(await screen.findByRole("button", { name: /Laura/ }));
-      expect((await screen.findByTestId("billing-line-professional-name-0")).textContent).toMatch(/Laura/);
-      const more = screen.getByTestId("billing-more-options") as HTMLDetailsElement;
-      fireEvent.click(more.querySelector("summary") as HTMLElement);
       expect(await screen.findByLabelText(/tip.*Laura/i)).toBeTruthy();
+      const more = screen.getByTestId("billing-more-options") as HTMLDetailsElement;
+      expect(more.open).toBe(false);
+      expect(screen.getByTestId("billing-tips-section").contains(await screen.findByLabelText(/tip.*Laura/i))).toBe(true);
     });
   });
 

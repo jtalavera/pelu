@@ -11,7 +11,7 @@ import {
   setTenantFlag,
   type CommissionWorld,
 } from "../../fixtures/commissions";
-import { fillPaymentAmount, goToBillingHome, goToInvoiceHistory, openLineMoreOptions, pickInvoiceLineProfessional } from "../../fixtures/billing";
+import { fillPaymentAmount, goToBillingHome, goToInvoiceHistory, pickInvoiceLineProfessional } from "../../fixtures/billing";
 import { openFichaByText } from "../../fixtures/ui";
 
 /** HU-COM-10 · Asignar profesional / vendedor a las líneas del comprobante (modifica HU-14). */
@@ -47,7 +47,6 @@ test("venta suelta: cada línea (servicio y producto) tiene Profesional / Vended
   await openNewInvoice(page);
   await pickServiceLine(page, w.product.name, 0);
   // Starts empty and lists only active professionals; empty line shows the warning.
-  await openLineMoreOptions(page, 0);
   await expect(page.locator("#line-professional-0")).toHaveValue("No professional");
   await expect(page.getByTestId("line-no-commission-0")).toHaveText("This line will not generate a commission.");
   await pickInvoiceLineProfessional(page, 0, w.bea.name);
@@ -82,7 +81,6 @@ test("desde una ficha de servicio el profesional se precarga y se puede cambiar"
   await openFichaByText(page, "Cliente Ficha");
   await page.getByTestId("service-record-generate-invoice").click();
   await expect(page).toHaveURL(/\/app\/billing/);
-  await openLineMoreOptions(page, 0);
   const select = page.locator("#line-professional-0");
   await expect(select).toHaveValue(w.ana.name);
   await pickInvoiceLineProfessional(page, 0, w.bea.name);
@@ -132,7 +130,6 @@ test("con la flag deshabilitada el campo es opcional, sin aviso de comisión, y 
     await loginAdminUi(page, w);
     await openNewInvoice(page);
     await pickServiceLine(page, w.service.name, 0);
-    await openLineMoreOptions(page, 0);
     await expect(page.locator("#line-professional-0")).toHaveValue("No professional");
     await expect(page.getByTestId("line-no-commission-0")).toHaveCount(0);
     await fillPaymentAmount(page, "110000");
