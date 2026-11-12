@@ -212,20 +212,57 @@ Import (run from `up.sh`):
     `e2e/global-setup.mt.ts`, so the data is valid by construction
   - then bulk-generates history as SQL for speed: clients, appointments, fichas
     (service records), invoices (TEST SIFEN state), cash sessions/movements, tips
-- [ ] Size profiles:
-  - `small`: about 10 tenants
-  - `target`: about 100 tenants, matching the 10→100 client cost projection
+- [ ] **Tenant count is a parameter, not a fixed profile.** The generator takes
+      `--tenants=N`, where N is a multiple of 10 (10, 20, 30, …). It rejects any other value.
+      - Volumes are generated **in blocks of 10 tenants** with a fixed seed, so a `--tenants=30`
+        DB is the `--tenants=20` DB plus one more block. Results from different runs stay
+        comparable, and a bigger DB can be grown from an existing smaller BACPAC by adding blocks
+        instead of regenerating everything.
+      - Per-tenant volumes come from prod averages, measured with a query on a T5 snapshot (no
+        prod data is copied).
+- [ ] **SIFEN tenants are a parameter too.** `--sifen-tenants=M` (0 ≤ M ≤ N) turns
+      `SIFEN_ELECTRONIC_INVOICING` on for the first M tenants and leaves it off for the rest.
+      **All M tenants use the same credentials and issuer data as the dev tenant
+      "Femme Coiffure"**:
+      - **Issuer data** is read from the dev DB and copied into each SIFEN tenant's
+        `BusinessProfile`, fiscal stamp (timbrado), and SIFEN settings:
+        - RUC
+        - razón social and nombre de fantasía
+        - address, actividad económica, establecimiento
+        - timbrado number and validity
+        - CSC id and value
 
-  Per-tenant volumes come from prod averages, measured with a query on a T5 snapshot (no prod
-  data is copied).
-- [ ] Must fit under the **Basic 2 GB** cap with headroom. Record the final size.
-- [ ] Export as `loadtest/loadtest-V<flyway version>-<profile>.bacpac` into the same storage
+        The values are only read; nothing in dev changes.
+      - **Certificate:** the `.p12` file and its password are read from the dev Key Vault
+        (`femme-kv-b10via`, Femme Coiffure's `sifen-cert-t<id>-…` secrets). The generator uploads
+        them to each SIFEN tenant through the **real certificate upload API**, so each tenant gets
+        its own `sifen-cert-t<tenantId>-<uuid>-p12/-pwd` secrets and valid `sifen_certificates`
+        rows.
+      - **Numbering collisions.** M tenants share one RUC and one timbrado on `sifen-test`, so
+        each SIFEN tenant gets its **own punto de expedición** (001…M) or a disjoint invoice number
+        range. Otherwise every tenant would issue the same `establecimiento-punto-número` and the
+        same CDCs, and SIFEN would reject them as duplicates. To check during T6: whether
+        `sifen-test` accepts punto de expedición values that weren't declared for that timbrado.
+        If it doesn't, use disjoint number ranges on a single punto.
+- [ ] Must fit under the **Basic 2 GB** cap with headroom. The generator estimates the size
+      before it runs, refuses an N that won't fit, and records the final size.
+- [ ] Export as `loadtest/loadtest-V<flyway version>-t<N>-s<M>.bacpac` into the same storage
       account (no expiry). Regenerate after major schema changes; otherwise Flyway migrates it
       forward on boot.
-- [ ] Publish the test users and passwords for each profile, so k6 can use them.
+- [ ] **Re-link certificates on every recreate.** The BACPAC keeps the `sifen_certificates` rows,
+      but their secrets lived in the *previous* staging Key Vault, which `down.sh` deletes.
+      `up.sh --data=loadtest` therefore re-writes Femme Coiffure's `.p12` and password from the
+      dev vault into the new staging vault, under the secret names those rows already reference.
+      `KeyVaultSifenCertificateSecretStore` checks that each name starts with
+      `sifen-cert-t<tenantId>-`, and the names are kept unchanged.
+- [ ] Publish the test users and passwords, plus which tenants have SIFEN, so k6 can target both
+      groups.
 
-**Acceptance:** `up.sh --data=loadtest --bacpac=<name>` brings up N tenants where every one can
-log in and shows populated agenda, fichas and billing.
+**Acceptance:** `up.sh --data=loadtest --bacpac=loadtest-…-t<N>-s<M>` brings up N tenants:
+- every tenant can log in and shows a populated agenda, fichas and billing
+- exactly M tenants have SIFEN on
+- each SIFEN tenant can issue an invoice that `sifen-test` approves, with no duplicate-number or
+  duplicate-CDC rejections across tenants
 
 ### T7 — Load testing
 
@@ -239,8 +276,10 @@ log in and shows populated agenda, fichas and billing.
   - dashboard
 
   Users and tenants are spread across the golden DB.
-- [ ] SIFEN issuance is excluded or tightly throttled, since it calls the external `sifen-test`
-      endpoint.
+- [ ] SIFEN issuance runs only against the M SIFEN tenants. It is excluded or tightly throttled
+      (a configurable rate), since it calls the external `sifen-test` endpoint and every tenant
+      shares Femme Coiffure's RUC and timbrado. Non-SIFEN tenants run the non-fiscal comprobante
+      flow.
 - [ ] Runner: GH Actions `workflow_dispatch` (`loadtest.yml`) on a hosted runner. Azure Load
       Testing is an option for higher volumes.
 - [ ] Thresholds: p95 latency per endpoint and error rate.
@@ -258,7 +297,8 @@ log in and shows populated agenda, fichas and billing.
   - Run inside the wake window (07–20 Mon–Sat, Asunción), or account for scale-to-zero cold
     starts, as in prod.
 
-**Acceptance:** a run against `small` produces a report with all of the metrics above.
+**Acceptance:** a run against a `t10-s2` golden DB produces a report with all of the metrics
+above. The report states N and M.
 
 ### T8 — Docs & runbook
 
@@ -279,10 +319,13 @@ log in and shows populated agenda, fichas and billing.
 
 **Load test** (expected ≈ 30 min to set up):
 
-1. `scripts/staging/up.sh --recreate --data=loadtest --bacpac=<golden> --ref=<ref>`
-2. Run `loadtest.yml`.
-3. Collect the report.
-4. `scripts/staging/down.sh`
+1. If no golden DB exists yet for the N/M you want, generate one (T6):
+   `loadtest/seed --tenants=N --sifen-tenants=M`. Alternatively, grow an existing smaller BACPAC
+   by adding blocks of 10.
+2. `scripts/staging/up.sh --recreate --data=loadtest --bacpac=loadtest-V<v>-t<N>-s<M> --ref=<ref>`
+3. Run `loadtest.yml`.
+4. Collect the report.
+5. `scripts/staging/down.sh`
 
 **Torn-down checklist:**
 
@@ -313,13 +356,17 @@ windows around it. The persistent BACPAC storage account costs pennies.
 | CI loses rights when the RG is recreated | Subscription-scope role, or re-grant in `up.sh` (T4) |
 | First revision crash-loops after apply | Expected while RBAC propagates; `up.sh` waits and retries the smoke test |
 | `deployer_ip` changes | Same variable as dev; update before running `up.sh` |
-| Basic 2 GB cap exceeded by the golden DB | Size budget per profile (T6) |
+| Basic 2 GB cap exceeded by the golden DB | Generator estimates the size for N and refuses an N that won't fit (T6) |
+| SIFEN tenants sharing Femme Coiffure's RUC/timbrado collide on numbers or CDCs | Separate punto de expedición or number range per SIFEN tenant (T6) |
+| Load-test DB certificates point at a deleted vault | `up.sh` re-writes the secrets into the new staging vault from the dev vault (T6) |
+| Femme Coiffure's dev certificate or timbrado expires or is replaced | Generator and `up.sh` always read the *current* dev values; re-run them after a renewal |
 
 ## 7. Open decisions
 
 1. Sanitization details: target domain for rewritten emails, and which accounts get a known
    password.
-2. Load-test profiles: exact tenant count and per-tenant volumes for `target`.
+2. Load-test data: per-tenant volumes per block of 10. Confirm whether `sifen-test` accepts
+   separate puntos de expedición per tenant, or whether disjoint number ranges are needed.
 3. k6 on GH Actions vs Azure Load Testing.
 4. Whether `v2-staging` deploys need a required reviewer.
 5. Retention (N days) for prod snapshots in `femme-staging-data-rg`.
