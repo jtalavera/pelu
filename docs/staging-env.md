@@ -238,12 +238,44 @@ Import (run from `up.sh`):
         them to each SIFEN tenant through the **real certificate upload API**, so each tenant gets
         its own `sifen-cert-t<tenantId>-<uuid>-p12/-pwd` secrets and valid `sifen_certificates`
         rows.
-      - **Numbering collisions.** M tenants share one RUC and one timbrado on `sifen-test`, so
-        each SIFEN tenant gets its **own punto de expedición** (001…M) or a disjoint invoice number
-        range. Otherwise every tenant would issue the same `establecimiento-punto-número` and the
-        same CDCs, and SIFEN would reject them as duplicates. To check during T6: whether
-        `sifen-test` accepts punto de expedición values that weren't declared for that timbrado.
-        If it doesn't, use disjoint number ranges on a single punto.
+      - **Numbering collisions: disjoint number ranges.** M tenants share one RUC, timbrado,
+        establecimiento and punto on `sifen-test`. Each SIFEN tenant k (k = 0…M-1) therefore gets
+        its own block of 100 invoice numbers:
+
+        ```
+        start(k) = <base number> + k * 100
+        end(k)   = start(k) + 99
+        ```
+
+        This works because tests never issue more than 100 invoices per tenant. The rules:
+        - **Enforce the cap in the app, not just by convention.** Set each tenant's fiscal stamp to
+          begin at `start(k)` and end at `end(k)`; the optional end number exists since V79. A
+          tenant that hits 100 then gets the app's normal "range exhausted" error instead of
+          silently overlapping the next tenant's block. k6 treats that error as "stop issuing for
+          this tenant", not as a test failure.
+        - **`<base number>` must be above every number ever sent to `sifen-test` for that RUC,
+          timbrado and punto.** That includes Femme Coiffure's own invoices in dev, which share the
+          same issuer data, and **every previous staging run**, because `sifen-test` remembers
+          numbers and CDCs across recreates.
+        - Keep a **high-water mark** in the persistent storage account
+          (`femme-staging-data-rg`, e.g. `sifen-numbering.json`).
+        - `up.sh` computes the base for each run as:
+
+          ```
+          base = max(Femme Coiffure's current dev number, stored high-water mark) + margin
+          ```
+
+          rounded up to a multiple of 100. After the run, it stores `base + M * 100` as the new
+          high-water mark.
+        - **Rebase on every recreate.** The golden BACPAC is reused across runs, so its ranges
+          can't be baked in. Right after import, `up.sh` rewrites every SIFEN tenant's fiscal stamp
+          to that run's `start(k)` / `end(k)`. Invoices generated as history in the BACPAC are not
+          real SIFEN submissions, so they don't use up numbers on `sifen-test`.
+        - **Headroom.** The SIFEN invoice number has 7 digits (max 9,999,999). One run uses
+          M × 100 numbers, so 100 SIFEN tenants use 10,000 numbers per run. `up.sh` refuses to run
+          if `base + M * 100` would go past the max; at that point a new timbrado or punto is
+          needed in dev.
+
 - [ ] Must fit under the **Basic 2 GB** cap with headroom. The generator estimates the size
       before it runs, refuses an N that won't fit, and records the final size.
 - [ ] Export as `loadtest/loadtest-V<flyway version>-t<N>-s<M>.bacpac` into the same storage
@@ -261,8 +293,10 @@ Import (run from `up.sh`):
 **Acceptance:** `up.sh --data=loadtest --bacpac=loadtest-…-t<N>-s<M>` brings up N tenants:
 - every tenant can log in and shows a populated agenda, fichas and billing
 - exactly M tenants have SIFEN on
-- each SIFEN tenant can issue an invoice that `sifen-test` approves, with no duplicate-number or
-  duplicate-CDC rejections across tenants
+- each SIFEN tenant can issue an invoice that `sifen-test` approves, numbered inside its own
+  `start(k)…end(k)` block, with no duplicate-number or duplicate-CDC rejections across tenants or
+  against earlier runs
+- the 101st invoice for a tenant is blocked by the app (range exhausted)
 
 ### T7 — Load testing
 
@@ -357,7 +391,7 @@ windows around it. The persistent BACPAC storage account costs pennies.
 | First revision crash-loops after apply | Expected while RBAC propagates; `up.sh` waits and retries the smoke test |
 | `deployer_ip` changes | Same variable as dev; update before running `up.sh` |
 | Basic 2 GB cap exceeded by the golden DB | Generator estimates the size for N and refuses an N that won't fit (T6) |
-| SIFEN tenants sharing Femme Coiffure's RUC/timbrado collide on numbers or CDCs | Separate punto de expedición or number range per SIFEN tenant (T6) |
+| SIFEN tenants sharing Femme Coiffure's RUC/timbrado collide on numbers or CDCs | Disjoint 100-number block per SIFEN tenant (`base + k*100`), capped by the fiscal stamp's end number; base above a persisted high-water mark and Femme Coiffure's dev number (T6) |
 | Load-test DB certificates point at a deleted vault | `up.sh` re-writes the secrets into the new staging vault from the dev vault (T6) |
 | Femme Coiffure's dev certificate or timbrado expires or is replaced | Generator and `up.sh` always read the *current* dev values; re-run them after a renewal |
 
@@ -365,8 +399,8 @@ windows around it. The persistent BACPAC storage account costs pennies.
 
 1. Sanitization details: target domain for rewritten emails, and which accounts get a known
    password.
-2. Load-test data: per-tenant volumes per block of 10. Confirm whether `sifen-test` accepts
-   separate puntos de expedición per tenant, or whether disjoint number ranges are needed.
+2. Load-test data: per-tenant volumes per block of 10. The margin added above the SIFEN
+   high-water mark (e.g. +1,000).
 3. k6 on GH Actions vs Azure Load Testing.
 4. Whether `v2-staging` deploys need a required reviewer.
 5. Retention (N days) for prod snapshots in `femme-staging-data-rg`.
