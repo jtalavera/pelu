@@ -57,4 +57,38 @@ describe("MoreActionsMenu", () => {
     await userEvent.click(screen.getByText("outside"));
     expect(screen.queryByTestId("m")).toBeNull();
   });
+
+  describe("compact trigger icon", () => {
+    function renderCompact(triggerIcon?: "horizontal" | "vertical") {
+      return render(
+        <MoreActionsMenu
+          compact
+          triggerIcon={triggerIcon}
+          label="More actions"
+          items={[{ id: "a", label: "A", onSelect: vi.fn() }]}
+          open={false}
+          onOpenChange={vi.fn()}
+          triggerTestId="t"
+        />,
+      );
+    }
+
+    it("is the horizontal «⋯» by default", () => {
+      renderCompact();
+      const trigger = screen.getByTestId("t");
+      expect(trigger.textContent).toBe("⋯");
+      expect(trigger.querySelector("svg")).toBeNull();
+      expect(trigger.getAttribute("aria-label")).toBe("More actions");
+    });
+
+    it("can be the vertical «⋮» (three dots, still named by the label)", () => {
+      renderCompact("vertical");
+      const trigger = screen.getByTestId("t");
+      const icon = trigger.querySelector('svg[data-icon="dots-vertical"]')!;
+      expect(icon).not.toBeNull();
+      expect(icon.querySelectorAll("circle")).toHaveLength(3);
+      expect(trigger.textContent).toBe("");
+      expect(trigger.getAttribute("aria-label")).toBe("More actions");
+    });
+  });
 });
