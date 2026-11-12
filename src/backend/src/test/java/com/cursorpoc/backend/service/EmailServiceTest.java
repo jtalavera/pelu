@@ -10,7 +10,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.azure.communication.email.EmailClient;
+import com.azure.communication.email.models.EmailMessage;
+import com.azure.communication.email.models.EmailSendResult;
+import com.azure.core.util.polling.LongRunningOperationStatus;
+import com.azure.core.util.polling.PollResponse;
+import com.azure.core.util.polling.SyncPoller;
+import java.time.Duration;
 import java.util.Locale;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.MessageSource;
@@ -149,5 +158,76 @@ class EmailServiceTest {
     verify(messageSource)
         .getMessage(eq("email.activation.body"), argsCaptor.capture(), any(Locale.class));
     assertThat(argsCaptor.getValue()).containsExactly("https://x/activate", "Acme Salon");
+  }
+
+  @SuppressWarnings("unchecked")
+  private static SyncPoller<EmailSendResult, EmailSendResult> stubAcs(EmailService service) {
+    EmailClient client = mock(EmailClient.class);
+    SyncPoller<EmailSendResult, EmailSendResult> poller = mock(SyncPoller.class);
+    when(client.beginSend(any(EmailMessage.class))).thenReturn(poller);
+    Function<String, EmailClient> factory = cs -> client;
+    ReflectionTestUtils.setField(service, "clientFactory", factory);
+    ReflectionTestUtils.setField(service, "sendStatusTimeout", Duration.ofSeconds(1));
+    return poller;
+  }
+
+  /**
+   * 2026-11-12 prod incident: ACS accepted the KuDE email but never reported a final status, and
+   * the unbounded {@code getFinalResult()} hung the SIFEN queue consumer forever. The wait is now
+   * bounded — a send whose status isn't final in time returns (ACS already has the message).
+   */
+  @Test
+  void sendPdfAttachment_acsStatusNeverFinal_returnsAfterTheBoundInsteadOfHanging() {
+    EmailService service = newService(true, "endpoint=https://x/;accesskey=a2V5");
+    SyncPoller<EmailSendResult, EmailSendResult> poller = stubAcs(service);
+    when(poller.waitForCompletion(Duration.ofSeconds(1)))
+        .thenThrow(new RuntimeException(new TimeoutException("still running")));
+
+    assertThatCode(
+            () ->
+                service.sendPdfAttachment(
+                    "cliente@example.com", "Subj", "Body", "f.pdf", new byte[] {1}))
+        .doesNotThrowAnyException();
+    verify(poller).waitForCompletion(Duration.ofSeconds(1));
+  }
+
+  @Test
+  void sendPlainTextEmail_acsStatusStillRunningAtTheBound_returns() {
+    EmailService service = newService(true, "endpoint=https://x/;accesskey=a2V5");
+    SyncPoller<EmailSendResult, EmailSendResult> poller = stubAcs(service);
+    when(poller.waitForCompletion(Duration.ofSeconds(1)))
+        .thenReturn(new PollResponse<>(LongRunningOperationStatus.IN_PROGRESS, null));
+
+    assertThatCode(() -> service.sendPlainTextEmail("cliente@example.com", "Subj", "Body"))
+        .doesNotThrowAnyException();
+  }
+
+  @Test
+  void sendPdfAttachment_acsReportsFailed_wrapsAsEmailSendFailed() {
+    EmailService service = newService(true, "endpoint=https://x/;accesskey=a2V5");
+    SyncPoller<EmailSendResult, EmailSendResult> poller = stubAcs(service);
+    when(poller.waitForCompletion(Duration.ofSeconds(1)))
+        .thenReturn(new PollResponse<>(LongRunningOperationStatus.FAILED, null));
+
+    assertThatThrownBy(
+            () ->
+                service.sendPdfAttachment(
+                    "cliente@example.com", "Subj", "Body", "f.pdf", new byte[] {1}))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("EMAIL_SEND_FAILED");
+  }
+
+  @Test
+  void sendActivationLink_acsCompletes_doesNotThrow() {
+    EmailService service = newService(true, "endpoint=https://x/;accesskey=a2V5");
+    SyncPoller<EmailSendResult, EmailSendResult> poller = stubAcs(service);
+    when(poller.waitForCompletion(Duration.ofSeconds(1)))
+        .thenReturn(new PollResponse<>(LongRunningOperationStatus.SUCCESSFULLY_COMPLETED, null));
+
+    assertThatCode(
+            () ->
+                service.sendActivationLink(
+                    "admin@acme.example", "https://x/a", "Acme", Locale.forLanguageTag("es-PY")))
+        .doesNotThrowAnyException();
   }
 }

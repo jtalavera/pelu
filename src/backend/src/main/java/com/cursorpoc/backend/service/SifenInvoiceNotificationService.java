@@ -5,6 +5,7 @@ import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
+import jakarta.annotation.PreDestroy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.DecimalFormat;
@@ -12,9 +13,16 @@ import java.text.DecimalFormatSymbols;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import org.hibernate.Hibernate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.Lazy;
@@ -59,6 +67,27 @@ public class SifenInvoiceNotificationService {
   private final MessageSource messageSource;
   private final FemmeTimeProperties timeProperties;
 
+  /** Bound on queued-but-not-yet-sent KuDE emails; past it new ones are dropped (and logged). */
+  private static final int KUDE_EMAIL_QUEUE_CAPACITY = 500;
+
+  /**
+   * Single background thread for the KuDE auto-email (2026-11-12 prod incident): it used to run on
+   * the SIFEN Service Bus consumer thread itself, and that consumer processes one message at a
+   * time, so an email send that never returned froze every later invoice in "En proceso".
+   */
+  private final ExecutorService kudeEmailExecutor =
+      new ThreadPoolExecutor(
+          1,
+          1,
+          0L,
+          TimeUnit.MILLISECONDS,
+          new LinkedBlockingQueue<>(KUDE_EMAIL_QUEUE_CAPACITY),
+          runnable -> {
+            Thread thread = new Thread(runnable, "sifen-kude-email");
+            thread.setDaemon(true);
+            return thread;
+          });
+
   @Autowired @Lazy private SifenInvoiceNotificationService selfProxy;
 
   public SifenInvoiceNotificationService(
@@ -76,6 +105,40 @@ public class SifenInvoiceNotificationService {
 
   private SifenInvoiceNotificationService self() {
     return selfProxy != null ? selfProxy : this;
+  }
+
+  /**
+   * Item 2, as called from the SIFEN submission listener: queues {@link #emailKudeAfterApproval} on
+   * a dedicated background thread and returns immediately, so the email can never hold up the
+   * submission queue consumer. Never throws.
+   */
+  public void emailKudeAfterApprovalAsync(long tenantId, long invoiceId) {
+    Map<String, String> mdc = MDC.getCopyOfContextMap();
+    try {
+      kudeEmailExecutor.execute(
+          () -> {
+            if (mdc != null) {
+              MDC.setContextMap(mdc);
+            }
+            try {
+              emailKudeAfterApproval(tenantId, invoiceId);
+            } finally {
+              MDC.clear();
+            }
+          });
+    } catch (RejectedExecutionException ex) {
+      log.error(
+          "SIFEN KuDE auto-email not queued (backlog full) tenantId={} invoiceId={} — invoice "
+              + "stays approved, resend the KuDE manually",
+          tenantId,
+          invoiceId);
+    }
+  }
+
+  @PreDestroy
+  void shutdownKudeEmailExecutor() throws InterruptedException {
+    kudeEmailExecutor.shutdown();
+    kudeEmailExecutor.awaitTermination(30, TimeUnit.SECONDS);
   }
 
   /**
