@@ -191,8 +191,10 @@ public class SifenSubmissionQueueListener {
           || status == SifenSubmissionStatus.APPROVED_WITH_OBSERVATION) {
         // Issue #173 item 2: SIFEN accepted the document — email its KuDE to the recipient. This
         // is a best-effort side effect; it never throws, so an email problem can't re-queue or
-        // dead-letter an already-approved fiscal document.
-        notificationService.emailKudeAfterApproval(tenantId, invoiceId);
+        // dead-letter an already-approved fiscal document. It runs off this thread: the queue
+        // consumer handles one message at a time, and an email send that hung here once froze
+        // every later invoice in "En proceso" (2026-11-12 prod incident).
+        notificationService.emailKudeAfterApprovalAsync(tenantId, invoiceId);
       }
       log.info(
           "SIFEN transmit resolved tenantId={} invoiceId={} attempt={} status={}",

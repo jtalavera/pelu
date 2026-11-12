@@ -83,7 +83,7 @@ class SifenSubmissionQueueListenerTest {
     verify(persistence).releaseLease(TENANT_ID, INVOICE_ID);
     verify(numberVoidingService, never()).recordPendingForRejectedInvoice(anyLong(), anyLong());
     // Issue #173 item 2: SIFEN approved → the KuDE is auto-emailed.
-    verify(notificationService).emailKudeAfterApproval(TENANT_ID, INVOICE_ID);
+    verify(notificationService).emailKudeAfterApprovalAsync(TENANT_ID, INVOICE_ID);
   }
 
   /** Issue #173 item 2: a non-approved terminal result never triggers the KuDE auto-email. */
@@ -98,7 +98,7 @@ class SifenSubmissionQueueListenerTest {
 
     listener.processMessage(TENANT_ID, INVOICE_ID, 1, CORRELATION_ID);
 
-    verify(notificationService, never()).emailKudeAfterApproval(anyLong(), anyLong());
+    verify(notificationService, never()).emailKudeAfterApprovalAsync(anyLong(), anyLong());
   }
 
   /** RT-25 (Hardening_SIFEN.md): a rejected transmit records a pending inutilización. */

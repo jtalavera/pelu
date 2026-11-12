@@ -15,6 +15,7 @@ import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,12 +30,15 @@ class SifenSubmissionReconcilerTest {
 
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private SifenSubmissionQueue queue;
+  @Mock private SifenInvoiceSubmissionPersistenceService persistence;
 
   private SifenSubmissionReconciler reconciler;
 
   @BeforeEach
   void setUp() {
-    reconciler = new SifenSubmissionReconciler(invoiceRepository, queue, new FemmeTimeProperties());
+    reconciler =
+        new SifenSubmissionReconciler(
+            invoiceRepository, queue, new FemmeTimeProperties(), persistence);
   }
 
   private static Invoice invoiceOf(long id, long tenantId, int attemptCount) {
@@ -99,5 +103,25 @@ class SifenSubmissionReconcilerTest {
     reconciler.reconcile();
 
     verify(queue, never()).enqueue(anyLong(), anyLong(), anyInt(), any(), any());
+  }
+
+  /**
+   * 2026-11-12 prod incident: with the consumer stuck, a QUEUED invoice (next attempt still null)
+   * was re-enqueued on every 60s run and the queue piled up duplicates. Each re-enqueue now pushes
+   * the invoice's next attempt {@link SifenSubmissionReconciler#REENQUEUE_GRACE} out.
+   */
+  @Test
+  void reconcile_pushesNextAttemptOutByTheGrace_soAStuckInvoiceIsNotReEnqueuedEveryRun() {
+    when(invoiceRepository.findDueForSifenRetry(any(), any(), any(), anyInt(), any(), anyInt()))
+        .thenReturn(List.of(invoiceOf(10L, 1L, 0)));
+    LocalDateTime before = LocalDateTime.now(new FemmeTimeProperties().zoneId());
+
+    reconciler.reconcile();
+
+    ArgumentCaptor<LocalDateTime> nextAttemptCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+    verify(persistence).scheduleRetry(eq(1L), eq(10L), nextAttemptCaptor.capture());
+    assertThat(nextAttemptCaptor.getValue())
+        .isAfterOrEqualTo(before.plus(SifenSubmissionReconciler.REENQUEUE_GRACE));
+    verify(queue).enqueue(eq(1L), eq(10L), eq(1), eq(Duration.ZERO), any());
   }
 }

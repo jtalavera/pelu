@@ -5,8 +5,15 @@ import com.azure.communication.email.EmailClientBuilder;
 import com.azure.communication.email.models.EmailAddress;
 import com.azure.communication.email.models.EmailAttachment;
 import com.azure.communication.email.models.EmailMessage;
+import com.azure.communication.email.models.EmailSendResult;
 import com.azure.core.util.BinaryData;
+import com.azure.core.util.polling.LongRunningOperationStatus;
+import com.azure.core.util.polling.PollResponse;
+import com.azure.core.util.polling.SyncPoller;
+import java.time.Duration;
 import java.util.Locale;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +41,22 @@ public class EmailService {
 
   @Value("${app.femme.email.sender-address.generic:}")
   private String senderAddressGeneric;
+
+  /**
+   * Upper bound on how long a send waits for ACS to report the message's final status. ACS accepts
+   * the send (HTTP 202) right away and then reports progress through a status operation that the
+   * SDK polls; with no bound, {@code beginSend(...).getFinalResult()} polled that status forever
+   * when ACS never reached a terminal state (2026-11-12 prod incident: ACS kept answering "running"
+   * / 429 and the single SIFEN Service Bus consumer thread hung inside the KuDE auto-email, so no
+   * further invoice was ever transmitted). Past this bound the send is treated as accepted — ACS
+   * already has the message — and logged as unconfirmed.
+   */
+  @Value("${app.femme.email.send-status-timeout:PT30S}")
+  private Duration sendStatusTimeout = Duration.ofSeconds(30);
+
+  /** Seam for tests; production builds a fresh client per send from the connection string. */
+  private Function<String, EmailClient> clientFactory =
+      cs -> new EmailClientBuilder().connectionString(cs).buildClient();
 
   private final MessageSource messageSource;
 
@@ -72,15 +95,13 @@ public class EmailService {
     }
 
     try {
-      EmailClient client =
-          new EmailClientBuilder().connectionString(connectionString).buildClient();
       EmailMessage message =
           new EmailMessage()
               .setSenderAddress(senderAddressGeneric)
               .setToRecipients(new EmailAddress(toEmail))
               .setSubject(subject)
               .setBodyPlainText(body);
-      client.beginSend(message).getFinalResult();
+      submit(message);
       log.info(
           "EMAIL SENT from={} to={} subject=\"{}\" locale={}",
           senderAddressGeneric,
@@ -117,15 +138,13 @@ public class EmailService {
     }
 
     try {
-      EmailClient client =
-          new EmailClientBuilder().connectionString(connectionString).buildClient();
       EmailMessage message =
           new EmailMessage()
               .setSenderAddress(senderAddressGeneric)
               .setToRecipients(new EmailAddress(toEmail))
               .setSubject(subject)
               .setBodyPlainText(body);
-      client.beginSend(message).getFinalResult();
+      submit(message);
       log.info(
           "EMAIL SENT from={} to={} subject=\"{}\" locale={}",
           senderAddressGeneric,
@@ -156,15 +175,13 @@ public class EmailService {
     }
 
     try {
-      EmailClient client =
-          new EmailClientBuilder().connectionString(connectionString).buildClient();
       EmailMessage message =
           new EmailMessage()
               .setSenderAddress(senderAddressReminders)
               .setToRecipients(new EmailAddress(toEmail))
               .setSubject(subject)
               .setBodyPlainText(body);
-      client.beginSend(message).getFinalResult();
+      submit(message);
       log.info("EMAIL SENT from={} to={} subject=\"{}\"", senderAddressReminders, toEmail, subject);
     } catch (Exception ex) {
       log.error("EMAIL send failed to={} subject=\"{}\"", toEmail, subject, ex);
@@ -195,8 +212,6 @@ public class EmailService {
     }
 
     try {
-      EmailClient client =
-          new EmailClientBuilder().connectionString(connectionString).buildClient();
       EmailAttachment attachment =
           new EmailAttachment(
               attachmentFilename, "application/pdf", BinaryData.fromBytes(attachmentBytes));
@@ -207,7 +222,7 @@ public class EmailService {
               .setSubject(subject)
               .setBodyPlainText(body)
               .setAttachments(attachment);
-      client.beginSend(message).getFinalResult();
+      submit(message);
       log.info(
           "EMAIL SENT (with attachment) from={} to={} subject=\"{}\" attachment={}",
           senderAddressInvoices,
@@ -222,6 +237,37 @@ public class EmailService {
           attachmentFilename,
           ex);
       throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "EMAIL_SEND_FAILED", ex);
+    }
+  }
+
+  /**
+   * Hands the message to ACS and waits at most {@link #sendStatusTimeout} for its final status.
+   * Throws when ACS reports the send as failed (callers map it to {@code EMAIL_SEND_FAILED}); when
+   * the status is still not final after the bound, logs a warning and returns — the message was
+   * accepted, and blocking the caller (an HTTP request or the SIFEN queue consumer) is worse.
+   */
+  private void submit(EmailMessage message) {
+    SyncPoller<EmailSendResult, EmailSendResult> poller =
+        clientFactory.apply(connectionString).beginSend(message);
+    PollResponse<EmailSendResult> response;
+    try {
+      response = poller.waitForCompletion(sendStatusTimeout);
+    } catch (RuntimeException ex) {
+      if (!(ex.getCause() instanceof TimeoutException)) {
+        throw ex;
+      }
+      response = null;
+    }
+    if (response == null || !response.getStatus().isComplete()) {
+      log.warn(
+          "EMAIL accepted by ACS but final status not confirmed within {}s subject=\"{}\"",
+          sendStatusTimeout.toSeconds(),
+          message.getSubject());
+      return;
+    }
+    if (response.getStatus() != LongRunningOperationStatus.SUCCESSFULLY_COMPLETED) {
+      throw new IllegalStateException(
+          "ACS email send finished with status " + response.getStatus());
     }
   }
 }
