@@ -39,17 +39,29 @@ public class SifenSubmissionReconciler {
   private static final List<SifenSubmissionStatus> RETRYABLE_STATUSES =
       List.of(SifenSubmissionStatus.QUEUED, SifenSubmissionStatus.PENDING_VERIFICATION);
 
+  /**
+   * After re-enqueuing an invoice, wait this long before re-enqueuing it again. Without it an
+   * invoice whose message simply hadn't been consumed yet (QUEUED, {@code sifenNextAttemptAt} still
+   * null) was re-enqueued on every 60s run — when the consumer was stuck (2026-11-12 prod incident)
+   * that piled up hundreds of duplicate messages. The listener overwrites or clears the schedule as
+   * soon as it actually processes the invoice, so this only spaces out the safety net.
+   */
+  static final Duration REENQUEUE_GRACE = Duration.ofMinutes(5);
+
   private final InvoiceRepository invoiceRepository;
   private final SifenSubmissionQueue queue;
   private final FemmeTimeProperties timeProperties;
+  private final SifenInvoiceSubmissionPersistenceService persistence;
 
   public SifenSubmissionReconciler(
       InvoiceRepository invoiceRepository,
       SifenSubmissionQueue queue,
-      FemmeTimeProperties timeProperties) {
+      FemmeTimeProperties timeProperties,
+      SifenInvoiceSubmissionPersistenceService persistence) {
     this.invoiceRepository = invoiceRepository;
     this.queue = queue;
     this.timeProperties = timeProperties;
+    this.persistence = persistence;
   }
 
   @Scheduled(fixedDelay = 60_000)
@@ -73,6 +85,9 @@ public class SifenSubmissionReconciler {
           tenantId,
           invoiceId,
           invoice.getSifenAttemptCount());
+      // Push the next safety-net run out first: the local async queue may process the message
+      // (and set its own schedule) before enqueue() even returns.
+      persistence.scheduleRetry(tenantId, invoiceId, now.plus(REENQUEUE_GRACE));
       queue.enqueue(
           tenantId, invoiceId, invoice.getSifenAttemptCount() + 1, Duration.ZERO, correlationId);
     }

@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -19,6 +21,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -159,5 +163,34 @@ class SifenInvoiceNotificationServiceTest {
     verify(emailService, never())
         .sendPdfAttachment(anyString(), anyString(), anyString(), anyString(), any());
     assertThat(invoice.getSifenCancellationNotifiedAt()).isNull();
+  }
+
+  /**
+   * 2026-11-12 prod incident: the SIFEN queue consumer called the KuDE email inline and an email
+   * send that never returned froze every later invoice. The async variant must return while the
+   * send is still blocked, and still deliver once it unblocks.
+   */
+  @Test
+  void emailKudeAfterApprovalAsync_returnsWhileTheSendIsStillBlocked() throws Exception {
+    CountDownLatch release = new CountDownLatch(1);
+    doAnswer(
+            inv -> {
+              release.await(10, TimeUnit.SECONDS);
+              return null;
+            })
+        .when(emailService)
+        .sendPdfAttachment(anyString(), anyString(), anyString(), anyString(), any());
+
+    long start = System.nanoTime();
+    service.emailKudeAfterApprovalAsync(TENANT_ID, INVOICE_ID);
+    long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+
+    assertThat(elapsedMs).isLessThan(2_000);
+    verify(emailService, timeout(5_000))
+        .sendPdfAttachment(
+            eq("cliente@example.com"), anyString(), anyString(), eq("KUDE-x.pdf"), any());
+    release.countDown();
+    service.shutdownKudeEmailExecutor();
+    assertThat(invoice.getSifenKudeEmailedAt()).isNotNull();
   }
 }
