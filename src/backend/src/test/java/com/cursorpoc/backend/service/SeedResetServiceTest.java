@@ -70,6 +70,7 @@ class SeedResetServiceTest {
   @Mock private AppUserTourStateRepository appUserTourStateRepository;
   @Mock private TipWithdrawalRepository tipWithdrawalRepository;
   @Mock private com.cursorpoc.backend.repository.ManualTipRepository manualTipRepository;
+  @Mock private com.cursorpoc.backend.repository.InvoiceLateTipRepository invoiceLateTipRepository;
   @Mock private SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository;
   @Mock private SifenCertificateRepository sifenCertificateRepository;
   @Mock private FemmeDataInitializer femmeDataInitializer;
@@ -104,6 +105,7 @@ class SeedResetServiceTest {
             appUserTourStateRepository,
             tipWithdrawalRepository,
             manualTipRepository,
+            invoiceLateTipRepository,
             sifenNumberVoidingEventRepository,
             sifenCertificateRepository,
             femmeDataInitializer);
