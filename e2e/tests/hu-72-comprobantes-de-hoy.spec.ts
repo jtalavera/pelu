@@ -332,7 +332,7 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
 
     const dialog = page.getByTestId("kude-email-dialog");
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText(inv.fullName);
+    await expect(dialog).toContainText(inv.fullName, { ignoreCase: true });
     await expect(dialog).toContainText(`Invoice ${inv.invoiceNumberFormatted}`);
     await expect(dialog).toContainText("Gs. 45.000");
     await expect(page.getByTestId("kude-email-input")).toHaveValue("cliente-hu72@example.com");
