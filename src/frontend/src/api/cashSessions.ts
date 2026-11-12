@@ -26,6 +26,22 @@ export type CashMovement = {
   afterClose?: boolean;
 };
 
+/** A tip left after its invoice was issued that entered a cash register (HU-73). */
+export type CashLateTip = {
+  id: number;
+  professionalName: string;
+  invoiceNumberFormatted: string;
+  amount: string | number;
+  paymentMethod: string;
+  cardBrand: string | null;
+  createdAt: string;
+  createdByEmail: string | null;
+  /** Voided tips are listed but never counted in the expected cash nor in the per-method totals. */
+  voided: boolean;
+  voidReason: string | null;
+  voidedByEmail: string | null;
+};
+
 export type CashSessionDetail = {
   id: number;
   tenantId: number;
@@ -42,6 +58,8 @@ export type CashSessionDetail = {
   paymentSummary: Array<{ method: string; total: string }>;
   movements: CashMovement[];
   isOpen: boolean;
+  /** Tips collected after their invoice was issued that entered this register (HU-73). */
+  lateTips?: CashLateTip[];
 };
 
 export type CashSessionListItem = {

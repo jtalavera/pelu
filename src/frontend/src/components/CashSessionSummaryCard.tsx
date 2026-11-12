@@ -6,7 +6,7 @@ import { useDateLocale } from "../i18n/dateLocale";
 import { formatGuaraniesGs, formatSignedGs } from "../lib/formatMoney";
 import { formatParaguayDateTime } from "../lib/paraguayDateTime";
 import { Disclosure, Row } from "./CashDisclosure";
-import { CashMovementRow } from "./CashMovementRow";
+import { CashLateTipRow, CashMovementRow, lateTipsMethodsNote, mergeCashEntries } from "./CashMovementRow";
 
 function capitalizeSnake(s: string): string {
   if (!s) return "";
@@ -39,6 +39,9 @@ export function CashSessionSummaryCard({
   const expected = Number(detail.expectedCashAmount);
   const methods = detail.paymentSummary ?? [];
   const movements = detail.movements ?? [];
+  const lateTips = detail.lateTips ?? [];
+  const entries = mergeCashEntries(movements, lateTips);
+  const lateTipsNote = lateTipsMethodsNote(lateTips, t);
   const dayLine = t("femme.billing.cash.invoicedLine", {
     count: detail.invoiceCount,
     amount: formatGuaraniesGs(detail.totalInvoiced),
@@ -106,18 +109,29 @@ export function CashSessionSummaryCard({
               />
             ))
           )}
+          {lateTipsNote ? (
+            <Text variant="small" className="text-ink-3" data-testid="cash-late-tips-note">
+              {lateTipsNote}
+            </Text>
+          ) : null}
         </Disclosure>
         <Disclosure
           id="movements"
           label={t("femme.billing.movements.title")}
-          count={movements.length}
+          count={entries.length}
           open={open === "movements"}
           onToggle={() => toggle("movements")}
         >
-          {movements.length === 0 ? (
+          {entries.length === 0 ? (
             <Text variant="muted">{t("femme.billing.movements.emptyToday")}</Text>
           ) : (
-            movements.map((m) => <CashMovementRow key={m.id} movement={m} showUser />)
+            entries.map((e) =>
+              e.kind === "movement" ? (
+                <CashMovementRow key={e.key} movement={e.movement} showUser />
+              ) : (
+                <CashLateTipRow key={e.key} tip={e.tip} showUser />
+              ),
+            )
           )}
         </Disclosure>
         <Disclosure

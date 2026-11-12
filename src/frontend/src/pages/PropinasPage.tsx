@@ -32,11 +32,13 @@ import {
 } from "../api/propinas";
 import { getCurrentSession, listCashSessionsPaged } from "../api/cashSessions";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { VoidLateTipDialog, type VoidLateTipTarget } from "../components/invoice/VoidLateTipDialog";
 import { useMe } from "../hooks/useMe";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatGuaraniesGs } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
+import { capitalize } from "./billing/billingShared";
 
 type Professional = { id: number; fullName: string; displayName?: string | null; active: boolean };
 type Period = 7 | 30 | 90;
@@ -81,6 +83,18 @@ type ManualInfo = {
   voidedByName: string | null;
 };
 
+/** A tip left after the invoice was issued (HU-73): voidable by the administrator, never editable. */
+type LateInfo = {
+  id: number;
+  paymentMethod: string | null;
+  cardBrand: string | null;
+  invoiceNumberFormatted: string | null;
+  createdByName: string | null;
+  voided: boolean;
+  voidReason: string | null;
+  voidedByName: string | null;
+};
+
 type Movement =
   | {
       kind: "tip";
@@ -90,6 +104,7 @@ type Movement =
       client: string | null;
       amount: number;
       manual?: ManualInfo;
+      late?: LateInfo;
     }
   | { kind: "withdrawal"; key: string; at: string; professional: string; amount: number };
 
@@ -161,6 +176,7 @@ export default function PropinasPage() {
   const [manualSubmitError, setManualSubmitError] = useState<string | null>(null);
   const [manualSubmitting, setManualSubmitting] = useState(false);
   const [voidTarget, setVoidTarget] = useState<ManualInfo | null>(null);
+  const [lateVoidTarget, setLateVoidTarget] = useState<VoidLateTipTarget | null>(null);
   const [voidAmountLabel, setVoidAmountLabel] = useState("");
   const [voidReason, setVoidReason] = useState("");
   const [voidError, setVoidError] = useState<string | null>(null);
@@ -299,7 +315,7 @@ export default function PropinasPage() {
     const toMs = new Date(localDateYmdToIsoEnd(shown.range.to)).getTime();
     const tips: Movement[] = (report?.rows ?? []).map((row, i) => ({
       kind: "tip",
-      key: `tip-${row.manualTipId ?? ""}-${row.professionalId}-${row.serviceDateTime}-${i}`,
+      key: `tip-${row.manualTipId ?? ""}-${row.lateTipId ?? ""}-${row.professionalId}-${row.serviceDateTime}-${i}`,
       at: row.serviceDateTime,
       professional: row.professionalName,
       client: row.clientName,
@@ -310,6 +326,19 @@ export default function PropinasPage() {
               id: row.manualTipId,
               professionalId: row.professionalId,
               note: row.note ?? null,
+              createdByName: row.createdByName ?? null,
+              voided: row.voided === true,
+              voidReason: row.voidReason ?? null,
+              voidedByName: row.voidedByName ?? null,
+            }
+          : undefined,
+      late:
+        row.lateTipId != null
+          ? {
+              id: row.lateTipId,
+              paymentMethod: row.paymentMethod ?? null,
+              cardBrand: row.cardBrand ?? null,
+              invoiceNumberFormatted: row.invoiceNumberFormatted ?? null,
               createdByName: row.createdByName ?? null,
               voided: row.voided === true,
               voidReason: row.voidReason ?? null,
@@ -368,7 +397,8 @@ export default function PropinasPage() {
    */
   function describeMovement(m: Movement) {
     const manual = m.kind === "tip" ? m.manual : undefined;
-    const voided = manual?.voided === true;
+    const late = m.kind === "tip" ? m.late : undefined;
+    const voided = manual?.voided === true || late?.voided === true;
     const conceptLabel =
       m.kind === "withdrawal"
         ? t("femme.propinas.concept.withdrawal")
@@ -377,7 +407,33 @@ export default function PropinasPage() {
           : m.client
             ? t("femme.propinas.concept.tipOf", { name: m.client })
             : t("femme.propinas.concept.tip");
-    const conceptDetail = manual
+    const lateDetail = late
+      ? [
+          t("femme.propinas.concept.lateDetail", {
+            method: [
+              late.paymentMethod
+                ? t(`femme.billing.invoice.paymentMethod${capitalize(late.paymentMethod)}`)
+                : null,
+              late.cardBrand ? t(`femme.billing.invoice.cardBrand${capitalize(late.cardBrand)}`) : null,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            name: late.createdByName ?? "",
+          }),
+          late.invoiceNumberFormatted ? `#${late.invoiceNumberFormatted}` : null,
+          late.voided
+            ? t("femme.propinas.manual.voidedBy", {
+                name: late.voidedByName ?? "",
+                reason: late.voidReason ?? "",
+              })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : "";
+    const conceptDetail = late
+      ? lateDetail
+      : manual
       ? [
           manual.note,
           manual.createdByName ? t("femme.propinas.manual.createdBy", { name: manual.createdByName }) : null,
@@ -391,12 +447,42 @@ export default function PropinasPage() {
           .filter(Boolean)
           .join(" · ")
       : "";
-    return { manual, voided, conceptLabel, conceptDetail };
+    return { manual, late, voided, conceptLabel, conceptDetail };
   }
 
   /** The ⋯ menu (edit / void) of a live manual tip; admin only. */
   function renderRowMenu(m: Movement) {
-    const { manual, voided } = describeMovement(m);
+    const { manual, late, voided } = describeMovement(m);
+    if (isAdmin && late && !voided && m.kind === "tip") {
+      // A tip left after issuing already moved money in the cash register: it is voided, not edited.
+      return (
+        <KebabMenu
+          id={`propinas-late-${late.id}`}
+          triggerAriaLabel={t("femme.propinas.manual.rowActions", { name: m.professional })}
+          items={[
+            {
+              id: "void",
+              label: t("femme.propinas.manual.void"),
+              destructive: true,
+              onSelect: () =>
+                setLateVoidTarget({
+                  id: late.id,
+                  professionalName: m.professional,
+                  amount: m.amount,
+                  paymentLabel: [
+                    late.paymentMethod
+                      ? t(`femme.billing.invoice.paymentMethod${capitalize(late.paymentMethod)}`)
+                      : null,
+                    late.cardBrand ? t(`femme.billing.invoice.cardBrand${capitalize(late.cardBrand)}`) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · "),
+                }),
+            },
+          ]}
+        />
+      );
+    }
     if (!isAdmin || !manual || voided) return null;
     return (
       <KebabMenu
@@ -1356,6 +1442,16 @@ export default function PropinasPage() {
           </div>
         ) : null}
       </Modal>
+
+      <VoidLateTipDialog
+        target={lateVoidTarget}
+        onClose={() => setLateVoidTarget(null)}
+        onVoided={() => {
+          setLateVoidTarget(null);
+          setNotice(t("femme.billing.invoiceTips.voided"));
+          setReloadTick((n) => n + 1);
+        }}
+      />
 
       <Toast
         open={notice !== null}

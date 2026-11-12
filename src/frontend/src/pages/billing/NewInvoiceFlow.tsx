@@ -25,6 +25,7 @@ import { FieldValidationError } from "../../components/FieldValidationError";
 import { FiscalRucWarning } from "../../components/FiscalRucWarning";
 import { InvoiceDetailModal, type InvoiceDetail } from "../../components/InvoiceDetailModal";
 import { InvoiceStatePill } from "../../components/InvoiceStatePill";
+import { InvoiceTipsPanel, servedProfessionals } from "../../components/invoice/InvoiceTipsPanel";
 import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../../hooks/useSifenStatusLiveRefresh";
 import { formatAmountDecimal, formatDecimalGs } from "../../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../../lib/moneyInputMask";
@@ -1181,6 +1182,15 @@ export function NewInvoiceFlow({
                 </span>
               </div>
             </section>
+          )}
+          {/* HU-73: tips left after issuing. Collapsed; highlighted while nothing is registered. */}
+          {lastInvoiceId != null && issuedInvoice && (
+            <InvoiceTipsPanel
+              invoiceId={lastInvoiceId}
+              served={servedProfessionals(issuedInvoice.lines)}
+              highlightPending
+              onGoToCash={onBack}
+            />
           )}
           <div className="flex flex-col gap-3">
             {lastInvoiceId && sifenEnabled && (
