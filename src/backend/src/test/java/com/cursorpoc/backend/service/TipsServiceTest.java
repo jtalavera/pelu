@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.CashMovement;
 import com.cursorpoc.backend.domain.CashSession;
+import com.cursorpoc.backend.domain.Invoice;
+import com.cursorpoc.backend.domain.InvoiceLateTip;
 import com.cursorpoc.backend.domain.ManualTip;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.Tenant;
@@ -21,6 +23,7 @@ import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.CashMovementRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
+import com.cursorpoc.backend.repository.InvoiceLateTipRepository;
 import com.cursorpoc.backend.repository.InvoiceTipRepository;
 import com.cursorpoc.backend.repository.ManualTipRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
@@ -54,6 +57,7 @@ class TipsServiceTest {
   @Mock private CashSessionRepository cashSessionRepository;
   @Mock private CashMovementRepository cashMovementRepository;
   @Mock private ManualTipRepository manualTipRepository;
+  @Mock private InvoiceLateTipRepository invoiceLateTipRepository;
 
   @InjectMocks private TipsService service;
 
@@ -87,6 +91,9 @@ class TipsServiceTest {
         .thenReturn(BigDecimal.ZERO);
     lenient().when(tipWithdrawalRepository.sumForProfessional(1L, 20L)).thenReturn(BigDecimal.ZERO);
     lenient().when(manualTipRepository.sumForProfessional(1L, 20L)).thenReturn(BigDecimal.ZERO);
+    lenient()
+        .when(invoiceLateTipRepository.sumForProfessional(1L, 20L, InvoiceStatus.ISSUED))
+        .thenReturn(BigDecimal.ZERO);
     lenient().when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
     lenient().when(appUserRepository.findById(10L)).thenReturn(Optional.of(user));
   }
@@ -165,6 +172,79 @@ class TipsServiceTest {
     assertThat(captor.getValue().getCashSession()).isEqualTo(closed);
     assertThat(captor.getValue().isAfterClose()).isTrue();
     assertThat(captor.getValue().getType()).isEqualTo(CashMovementType.TIP_WITHDRAWAL_OUT);
+  }
+
+  // ── Tips left after the invoice was issued (HU-73) ────────────────────────────────────────────
+
+  @Test
+  void getBalance_includesTheTipsLeftAfterTheInvoiceWasIssued() {
+    when(invoiceLateTipRepository.sumForProfessional(1L, 20L, InvoiceStatus.ISSUED))
+        .thenReturn(new BigDecimal("15000.00"));
+
+    // 50.000 from fichas + 15.000 late tips - 0 withdrawn
+    assertThat(service.getBalance(1L, 20L).balance()).isEqualByComparingTo("65000.00");
+  }
+
+  @Test
+  void getReport_listsLateTipsWithTheirPaymentAndCountsOnlyTheLiveOnes() {
+    Invoice invoice = new Invoice();
+    invoice.setId(30L);
+    invoice.setInvoiceNumber(126);
+    invoice.setClientDisplayName("María Gómez");
+    AppUser creator = new AppUser();
+    creator.setId(11L);
+    creator.setEmail("ana@demo.com");
+    InvoiceLateTip live = new InvoiceLateTip();
+    live.setId(1L);
+    live.setInvoice(invoice);
+    live.setProfessional(professional);
+    live.setAmount(new BigDecimal("10000.00"));
+    live.setPaymentMethod(com.cursorpoc.backend.domain.enums.PaymentMethod.DEBIT_CARD);
+    live.setCardBrand(com.cursorpoc.backend.domain.enums.CardBrand.VISA);
+    live.setCreatedBy(creator);
+    live.setCreatedAt(Instant.parse("2026-11-12T15:12:00Z"));
+    InvoiceLateTip voided = new InvoiceLateTip();
+    voided.setId(2L);
+    voided.setInvoice(invoice);
+    voided.setProfessional(professional);
+    voided.setAmount(new BigDecimal("1000.00"));
+    voided.setPaymentMethod(com.cursorpoc.backend.domain.enums.PaymentMethod.CASH);
+    voided.setCreatedAt(Instant.parse("2026-11-12T15:10:00Z"));
+    voided.setVoidedAt(Instant.parse("2026-11-12T15:20:00Z"));
+    voided.setVoidReason("Monto mal cargado");
+    voided.setVoidedBy(creator);
+    when(invoiceLateTipRepository.findForReport(any(), any(), any(), any(), any()))
+        .thenReturn(java.util.List.of(live, voided));
+
+    var report =
+        service.getReport(
+            1L,
+            Instant.parse("2026-11-01T00:00:00Z"),
+            Instant.parse("2026-11-30T00:00:00Z"),
+            java.util.List.of(20L));
+
+    assertThat(report.rows()).hasSize(2);
+    var liveRow =
+        report.rows().stream()
+            .filter(r -> Long.valueOf(1L).equals(r.lateTipId()))
+            .findFirst()
+            .get();
+    assertThat(liveRow.paymentMethod()).isEqualTo("DEBIT_CARD");
+    assertThat(liveRow.cardBrand()).isEqualTo("VISA");
+    assertThat(liveRow.invoiceNumberFormatted()).isEqualTo("0000126");
+    assertThat(liveRow.clientName()).isEqualTo("María Gómez");
+    assertThat(liveRow.createdByName()).isEqualTo("ana@demo.com");
+    assertThat(liveRow.voided()).isFalse();
+    assertThat(liveRow.manualTipId()).isNull();
+    var voidedRow =
+        report.rows().stream()
+            .filter(r -> Long.valueOf(2L).equals(r.lateTipId()))
+            .findFirst()
+            .get();
+    assertThat(voidedRow.voided()).isTrue();
+    assertThat(voidedRow.voidReason()).isEqualTo("Monto mal cargado");
+    // Only the live late tip counts in the totals.
+    assertThat(report.grandTotal()).isEqualByComparingTo("10000.00");
   }
 
   // ── Manual tips (loaded by the salon administrator) ────────────────────────────────────────────

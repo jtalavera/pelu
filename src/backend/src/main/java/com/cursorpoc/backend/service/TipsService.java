@@ -4,6 +4,7 @@ import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.CashMovement;
 import com.cursorpoc.backend.domain.CashSession;
 import com.cursorpoc.backend.domain.Invoice;
+import com.cursorpoc.backend.domain.InvoiceLateTip;
 import com.cursorpoc.backend.domain.ManualTip;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ServiceRecordTip;
@@ -15,6 +16,7 @@ import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.CashMovementRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
+import com.cursorpoc.backend.repository.InvoiceLateTipRepository;
 import com.cursorpoc.backend.repository.InvoiceTipRepository;
 import com.cursorpoc.backend.repository.ManualTipRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
@@ -61,6 +63,7 @@ public class TipsService {
   private final CashSessionRepository cashSessionRepository;
   private final CashMovementRepository cashMovementRepository;
   private final ManualTipRepository manualTipRepository;
+  private final InvoiceLateTipRepository invoiceLateTipRepository;
 
   public TipsService(
       ServiceRecordTipRepository serviceRecordTipRepository,
@@ -71,7 +74,8 @@ public class TipsService {
       AppUserRepository appUserRepository,
       CashSessionRepository cashSessionRepository,
       CashMovementRepository cashMovementRepository,
-      ManualTipRepository manualTipRepository) {
+      ManualTipRepository manualTipRepository,
+      InvoiceLateTipRepository invoiceLateTipRepository) {
     this.serviceRecordTipRepository = serviceRecordTipRepository;
     this.invoiceTipRepository = invoiceTipRepository;
     this.tipWithdrawalRepository = tipWithdrawalRepository;
@@ -81,6 +85,7 @@ public class TipsService {
     this.cashSessionRepository = cashSessionRepository;
     this.cashMovementRepository = cashMovementRepository;
     this.manualTipRepository = manualTipRepository;
+    this.invoiceLateTipRepository = invoiceLateTipRepository;
   }
 
   @Transactional(readOnly = true)
@@ -121,6 +126,10 @@ public class TipsService {
                         t.getAmount(),
                         invoiceClientName(t.getInvoice()),
                         t.getInvoice().getIssuedAt())));
+    // Tips left after the invoice was issued; voided ones are listed (flagged) but not counted.
+    invoiceLateTipRepository
+        .findForReport(tenantId, InvoiceStatus.ISSUED, fromDate, toDate, resolvedProfessionalIds)
+        .forEach(t -> rows.add(toReportRow(t)));
     // Tips loaded by hand by the administrator; voided ones are listed (flagged) but not counted.
     manualTipRepository
         .findForReport(tenantId, fromDate, toDate, resolvedProfessionalIds)
@@ -469,7 +478,31 @@ public class TipsService {
         userName(m.getCreatedBy()),
         m.isVoided(),
         m.getVoidReason(),
-        userName(m.getVoidedBy()));
+        userName(m.getVoidedBy()),
+        null,
+        null,
+        null,
+        null);
+  }
+
+  private static TipReportRowResponse toReportRow(InvoiceLateTip t) {
+    Invoice invoice = t.getInvoice();
+    return new TipReportRowResponse(
+        t.getProfessional().getId(),
+        t.getProfessional().getDisplayName(),
+        t.getAmount(),
+        invoiceClientName(invoice),
+        t.getCreatedAt(),
+        null,
+        null,
+        userName(t.getCreatedBy()),
+        t.isVoided(),
+        t.getVoidReason(),
+        userName(t.getVoidedBy()),
+        t.getId(),
+        t.getPaymentMethod().name(),
+        t.getCardBrand() != null ? t.getCardBrand().name() : null,
+        String.format("%07d", invoice.getInvoiceNumber()));
   }
 
   private BigDecimal computeBalance(long tenantId, long professionalId) {
@@ -479,7 +512,10 @@ public class TipsService {
             .add(
                 invoiceTipRepository.sumForProfessional(
                     tenantId, professionalId, InvoiceStatus.ISSUED))
-            .add(manualTipRepository.sumForProfessional(tenantId, professionalId));
+            .add(manualTipRepository.sumForProfessional(tenantId, professionalId))
+            .add(
+                invoiceLateTipRepository.sumForProfessional(
+                    tenantId, professionalId, InvoiceStatus.ISSUED));
     BigDecimal withdrawalsTotal =
         tipWithdrawalRepository.sumForProfessional(tenantId, professionalId);
     return tipsTotal.subtract(withdrawalsTotal);

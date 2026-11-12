@@ -73,6 +73,103 @@ describe("CashSessionSummaryCard", () => {
     expect(screen.getByText("−Gs. 4.000").className).toMatch(/text-danger/);
   });
 
+  describe("tips left after the invoice was issued (HU-73)", () => {
+    const withTips: CashSessionDetail = {
+      ...base,
+      expectedCashAmount: "20000",
+      paymentSummary: [
+        { method: "CASH", total: "110000" },
+        { method: "DEBIT_CARD", total: "5000" },
+      ],
+      lateTips: [
+        {
+          id: 1,
+          professionalName: "Laura Benítez",
+          invoiceNumberFormatted: "0000126",
+          amount: "10000",
+          paymentMethod: "CASH",
+          cardBrand: null,
+          createdAt: "2026-10-30T21:30:00Z",
+          createdByEmail: "ana@demo.com",
+          voided: false,
+          voidReason: null,
+          voidedByEmail: null,
+        },
+        {
+          id: 2,
+          professionalName: "Camila Ortiz",
+          invoiceNumberFormatted: "0000126",
+          amount: "5000",
+          paymentMethod: "DEBIT_CARD",
+          cardBrand: "VISA",
+          createdAt: "2026-10-30T21:31:00Z",
+          createdByEmail: "ana@demo.com",
+          voided: false,
+          voidReason: null,
+          voidedByEmail: null,
+        },
+        {
+          id: 3,
+          professionalName: "Laura Benítez",
+          invoiceNumberFormatted: "0000126",
+          amount: "1000",
+          paymentMethod: "CASH",
+          cardBrand: null,
+          createdAt: "2026-10-30T21:20:00Z",
+          createdByEmail: "ana@demo.com",
+          voided: true,
+          voidReason: "Monto mal cargado",
+          voidedByEmail: "admin@demo.com",
+        },
+      ],
+    };
+
+    it("lists them among the movements, oldest first, counting them", () => {
+      renderCard(withTips);
+      const rows = screen.getAllByTestId(/^cash-(movement|late-tip)-row$/);
+      // 3 movements + 3 late tips, ordered by time: the voided tip (21:20) comes before the 21:24 movement.
+      expect(rows).toHaveLength(6);
+      expect(rows[0].getAttribute("data-testid")).toBe("cash-late-tip-row");
+      expect(rows[0].getAttribute("data-voided")).toBe("true");
+      expect(screen.getByTestId("cash-section-movements").textContent).toMatch(/6/);
+    });
+
+    it("shows the tip, who it is for, the invoice and how it was paid; only cash shows a «+»", () => {
+      renderCard(withTips);
+      const tipRows = screen.getAllByTestId("cash-late-tip-row");
+      const cash = tipRows.find((r) => r.getAttribute("data-voided") === "false" && /Cash/.test(r.textContent ?? ""))!;
+      expect(cash.textContent).toMatch(/Tip collected · Laura Benítez · #0000126/);
+      expect(within(cash).getByTestId("cash-late-tip-amount").textContent).toBe("+Gs. 10.000");
+      const card = tipRows.find((r) => /Debit card/.test(r.textContent ?? ""))!;
+      expect(card.textContent).toMatch(/Debit card · Visa/);
+      expect(within(card).getByTestId("cash-late-tip-amount").textContent).toBe("Gs. 5.000");
+    });
+
+    it("strikes through a voided tip, says why, and gives it no sign", () => {
+      renderCard(withTips);
+      const voided = screen.getAllByTestId("cash-late-tip-row").find((r) => r.getAttribute("data-voided") === "true")!;
+      expect(voided.textContent).toMatch(/Tip voided · Laura Benítez/);
+      expect(voided.textContent).toMatch(/«Monto mal cargado»/);
+      const amount = within(voided).getByTestId("cash-late-tip-amount");
+      expect(amount.className).toMatch(/line-through/);
+      expect(amount.textContent).toBe("Gs. 1.000");
+    });
+
+    it("tells how much of each method total are late tips, leaving voided ones out", async () => {
+      renderCard(withTips);
+      await userEvent.click(screen.getByTestId("cash-section-methods"));
+      expect(screen.getByTestId("cash-late-tips-note").textContent).toBe(
+        "They include the tips collected after issuing: cash Gs. 10.000, debit card Gs. 5.000.",
+      );
+    });
+
+    it("shows no note when there are no (live) late tips", async () => {
+      renderCard({ ...withTips, lateTips: [withTips.lateTips![2]] });
+      await userEvent.click(screen.getByTestId("cash-section-methods"));
+      expect(screen.queryByTestId("cash-late-tips-note")).toBeNull();
+    });
+  });
+
   it("opening data is folded until opened", async () => {
     renderCard(base);
     expect(screen.queryByText("isabel@example.com", { selector: "span.min-w-0" })).toBeNull();

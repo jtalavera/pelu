@@ -4,7 +4,12 @@ import { Button, Card, Text } from "@design-system";
 import type { CashSession, CashSessionDetail } from "../../api/cashSessions";
 import { CashSessionSummaryCard } from "../../components/CashSessionSummaryCard";
 import { Disclosure, Row } from "../../components/CashDisclosure";
-import { CashMovementRow } from "../../components/CashMovementRow";
+import {
+  CashLateTipRow,
+  CashMovementRow,
+  lateTipsMethodsNote,
+  mergeCashEntries,
+} from "../../components/CashMovementRow";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs, formatSignedGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
@@ -27,6 +32,9 @@ export function CashPanelSummary({
   const [open, setOpen] = useState<"methods" | "movements" | "opening" | null>(null);
   const toggle = (k: "methods" | "movements" | "opening") => setOpen((o) => (o === k ? null : k));
   const movements = detail?.movements ?? [];
+  const lateTips = detail?.lateTips ?? [];
+  const entries = mergeCashEntries(movements, lateTips);
+  const lateTipsNote = lateTipsMethodsNote(lateTips, t);
   const methods = detail?.paymentSummary ?? [];
 
   return (
@@ -72,18 +80,29 @@ export function CashPanelSummary({
               />
             ))
           )}
+          {lateTipsNote ? (
+            <Text variant="small" className="text-ink-3" data-testid="cash-late-tips-note">
+              {lateTipsNote}
+            </Text>
+          ) : null}
         </Disclosure>
         <Disclosure
           id="movements"
           label={t("femme.billing.movements.title")}
-          count={movements.length}
+          count={entries.length}
           open={open === "movements"}
           onToggle={() => toggle("movements")}
         >
-          {movements.length === 0 ? (
+          {entries.length === 0 ? (
             <Text variant="muted">{t("femme.billing.movements.emptyToday")}</Text>
           ) : (
-            movements.map((m) => <CashMovementRow key={m.id} movement={m} />)
+            entries.map((e) =>
+              e.kind === "movement" ? (
+                <CashMovementRow key={e.key} movement={e.movement} />
+              ) : (
+                <CashLateTipRow key={e.key} tip={e.tip} />
+              ),
+            )
           )}
         </Disclosure>
         <Disclosure

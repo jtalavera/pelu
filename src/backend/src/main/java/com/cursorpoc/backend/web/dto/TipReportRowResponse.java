@@ -6,7 +6,9 @@ import java.time.Instant;
 /**
  * One tip in the report. Rows that come from a ficha or a comprobante carry only the first five
  * fields; a manual tip also carries its id, note, who loaded it and, when voided, who/why (voided
- * rows are shown but never counted in any total).
+ * rows are shown but never counted in any total). A tip left after the invoice was issued carries
+ * its {@code lateTipId} plus how it was paid ({@code paymentMethod}, {@code cardBrand}) and the
+ * invoice number, and can be voided like a manual one.
  */
 public record TipReportRowResponse(
     Long professionalId,
@@ -19,7 +21,11 @@ public record TipReportRowResponse(
     String createdByName,
     boolean voided,
     String voidReason,
-    String voidedByName) {
+    String voidedByName,
+    Long lateTipId,
+    String paymentMethod,
+    String cardBrand,
+    String invoiceNumberFormatted) {
 
   public TipReportRowResponse(
       Long professionalId,
@@ -37,6 +43,10 @@ public record TipReportRowResponse(
         null,
         null,
         false,
+        null,
+        null,
+        null,
+        null,
         null,
         null);
   }

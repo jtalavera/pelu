@@ -18,6 +18,11 @@ export type TipReportRow = {
   voided?: boolean;
   voidReason?: string | null;
   voidedByName?: string | null;
+  /** Only tips left after the invoice was issued (HU-73) carry the fields below. */
+  lateTipId?: number | null;
+  paymentMethod?: string | null;
+  cardBrand?: string | null;
+  invoiceNumberFormatted?: string | null;
 };
 
 export type TipReportProfessionalTotal = {

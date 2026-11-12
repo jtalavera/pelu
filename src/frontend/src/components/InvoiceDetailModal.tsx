@@ -28,6 +28,7 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { AssignInvoiceProfessionalsDialog } from "./invoice/AssignInvoiceProfessionalsDialog";
+import { InvoiceTipsPanel, servedProfessionals } from "./invoice/InvoiceTipsPanel";
 import { FieldValidationError } from "./FieldValidationError";
 import { MoreActionsMenu } from "./MoreActionsMenu";
 import { ACTION_BUTTON } from "./actionButtons";
@@ -1833,6 +1834,13 @@ export function InvoiceDetailModal({
                 </div>
               ))}
             </section>
+
+            {/* HU-73: tips, including the ones left after issuing; neutral while there are none. */}
+            <InvoiceTipsPanel
+              invoiceId={invoice.id}
+              served={servedProfessionals(invoice.lines)}
+              onGoToCash={onClose}
+            />
 
             {assignProfessionalsSuccess && (
               <Alert variant="success" data-testid="invoice-assign-professionals-success">
