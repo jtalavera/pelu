@@ -6,4 +6,10 @@ package com.cursorpoc.backend.web.dto;
  * bean-validation annotations here, so each failure can carry its own SCREAMING_SNAKE_CASE error
  * code (see {@code femme.apiErrors.*}) instead of a generic {@code INVALID_REQUEST}.
  */
-public record TenantCreateRequest(String name, String domain, Long tierId) {}
+public record TenantCreateRequest(String name, String domain, Long tierId, String skin) {
+
+  /** Convenience for callers that don't pick a skin (it defaults to {@code DURAZNO}). */
+  public TenantCreateRequest(String name, String domain, Long tierId) {
+    this(name, domain, tierId, null);
+  }
+}

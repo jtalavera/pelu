@@ -415,6 +415,21 @@ export function isoDateLocal(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/**
+ * A start time a few minutes ahead that is still *today* in the browser's local day, so the turno
+ * shows in Inicio's «de hoy» list and the API does not reject it as past. Plain `now + 5 min` lands
+ * on tomorrow when the suite runs just before midnight (CI runs in UTC).
+ */
+export function soonTodaySlot(): Date {
+  const now = Date.now();
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  const ahead = Math.max(90_000, Math.min(5 * 60_000, midnight.getTime() - now - 60_000));
+  const slot = new Date(now + ahead);
+  slot.setSeconds(0, 0);
+  return slot;
+}
+
 /** Weekly schedule rows for `PUT /api/professionals/{id}/schedules` (Monday=1 … Sunday=7). */
 export async function putProfessionalSchedules(
   request: APIRequestContext,

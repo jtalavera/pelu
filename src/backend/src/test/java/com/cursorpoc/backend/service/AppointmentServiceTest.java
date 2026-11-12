@@ -8,6 +8,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Appointment;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Professional;
@@ -47,6 +48,9 @@ class AppointmentServiceTest {
   @Mock private ProfessionalRepository professionalRepository;
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private ClientRepository clientRepository;
+  @Mock private com.cursorpoc.backend.repository.ServiceRecordRepository serviceRecordRepository;
+  @Mock private com.cursorpoc.backend.repository.InvoiceRepository invoiceRepository;
+  @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   private final InMemoryTelemetry telemetry = new InMemoryTelemetry();
   @Spy private BusinessMetrics businessMetrics = new BusinessMetrics(telemetry.openTelemetry());
@@ -216,6 +220,54 @@ class AppointmentServiceTest {
     Instant start = Instant.parse(START_AT);
     Instant expectedEnd = start.plusSeconds(90L * 60);
     assertThat(Instant.parse(res.endAt())).isEqualTo(expectedEnd);
+  }
+
+  @Test
+  void create_withOwnDuration_usesItInsteadOfTheServices() {
+    when(appointmentRepository.countOverlapping(any(), any(), any(), any(), any(), any()))
+        .thenReturn(0L);
+
+    var req = new AppointmentCreateRequest(null, PROFESSIONAL_ID, SERVICE_ID, START_AT, 95);
+    var res = service.create(TENANT_ID, req);
+
+    Instant start = Instant.parse(START_AT);
+    assertThat(Instant.parse(res.endAt())).isEqualTo(start.plusSeconds(95L * 60));
+    // The response reports the turno's own length, not the service's (60).
+    assertThat(res.durationMinutes()).isEqualTo(95);
+  }
+
+  @Test
+  void create_withDurationOutsideTheRange_isRejected() {
+    for (int bad : new int[] {0, 4, 481, -10}) {
+      var req = new AppointmentCreateRequest(null, PROFESSIONAL_ID, SERVICE_ID, START_AT, bad);
+      assertThatThrownBy(() -> service.create(TENANT_ID, req))
+          .isInstanceOf(ResponseStatusException.class)
+          .hasMessageContaining("APPOINTMENT_DURATION_INVALID");
+    }
+  }
+
+  @Test
+  void update_canStretchTheTurno_andTheOverlapCheckUsesTheNewEnd() {
+    Appointment appointment = buildAppointment(AppointmentStatus.PENDING);
+    when(appointmentRepository.findByIdAndTenant_Id(1L, TENANT_ID))
+        .thenReturn(Optional.of(appointment));
+    when(appointmentRepository.countOverlapping(any(), any(), any(), any(), any(), any()))
+        .thenReturn(0L);
+
+    var req = new AppointmentUpdateRequest(null, PROFESSIONAL_ID, SERVICE_ID, START_AT, 150);
+    var res = service.update(TENANT_ID, 1L, req);
+
+    Instant start = Instant.parse(START_AT);
+    assertThat(Instant.parse(res.endAt())).isEqualTo(start.plusSeconds(150L * 60));
+    assertThat(res.durationMinutes()).isEqualTo(150);
+    verify(appointmentRepository)
+        .countOverlapping(
+            eq(TENANT_ID),
+            eq(PROFESSIONAL_ID),
+            eq(start),
+            eq(start.plusSeconds(150L * 60)),
+            eq(1L),
+            any());
   }
 
   @Test

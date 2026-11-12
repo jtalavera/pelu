@@ -8,14 +8,7 @@ import {
   tomorrowLocalIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import {
-  bookingAppointmentDialog,
-  ensureCalendarShowsClientCard,
-  fillAppointmentDateIso,
-  fillAppointmentTime,
-  localDatePlusDays,
-  pickSearchableOption,
-} from "../fixtures/ui";
+import { bookingAppointmentDialog, ensureCalendarShowsClientCard, fillAppointmentDateIso, fillAppointmentTime, localDatePlusDays, pickSearchableOption, filterAgendaByProfessional } from "../fixtures/ui";
 
 function rxExact(s: string): RegExp {
   return new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -30,7 +23,7 @@ test.describe("HU-07 · Agendar un turno", () => {
     const client = await seedClient(request, token, `E2E Book ${Date.now()}`);
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: "New appointment" }).first().click();
     const dlg = bookingAppointmentDialog(page);
     const day = localDatePlusDays(1);
@@ -65,9 +58,12 @@ test.describe("HU-07 · Agendar un turno", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
+    // On a Sunday afternoon the slot lands in next week: navigate to it instead of assuming this week.
+    await ensureCalendarShowsClientCard(page, new RegExp(client.fullName));
     await page.getByRole("button", { name: new RegExp(client.fullName) }).click();
-    await expect(page.getByText("Pending", { exact: true })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Appointment detail" }).getByText("Pending", { exact: true })).toBeVisible();
   });
 
   test("HU-07 · 2 sin solapamiento: segundo turno mismo slot muestra error", async ({
@@ -86,7 +82,7 @@ test.describe("HU-07 · Agendar un turno", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: "New appointment" }).first().click();
     const dlg = bookingAppointmentDialog(page);
     const day = localDatePlusDays(1);
@@ -126,7 +122,7 @@ test.describe("HU-07 · Agendar un turno", () => {
     const client = await seedClient(request, token, `E2E Grid ${Date.now()}`);
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: "New appointment" }).first().click();
     const dlg = bookingAppointmentDialog(page);
     const day = localDatePlusDays(1);

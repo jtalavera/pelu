@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "../test/renderWithTour";
+import { fireEvent, render, screen, waitFor, within } from "../test/renderWithTour";
 import { I18nextProvider } from "react-i18next";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@design-system";
@@ -37,6 +37,13 @@ function renderPage() {
       </MemoryRouter>
     </I18nextProvider>,
   );
+}
+
+/** Opens the cash register panel behind the status chip. */
+async function openCashPanel() {
+  const chip = await screen.findByTestId("billing-cash-chip");
+  fireEvent.click(chip);
+  return await screen.findByTestId("billing-cash-panel");
 }
 
 const openSession = {
@@ -115,11 +122,28 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       });
     });
 
-    it("shows open session info", async () => {
+    it("shows the register status chip and, in its panel, the open session info", async () => {
       renderPage();
       const openTexts = await screen.findAllByText(/cash register is open/i);
       expect(openTexts.length).toBeGreaterThan(0);
+      // Details live behind the chip, not on the home screen.
+      expect(screen.queryByText(/admin@demo\.com/i)).toBeNull();
+      await openCashPanel();
+      // The opening details (who, initial amount) are one tap away inside the panel.
+      expect(screen.queryByText(/admin@demo\.com/i)).toBeNull();
+      fireEvent.click(screen.getByTestId("cash-section-opening"));
       expect(screen.getByText(/admin@demo\.com/i)).toBeTruthy();
+    });
+
+    it("shows today's invoices open by default and lets the user fold them (issue #384)", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+      const toggle = await screen.findByTestId("billing-today-toggle");
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(await screen.findByTestId("billing-view-history")).toBeTruthy();
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(screen.queryByTestId("billing-view-history")).toBeNull();
     });
 
     it("renders the New Invoice button inside the Cash Register tab (HU-14, HU-15, issue #153)", async () => {
@@ -137,33 +161,29 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       expect(anyEnabled).toBe(true);
     });
 
-    it("shows invoice history tab trigger (HU-16)", async () => {
-      femmeJson
-        .mockResolvedValueOnce(openSession)
-        .mockResolvedValueOnce([])
-        .mockResolvedValue([]);
+    it("reaches the invoice history from the expanded list of today (HU-16)", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
-
-      // History tab trigger should exist
-      const historyTabs = screen.getAllByRole("tab", { name: /history/i });
-      expect(historyTabs.length).toBeGreaterThan(0);
+      expect(await screen.findByRole("button", { name: /view full history/i })).toBeTruthy();
     });
 
-    it("shows close cash register button (HU-18)", async () => {
+    it("shows close cash register button inside the register panel (HU-18)", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
+      expect(screen.queryByRole("button", { name: /close cash register/i })).toBeNull();
+      await openCashPanel();
       expect(screen.getByRole("button", { name: /close cash register/i })).toBeTruthy();
     });
 
     it("shows close form when clicking close register button", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
+      await openCashPanel();
 
       const closeBtn = screen.getByRole("button", { name: /close cash register/i });
       fireEvent.click(closeBtn);
 
-      expect(await screen.findByLabelText(/counted cash amount/i)).toBeTruthy();
+      expect(await screen.findByLabelText(/how much cash is in the register/i)).toBeTruthy();
     });
   });
 
@@ -197,14 +217,48 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       );
       expect(serviceInputs.length).toBeGreaterThan(0);
 
-      // Payment method select should exist
-      const paymentSelects = document.querySelectorAll("select");
-      expect(paymentSelects.length).toBeGreaterThan(0);
+      // Payment methods are big buttons, and none is preselected (issue #284).
+      const methodButtons = document.querySelectorAll('button[id^="pay-method-"]');
+      expect(methodButtons.length).toBe(5);
+      methodButtons.forEach((b) => expect(b.getAttribute("aria-pressed")).toBe("false"));
     });
 
-    it("renders the recipient email field below the client search (issue #173)", async () => {
+    it("lays the new invoice out as three steps and keeps the extras in More options", async () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
+
+      expect(screen.getByTestId("billing-step-items")).toBeTruthy();
+      expect(screen.getByTestId("billing-step-client")).toBeTruthy();
+      expect(screen.getByTestId("billing-step-payment")).toBeTruthy();
+      const more = screen.getByTestId("billing-more-options") as HTMLDetailsElement;
+      expect(more.open).toBe(false);
+      // Discount and tips live inside the folded section; the date and the professional do not.
+      for (const selector of ["#discount-type", '[data-testid="billing-tips-section"]']) {
+        expect(more.querySelector(selector)).not.toBeNull();
+      }
+      expect(more.querySelector("#billing-issue-date")).toBeNull();
+      expect(more.querySelector('[data-testid="billing-per-item-options"]')).toBeNull();
+    });
+
+    it("issues the invoice 'No name' by default and blocks Issue until a payment method is chosen", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+
+      expect(screen.getByTestId("billing-client-default")).toBeTruthy();
+      // No client identity fields while the invoice is anonymous.
+      expect(document.querySelector("#client-display-name")).toBeNull();
+      const submit = screen.getByTestId("billing-invoice-submit") as HTMLButtonElement;
+      expect(submit.disabled).toBe(true);
+    });
+
+    it("renders the recipient email field once a client is identified (issue #173)", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+
+      // "No name" invoices carry no recipient email.
+      expect(document.querySelector("#billing-client-email")).toBeNull();
+      fireEvent.focus(document.querySelector("#billing-client-search") as HTMLElement);
+      fireEvent.click(await screen.findByRole("button", { name: /occasional client/i }));
 
       const emailInput = document.querySelector("#billing-client-email");
       expect(emailInput).not.toBeNull();
@@ -216,6 +270,9 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
 
+      fireEvent.focus(document.querySelector("#billing-client-search") as HTMLElement);
+      fireEvent.click(await screen.findByRole("button", { name: /occasional client/i }));
+
       expect(document.querySelector("#billing-client-email")).toBeNull();
       expect(document.querySelector("#billing-client-email-hint")).toBeNull();
       expect(
@@ -223,6 +280,254 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
           "The document may be dated up to 30 days in the past or 5 days in the future relative to its submission to SIFEN.",
         ),
       ).toBeNull();
+    });
+  });
+
+  describe("Emitir comprobante layout: Client → Services → Payment, date on top, per-service options", () => {
+    const client = { id: 5, fullName: "Marta Benítez", phone: "0981123456", email: "marta@example.com", ruc: null, active: true };
+    const record = {
+      id: 70,
+      clientId: 5,
+      clientFullName: "Marta Benítez",
+      clientRuc: null,
+      status: "OPEN",
+      totalAmount: "310000",
+      tipsTotal: "0",
+      voidReason: null,
+      createdAt: new Date().toISOString(),
+      closedAt: null,
+      invoiceId: null,
+      invoiceNumberFormatted: null,
+      lines: [
+        { id: 1, serviceId: 11, description: "Coloración", unitPrice: "250000", quantity: 1, lineTotal: "250000", professionalId: null, professionalName: null },
+      ],
+      tips: [],
+    };
+
+    beforeEach(() => {
+      femmeJson.mockImplementation((url: string) => {
+        if (url.includes("/api/cash-sessions/current")) return Promise.resolve(openSession);
+        if (url.startsWith("/api/clients")) return Promise.resolve([client]);
+        if (url.startsWith("/api/service-records?")) {
+          return Promise.resolve({
+            content: [{ id: 70, clientId: 5, clientFullName: "Marta Benítez", status: "OPEN", totalAmount: "250000", createdAt: record.createdAt }],
+            page: 0,
+            size: 1,
+            totalElements: 1,
+            totalPages: 1,
+          });
+        }
+        if (url === "/api/service-records/70") return Promise.resolve(record);
+        if (url === "/api/professionals/options") return Promise.resolve([{ id: 3, fullName: "Laura", active: true }]);
+        if (/^\/api\/invoices\/\d+$/.test(url)) return Promise.reject(new Error("not needed"));
+        if (url.includes("/api/invoices")) return Promise.resolve([]);
+        return Promise.resolve(undefined);
+      });
+    });
+
+    async function openFormWithServiceLine() {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+      fireEvent.focus(document.querySelector("#billing-client-search") as HTMLElement);
+      fireEvent.click(await screen.findByRole("button", { name: /Marta Benítez/ }));
+      fireEvent.click(await screen.findByTestId("billing-open-record-import"));
+      await screen.findByTestId("billing-line-0");
+    }
+
+    it("orders the steps Client, then Services, then Payment", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+      const order = ["billing-step-client", "billing-step-items", "billing-step-payment"].map((id) =>
+        screen.getByTestId(id),
+      );
+      for (let i = 0; i < order.length - 1; i++) {
+        expect(order[i].compareDocumentPosition(order[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      }
+    });
+
+    it("shows the emission date on top as 'Today · date' and lets the user change it", async () => {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+      const control = screen.getByTestId("billing-issue-date-control");
+      expect(within(control).getByTestId("billing-issue-date-label").textContent).toMatch(/^Today · /);
+      expect(document.querySelector("#billing-issue-date")).toBeNull();
+      fireEvent.click(screen.getByTestId("billing-issue-date-open"));
+      const input = document.querySelector("#billing-issue-date") as HTMLInputElement;
+      expect(input).not.toBeNull();
+      expect(sifenEnabledFlag).toBe(true);
+      expect(within(control).getByText(/30 days in the past or 5 days in the future/i)).toBeTruthy();
+      // "Today" puts it back to the plain label.
+      fireEvent.click(screen.getByTestId("billing-issue-date-today"));
+      expect(document.querySelector("#billing-issue-date")).toBeNull();
+      expect(screen.getByTestId("billing-issue-date-label")).toBeTruthy();
+    });
+
+    it("each service has its own folded 'More options' with the professional and the item discount", async () => {
+      await openFormWithServiceLine();
+      const toggle = screen.getByTestId("billing-line-more-0");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(document.querySelector("#line-professional-0")).toBeNull();
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(document.querySelector("#line-professional-0")).not.toBeNull();
+      expect(document.querySelector("#line-disc-toggle-0")).not.toBeNull();
+    });
+
+    it("an assigned professional is named next to the service and unlocks their tip in the general More options", async () => {
+      await openFormWithServiceLine();
+      expect(screen.queryByTestId("billing-line-professional-name-0")).toBeNull();
+      fireEvent.click(screen.getByTestId("billing-line-more-0"));
+      // Issue #384: the professional is a searchable combobox that filters while typing.
+      const professionalInput = document.querySelector("#line-professional-0") as HTMLInputElement;
+      fireEvent.focus(professionalInput);
+      fireEvent.change(professionalInput, { target: { value: "Lau" } });
+      fireEvent.mouseDown(await screen.findByRole("button", { name: /Laura/ }));
+      expect((await screen.findByTestId("billing-line-professional-name-0")).textContent).toMatch(/Laura/);
+      const more = screen.getByTestId("billing-more-options") as HTMLDetailsElement;
+      fireEvent.click(more.querySelector("summary") as HTMLElement);
+      expect(await screen.findByLabelText(/tip.*Laura/i)).toBeTruthy();
+    });
+  });
+
+  describe("Open ficha de servicio of the day (invoice ↔ ficha)", () => {
+    const client = {
+      id: 5,
+      fullName: "Marta Benítez",
+      phone: "0981123456",
+      email: "marta@example.com",
+      ruc: null,
+      active: true,
+    };
+    const record = (lines: Array<{ id: number; serviceId: number; description: string; unitPrice: string; quantity: number; professionalId: number | null }>) => ({
+      id: 70,
+      clientId: 5,
+      clientFullName: "Marta Benítez",
+      clientRuc: null,
+      status: "OPEN",
+      totalAmount: String(lines.reduce((a, l) => a + Number(l.unitPrice) * l.quantity, 0)),
+      tipsTotal: "0",
+      voidReason: null,
+      createdAt: new Date().toISOString(),
+      closedAt: null,
+      invoiceId: null,
+      invoiceNumberFormatted: null,
+      lines: lines.map((l) => ({ ...l, lineTotal: String(Number(l.unitPrice) * l.quantity), professionalName: null })),
+      tips: [],
+    });
+
+    function mockBackend(openRecord: ReturnType<typeof record> | null) {
+      femmeJson.mockImplementation((url: string) => {
+        if (url.includes("/api/cash-sessions/current")) return Promise.resolve(openSession);
+        if (url.startsWith("/api/clients")) return Promise.resolve([client]);
+        if (url.startsWith("/api/service-records?")) {
+          return Promise.resolve({
+            content: openRecord
+              ? [{ id: openRecord.id, clientId: 5, clientFullName: "Marta Benítez", status: "OPEN", totalAmount: openRecord.totalAmount, createdAt: openRecord.createdAt }]
+              : [],
+            page: 0,
+            size: 1,
+            totalElements: openRecord ? 1 : 0,
+            totalPages: openRecord ? 1 : 0,
+          });
+        }
+        if (url === "/api/service-records/70") return Promise.resolve(openRecord);
+        // The success screen's read-back of the issued invoice is a nicety: let it fail quietly.
+        if (/^\/api\/invoices\/\d+$/.test(url)) return Promise.reject(new Error("not needed here"));
+        if (url.includes("/api/invoices")) return Promise.resolve([]);
+        if (url === "/api/professionals/options") return Promise.resolve([{ id: 3, fullName: "Laura", active: true }]);
+        return Promise.resolve(undefined);
+      });
+    }
+
+    async function chooseClient() {
+      renderPage();
+      await screen.findAllByText(/cash register is open/i);
+      const input = document.querySelector("#billing-client-search") as HTMLElement;
+      fireEvent.focus(input);
+      fireEvent.click(await screen.findByRole("button", { name: /Marta Benítez/ }));
+    }
+
+    const withServices = record([
+      { id: 1, serviceId: 11, description: "Coloración", unitPrice: "250000", quantity: 2, professionalId: 3 },
+      { id: 2, serviceId: 12, description: "Brushing", unitPrice: "60000", quantity: 1, professionalId: null },
+    ]);
+
+    it("warns that the client already has an open ficha today and asks before bringing its services", async () => {
+      mockBackend(withServices);
+      await chooseClient();
+      const notice = await screen.findByTestId("billing-open-record-notice");
+      expect(notice.textContent).toMatch(/already has an open service record today/i);
+      expect(screen.getByTestId("billing-open-record-summary").textContent).toMatch(/2 services loaded/);
+      expect(screen.getByTestId("billing-open-record-import")).toBeTruthy();
+      expect(screen.getByTestId("billing-open-record-link-note").textContent).toMatch(/closes the record/i);
+      // Only today's OPEN ficha of that client is looked up.
+      const call = femmeJson.mock.calls.map((c) => String(c[0])).find((u) => u.startsWith("/api/service-records?")) ?? "";
+      expect(call).toContain("clientId=5");
+      expect(call).toContain("status=OPEN");
+    });
+
+    it("'Bring services' fills the invoice form with the ficha's services and quantities", async () => {
+      mockBackend(withServices);
+      await chooseClient();
+      fireEvent.click(await screen.findByTestId("billing-open-record-import"));
+      expect(await screen.findByTestId("billing-open-record-imported")).toBeTruthy();
+      expect(screen.queryByTestId("billing-open-record-import")).toBeNull();
+      const html = document.body.textContent ?? "";
+      expect(html).toMatch(/Coloración/);
+      expect(html).toMatch(/Brushing/);
+      const qtys = Array.from(document.querySelectorAll('input[id^="line-qty-"]')).map((el) => (el as HTMLInputElement).value);
+      expect(qtys).toContain("2");
+    });
+
+    it("'No, thanks' keeps the form as is but the invoice is still linked to the ficha", async () => {
+      mockBackend(withServices);
+      await chooseClient();
+      fireEvent.click(await screen.findByTestId("billing-open-record-skip"));
+      expect(screen.queryByTestId("billing-open-record-import")).toBeNull();
+      expect(screen.queryByTestId("billing-open-record-imported")).toBeNull();
+      expect(screen.getByTestId("billing-open-record-link-note").textContent).toMatch(/closes the record/i);
+    });
+
+    it("lets the user unlink the ficha, and link it again", async () => {
+      mockBackend(withServices);
+      await chooseClient();
+      const toggle = await screen.findByTestId("billing-open-record-toggle-link");
+      fireEvent.click(toggle);
+      expect(screen.getByTestId("billing-open-record-link-note").textContent).toMatch(/will not be linked/i);
+      fireEvent.click(screen.getByTestId("billing-open-record-toggle-link"));
+      expect(screen.getByTestId("billing-open-record-link-note").textContent).toMatch(/closes the record/i);
+    });
+
+    it("a ficha with no services is only announced (nothing to bring)", async () => {
+      mockBackend(record([]));
+      await chooseClient();
+      await screen.findByTestId("billing-open-record-notice");
+      expect(screen.getByTestId("billing-open-record-summary").textContent).toMatch(/no services loaded yet/i);
+      expect(screen.queryByTestId("billing-open-record-import")).toBeNull();
+    });
+
+    it("shows nothing when the client has no open ficha today", async () => {
+      mockBackend(null);
+      await chooseClient();
+      await waitFor(() =>
+        expect(femmeJson.mock.calls.some((c) => String(c[0]).startsWith("/api/service-records?"))).toBe(true),
+      );
+      expect(screen.queryByTestId("billing-open-record-notice")).toBeNull();
+    });
+
+    it("sends the ficha id with the invoice so issuing it closes the ficha", async () => {
+      mockBackend(withServices);
+      femmePostJson.mockResolvedValue({ id: 99, invoiceNumberFormatted: "001-001-0000099" });
+      await chooseClient();
+      fireEvent.click(await screen.findByTestId("billing-open-record-import"));
+      await screen.findByTestId("billing-open-record-imported");
+      fireEvent.click(screen.getByTestId("pay-method-CASH"));
+      const submit = screen.getByTestId("billing-invoice-submit") as HTMLButtonElement;
+      await waitFor(() => expect(submit.disabled).toBe(false));
+      fireEvent.click(submit);
+      await waitFor(() => expect(femmePostJson).toHaveBeenCalled());
+      const [, payload] = femmePostJson.mock.calls.find((c) => c[0] === "/api/invoices") ?? [];
+      expect(payload.serviceRecordId).toBe(70);
     });
   });
 
@@ -265,13 +570,12 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
       renderPage();
       await screen.findAllByText(/cash register is open/i);
 
-      const historyTabs = screen.getAllByRole("tab", { name: /history/i });
-      fireEvent.click(historyTabs[0]);
+      fireEvent.click(await screen.findByRole("button", { name: /view full history/i }));
 
       expect(await screen.findByText("0000001")).toBeTruthy();
       expect(screen.getAllByText("0000002").length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/issued/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/voided/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^approved$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^voided$/i).length).toBeGreaterThan(0);
     });
   });
 
@@ -299,11 +603,12 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
 
       renderPage();
       await screen.findAllByText(/cash register is open/i);
+      await openCashPanel();
 
       const closeBtn = screen.getByRole("button", { name: /close cash register/i });
       fireEvent.click(closeBtn);
 
-      const countedInput = await screen.findByLabelText(/counted cash amount/i);
+      const countedInput = await screen.findByLabelText(/how much cash is in the register/i);
       fireEvent.change(countedInput, { target: { value: "150000" } });
 
       const confirmBtn = screen.getByRole("button", { name: /confirm close/i });
@@ -322,11 +627,12 @@ describe("BillingPage (HU-13, HU-14, HU-15, HU-16, HU-17, HU-18)", () => {
 
       renderPage();
       await screen.findAllByText(/cash register is open/i);
+      await openCashPanel();
 
       const closeBtn = screen.getByRole("button", { name: /close cash register/i });
       fireEvent.click(closeBtn);
 
-      const countedInput = await screen.findByLabelText(/counted cash amount/i);
+      const countedInput = await screen.findByLabelText(/how much cash is in the register/i);
       fireEvent.change(countedInput, { target: { value: "0" } });
 
       const confirmBtn = screen.getByRole("button", { name: /confirm close/i });

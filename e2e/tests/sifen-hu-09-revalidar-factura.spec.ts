@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { goToInvoiceHistory, openInvoicePanel, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
@@ -74,9 +75,9 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
 
   async function openInvoiceDetail(page: Page, clientFullName: string) {
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientFullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: clientFullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientFullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: clientFullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
   }
@@ -113,12 +114,17 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    // Issue #163: the revalidate button lives inside its own accordion section — expand it first.
-    await page.getByTestId("sifen-tab-revalidate").click();
+    // The revalidate button lives in the invoice detail's "SIFEN" tab.
+    await openInvoicePanel(page, "revalidate");
     const button = page.getByTestId("sifen-revalidate-button");
     await expect(button).toBeVisible();
 
+    // No outbound network needed: let the popup "load" the SET page from a stub so its URL commits.
+    await page.context().route("https://ekuatia.set.gov.py/**", (route) =>
+      route.fulfill({ contentType: "text/html", body: "<html><body>ok</body></html>" }),
+    );
     const [popup] = await Promise.all([page.waitForEvent("popup"), button.click()]);
+    await popup.waitForLoadState();
     // AC-02: a real new tab, no scanning/reading of any image involved.
     // AC-03: the test-environment invoice must open the test consultation site, never production.
     expect(popup.url()).toContain("https://ekuatia.set.gov.py/consultas-test/qr?");
@@ -148,16 +154,20 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    const section = page.getByTestId("sifen-status-section");
-    await expect(section).toBeVisible();
-    await expect(section.getByText("Not found / Rejected", { exact: true })).toBeVisible();
+    // The revalidate button lives in the invoice detail's "SIFEN" tab.
+    await openInvoicePanel(page, "revalidate");
+    // Redesign: the detail shows one plain-language state ("Needs attention") for a rejected invoice.
+    await expect(page.getByTestId("invoice-detail-view").getByText("Needs attention", { exact: true })).toBeVisible();
 
-    // Issue #163: the revalidate button lives inside its own accordion section — expand it first.
-    await page.getByTestId("sifen-tab-revalidate").click();
     const button = page.getByTestId("sifen-revalidate-button");
     await expect(button).toBeVisible();
 
+    // No outbound network needed: let the popup "load" the SET page from a stub so its URL commits.
+    await page.context().route("https://ekuatia.set.gov.py/**", (route) =>
+      route.fulfill({ contentType: "text/html", body: "<html><body>ok</body></html>" }),
+    );
     const [popup] = await Promise.all([page.waitForEvent("popup"), button.click()]);
+    await popup.waitForLoadState();
     expect(popup.url()).toContain("https://ekuatia.set.gov.py/consultas-test/qr?");
     await popup.close();
   });
@@ -178,7 +188,7 @@ test.describe("SIFEN HU-09 · Revalidar en SIFEN una factura desde el sistema", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await page.getByTestId("sifen-tab-revalidate").click();
+    await openInvoicePanel(page, "revalidate");
     const section = page.getByTestId("sifen-tab-revalidate");
     await expect(
       section.getByText(

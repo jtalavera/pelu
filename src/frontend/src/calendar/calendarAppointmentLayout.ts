@@ -92,3 +92,53 @@ export function layoutOverlappingInDay(appts: AppointmentLike[]): Map<number, Ap
 
   return result;
 }
+
+export type OverflowGroup<T extends AppointmentLike> = {
+  /** Every turno of the overlap group, by start time. */
+  members: T[];
+  /** The first turno of the group; identifies it. */
+  anchorId: number;
+  /** Number of turnos folded into the group. */
+  hiddenCount: number;
+};
+
+/**
+ * Like {@link layoutOverlappingInDay}, but a cluster of overlapping turnos needing more than `maxCols`
+ * columns is left out of `layout` entirely and returned as one {@link OverflowGroup}, so the grid can draw a
+ * single group card that opens the list instead of squeezing every card into a sliver.
+ */
+export function layoutWithOverflow<T extends AppointmentLike>(
+  appts: T[],
+  maxCols = 2,
+): { layout: Map<number, AppointmentLayoutSlot>; groups: OverflowGroup<T>[] } {
+  const full = layoutOverlappingInDay(appts);
+  const layout = new Map<number, AppointmentLayoutSlot>();
+  const groups: OverflowGroup<T>[] = [];
+
+  const sorted = [...appts].sort(
+    (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+  );
+  // Connected overlap groups, walking in start order.
+  const clusters: T[][] = [];
+  let clusterEnd = -Infinity;
+  for (const a of sorted) {
+    const startMs = new Date(a.startAt).getTime();
+    if (clusters.length === 0 || startMs >= clusterEnd) {
+      clusters.push([a]);
+      clusterEnd = appointmentEndMs(a);
+    } else {
+      clusters[clusters.length - 1].push(a);
+      clusterEnd = Math.max(clusterEnd, appointmentEndMs(a));
+    }
+  }
+
+  for (const members of clusters) {
+    const slotCount = full.get(members[0].id)?.slotCount ?? 1;
+    if (slotCount <= maxCols) {
+      for (const m of members) layout.set(m.id, full.get(m.id) ?? { col: 0, slotCount: 1 });
+      continue;
+    }
+    groups.push({ members, anchorId: members[0].id, hiddenCount: members.length });
+  }
+  return { layout, groups };
+}

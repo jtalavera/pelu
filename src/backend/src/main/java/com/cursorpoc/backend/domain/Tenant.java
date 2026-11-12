@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.domain;
 
+import com.cursorpoc.backend.domain.enums.TenantSkin;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -47,6 +48,11 @@ public class Tenant {
   @Column(nullable = false, length = 20)
   private TenantStatus status = TenantStatus.ACTIVE;
 
+  // Flowbit rebrand: the accent skin picked by the Platform Admin (V89). Defaults to DURAZNO.
+  @Enumerated(EnumType.STRING)
+  @Column(nullable = false, length = 20)
+  private TenantSkin skin = TenantSkin.DEFAULT;
+
   public Long getId() {
     return id;
   }
@@ -77,6 +83,14 @@ public class Tenant {
 
   public void setTier(Tier tier) {
     this.tier = tier;
+  }
+
+  public TenantSkin getSkin() {
+    return skin;
+  }
+
+  public void setSkin(TenantSkin skin) {
+    this.skin = skin;
   }
 
   public TenantStatus getStatus() {

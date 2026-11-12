@@ -432,7 +432,7 @@ public class CommissionConfigService {
       exceptions.add(
           new ExceptionView(
               pid,
-              p == null ? null : p.getFullName(),
+              p == null ? null : p.getDisplayName(),
               p != null && p.isActive(),
               current.map(v -> new BigDecimal(v.getConfigValue())).orElse(null),
               current.map(CommissionConfigVersion::getId).orElse(null),
@@ -519,7 +519,8 @@ public class CommissionConfigService {
                 v -> {
                   BigDecimal pct = new BigDecimal(v.getConfigValue());
                   exceptions.add(
-                      new RuleException(p.getId(), p.getFullName(), pct, pct.subtract(standard)));
+                      new RuleException(
+                          p.getId(), p.getDisplayName(), pct, pct.subtract(standard)));
                 });
       }
       boolean scheduled =
@@ -562,7 +563,9 @@ public class CommissionConfigService {
         general,
         itemCount,
         withExceptions,
-        professionals.stream().map(p -> new RuleProfessional(p.getId(), p.getFullName())).toList(),
+        professionals.stream()
+            .map(p -> new RuleProfessional(p.getId(), p.getDisplayName()))
+            .toList(),
         categories.values().stream().map(RuleCategoryBuilder::build).toList());
   }
 
@@ -616,7 +619,7 @@ public class CommissionConfigService {
     Map<Long, String> names = new HashMap<>();
     professionalRepository
         .findByTenant_IdOrderByFullNameAsc(tenantId)
-        .forEach(p -> names.put(p.getId(), p.getFullName()));
+        .forEach(p -> names.put(p.getId(), p.getDisplayName()));
     return names;
   }
 
@@ -638,7 +641,7 @@ public class CommissionConfigService {
         s == null ? null : s.getName(),
         s == null ? null : s.getKind().name(),
         v.getProfessionalId(),
-        p == null ? null : p.getFullName(),
+        p == null ? null : p.getDisplayName(),
         v.getConfigValue(),
         previous,
         v.getEffectiveFrom(),

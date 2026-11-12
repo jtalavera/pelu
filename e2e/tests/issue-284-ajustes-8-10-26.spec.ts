@@ -16,8 +16,9 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { DEMO_EMAIL, loginAs, loginAsDemo, loginAsPlatformAdmin } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { addPaymentMethodRow, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import { pdfContainsText, pickServiceLine } from "../fixtures/invoice";
+import { openSettingsMoreItem, openSummaryMore } from "../fixtures/ui";
 
 // Issue #284 "Ajustes 8-10-26". Ajuste 1 (la categoría del producto viaja a Stock) necesita un
 // control-stock real: vive en tests/stock/issue-284-categoria-del-producto-en-stock.spec.ts y en
@@ -60,7 +61,7 @@ async function seedInvoiceOnDay(
 
 async function openNewInvoiceForm(page: Page) {
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 }
 
@@ -93,24 +94,20 @@ test.describe("Issue #284 · ajuste 2 · días sin facturación en el gráfico",
 
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
-    const chart = page.getByTestId("dashboard-revenue-trend");
-    await expect(chart).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("summary-revenue-chart")).toBeVisible({ timeout: 20_000 });
 
-    // One visible marker per day with no invoicing, on exactly those days.
-    const markers = chart.getByTestId("dashboard-revenue-trend-zero-day");
-    await expect(markers).toHaveCount(zeroDates.length);
-    const markerDates = await markers.evaluateAll((els) => els.map((e) => e.getAttribute("data-date")));
-    expect([...markerDates].sort()).toEqual([...zeroDates].sort());
-    await expect(chart.locator(".recharts-legend-wrapper").getByText("No invoicing", { exact: true })).toBeVisible();
-
-    // The zero days count in the 7-day average: the end dot equals the mean of the last 7 days
-    // of the series INCLUDING its zeros.
-    const series = dashboard.revenueTrend.map((p) => Number(p.invoiced));
-    const last7 = series.slice(-7);
-    const expectedAverage = last7.reduce((a, b) => a + b, 0) / 7;
-    await expect(chart.getByTestId("dashboard-revenue-trend-end-dot")).toContainText(
-      `Gs. ${groupThousands(expectedAverage)}`,
-    );
+    // Redesign ("Resumen"): every plotted day has a bar button; a day with no invoicing is an
+    // empty bar whose label says "Gs. 0" (no separate marker, no moving-average line any more).
+    const bars = page.locator('[data-testid^="summary-bar-2"]');
+    await expect(bars).toHaveCount(dashboard.revenueTrend.length);
+    for (const date of zeroDates) {
+      await expect(page.getByTestId(`summary-bar-${date}`)).toHaveAttribute("aria-label", /Gs\. 0$/);
+    }
+    const invoicedDates = dashboard.revenueTrend.filter((p) => Number(p.invoiced) > 0).map((p) => p.date);
+    expect(invoicedDates.length).toBeGreaterThanOrEqual(2);
+    for (const date of invoicedDates) {
+      await expect(page.getByTestId(`summary-bar-${date}`)).not.toHaveAttribute("aria-label", /Gs\. 0$/);
+    }
   });
 });
 
@@ -133,26 +130,39 @@ test.describe("Issue #284 · ajuste 3 · método de pago vacío", () => {
     await page.locator("#line-price-0").fill("10000");
     await expect(page.locator("#line-price-0")).toHaveValue("10.000");
 
-    // Empty by default (placeholder), with the rule shown and the submit button disabled.
-    const method = page.locator("#pay-method-0");
-    await expect(method).toHaveValue("");
-    await expect(method.locator("option:checked")).toHaveText("Select a payment method");
+    // Redesign: the methods are buttons and none is pressed by default. The rule is shown and the
+    // submit button stays disabled.
+    const methods = ["CASH", "DEBIT_CARD", "CREDIT_CARD", "TRANSFER", "OTHER"];
+    for (const m of methods) {
+      await expect(page.locator(`#pay-method-${m}`)).toHaveAttribute("aria-pressed", "false");
+    }
     await expect(page.locator("#pay-method-err-0")).toHaveText("Select a payment method.");
-    await expect(method).toHaveAttribute("aria-invalid", "true");
+    await expect(page.locator("#pay-method-CASH")).toHaveAttribute("aria-invalid", "true");
     await expect(page.getByRole("button", { name: "Issue invoice" })).toBeDisabled();
 
     // Choosing one clears the error and enables the button.
-    await method.selectOption("CASH");
+    await page.locator("#pay-method-CASH").click();
+    await expect(page.locator("#pay-method-CASH")).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator("#pay-method-err-0")).toHaveCount(0);
-    await expect(method).toHaveAttribute("aria-invalid", "false");
     await expect(page.getByRole("button", { name: "Issue invoice" })).toBeEnabled();
 
-    // A newly added payment row also starts empty; its amount is not enough to issue.
-    await page.getByRole("button", { name: "Add payment method" }).click();
+    // Splitting the payment keeps the chosen method; a newly added payment row starts empty and
+    // its amount is not enough to issue.
+    await addPaymentMethodRow(page);
+    await expect(page.locator("#pay-method-0")).toHaveValue("CASH");
     await expect(page.locator("#pay-method-1")).toHaveValue("");
-    await page.locator("#pay-amount-0").fill("4000");
+    await fillPaymentAmount(page, "4000");
     await page.locator("#pay-amount-1").fill("6000");
     await expect(page.locator("#pay-method-err-1")).toHaveText("Select a payment method.");
+
+    // Forgetting the 2nd method: submitting is blocked client-side with the clear message (and
+    // focus on the missing select) instead of the API's generic "invalid request" error.
+    await page.getByRole("button", { name: "Issue invoice" }).click();
+    await expect(page.locator("#pay-method-err-1")).toHaveText("Select a payment method.");
+    await expect(page.locator("#pay-method-1")).toBeFocused();
+    await expect(page.getByText(/issued successfully/i)).toHaveCount(0);
+    await expect(page.getByText(/request is invalid|La solicitud no es válida/i)).toHaveCount(0);
+
     await page.locator("#pay-method-1").selectOption("TRANSFER");
     await page.getByRole("button", { name: "Issue invoice" }).click();
     await expect(page.getByText(/issued successfully/i)).toBeVisible();
@@ -165,7 +175,7 @@ test.describe("Issue #284 · ajuste 4 · fondo del menú de Descargar reporte", 
   test("el menú del botón Descargar reporte tiene un fondo de color opaco", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await page.getByTestId("invoice-history-report-button").click();
 
     const menu = page.getByTestId("invoice-history-report-menu");
@@ -235,7 +245,7 @@ test.describe("Issue #284 · ajuste 5 · número completo en el reporte", () => 
     // …and the same through the "Descargar reporte" menu in the browser.
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await page.getByTestId("invoice-history-report-button").click();
     const [dl] = await Promise.all([
       page.waitForEvent("download"),
@@ -253,11 +263,14 @@ test.describe("Issue #284 · ajuste 6 · títulos de los gráficos", () => {
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
-    await expect(page.getByTestId("dashboard-revenue-trend")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("summary-revenue-chart")).toBeVisible({ timeout: 20_000 });
+    await openSummaryMore(page);
 
-    await expect(page.getByText("Invoicing", { exact: true })).toBeVisible();
+    // Redesign ("Resumen"): the main chart is "Invoicing"; the detail cards are "Top services",
+    // "Payment methods" and "Appointments by day of week" (Spanish copy: chartTitles.test.ts).
+    await expect(page.getByText("Invoicing per day", { exact: true })).toBeVisible();
     await expect(page.getByText("Payment methods", { exact: true })).toBeVisible();
-    await expect(page.getByText("Most invoiced services", { exact: true })).toBeVisible();
+    await expect(page.getByText("Most sold services", { exact: true })).toBeVisible();
     // The old titles are gone.
     await expect(page.getByText("Revenue trend", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Payment method mix", { exact: true })).toHaveCount(0);
@@ -329,13 +342,15 @@ test.describe("Issue #284 · ajuste 7 · auditoría", () => {
     // UI: Configuración → Auditoría shows it as a sentence, filterable by user and "what".
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
-    await page.getByRole("link", { name: "Audit" }).click();
+    await openSettingsMoreItem(page, "Audit");
     await expect(page).toHaveURL(/\/app\/settings\/audit$/);
     await expect(page.getByTestId("audit-table")).toBeVisible({ timeout: 20_000 });
 
+    // Redesign: the user search is the main field; "what" lives in the folded Filters.
     await page.locator("#audit-user").fill(DEMO_EMAIL);
+    await page.getByTestId("audit-filters-toggle").click();
     await page.locator("#audit-resource").selectOption("clients");
-    await page.getByRole("button", { name: "Search" }).click();
+    await page.getByTestId("audit-search").click();
     const rows = page.getByTestId("audit-row");
     await expect(rows.first()).toBeVisible();
     await expect(rows.first().getByTestId("audit-row-user")).toHaveText(DEMO_EMAIL);
@@ -347,7 +362,7 @@ test.describe("Issue #284 · ajuste 7 · auditoría", () => {
 
     // A user that matches nothing → empty state; clearing brings the list back.
     await page.locator("#audit-user").fill("nadie@nowhere.test");
-    await page.getByRole("button", { name: "Search" }).click();
+    await page.getByTestId("audit-search").click();
     await expect(page.getByTestId("audit-empty")).toBeVisible();
     await page.getByRole("button", { name: "Clear filters" }).click();
     await expect(page.getByTestId("audit-table")).toBeVisible();
@@ -445,9 +460,9 @@ test.describe("Issue #284 · ajuste 7 · auditoría", () => {
     await expect(page).toHaveURL(/\/platform\/audit$/);
     await expect(page.getByTestId("platform-audit")).toBeVisible();
     await expect(page.getByTestId("audit-table")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole("columnheader", { name: "Business" })).toBeVisible();
+    // Redesign: each row carries its business ("Business · user · date") instead of a column.
     await page.locator("#audit-user").fill("platform-admin");
-    await page.getByRole("button", { name: "Search" }).click();
+    await page.getByTestId("audit-search").click();
     const first = page.getByTestId("audit-row").first();
     await expect(first.getByTestId("audit-row-user")).toContainText("platform-admin");
     await expect(first).toContainText("Platform");
@@ -467,6 +482,12 @@ test.describe("Issue #284 · ajuste 7 · auditoría", () => {
     });
     await loginAs(page, email, "ValidPass1!");
     await page.goto("/app/settings/taxes");
+    // Other roles never get the Audit entry: no ⋯ menu item and the direct URL bounces away.
+    const more = page.getByRole("button", { name: "More", exact: true });
+    if (await more.isVisible().catch(() => false)) {
+      await more.click();
+      await expect(page.getByRole("menuitem", { name: "Audit" })).toHaveCount(0);
+    }
     await expect(page.getByRole("link", { name: "Audit" })).toHaveCount(0);
   });
 });

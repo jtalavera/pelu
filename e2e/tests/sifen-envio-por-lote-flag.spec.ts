@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiBaseUrl,
   apiPostJson,
@@ -145,18 +146,16 @@ async function supportPost(request: APIRequestContext, path: string, data?: unkn
 async function openInvoiceStatus(page: Page, clientName: string) {
   await loginAsDemo(page);
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "History" }).click();
-  await page.locator("#invoice-history-text-filter").fill(clientName);
+  await goToInvoiceHistory(page);
+  await searchInvoiceHistory(page, clientName);
   const row = page
-    .locator('tbody tr[role="button"]')
+    .locator('[data-testid^="invoice-history-row-"]')
     .filter({ hasText: clientName })
     .filter({ visible: true });
   await expect(row).toBeVisible({ timeout: 30_000 });
   await row.click();
-  const section = page.getByTestId("sifen-status-section");
-  await expect(section).toBeVisible();
-  await page.getByTestId("sifen-tab-status").locator("summary").click();
-  return section;
+  await openInvoiceSifenTab(page);
+  return page.getByTestId("sifen-status-section");
 }
 
 test.describe("SIFEN · canal de envío por feature flag (SIFEN_SYNC_SUBMISSION)", () => {

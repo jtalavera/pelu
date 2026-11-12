@@ -18,14 +18,76 @@ public class FemmeUserPrincipal implements UserDetails {
   private final String email;
   private final UserRole role;
   private final Long professionalId;
+  // Issue #310: true only for a Platform Admin impersonating a tenant (JwtService "imp" claim).
+  private final boolean impersonation;
+  // HU-66: set only for a professional session opened with her PIN on a shared device — the
+  // device that issued it and the PIN version it was issued for (JwtService "pin"/"pv" claims).
+  private final Long pinDeviceId;
+  private final int pinVersion;
 
   public FemmeUserPrincipal(
       long userId, Long tenantId, String email, UserRole role, Long professionalId) {
+    this(userId, tenantId, email, role, professionalId, false);
+  }
+
+  public FemmeUserPrincipal(
+      long userId,
+      Long tenantId,
+      String email,
+      UserRole role,
+      Long professionalId,
+      boolean impersonation) {
+    this(userId, tenantId, email, role, professionalId, impersonation, null, 0);
+  }
+
+  public FemmeUserPrincipal(
+      long userId,
+      Long tenantId,
+      String email,
+      UserRole role,
+      Long professionalId,
+      boolean impersonation,
+      Long pinDeviceId,
+      int pinVersion) {
     this.userId = userId;
     this.tenantId = tenantId;
     this.email = email;
     this.role = role;
     this.professionalId = professionalId;
+    this.impersonation = impersonation;
+    this.pinDeviceId = pinDeviceId;
+    this.pinVersion = pinVersion;
+  }
+
+  /** HU-66: a PROFESSIONAL session opened with a PIN on a shared device (calendar only). */
+  public static FemmeUserPrincipal pinSession(
+      long tenantId, long professionalId, long deviceId, int pinVersion) {
+    return new FemmeUserPrincipal(
+        0L,
+        tenantId,
+        pinSessionUsername(professionalId, deviceId),
+        UserRole.PROFESSIONAL,
+        professionalId,
+        false,
+        deviceId,
+        pinVersion);
+  }
+
+  /** How a PIN session shows up as "user" (e.g. in the audit trail): professional + device. */
+  public static String pinSessionUsername(long professionalId, long deviceId) {
+    return "pin:professional-" + professionalId + "@device-" + deviceId;
+  }
+
+  public boolean isPinSession() {
+    return pinDeviceId != null;
+  }
+
+  public Long getPinDeviceId() {
+    return pinDeviceId;
+  }
+
+  public int getPinVersion() {
+    return pinVersion;
   }
 
   public long getUserId() {
@@ -71,6 +133,15 @@ public class FemmeUserPrincipal implements UserDetails {
 
   public boolean isPlatformAdmin() {
     return role == UserRole.PLATFORM_ADMIN;
+  }
+
+  /**
+   * Issue #310: a Platform Admin working inside a tenant as its {@code ADMIN} (impersonation). The
+   * role is {@code ADMIN} — never {@code PLATFORM_ADMIN}, so no platform route accepts this token —
+   * while {@link #getUserId()}/{@link #getUsername()} still identify the Platform Admin.
+   */
+  public boolean isImpersonation() {
+    return impersonation;
   }
 
   @Override

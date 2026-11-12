@@ -3,10 +3,12 @@ package com.cursorpoc.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
@@ -65,6 +67,7 @@ class InvoiceServiceTest {
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private BusinessProfileRepository businessProfileRepository;
   @Mock private ServiceRecordRepository serviceRecordRepository;
+  @Mock private com.cursorpoc.backend.repository.AppointmentRepository appointmentRepository;
   @Mock private SifenInvoiceHeaderService sifenInvoiceHeaderService;
   @Mock private SifenNumberVoidingService sifenNumberVoidingService;
   @Mock private SifenInvoiceSubmissionPersistenceService sifenSubmissionPersistence;
@@ -461,7 +464,7 @@ class InvoiceServiceTest {
   }
 
   @Test
-  void issueInvoice_withTipsAmount_paymentsMustCoverTotalOnly() {
+  void issueInvoice_withTipsAmount_paymentsMustCoverTotalPlusTips() {
     when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
         .thenReturn(Optional.of(openSession));
     when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
@@ -470,9 +473,9 @@ class InvoiceServiceTest {
     when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
 
     var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
-    var paymentIncludingTip =
-        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"), null, null);
-    var requestTooHigh =
+    var paymentWithoutTip =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    var requestMissingTip =
         new InvoiceCreateRequest(
             null,
             null,
@@ -480,13 +483,13 @@ class InvoiceServiceTest {
             null,
             null,
             List.of(line),
-            List.of(paymentIncludingTip),
+            List.of(paymentWithoutTip),
             null,
             new BigDecimal("10000.00"));
 
-    // Issue #139: tips never factor into the amount to reconcile — paying total + tip
-    // (60000, ignoring that only 50000 is the fiscal total) must be rejected.
-    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, requestTooHigh))
+    // Issue #384: the payments must add up to total + tip — paying only the 50000 fiscal total,
+    // without the 10000 tip, is rejected.
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, requestMissingTip))
         .isInstanceOf(ResponseStatusException.class)
         .satisfies(
             ex -> {
@@ -495,8 +498,8 @@ class InvoiceServiceTest {
             });
 
     when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
-    var paymentCoveringTotalOnly =
-        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    var paymentCoveringTotalAndTip =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("60000.00"), null, null);
     var requestOk =
         new InvoiceCreateRequest(
             null,
@@ -505,14 +508,14 @@ class InvoiceServiceTest {
             null,
             null,
             List.of(line),
-            List.of(paymentCoveringTotalOnly),
+            List.of(paymentCoveringTotalAndTip),
             null,
             new BigDecimal("10000.00"));
 
     InvoiceResponse result = invoiceService.issueInvoice(1L, requestOk);
 
-    // Tips are collected/stored but never touch the fiscal subtotal/total nor the
-    // required payment sum.
+    // Tips are collected/stored but never touch the fiscal subtotal/total; the payments cover
+    // total + tip.
     assertThat(result.total()).isEqualByComparingTo(new BigDecimal("50000.00"));
     assertThat(result.tipsAmount()).isEqualByComparingTo(new BigDecimal("10000.00"));
   }
@@ -549,6 +552,137 @@ class InvoiceServiceTest {
     assertThat(serviceRecord.getStatus())
         .isEqualTo(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.CLOSED);
     assertThat(serviceRecord.getClosedAt()).isNotNull();
+  }
+
+  private void stubIssuance() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    org.mockito.Mockito.lenient()
+        .when(invoiceRepository.save(any(Invoice.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+  }
+
+  private InvoiceCreateRequest requestForTurno(Long serviceRecordId, Long appointmentId) {
+    var line = new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null);
+    var payment =
+        new InvoicePaymentAllocationRequest("CASH", new BigDecimal("50000.00"), null, null);
+    return new InvoiceCreateRequest(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        List.of(line),
+        List.of(payment),
+        serviceRecordId,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        appointmentId);
+  }
+
+  private com.cursorpoc.backend.domain.Appointment turno(
+      long id, com.cursorpoc.backend.domain.enums.AppointmentStatus status) {
+    var a = new com.cursorpoc.backend.domain.Appointment();
+    a.setId(id);
+    a.setTenant(tenant);
+    a.setStatus(status);
+    return a;
+  }
+
+  @Test
+  void issueInvoice_forAFichaOfATurno_linksAndCompletesTheTurno() {
+    stubIssuance();
+    var appt = turno(70L, com.cursorpoc.backend.domain.enums.AppointmentStatus.IN_PROGRESS);
+    var record = new com.cursorpoc.backend.domain.ServiceRecord();
+    record.setId(210L);
+    record.setTenant(tenant);
+    record.setStatus(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.OPEN);
+    record.getAppointments().add(appt);
+    when(serviceRecordRepository.findByIdAndTenant_Id(210L, 1L)).thenReturn(Optional.of(record));
+
+    invoiceService.issueInvoice(1L, requestForTurno(210L, null));
+
+    assertThat(appt.getStatus())
+        .isEqualTo(com.cursorpoc.backend.domain.enums.AppointmentStatus.COMPLETED);
+    org.mockito.ArgumentCaptor<Invoice> saved = org.mockito.ArgumentCaptor.forClass(Invoice.class);
+    org.mockito.Mockito.verify(invoiceRepository).save(saved.capture());
+    assertThat(saved.getValue().getAppointment()).isSameAs(appt);
+  }
+
+  @Test
+  void issueInvoice_forAFichaOfSeveralTurnos_completesAllAndLinksTheEarliest() {
+    stubIssuance();
+    var first = turno(80L, com.cursorpoc.backend.domain.enums.AppointmentStatus.IN_PROGRESS);
+    first.setStartAt(java.time.Instant.parse("2026-11-05T14:00:00Z"));
+    var second = turno(81L, com.cursorpoc.backend.domain.enums.AppointmentStatus.CONFIRMED);
+    second.setStartAt(java.time.Instant.parse("2026-11-05T16:00:00Z"));
+    var record = new com.cursorpoc.backend.domain.ServiceRecord();
+    record.setId(211L);
+    record.setTenant(tenant);
+    record.setStatus(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.OPEN);
+    record.getAppointments().add(second);
+    record.getAppointments().add(first);
+    when(serviceRecordRepository.findByIdAndTenant_Id(211L, 1L)).thenReturn(Optional.of(record));
+
+    invoiceService.issueInvoice(1L, requestForTurno(211L, null));
+
+    assertThat(first.getStatus())
+        .isEqualTo(com.cursorpoc.backend.domain.enums.AppointmentStatus.COMPLETED);
+    assertThat(second.getStatus())
+        .isEqualTo(com.cursorpoc.backend.domain.enums.AppointmentStatus.COMPLETED);
+    org.mockito.ArgumentCaptor<Invoice> saved = org.mockito.ArgumentCaptor.forClass(Invoice.class);
+    org.mockito.Mockito.verify(invoiceRepository).save(saved.capture());
+    assertThat(saved.getValue().getAppointment()).isSameAs(first);
+  }
+
+  @Test
+  void issueInvoice_forATurnoWithoutFicha_linksAndCompletesIt() {
+    stubIssuance();
+    var appt = turno(71L, com.cursorpoc.backend.domain.enums.AppointmentStatus.CONFIRMED);
+    when(appointmentRepository.findByIdAndTenant_Id(71L, 1L)).thenReturn(Optional.of(appt));
+
+    invoiceService.issueInvoice(1L, requestForTurno(null, 71L));
+
+    assertThat(appt.getStatus())
+        .isEqualTo(com.cursorpoc.backend.domain.enums.AppointmentStatus.COMPLETED);
+    org.mockito.ArgumentCaptor<Invoice> saved = org.mockito.ArgumentCaptor.forClass(Invoice.class);
+    org.mockito.Mockito.verify(invoiceRepository).save(saved.capture());
+    assertThat(saved.getValue().getAppointment()).isSameAs(appt);
+  }
+
+  @Test
+  void issueInvoice_forATurnoAlreadyInvoiced_throwsConflict() {
+    stubIssuance();
+    var appt = turno(72L, com.cursorpoc.backend.domain.enums.AppointmentStatus.COMPLETED);
+    when(appointmentRepository.findByIdAndTenant_Id(72L, 1L)).thenReturn(Optional.of(appt));
+    when(invoiceRepository.existsByAppointment_IdAndStatus(
+            72L, com.cursorpoc.backend.domain.enums.InvoiceStatus.ISSUED))
+        .thenReturn(true);
+
+    assertThatThrownBy(() -> invoiceService.issueInvoice(1L, requestForTurno(null, 72L)))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("APPOINTMENT_ALREADY_INVOICED");
+  }
+
+  @Test
+  void issueInvoice_forACancelledTurno_doesNotReviveIt() {
+    stubIssuance();
+    var appt = turno(73L, com.cursorpoc.backend.domain.enums.AppointmentStatus.CANCELLED);
+    when(appointmentRepository.findByIdAndTenant_Id(73L, 1L)).thenReturn(Optional.of(appt));
+
+    invoiceService.issueInvoice(1L, requestForTurno(null, 73L));
+
+    assertThat(appt.getStatus())
+        .isEqualTo(com.cursorpoc.backend.domain.enums.AppointmentStatus.CANCELLED);
   }
 
   @Test
@@ -935,7 +1069,17 @@ class InvoiceServiceTest {
     neverSubmitted.setIssuedAt(Instant.now());
 
     when(invoiceRepository.findByTenantWithFiltersPaged(
-            eq(1L), any(), any(), any(), any(), any(), any(), any()))
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            any(),
+            anyBoolean(),
+            any(),
+            anyBoolean(),
+            any(),
+            any(),
+            any()))
         .thenReturn(new PageImpl<>(List.of(submitted, neverSubmitted)));
     when(invoiceRepository.sumIssuedTotalWithFilters(eq(1L), any(), any(), any(), any(), any()))
         .thenReturn(BigDecimal.ZERO);
@@ -966,12 +1110,143 @@ class InvoiceServiceTest {
             SifenSubmissionStatus.APPROVED,
             1,
             1);
-    when(invoiceRepository.findReportRows(eq(1L), any(), any(), any(), any(), any(), any(), any()))
+    when(invoiceRepository.findReportRows(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            any(),
+            anyBoolean(),
+            any(),
+            anyBoolean(),
+            any(),
+            any(),
+            any()))
         .thenReturn(List.of(row));
 
     var result = invoiceService.listInvoicesForReport(1L, null, null, null, "ISSUED", null);
 
     assertThat(result).containsExactly(row);
+  }
+
+  @Test
+  void resolveStatusFilter_plainStatusesFilterOnlyByInvoiceStatus() {
+    var issued = InvoiceService.resolveStatusFilter("ISSUED");
+    assertThat(issued.status()).isEqualTo(InvoiceStatus.ISSUED);
+    assertThat(issued.sifenFilter()).isFalse();
+    var voided = InvoiceService.resolveStatusFilter(" voided ");
+    assertThat(voided.status()).isEqualTo(InvoiceStatus.VOIDED);
+    assertThat(voided.sifenFilter()).isFalse();
+  }
+
+  @Test
+  void resolveStatusFilter_blankOrUnknownMeansNoFilter() {
+    for (String value : new String[] {null, "", "  ", "NOPE"}) {
+      var filter = InvoiceService.resolveStatusFilter(value);
+      assertThat(filter.status()).as(String.valueOf(value)).isNull();
+      assertThat(filter.sifenFilter()).as(String.valueOf(value)).isFalse();
+      // Never empty, so it is always safe to bind to an IN clause.
+      assertThat(filter.sifenStatuses()).isNotEmpty();
+    }
+  }
+
+  @Test
+  void resolveStatusFilter_attentionIsAnIssuedInvoiceSifenRejected() {
+    var filter = InvoiceService.resolveStatusFilter("attention");
+    assertThat(filter.status()).isEqualTo(InvoiceStatus.ISSUED);
+    assertThat(filter.sifenFilter()).isTrue();
+    assertThat(filter.sifenStatuses()).containsExactly(SifenSubmissionStatus.REJECTED);
+    assertThat(filter.includeNoSifen()).isFalse();
+  }
+
+  @Test
+  void resolveStatusFilter_approvedIncludesInvoicesNeverSentToSifen() {
+    var filter = InvoiceService.resolveStatusFilter("APPROVED");
+    assertThat(filter.status()).isEqualTo(InvoiceStatus.ISSUED);
+    assertThat(filter.sifenFilter()).isTrue();
+    assertThat(filter.sifenStatuses())
+        .containsExactlyInAnyOrder(
+            SifenSubmissionStatus.APPROVED, SifenSubmissionStatus.APPROVED_WITH_OBSERVATION);
+    assertThat(filter.includeNoSifen()).isTrue();
+  }
+
+  @Test
+  void resolveStatusFilter_processingIsQueuedOrWaitingForSifen() {
+    var filter = InvoiceService.resolveStatusFilter("processing");
+    assertThat(filter.status()).isEqualTo(InvoiceStatus.ISSUED);
+    assertThat(filter.sifenFilter()).isTrue();
+    assertThat(filter.sifenStatuses())
+        .containsExactlyInAnyOrder(
+            SifenSubmissionStatus.QUEUED, SifenSubmissionStatus.PENDING_VERIFICATION);
+    assertThat(filter.includeNoSifen()).isFalse();
+  }
+
+  @Test
+  void listInvoices_attentionFilterQueriesIssuedInvoicesSifenRejected() {
+    when(invoiceRepository.findByTenantWithFiltersPaged(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            any(),
+            anyBoolean(),
+            any(),
+            anyBoolean(),
+            any(),
+            any(),
+            any()))
+        .thenReturn(new PageImpl<>(List.of()));
+    when(invoiceRepository.sumIssuedTotalWithFilters(eq(1L), any(), any(), any(), any(), any()))
+        .thenReturn(BigDecimal.ZERO);
+
+    invoiceService.listInvoices(1L, null, null, null, "ATTENTION", null, 0, 10);
+
+    verify(invoiceRepository)
+        .findByTenantWithFiltersPaged(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            eq(InvoiceStatus.ISSUED),
+            eq(true),
+            eq(List.of(SifenSubmissionStatus.REJECTED)),
+            eq(false),
+            any(),
+            any(),
+            any());
+  }
+
+  @Test
+  void listInvoicesForReport_approvedFilterMatchesTheListFilter() {
+    when(invoiceRepository.findReportRows(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            any(),
+            anyBoolean(),
+            any(),
+            anyBoolean(),
+            any(),
+            any(),
+            any()))
+        .thenReturn(List.of());
+
+    invoiceService.listInvoicesForReport(1L, null, null, null, "APPROVED", null);
+
+    verify(invoiceRepository)
+        .findReportRows(
+            eq(1L),
+            any(),
+            any(),
+            any(),
+            eq(InvoiceStatus.ISSUED),
+            eq(true),
+            any(),
+            eq(true),
+            any(),
+            any(),
+            any());
   }
 
   @Test
@@ -988,13 +1263,13 @@ class InvoiceServiceTest {
   }
 
   @Test
-  void resolveInvoiceListRange_rejectsFromOlderThan6Months() {
+  void resolveInvoiceListRange_rejectsFromOlderThanOneYear() {
     ZoneId z = ZoneId.systemDefault();
     // A date well outside the 6-month window
-    Instant from = LocalDate.now(z).minusMonths(7).atStartOfDay(z).toInstant();
+    Instant from = LocalDate.now(z).minusMonths(13).atStartOfDay(z).toInstant();
     Instant to =
         LocalDate.now(z)
-            .minusMonths(7)
+            .minusMonths(13)
             .plusDays(5)
             .atTime(23, 59, 59, 999_000_000)
             .atZone(z)
@@ -1006,6 +1281,19 @@ class InvoiceServiceTest {
               ResponseStatusException r = (ResponseStatusException) e;
               assertThat(r.getReason()).isEqualTo("INVOICE_LIST_RANGE_TOO_OLD");
             });
+  }
+
+  @Test
+  void resolveInvoiceListRange_toleratesOneDayOfTimezoneSkewAtTheSixMonthLimit() {
+    ZoneId z = ZoneId.systemDefault();
+    LocalDate limit = LocalDate.now(z).minusYears(1);
+    Instant to = LocalDate.now(z).atTime(23, 59, 59).atZone(z).toInstant();
+    // The user's local "one year ago" can be one day earlier than the server's.
+    Instant oneDayEarlier = limit.minusDays(1).atStartOfDay(z).toInstant();
+    assertThat(InvoiceService.resolveInvoiceListRange(oneDayEarlier, to, null)).isNotNull();
+    Instant twoDaysEarlier = limit.minusDays(2).atStartOfDay(z).toInstant();
+    assertThatThrownBy(() -> InvoiceService.resolveInvoiceListRange(twoDaysEarlier, to, null))
+        .isInstanceOf(ResponseStatusException.class);
   }
 
   @Test
@@ -1025,7 +1313,7 @@ class InvoiceServiceTest {
     ZoneId z = ZoneId.systemDefault();
     LocalDate d0 = r[0].atZone(z).toLocalDate();
     LocalDate d1 = r[1].atZone(z).toLocalDate();
-    // Default from = 6 months ago (start of that day), to = today end
+    // Default from = one year ago (start of that day), to = today end
     assertThat(d0).isEqualTo(LocalDate.now(z).minusMonths(InvoiceService.MAX_INVOICE_LIST_MONTHS));
     assertThat(d1).isEqualTo(LocalDate.now(z));
   }
@@ -1688,5 +1976,171 @@ class InvoiceServiceTest {
                         List.of(bigPay))))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("SIFEN_CLIENT_IDENTIFICATION_REQUIRED");
+  }
+
+  // ── Propinas on the comprobante form ─────────────────────────────────────────────────────────
+
+  private com.cursorpoc.backend.domain.Professional stubProfessional(long id, String name) {
+    com.cursorpoc.backend.domain.Professional p = new com.cursorpoc.backend.domain.Professional();
+    p.setId(id);
+    p.setFullName(name);
+    p.setActive(true);
+    return p;
+  }
+
+  private void stubIssuePrerequisites() {
+    when(cashSessionRepository.findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(1L))
+        .thenReturn(Optional.of(openSession));
+    when(fiscalStampRepository.findByTenant_IdAndActiveTrue(1L))
+        .thenReturn(Optional.of(activeStamp));
+    when(fiscalStampRepository.lockByIdAndTenantId(5L, 1L)).thenReturn(Optional.of(activeStamp));
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+  }
+
+  private InvoiceCreateRequest requestWithTips(
+      Long serviceRecordId,
+      List<InvoiceLineRequest> lines,
+      List<com.cursorpoc.backend.web.dto.InvoiceTipRequest> tips) {
+    // Issue #384: the payments cover the 50000 invoiced plus the tips.
+    BigDecimal tipsSum =
+        tips.stream()
+            .map(com.cursorpoc.backend.web.dto.InvoiceTipRequest::amount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    var payment =
+        new InvoicePaymentAllocationRequest(
+            "CASH", new BigDecimal("50000.00").add(tipsSum), null, null);
+    return new InvoiceCreateRequest(
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        lines,
+        List.of(payment),
+        serviceRecordId,
+        null,
+        null,
+        null,
+        null,
+        null,
+        tips);
+  }
+
+  @Test
+  void issueInvoice_withTipsPerProfessional_storesInvoiceTipsAndNeverTouchesTotal() {
+    stubIssuePrerequisites();
+    var professionalRepository =
+        org.mockito.Mockito.mock(com.cursorpoc.backend.repository.ProfessionalRepository.class);
+    invoiceService.setProfessionalRepository(professionalRepository);
+    var ana = stubProfessional(20L, "Ana");
+    when(professionalRepository.findByIdAndTenant_Id(20L, 1L)).thenReturn(Optional.of(ana));
+
+    var line =
+        new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null, 20L);
+    var captured = new java.util.concurrent.atomic.AtomicReference<Invoice>();
+    when(invoiceRepository.save(any(Invoice.class)))
+        .thenAnswer(
+            inv -> {
+              captured.set(inv.getArgument(0));
+              return inv.getArgument(0);
+            });
+
+    InvoiceResponse result =
+        invoiceService.issueInvoice(
+            1L,
+            requestWithTips(
+                null,
+                List.of(line),
+                List.of(
+                    new com.cursorpoc.backend.web.dto.InvoiceTipRequest(
+                        20L, new BigDecimal("7000")))));
+
+    assertThat(result.total()).isEqualByComparingTo(new BigDecimal("50000.00"));
+    assertThat(result.tipsAmount()).isEqualByComparingTo(new BigDecimal("7000.00"));
+    assertThat(captured.get().getTips()).hasSize(1);
+    assertThat(captured.get().getTips().get(0).getProfessional()).isSameAs(ana);
+    assertThat(captured.get().getTips().get(0).getAmount())
+        .isEqualByComparingTo(new BigDecimal("7000.00"));
+  }
+
+  @Test
+  void issueInvoice_tipForProfessionalNotOnAnyLine_isRejected() {
+    stubIssuePrerequisites();
+    var professionalRepository =
+        org.mockito.Mockito.mock(com.cursorpoc.backend.repository.ProfessionalRepository.class);
+    invoiceService.setProfessionalRepository(professionalRepository);
+    when(professionalRepository.findByIdAndTenant_Id(20L, 1L))
+        .thenReturn(Optional.of(stubProfessional(20L, "Ana")));
+
+    var line =
+        new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("50000.00"), null, null, 20L);
+
+    assertThatThrownBy(
+            () ->
+                invoiceService.issueInvoice(
+                    1L,
+                    requestWithTips(
+                        null,
+                        List.of(line),
+                        List.of(
+                            new com.cursorpoc.backend.web.dto.InvoiceTipRequest(
+                                99L, new BigDecimal("5000"))))))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("INVOICE_TIP_PROFESSIONAL_NOT_IN_LINES");
+  }
+
+  @Test
+  void issueInvoice_fromFicha_tipsReplaceTheFichaTipsInsteadOfDuplicatingThem() {
+    stubIssuePrerequisites();
+    when(invoiceRepository.save(any(Invoice.class))).thenAnswer(inv -> inv.getArgument(0));
+    var professionalRepository =
+        org.mockito.Mockito.mock(com.cursorpoc.backend.repository.ProfessionalRepository.class);
+    invoiceService.setProfessionalRepository(professionalRepository);
+    var ana = stubProfessional(20L, "Ana");
+    var bea = stubProfessional(21L, "Bea");
+    when(professionalRepository.findByIdAndTenant_Id(20L, 1L)).thenReturn(Optional.of(ana));
+    when(professionalRepository.findByIdAndTenant_Id(21L, 1L)).thenReturn(Optional.of(bea));
+
+    com.cursorpoc.backend.domain.ServiceRecord serviceRecord =
+        new com.cursorpoc.backend.domain.ServiceRecord();
+    serviceRecord.setId(300L);
+    serviceRecord.setTenant(tenant);
+    serviceRecord.setStatus(com.cursorpoc.backend.domain.enums.ServiceRecordStatus.OPEN);
+    var fichaTip = new com.cursorpoc.backend.domain.ServiceRecordTip();
+    fichaTip.setServiceRecord(serviceRecord);
+    fichaTip.setProfessional(ana);
+    fichaTip.setAmount(new BigDecimal("4000.00"));
+    serviceRecord.getTips().add(fichaTip);
+    when(serviceRecordRepository.findByIdAndTenant_Id(300L, 1L))
+        .thenReturn(Optional.of(serviceRecord));
+    when(invoiceRepository.existsByServiceRecord_Id(300L)).thenReturn(false);
+
+    var lineAna =
+        new InvoiceLineRequest(null, "Haircut", 1, new BigDecimal("30000.00"), null, null, 20L);
+    var lineBea =
+        new InvoiceLineRequest(null, "Color", 1, new BigDecimal("20000.00"), null, null, 21L);
+
+    InvoiceResponse result =
+        invoiceService.issueInvoice(
+            1L,
+            requestWithTips(
+                300L,
+                List.of(lineAna, lineBea),
+                List.of(
+                    new com.cursorpoc.backend.web.dto.InvoiceTipRequest(
+                        20L, new BigDecimal("6000")),
+                    new com.cursorpoc.backend.web.dto.InvoiceTipRequest(
+                        21L, new BigDecimal("3000")))));
+
+    assertThat(result.tipsAmount()).isEqualByComparingTo(new BigDecimal("9000.00"));
+    assertThat(serviceRecord.getTips()).hasSize(2);
+    assertThat(fichaTip.getAmount()).isEqualByComparingTo(new BigDecimal("6000.00"));
+    assertThat(serviceRecord.getTips())
+        .anySatisfy(
+            t -> {
+              assertThat(t.getProfessional()).isSameAs(bea);
+              assertThat(t.getAmount()).isEqualByComparingTo(new BigDecimal("3000.00"));
+            });
   }
 }

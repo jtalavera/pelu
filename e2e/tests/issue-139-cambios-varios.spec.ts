@@ -9,7 +9,9 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { openFichaDialog } from "../fixtures/fichas";
+import { expectBalance, openWithdrawDialog, propinasMovements } from "../fixtures/propinas";
+import { addPaymentMethodRow, choosePaymentMethod, ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { pickSearchableOption, setControlledInputValue } from "../fixtures/ui";
 
@@ -37,14 +39,6 @@ async function createServiceRecordApi(
   });
 }
 
-/** Filters the ficha de servicio "History" tab and returns the first matching row. */
-async function findServiceRecordHistoryRow(page: Page, query: string) {
-  await page.goto("/app/service-records");
-  await page.getByRole("tab", { name: "History" }).click();
-  await page.locator("#service-record-history-text-filter").fill(query);
-  return page.locator("tbody tr").filter({ hasText: query }).first();
-}
-
 test.describe("Issue #139 · Cambios varios en sistema", () => {
   test("AC1 · Fichas de servicio aparece en Gestión, no en Finanzas", async ({ page }) => {
     await loginAsDemo(page);
@@ -62,7 +56,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     expect(serviceRecordsIdx).toBeLessThan(billingIdx);
   });
 
-  test("AC2 · RUC duplicado muestra el mensaje de advertencia esperado", async ({
+  test("AC2 · el RUC no es único: otro cliente puede usar el mismo RUC (p. ej. el de un familiar)", async ({
     page,
     request,
   }) => {
@@ -75,11 +69,13 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     await page.getByRole("button", { name: "+ New client" }).first().click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(`E2E139 RUC Dup B ${Date.now()}`);
+    await dlg.getByTestId("client-more-toggle").click();
     await dlg.getByLabel("Document number").fill(ruc);
     await dlg.getByRole("button", { name: "Save" }).click();
-    await expect(
-      page.getByText("A client with the same RUC already exists.", { exact: true }),
-    ).toBeVisible();
+    // It saves: no «same RUC already exists» warning, just the creation toast.
+    const toast = page.getByTestId("clients-toast");
+    await expect(toast).toContainText("created successfully", { timeout: 10_000 });
+    await expect(page.getByText(/same RUC already exists/i)).toHaveCount(0);
   });
 
   test("AC3 · crear cliente con éxito muestra un mensaje verde", async ({ page }) => {
@@ -89,12 +85,13 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("Full name").fill(`E2E139 Success ${Date.now()}`);
     await dlg.getByRole("button", { name: "Save" }).click();
-    const alert = page.getByRole("alert").filter({ hasText: "Client created" });
-    await expect(alert).toBeVisible({ timeout: 10_000 });
-    await expect(alert).toHaveClass(/emerald/);
+    // Redesign: the creation result is a green (success) toast.
+    const toast = page.getByTestId("clients-toast");
+    await expect(toast).toContainText("created successfully", { timeout: 10_000 });
+    await expect(toast).toHaveClass(/success/);
   });
 
-  test("AC4+AC5 · la propina se muestra en rojo y no se incluye en Pendiente ni en el Monto por defecto", async ({
+  test("AC4+AC5 · la propina se muestra en rojo (el cobro por defecto la incluye desde el issue 384)", async ({
     page,
     request,
   }) => {
@@ -110,10 +107,8 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     });
 
     await loginAsDemo(page);
-    const row = await findServiceRecordHistoryRow(page, client.fullName);
-    await expect(row).toBeVisible({ timeout: 15_000 });
-    await row.click();
-    await page.getByRole("button", { name: "Generate invoice" }).click();
+    const dialogAc4 = await openFichaDialog(page, client.fullName);
+    await dialogAc4.getByTestId("service-record-generate-invoice").click();
 
     await expect(page).toHaveURL(/\/app\/billing/);
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible();
@@ -122,12 +117,13 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
     // AC4: the tip label reads "Tip (non-invoiceable)" and renders in red.
     const tipLabel = page.getByText("Tip (non-invoiceable)", { exact: true });
     await expect(tipLabel).toBeVisible();
-    await expect(tipLabel).toHaveClass(/text-red-600/);
+    await expect(tipLabel).toHaveClass(/text-danger/);
     await expect(page.locator("#billing-tips-amount")).toHaveText("4.000");
 
-    // AC5: the default Efectivo (CASH) amount and "Remaining" both exclude the tip —
-    // they cover only the 50.000 fiscal total, not 54.000 (total + tip).
-    await expect(page.locator("#pay-amount-0")).toHaveValue("50.000");
+    // AC5 (superseded by issue #384): the default Efectivo (CASH) amount covers the 50.000 fiscal
+    // total PLUS the 4.000 tip = 54.000, and "Remaining" is 0.
+    await showPaymentAmounts(page);
+    await expect(page.locator("#pay-amount-0")).toHaveValue("54.000");
     const remainingRow = page.getByText("Remaining", { exact: true }).locator("xpath=..");
     await expect(remainingRow.getByText("0", { exact: true })).toBeVisible();
   });
@@ -142,7 +138,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -152,16 +148,16 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
 
     // Row 0 starts empty (issue #284): choose CASH. A second row starts empty too and CASH —
     // already used by row 0 — must be disabled in row 1's dropdown.
-    await page.locator("#pay-method-0").selectOption("CASH");
-    await page.getByRole("button", { name: "Add payment method" }).click();
+    await choosePaymentMethod(page, "CASH");
+    await addPaymentMethodRow(page);
     await expect(page.locator("#pay-method-1")).toHaveValue("");
     await expect(page.locator("#pay-method-1 option[value='CASH']")).toBeDisabled();
     await expect(page.locator("#pay-method-0 option[value='CASH']")).toBeEnabled();
 
     // Once every method type is in use, the "Add payment method" button disables itself.
-    await page.getByRole("button", { name: "Add payment method" }).click();
-    await page.getByRole("button", { name: "Add payment method" }).click();
-    await page.getByRole("button", { name: "Add payment method" }).click();
+    await addPaymentMethodRow(page);
+    await addPaymentMethodRow(page);
+    await addPaymentMethodRow(page);
     await expect(page.getByRole("button", { name: "Add payment method" })).toBeDisabled();
   });
 
@@ -170,7 +166,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
   }) => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -189,7 +185,7 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 10));
     await page.getByRole("button", { name: client.fullName }).click();
@@ -215,12 +211,12 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
       timeout: 15_000,
     });
 
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     // Filter by the edited free-text name — the invoice's stored clientDisplayName — so the
     // history table narrows to just this invoice. Scope to the interactive history rows so the
     // (hidden) Cash Register today's-invoices table can't be picked up.
-    await page.locator("#invoice-history-text-filter").fill(editedName);
-    const row = page.locator('tbody tr[role="button"]').filter({ visible: true }).first();
+    await searchInvoiceHistory(page, editedName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }).first();
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row).toContainText(client.fullName);
     await expect(row).not.toContainText(editedName);
@@ -258,34 +254,26 @@ test.describe("Issue #139 · Cambios varios en sistema", () => {
           discountValue: null,
         },
       ],
-      payments: [{ method: "CASH", amount: 40000 }],
+      payments: [{ method: "CASH", amount: 40000 + 8000 }],
       serviceRecordId: record.id,
       tipsAmount: 8000,
     });
 
     await loginAsDemo(page);
     await page.goto("/app/propinas");
-    await page.getByRole("tab", { name: "Tip withdrawal" }).click();
-    await expect(page.getByRole("tab", { name: "Tip withdrawal", selected: true })).toBeVisible();
+    await expectBalance(page, seed.professionalId, "Gs. 8.000");
 
-    await pickSearchableOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 8.000", { timeout: 15_000 });
-
+    await openWithdrawDialog(page, seed.professionalId);
     const amountInput = page.locator("#propinas-withdrawal-amount");
     await setControlledInputValue(amountInput, "8000");
-    await page.getByRole("button", { name: "Withdraw", exact: true }).click();
-    await expect(page.getByText("Withdrawal completed successfully.")).toBeVisible({
-      timeout: 15_000,
-    });
+    await page.getByTestId("propinas-withdraw-confirm").click();
+    await expect(page.getByTestId("propinas-toast")).toContainText(
+      "Withdrawal completed successfully.",
+      { timeout: 15_000 },
+    );
 
-    const historyRow = page
-      .getByTestId("propinas-withdrawal-history-table")
-      .locator("tbody tr")
+    const historyRow = propinasMovements(page)
+      .filter({ hasText: "Withdrawal" })
       .filter({ hasText: seed.professionalFullName })
       .first();
     await expect(historyRow).toBeVisible({ timeout: 15_000 });

@@ -1,19 +1,11 @@
 import { femmePostJson } from "./femmeClient";
-import { apiBaseUrl } from "./baseUrl";
-import { authHeaders } from "./authHeaders";
 
-export type GrantAccessResponse = {
-  emailSent: boolean;
-  rawToken: string;
-};
+/**
+ * Granting / revoking access is part of the professional save itself (issue #38 — the backend
+ * applies it atomically with the details), so only the explicit resend action lives here.
+ */
 
-export async function grantProfessionalAccess(professionalId: number): Promise<GrantAccessResponse> {
-  return femmePostJson<GrantAccessResponse>(`/api/professionals/${professionalId}/grant-access`, {});
-}
-
-export async function revokeProfessionalAccess(professionalId: number): Promise<void> {
-  await fetch(`${apiBaseUrl()}/api/professionals/${professionalId}/revoke-access`, {
-    method: "POST",
-    headers: authHeaders({ json: true }),
-  });
+/** Issue #38 (5): resend a pending invitation (409/429 when not pending or within the cooldown). */
+export async function resendProfessionalAccess<T>(professionalId: number): Promise<T> {
+  return femmePostJson<T>(`/api/professionals/${professionalId}/resend-access`, {});
 }

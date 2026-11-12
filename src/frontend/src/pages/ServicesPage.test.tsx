@@ -53,6 +53,17 @@ function makePageResponse(items: unknown[]) {
   return { content: items, page: 0, size: 10, totalElements: items.length, totalPages: 1 };
 }
 
+/** Catalog redesign: categories live in a dialog opened from the "⋯" menu. */
+async function openCategories() {
+  await userEvent.click(await screen.findByTestId("catalog-more-trigger"));
+  await userEvent.click(screen.getByTestId("catalog-more-item-categories"));
+}
+
+async function openMoreMenuItem(id: string) {
+  await userEvent.click(await screen.findByTestId("catalog-more-trigger"));
+  await userEvent.click(screen.getByTestId(`catalog-more-item-${id}`));
+}
+
 function mockLoad(categories: unknown[], services: unknown[]) {
   femmeJson.mockImplementation((url: string) => {
     if (typeof url === "string" && url.includes("service-categories")) {
@@ -90,16 +101,14 @@ describe("ServicesPage", () => {
     expect(container.querySelector(".card-inactive")).toBeNull();
   });
 
-  it("calls activate endpoint when Reactivate is clicked in the kebab menu", async () => {
+  it("calls activate endpoint when the row switch is turned on", async () => {
     mockLoad([sampleCategory], [inactiveService]);
     femmePostJson.mockResolvedValue({ ...inactiveService, active: true });
 
     renderPage();
     await screen.findByText("Basic cut");
 
-    const trigger = screen.getByTestId(`services-row-${inactiveService.id}-trigger`);
-    await userEvent.click(trigger);
-    await userEvent.click(screen.getByRole("menuitem", { name: /^Reactivate$/i }));
+    await userEvent.click(screen.getByTestId(`svc-switch-${inactiveService.id}`));
 
     await waitFor(() => {
       expect(femmePostJson).toHaveBeenCalledWith("/api/services/10/activate", {});
@@ -112,8 +121,7 @@ describe("ServicesPage", () => {
     femmePostJson.mockResolvedValue({ ...inactiveCategory, active: true });
 
     renderPage();
-    const categoriesTab = await screen.findByRole("button", { name: /^Categories$/i });
-    await userEvent.click(categoriesTab);
+    await openCategories();
     await screen.findByText("Beard");
 
     const reactivateButtons = screen.getAllByRole("button", { name: /^Reactivate$/i });
@@ -124,15 +132,13 @@ describe("ServicesPage", () => {
     });
   });
 
-  it("inactive service row shows a kebab menu with Reactivate and clicking the row opens the edit modal", async () => {
+  it("inactive service row shows an off switch and clicking the row opens the edit modal", async () => {
     mockLoad([sampleCategory], [inactiveService]);
     renderPage();
     await screen.findByText("Basic cut");
 
-    const trigger = screen.getByTestId(`services-row-${inactiveService.id}-trigger`);
-    await userEvent.click(trigger);
-    expect(screen.getByRole("menuitem", { name: /^Reactivate$/i })).toBeTruthy();
-    await userEvent.keyboard("{Escape}");
+    const toggle = screen.getByTestId(`svc-switch-${inactiveService.id}`) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
 
     const row = screen.getByTestId(`svc-row-${inactiveService.id}`);
     await userEvent.click(row);
@@ -169,9 +175,7 @@ describe("ServicesPage", () => {
     renderPage();
     await screen.findByText("Basic cut");
 
-    const button = screen.getByTestId("download-price-list-button");
-    expect(button).toBeTruthy();
-    await userEvent.click(button);
+    await openMoreMenuItem("price-list");
 
     await waitFor(() => {
       expect(downloadPriceListPdf).toHaveBeenCalledTimes(1);
@@ -187,37 +191,22 @@ describe("ServicesPage", () => {
     renderPage();
     await screen.findByText("Basic cut");
 
-    await userEvent.click(screen.getByTestId("download-price-list-button"));
+    await openMoreMenuItem("price-list");
 
     await waitFor(() => {
       expect(screen.getByTestId("price-list-error")).toBeTruthy();
     });
   });
 
-  it("filters to inactive-only services when the inactive quick filter is selected", async () => {
-    const activeSvc = {
-      id: 1,
-      categoryId: 1,
-      categoryName: "Hair",
-      categoryAccentKey: "rose",
-      name: "Other active",
-      priceMinor: 5000,
-      durationMinutes: 20,
-      active: true,
-    };
-    mockLoad([sampleCategory], [activeSvc, inactiveService]);
+  it("has no status quick filters: inactive services stay in the list, after the active ones", async () => {
+    mockLoad([sampleCategory], [inactiveService]);
     renderPage();
-    await screen.findByText("Other active");
-
-    // When the inactive filter is selected, listServicesPaged is called with active:false
-    listServicesPaged.mockResolvedValue(makePageResponse([inactiveService]));
-    await userEvent.click(screen.getByRole("button", { name: /inactive only/i }));
-
-    await waitFor(() => {
-      expect(screen.queryByText("Other active")).toBeNull();
-      expect(screen.getByText("Basic cut")).toBeTruthy();
-    });
+    await screen.findByText("Basic cut");
+    expect(screen.queryByRole("button", { name: /inactive only/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /active only/i })).toBeNull();
+    expect(listServicesPaged).toHaveBeenCalledWith(expect.objectContaining({ active: undefined }));
   });
+
   // Catalog split: this screen only lists / manages SERVICE items and service categories.
   it("only requests SERVICE items and categories and has no item-type filter", async () => {
     mockLoad([sampleCategory], [inactiveService]);
@@ -235,7 +224,6 @@ describe("ServicesPage", () => {
     mockLoad([sampleCategory], [inactiveService]);
     renderPage();
     await screen.findByText("Basic cut");
-    expect(screen.getByRole("columnheader", { name: "Duration" })).toBeTruthy();
     expect(screen.getByTestId(`svc-row-${inactiveService.id}`).textContent).toContain("30 min");
 
     await userEvent.click(screen.getByRole("button", { name: "+ New service" }));
@@ -247,9 +235,8 @@ describe("ServicesPage", () => {
     mockLoad([sampleCategory], []);
     femmePostJson.mockResolvedValue({ id: 5, name: "Nails", active: true, accentKey: "stone" });
     renderPage();
-    await screen.findByRole("button", { name: "Categories" });
-    await userEvent.click(screen.getByRole("button", { name: "Categories" }));
-    await userEvent.click(screen.getByRole("button", { name: "+ New category" }));
+    await openCategories();
+    await userEvent.click(await screen.findByRole("button", { name: "+ New category" }));
     await userEvent.type(await screen.findByLabelText("Name"), "Nails");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {

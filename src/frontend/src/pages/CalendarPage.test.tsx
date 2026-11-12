@@ -75,10 +75,11 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
     it("renders navigation buttons", async () => {
       renderPage();
       await waitFor(() => {
-        const prevButtons = screen.getAllByRole("button", { name: /previous week/i });
+        // The Day view is the default: the arrows move one day.
+        const prevButtons = screen.getAllByRole("button", { name: /previous day/i });
         expect(prevButtons.length).toBeGreaterThan(0);
       });
-      const nextButtons = screen.getAllByRole("button", { name: /next week/i });
+      const nextButtons = screen.getAllByRole("button", { name: /next day/i });
       expect(nextButtons.length).toBeGreaterThan(0);
     });
 
@@ -90,12 +91,30 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       });
     });
 
-    it("renders professional filter", async () => {
+    it("puts the professional filter in a button next to the search field, with a menu of professionals", async () => {
+      const user = userEvent.setup();
       renderPage();
-      await waitFor(() => {
-        const filter = screen.getAllByRole("combobox");
-        expect(filter.length).toBeGreaterThan(0);
-      });
+      const trigger = await screen.findByTestId("calendar-prof-trigger");
+      // Two controls side by side (the button is not inside the field), and no row of chips.
+      const field = screen.getByTestId("calendar-search").closest("[data-tour='calendar-search']")!;
+      expect(field.contains(trigger)).toBe(false);
+      expect(trigger.closest("[data-tour='calendar-prof-filter']")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-prof-panel")).toBeNull();
+      await user.click(trigger);
+      const panel = await screen.findByTestId("calendar-prof-panel");
+      expect(within(panel).getByTestId("calendar-prof-chip-all").getAttribute("aria-pressed")).toBe("true");
+      expect(within(panel).getByRole("button", { name: /^ana gomez$/i })).toBeTruthy();
+    });
+
+    it("opens on the Day view and switches to the Week grid with one tap", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      expect(await screen.findByTestId("calendar-week-strip")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-day-col-mon")).toBeNull();
+      await user.click(screen.getAllByTestId("calendar-view-week")[0]);
+      expect(await screen.findByTestId("calendar-day-col-mon")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-week-strip")).toBeNull();
+      expect(screen.getAllByRole("button", { name: /next week/i }).length).toBeGreaterThan(0);
     });
 
     it("shows appointment in calendar when appointments are loaded", async () => {
@@ -115,21 +134,38 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       });
     });
 
-    it("shows professional options in filter combobox (HU-19)", async () => {
+    it("filters the day by professional from the menu, shows her as a tag and removes it with ×", async () => {
       const user = userEvent.setup();
       renderPage();
+      await user.click(await screen.findByTestId("calendar-prof-trigger"));
+      const option = await screen.findByRole("button", { name: /^ana gomez$/i });
+      expect(option.getAttribute("aria-pressed")).toBe("false");
+      await user.click(option);
+      // The menu closes and her name stays in the field as a tag.
+      expect(screen.queryByTestId("calendar-prof-panel")).toBeNull();
+      expect(screen.getByTestId("calendar-prof-pill").textContent).toContain("Ana Gomez");
+      expect(screen.getByTestId("calendar-prof-trigger").getAttribute("aria-label")).toContain("Ana Gomez");
       await waitFor(() => {
-        expect(screen.getAllByRole("combobox").length).toBeGreaterThan(0);
+        const urls = femmeJsonMock.mock.calls.map((c) => String(c[0]));
+        expect(urls.some((u) => u.includes("/api/appointments") && u.includes("professionalId=10"))).toBe(true);
       });
-      const filterCombo = screen.getByRole("combobox", {
-        name: /filter by professional/i,
-      });
-      await user.click(filterCombo);
-      expect(await screen.findByRole("listbox", { name: /filter by professional/i })).toBeTruthy();
-      expect(await screen.findByRole("button", { name: /^ana gomez$/i })).toBeTruthy();
+      await user.click(screen.getByTestId("calendar-prof-pill-clear"));
+      expect(screen.queryByTestId("calendar-prof-pill")).toBeNull();
     });
 
-    it("does not show non-grid statuses in the week view (HU-19)", async () => {
+    it("searches inside the professional menu", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByTestId("calendar-prof-trigger"));
+      await user.type(await screen.findByTestId("calendar-prof-search"), "zzz");
+      expect(screen.queryByTestId("calendar-prof-chip-10")).toBeNull();
+      expect(screen.queryByTestId("calendar-prof-chip-all")).toBeNull();
+      await user.clear(screen.getByTestId("calendar-prof-search"));
+      await user.type(screen.getByTestId("calendar-prof-search"), "gom");
+      expect(screen.getByTestId("calendar-prof-chip-10")).toBeTruthy();
+    });
+
+    it("does not list non-grid statuses (HU-19)", async () => {
       const completedAppt = {
         ...MOCK_APPOINTMENT,
         id: 99,
@@ -179,7 +215,10 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       fireEvent.blur(timeInput);
 
       await user.click(screen.getByRole("combobox", { name: /^professional$/i }));
-      await user.click(await screen.findByRole("button", { name: /^ana gomez$/i }));
+      // The page also has an "Ana Gomez" filter chip: pick the option inside the opened list.
+      await user.click(
+        within(await screen.findByRole("listbox")).getByRole("button", { name: /^ana gomez$/i }),
+      );
 
       await user.click(screen.getByRole("combobox", { name: /^service$/i }));
       await user.click(await screen.findByRole("button", { name: /^haircut/i }));
@@ -248,7 +287,7 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
   });
 
   describe("HU-09 - Edit appointment restriction", () => {
-    it("shows edit button for PENDING appointments in detail modal", async () => {
+    it("offers Confirm as the main step and Edit behind the ⋯ menu for PENDING appointments", async () => {
       femmeJsonMock.mockImplementation((url: string) => {
         if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
         if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
@@ -263,10 +302,12 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
       const apptBtn = await screen.findByRole("button", { name: /haircut/i });
       await user.click(apptBtn);
 
-      await waitFor(() => {
-        const editBtns = screen.queryAllByRole("button", { name: /edit appointment/i });
-        expect(editBtns.length).toBeGreaterThan(0);
-      });
+      const next = await screen.findByTestId("calendar-next-step");
+      expect(next.textContent).toMatch(/confirm/i);
+      await user.click(screen.getByTestId("calendar-more-actions"));
+      expect(await screen.findByRole("menuitem", { name: /edit appointment/i })).toBeTruthy();
+      expect(screen.getByTestId("calendar-action-cancel")).toBeTruthy();
+      expect(screen.getByTestId("calendar-action-noshow")).toBeTruthy();
     });
 
     // COMPLETED appointments are excluded from the week grid entirely since HU-19
@@ -318,5 +359,271 @@ describe("CalendarPage (HU-06, HU-07, HU-08, HU-09)", () => {
         expect(alerts.length).toBeGreaterThan(0);
       });
     });
+  });
+});
+
+describe("CalendarPage · turnos completados siguen en la agenda", () => {
+  const at = (h: number) => {
+    const d = new Date();
+    d.setHours(h, 0, 0, 0);
+    return d;
+  };
+  const completed = (id: number, hour: number, invoiceId: number | null) => ({
+    ...MOCK_APPOINTMENT,
+    id,
+    clientName: `CLIENTE ${id}`,
+    status: "COMPLETED",
+    startAt: at(hour).toISOString(),
+    endAt: at(hour + 1).toISOString(),
+    serviceRecordId: null,
+    invoiceId,
+  });
+
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
+    femmeJsonMock.mockReset();
+    femmeJsonMock.mockImplementation((url: string) => {
+      if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
+      if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
+      if (url.includes("/api/appointments")) {
+        return Promise.resolve([
+          completed(101, 10, 555), // charged: has an issued comprobante
+          completed(102, 12, null), // completed, not charged yet
+          { ...MOCK_APPOINTMENT, id: 103, status: "CANCELLED", startAt: at(14).toISOString(), clientName: "CANCELADO" },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+  });
+
+  it("the Day list keeps completed turnos, marked «Charged» with a comprobante and «Completed» without", async () => {
+    renderPage();
+    const charged = await screen.findByTestId("calendar-done-badge-101");
+    expect(charged.textContent).toContain("Charged");
+    expect(charged.getAttribute("data-charged")).toBe("true");
+    const notCharged = await screen.findByTestId("calendar-done-badge-102");
+    expect(notCharged.textContent).toContain("Completed");
+    expect(notCharged.getAttribute("data-charged")).toBe("false");
+    // Cancelled turnos stay hidden.
+    expect(screen.queryByTestId("calendar-appt-103")).toBeNull();
+  });
+
+  it("the Week grid draws them as clean cards with a status icon", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click((await screen.findAllByTestId("calendar-view-week"))[0]);
+    const block = await screen.findByTestId("calendar-appt-101");
+    expect(block.getAttribute("data-done")).toBe("charged");
+    expect(within(block).getByTestId("calendar-done-badge-101").getAttribute("aria-label")).toBe("Charged");
+    const other = await screen.findByTestId("calendar-appt-102");
+    expect(other.getAttribute("data-done")).toBe("completed");
+    expect(within(other).getByTestId("calendar-done-badge-102").getAttribute("aria-label")).toBe("Completed");
+    // Clean-grid week: no legend (each icon explains itself on hover) and a «N turnos»/«libre» caption per day.
+    expect(screen.queryByTestId("calendar-week-legend")).toBeNull();
+    expect(within(block).getByTestId("calendar-done-badge-101").getAttribute("title")).toBe("Charged");
+    expect(screen.getAllByTestId(/^calendar-day-head-/).length).toBe(7);
+    expect(screen.queryByTestId("calendar-appt-103")).toBeNull();
+  });
+
+  describe("buscador por cliente o servicio", () => {
+    const todayAt = (hour: number) => {
+      const d = new Date();
+      d.setHours(hour, 0, 0, 0);
+      return d.toISOString();
+    };
+    const turno = (id: number, hour: number, clientName: string | null, serviceName: string) => ({
+      ...MOCK_APPOINTMENT,
+      id,
+      clientName,
+      serviceName,
+      startAt: todayAt(hour),
+      endAt: todayAt(hour + 1),
+    });
+
+    beforeEach(() => {
+      femmeJsonMock.mockImplementation((url: string) => {
+        if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
+        if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
+        if (url.includes("/api/appointments")) {
+          return Promise.resolve([
+            turno(201, 10, "TANIA NUÑEZ Z", "SPA DE PIES"),
+            turno(202, 11, "JUAN TALAVERA", "SPA DE PIES"),
+            turno(203, 12, null, "MAQUILLAJE"),
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+    });
+
+    it("filters the Day list by client, ignoring case and accents, and counts the matches", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByTestId("calendar-appt-201");
+      await user.type(screen.getByTestId("calendar-search"), "nunez");
+      expect(screen.getByTestId("calendar-appt-201")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-appt-202")).toBeNull();
+      expect(screen.queryByTestId("calendar-appt-203")).toBeNull();
+      expect(screen.getByTestId("calendar-search-count").textContent).toBe("1 of 3 appointments");
+      // The matching part is highlighted.
+      expect(within(screen.getByTestId("calendar-appt-201")).getByText(/Nu/i, { selector: "mark" })).toBeTruthy();
+    });
+
+    it("filters by service and also finds the occasional client by its label", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByTestId("calendar-appt-201");
+      await user.type(screen.getByTestId("calendar-search"), "spa de");
+      expect(screen.getByTestId("calendar-search-count").textContent).toBe("2 of 3 appointments");
+      expect(screen.queryByTestId("calendar-appt-203")).toBeNull();
+      await user.clear(screen.getByTestId("calendar-search"));
+      await user.type(screen.getByTestId("calendar-search"), "occasional");
+      expect(screen.getByTestId("calendar-appt-203")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-appt-201")).toBeNull();
+    });
+
+    it("shows «No results» with a button that clears the search, and the × clears it too", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByTestId("calendar-appt-201");
+      expect(screen.queryByTestId("calendar-search-clear")).toBeNull();
+      await user.type(screen.getByTestId("calendar-search"), "zzz");
+      const empty = screen.getByTestId("calendar-search-empty");
+      expect(empty.textContent).toContain("No results");
+      await user.click(within(empty).getByRole("button", { name: "Clear search" }));
+      expect((screen.getByTestId("calendar-search") as HTMLInputElement).value).toBe("");
+      expect(screen.getByTestId("calendar-appt-202")).toBeTruthy();
+      await user.type(screen.getByTestId("calendar-search"), "talavera");
+      await user.click(screen.getByTestId("calendar-search-clear"));
+      expect(screen.getByTestId("calendar-appt-201")).toBeTruthy();
+      expect(screen.queryByTestId("calendar-search-count")).toBeNull();
+    });
+
+    it("dims (instead of removing) the Week blocks that do not match", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click((await screen.findAllByTestId("calendar-view-week"))[0]);
+      await user.type(screen.getByTestId("calendar-search"), "talavera");
+      expect((await screen.findByTestId("calendar-appt-202")).getAttribute("data-dimmed")).toBeNull();
+      expect(screen.getByTestId("calendar-appt-201").getAttribute("data-dimmed")).toBe("true");
+      expect(screen.getByTestId("calendar-search-count").textContent).toBe("1 of 3 appointments this week");
+    });
+  });
+});
+
+describe("CalendarPage · vista semanal con horarios muy ocupados", () => {
+  const at = (h: number) => {
+    const d = new Date();
+    d.setHours(h, 0, 0, 0);
+    return d;
+  };
+  const at10 = (id: number, professionalId: number, clientName: string) => ({
+    ...MOCK_APPOINTMENT,
+    id,
+    professionalId,
+    professionalName: `Prof ${professionalId}`,
+    clientName,
+    status: "PENDING",
+    startAt: at(10).toISOString(),
+    endAt: at(11).toISOString(),
+  });
+
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
+    femmeJsonMock.mockReset();
+    femmeJsonMock.mockImplementation((url: string) => {
+      if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
+      if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
+      if (url.includes("/api/appointments")) {
+        return Promise.resolve([at10(201, 10, "UNO"), at10(202, 11, "DOS"), at10(203, 12, "TRES")]);
+      }
+      return Promise.resolve([]);
+    });
+  });
+
+  it("folds three turnos at the same hour into one group card that opens the list", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click((await screen.findAllByTestId("calendar-view-week"))[0]);
+    // One group card instead of three (or two + a button): none of them is drawn on its own.
+    const group = await screen.findByTestId("calendar-more-chip");
+    expect(group.textContent).toContain("3 appointments · ");
+    expect(group.textContent).toContain("Uno");
+    expect(screen.queryByTestId("calendar-appt-201")).toBeNull();
+    expect(screen.queryByTestId("calendar-appt-203")).toBeNull();
+    expect(screen.queryByTestId("calendar-more-popover")).toBeNull();
+    // The whole card is the button.
+    await user.click(group);
+    const pop = await screen.findByTestId("calendar-more-popover");
+    // Placed from the card's position on the screen (beside it), so it never depends on scrolling.
+    expect(pop.style.position).toBe("fixed");
+    expect(within(pop).getByTestId("calendar-more-row-201")).toBeTruthy();
+    expect(within(pop).getByTestId("calendar-more-row-202")).toBeTruthy();
+    expect(within(pop).getByTestId("calendar-more-row-203").textContent).toContain("TRES");
+    // Escape closes the list.
+    await user.keyboard("{Escape}");
+    expect(screen.queryByTestId("calendar-more-popover")).toBeNull();
+  });
+});
+
+describe("CalendarPage · tarjetas resumidas de la semana", () => {
+  const at = (h: number) => {
+    const d = new Date();
+    d.setHours(h, 0, 0, 0);
+    return d;
+  };
+  beforeEach(async () => {
+    await i18n.changeLanguage("en");
+    femmeJsonMock.mockReset();
+    femmeJsonMock.mockImplementation((url: string) => {
+      if (url.includes("/api/professionals")) return Promise.resolve([PROFESSIONAL]);
+      if (url.includes("/api/services")) return Promise.resolve([SERVICE]);
+      if (url.includes("/api/appointments")) {
+        return Promise.resolve([
+          { ...MOCK_APPOINTMENT, id: 301, clientName: "TANIA NUÑEZ Z", startAt: at(10).toISOString(), durationMinutes: 60 },
+          { ...MOCK_APPOINTMENT, id: 302, clientName: null, startAt: at(13).toISOString(), durationMinutes: 90 },
+        ]);
+      }
+      return Promise.resolve([]);
+    });
+  });
+
+  it("shows a short name, gives every card the same height and keeps the full detail for the hover", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click((await screen.findAllByTestId("calendar-view-week"))[0]);
+    const a = await screen.findByTestId("calendar-appt-301");
+    const b = await screen.findByTestId("calendar-appt-302");
+    expect(screen.getByTestId("calendar-appt-name-301").textContent).toBe("Tania N.");
+    expect(screen.getByTestId("calendar-appt-name-302").textContent).toBe("Occasional");
+    // Same height whatever the duration (60 vs 90 min).
+    expect(a.style.height).toBe(b.style.height);
+    // The accessible name keeps the full client name.
+    expect(a.getAttribute("aria-label")).toContain("TANIA NUÑEZ Z");
+    // Hover: a floating box with everything; the card does not change size.
+    const h0 = a.style.height;
+    await user.hover(a);
+    const tip = await screen.findByTestId("calendar-appt-tip-301");
+    expect(tip.textContent).toContain("TANIA NUÑEZ Z");
+    expect(tip.textContent).toContain("Haircut");
+    expect(tip.textContent).toContain("60 min");
+    expect(a.style.height).toBe(h0);
+    await user.unhover(a);
+    expect(screen.queryByTestId("calendar-appt-tip-301")).toBeNull();
+  });
+});
+
+describe("CalendarPage · lista del grupo: dónde se abre", () => {
+  it("opens beside the group card inside the screen: to its right when there is room, to its left when not", async () => {
+    const { __testPopoverPlacement: place } = await import("./CalendarPage");
+    Object.assign(window, { innerWidth: 1000, innerHeight: 600 });
+    // Room on the right: beside the card, aligned with its top.
+    expect(place({ left: 300, right: 424, top: 165, bottom: 217 }, 4)).toEqual({ left: 432, top: 165 });
+    // Last column: no room on the right, so to the left of the card.
+    expect(place({ left: 850, right: 980, top: 165, bottom: 217 }, 4)).toEqual({ left: 850 - 8 - 260, top: 165 });
+    // Low on the screen: moved up just enough to fit (4 members ≈ 232 px + 8 px margin).
+    const low = place({ left: 300, right: 424, top: 560, bottom: 612 }, 4);
+    expect(low.left).toBe(432);
+    expect(low.top + 232).toBeLessThanOrEqual(600 - 8);
+    expect(low.top).toBeGreaterThanOrEqual(8);
   });
 });

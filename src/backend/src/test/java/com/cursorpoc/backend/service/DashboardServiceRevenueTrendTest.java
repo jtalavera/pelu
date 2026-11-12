@@ -84,6 +84,26 @@ class DashboardServiceRevenueTrendTest {
   }
 
   @Test
+  void theWindowFollowsTheRequestedPeriod() {
+    when(invoiceRepository.findRevenueRowsByTenantAndStatusAndIssuedBetween(
+            eq(1L), eq(InvoiceStatus.ISSUED), any(), any()))
+        .thenReturn(List.of());
+
+    for (int days : DashboardService.ALLOWED_PERIOD_DAYS) {
+      DashboardResponse d = dashboardService.build(1L, days);
+
+      assertThat(d.revenueTrend()).hasSize(days);
+      assertThat(d.revenueTrendDays()).isEqualTo(days);
+      LocalDate today = LocalDate.now(ZONE);
+      assertThat(d.revenueTrend().get(0).date()).isEqualTo(today.minusDays(days - 1L).toString());
+      assertThat(d.revenueTrend().get(days - 1).date()).isEqualTo(today.toString());
+      // The 7-day moving average still has its full week behind the first plotted day.
+      assertThat(d.revenueTrendLookback())
+          .hasSize(DashboardService.REVENUE_TREND_AVERAGE_LOOKBACK_DAYS);
+    }
+  }
+
+  @Test
   void daysWithNoInvoicesAreZeroNotOmitted() {
     when(invoiceRepository.findRevenueRowsByTenantAndStatusAndIssuedBetween(
             eq(1L), eq(InvoiceStatus.ISSUED), any(), any()))

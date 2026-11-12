@@ -191,10 +191,11 @@ class CashSessionServiceTest {
     when(cashMovementRepository.findByCashSession_IdAndTenant_IdOrderByCreatedAtAsc(7L, 1L))
         .thenReturn(List.of());
 
-    var request = new CashSessionCloseRequest(new BigDecimal("30000.00"));
+    // expected = 100000 (opening) + 30000 (cash sales)
+    var request = new CashSessionCloseRequest(new BigDecimal("130000.00"));
     CashSessionDetailResponse result = service.closeSession(1L, 10L, request);
 
-    assertThat(result.expectedCashAmount()).isEqualByComparingTo("30000.00");
+    assertThat(result.expectedCashAmount()).isEqualByComparingTo("130000.00");
     assertThat(result.cashDifference()).isEqualByComparingTo("0.00");
     assertThat(result.totalInvoiced()).isEqualByComparingTo("50000.00");
     assertThat(result.invoiceCount()).isEqualTo(3);
@@ -222,11 +223,12 @@ class CashSessionServiceTest {
     when(cashMovementRepository.findByCashSession_IdAndTenant_IdOrderByCreatedAtAsc(7L, 1L))
         .thenReturn(List.of());
 
-    // expected = 30000 (cash sales) + 10000 (ingreso) - 5000 (egreso) - 2000 (retiro propina)
-    var request = new CashSessionCloseRequest(new BigDecimal("33000.00"));
+    // expected = 100000 (opening) + 30000 (cash sales) + 10000 (ingreso) - 5000 (egreso)
+    //            - 2000 (retiro propina)
+    var request = new CashSessionCloseRequest(new BigDecimal("133000.00"));
     CashSessionDetailResponse result = service.closeSession(1L, 10L, request);
 
-    assertThat(result.expectedCashAmount()).isEqualByComparingTo("33000.00");
+    assertThat(result.expectedCashAmount()).isEqualByComparingTo("133000.00");
     assertThat(result.cashDifference()).isEqualByComparingTo("0.00");
   }
 
@@ -370,7 +372,7 @@ class CashSessionServiceTest {
     assertThat(result.isOpen()).isTrue();
     assertThat(result.countedCashAmount()).isNull();
     assertThat(result.cashDifference()).isNull();
-    assertThat(result.expectedCashAmount()).isEqualByComparingTo("20000.00");
+    assertThat(result.expectedCashAmount()).isEqualByComparingTo("120000.00");
   }
 
   private static List<Object[]> singleRow(String label, BigDecimal amount) {

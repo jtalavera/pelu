@@ -9,6 +9,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openSummaryMore } from "../fixtures/ui";
 
 /**
  * Issue #221 · "Dashboard: gráfico de mezcla de medios de pago" — donut chart of invoiced revenue
@@ -132,38 +133,23 @@ test.describe("Issue #221 · Dashboard payment method mix chart", () => {
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
 
-    const chart = page.getByTestId("dashboard-payment-method-mix");
+    // Redesign ("Resumen"): one stacked bar plus a legend row per method with its share (%).
+    await openSummaryMore(page);
+    const chart = page.getByTestId("summary-payment-methods");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Payment methods", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("summary-more-empty")).toHaveCount(0);
 
-    // Not the empty state, given the invoices seeded above.
-    await expect(page.getByTestId("dashboard-payment-method-mix-empty")).toHaveCount(0);
-
-    // recharts renders a real <svg> once ResponsiveContainer measures a non-zero size.
-    await expect(chart.locator("svg").first()).toBeVisible({ timeout: 20_000 });
-
-    // Legend labels reuse the same femme.billing.invoice.paymentMethod* translations already used
-    // elsewhere in the billing UI (InvoicePaymentsEditor, InvoiceDetailModal, BillingPage) — not a
-    // duplicate mapping. Both seeded methods must show up as legend entries.
-    const legendTexts = await chart
-      .locator(".recharts-legend-item-text")
-      .allTextContents();
-    expect(legendTexts).toContain("Cash");
-    expect(legendTexts).toContain("Transfer");
-
-    // Unlike the top-services bar chart (an always-visible Y-axis money label), a donut chart's
-    // per-slice amount is only shown on hover via the Tooltip — so the dot-thousands /
-    // no-decimals Gs. money format has to be asserted there instead. A real `.hover()` is
-    // unreliable here: Playwright's actionability check targets the center point of the
-    // sector's *bounding box*, which for an annular wedge (this chart's `innerRadius`) can fall
-    // inside the donut's hollow middle — off the actual filled path — for a large-enough slice.
-    // Dispatching the DOM event recharts listens for directly on the sector element sidesteps
-    // that geometry entirely (no hit-testing at a computed screen point).
-    const sector = chart.locator(".recharts-pie-sector").first();
-    await sector.dispatchEvent("mouseover");
-    const tooltipValue = chart.locator(".recharts-tooltip-item-value").first();
-    await expect(tooltipValue).toBeVisible({ timeout: 5_000 });
-    await expect(tooltipValue).toHaveText(/^Gs\. \d{1,3}(\.\d{3})*$/);
+    const legend = chart.getByRole("listitem");
+    const rows = (await legend.allTextContents()).map((t) => t.replace(/\s+/g, " "));
+    const cashRow = rows.find((t) => t.includes("Cash"));
+    const transferRow = rows.find((t) => t.includes("Transfer"));
+    expect(cashRow, "a legend row for Cash").toBeTruthy();
+    expect(transferRow, "a legend row for Transfer").toBeTruthy();
+    // Each row carries its percentage of the period's total.
+    expect(cashRow).toMatch(/\d{1,3}%/);
+    expect(transferRow).toMatch(/\d{1,3}%/);
+    const total = rows.reduce((sum, t) => sum + Number(/(\d{1,3})%/.exec(t)?.[1] ?? 0), 0);
+    expect(Math.abs(total - 100)).toBeLessThanOrEqual(rows.length); // rounding only
   });
 
   // Note: this asserts the chart *card itself* fits the 400px viewport, not whole-document
@@ -193,9 +179,9 @@ test.describe("Issue #221 · Dashboard payment method mix chart", () => {
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
 
-    const chart = page.getByTestId("dashboard-payment-method-mix");
+    await openSummaryMore(page);
+    const chart = page.getByTestId("summary-payment-methods");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(chart.locator("svg").first()).toBeVisible({ timeout: 20_000 });
 
     const box = await chart.boundingBox();
     expect(box).toBeTruthy();

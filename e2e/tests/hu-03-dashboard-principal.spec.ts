@@ -1,27 +1,100 @@
 import { expect, test } from "@playwright/test";
+import {
+  createAppointmentApi,
+  ensureCashSessionOpenApi,
+  loginAsDemoApi,
+  seedCategoryServiceProfessional,
+  seedClient,
+} from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openDashboardMore } from "../fixtures/dashboard";
 
 test.describe("HU-03 · Dashboard principal", () => {
-  test("HU-03 · 1 métricas de ingresos y citas del día", async ({ page }) => {
+  test("HU-03 · 1 resumen de turnos e ingresos del día en una línea", async ({ page }) => {
     await loginAsDemo(page);
-    await expect(page.getByText("Revenue today", { exact: true })).toBeVisible();
-    await expect(page.getByText("Appointments today", { exact: true }).first()).toBeVisible();
+    await expect(page.getByTestId("dashboard-summary-appointments")).toHaveText(/^\d+ appointments? today$/);
     // Revenue figures must use dot thousands separator with no decimals (e.g. "Gs. 1.234.567")
-    const gsText = page.getByText(/^Gs\. \d{1,3}(\.\d{3})*$/).first();
-    await expect(gsText).toBeVisible();
+    await expect(page.getByTestId("dashboard-summary-collected")).toHaveText(
+      /^Gs\. \d{1,3}(\.\d{3})* collected$/,
+    );
+    // Week and month totals no longer clutter Inicio: they live in Dashboards.
+    await expect(page.getByText("Revenue this week", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Clients this month", { exact: true })).toHaveCount(0);
   });
 
-  test("HU-03 · 2 accesos rápidos a calendario y nueva cita", async ({ page }) => {
+  test("HU-03 · 2 accesos rápidos a calendario y nueva cita (el formulario abre en Inicio)", async ({ page }) => {
     await loginAsDemo(page);
     await page.getByRole("link", { name: "View agenda →" }).click();
     await expect(page).toHaveURL(/\/app\/calendar/);
     await page.goto("/app");
-    await page.getByRole("button", { name: "+ New appointment" }).click();
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    await page.getByRole("button", { name: "+ New appointment" }).first().click();
+    // The booking form opens right on Inicio: no navigation to the Agenda.
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/?$/);
   });
 
   test("HU-03 · 4 estado vacío cuando no hay citas hoy", async ({ page }) => {
+    // The shared demo tenant may already hold appointments for today (other specs): serve an empty
+    // appointments list to exercise the empty state.
+    await page.route("**/api/appointments?**", (route) => route.fulfill({ json: [] }));
     await loginAsDemo(page);
     await expect(page.getByText("No appointments today", { exact: true }).first()).toBeVisible();
+  });
+
+  test("HU-03 · 5 la facturación y los clientes del período se ven en Resumen", async ({ page }) => {
+    await loginAsDemo(page);
+    await page.goto("/app/dashboards");
+    // Resumen: the indicators follow the selected period (30 days by default).
+    await expect(page.getByTestId("summary-kpi-revenue")).toHaveText(/^Gs\. \d{1,3}(\.\d{3})*$/);
+    await expect(page.getByTestId("summary-kpi-clients")).toHaveText(/^\d+$/);
+  });
+
+  test("HU-03 · 6 «Más del día» está plegado y en el orden Ocupación, Cumpleaños, Inactivos (las fichas son tarjetas siempre visibles)", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    const toggles = page.getByTestId("dashboard-more").getByRole("button");
+    await expect(toggles).toHaveCount(3);
+    await expect(toggles.nth(0)).toContainText("Occupancy by professional");
+    await expect(toggles.nth(1)).toContainText("Birthdays");
+    await expect(toggles.nth(2)).toContainText("Inactive clients");
+    for (let i = 0; i < 3; i++) await expect(toggles.nth(i)).toHaveAttribute("aria-expanded", "false");
+    // The fichas of the day are not folded: they are cards right on the Inicio.
+    await expect(page.getByTestId("dashboard-today-records")).toBeVisible();
+    await expect(page.getByTestId("dashboard-inactive-clients")).toHaveCount(0);
+
+    await openDashboardMore(page, "occupancy");
+    await page.getByTestId("dashboard-more-occupancy").click();
+    await expect(page.getByTestId("dashboard-more-occupancy")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("HU-03 · 7 cada turno muestra estado y «Crear o asignar ficha»; la ficha creada se cobra y abre la factura con cliente y servicio cargados", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    await ensureCashSessionOpenApi(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const clientName = `E2E03 Cobrar ${Date.now()}`;
+    const client = await seedClient(request, token, clientName);
+    // Later today (local time), so the turno shows up in Inicio's list.
+    const slot = new Date();
+    slot.setTime(Date.now() + 5 * 60_000);
+    slot.setSeconds(0, 0);
+    await createAppointmentApi(request, token, {
+      clientId: client.id,
+      professionalId: seed.professionalId,
+      serviceId: seed.serviceId,
+      startAt: slot.toISOString(),
+    });
+    await loginAsDemo(page);
+    const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: new RegExp(clientName, "i") });
+    await expect(row).toContainText("Pending");
+    await row.getByTestId("dashboard-appointment-ficha-create-or-assign").click();
+    await page.getByTestId("appointment-ficha-create").click();
+    await page.getByRole("dialog").getByTestId("service-record-generate-invoice").click();
+    await expect(page).toHaveURL(/\/app\/billing/);
+    await expect(page.locator("#billing-client-search")).toHaveValue(new RegExp(clientName, "i"));
+    await expect(page.getByText(seed.serviceFullName).first()).toBeVisible();
   });
 });

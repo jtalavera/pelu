@@ -14,13 +14,16 @@ import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
+import com.cursorpoc.backend.repository.ManualTipRepository;
 import com.cursorpoc.backend.repository.PasswordResetTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalActivationTokenRepository;
+import com.cursorpoc.backend.repository.ProfessionalPinLockRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
+import com.cursorpoc.backend.repository.SharedDeviceRepository;
 import com.cursorpoc.backend.repository.SifenCertificateRepository;
 import com.cursorpoc.backend.repository.SifenNumberVoidingEventRepository;
 import com.cursorpoc.backend.repository.TenantFeatureFlagRepository;
@@ -58,6 +61,8 @@ public class SeedResetService {
   private final ProfessionalRepository professionalRepository;
   private final ProfessionalScheduleRepository professionalScheduleRepository;
   private final ProfessionalActivationTokenRepository professionalActivationTokenRepository;
+  private final ProfessionalPinLockRepository professionalPinLockRepository;
+  private final SharedDeviceRepository sharedDeviceRepository;
   private final AppUserActivationTokenRepository appUserActivationTokenRepository;
   private final ClientRepository clientRepository;
   private final AppointmentRepository appointmentRepository;
@@ -68,6 +73,7 @@ public class SeedResetService {
   private final PasswordResetTokenRepository passwordResetTokenRepository;
   private final AppUserTourStateRepository appUserTourStateRepository;
   private final TipWithdrawalRepository tipWithdrawalRepository;
+  private final ManualTipRepository manualTipRepository;
   private final SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository;
   private final SifenCertificateRepository sifenCertificateRepository;
   private final FemmeDataInitializer femmeDataInitializer;
@@ -83,6 +89,8 @@ public class SeedResetService {
       ProfessionalRepository professionalRepository,
       ProfessionalScheduleRepository professionalScheduleRepository,
       ProfessionalActivationTokenRepository professionalActivationTokenRepository,
+      ProfessionalPinLockRepository professionalPinLockRepository,
+      SharedDeviceRepository sharedDeviceRepository,
       AppUserActivationTokenRepository appUserActivationTokenRepository,
       ClientRepository clientRepository,
       AppointmentRepository appointmentRepository,
@@ -93,6 +101,7 @@ public class SeedResetService {
       PasswordResetTokenRepository passwordResetTokenRepository,
       AppUserTourStateRepository appUserTourStateRepository,
       TipWithdrawalRepository tipWithdrawalRepository,
+      ManualTipRepository manualTipRepository,
       SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository,
       SifenCertificateRepository sifenCertificateRepository,
       FemmeDataInitializer femmeDataInitializer) {
@@ -106,6 +115,8 @@ public class SeedResetService {
     this.professionalRepository = professionalRepository;
     this.professionalScheduleRepository = professionalScheduleRepository;
     this.professionalActivationTokenRepository = professionalActivationTokenRepository;
+    this.professionalPinLockRepository = professionalPinLockRepository;
+    this.sharedDeviceRepository = sharedDeviceRepository;
     this.appUserActivationTokenRepository = appUserActivationTokenRepository;
     this.clientRepository = clientRepository;
     this.appointmentRepository = appointmentRepository;
@@ -116,6 +127,7 @@ public class SeedResetService {
     this.passwordResetTokenRepository = passwordResetTokenRepository;
     this.appUserTourStateRepository = appUserTourStateRepository;
     this.tipWithdrawalRepository = tipWithdrawalRepository;
+    this.manualTipRepository = manualTipRepository;
     this.sifenNumberVoidingEventRepository = sifenNumberVoidingEventRepository;
     this.sifenCertificateRepository = sifenCertificateRepository;
     this.femmeDataInitializer = femmeDataInitializer;
@@ -163,6 +175,17 @@ public class SeedResetService {
     // Must run before deleting professionals below: tip_withdrawals has a FK to professionals.
     long deletedTipWithdrawals = tipWithdrawalRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} tip_withdrawals", deletedTipWithdrawals);
+
+    // Same reason: manual_tips has FKs to professionals and app_users.
+    long deletedManualTips = manualTipRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} manual_tips", deletedManualTips);
+
+    // HU-66: PIN locks reference professionals and shared devices; devices reference the tenant.
+    long deletedPinLocks =
+        professionalPinLockRepository.deleteByProfessional_Tenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} professional_pin_locks", deletedPinLocks);
+    long deletedDevices = sharedDeviceRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} shared_devices", deletedDevices);
 
     long deletedSchedules =
         professionalScheduleRepository.deleteByProfessional_Tenant_Id(DEMO_TENANT_ID);

@@ -22,10 +22,14 @@ type Props = {
   onChange: (service: SalonServiceOption | null) => void;
   id?: string;
   label?: string;
+  /** Visually hide the label (it stays available to screen readers) — for dense row layouts. */
+  labelSrOnly?: boolean;
   placeholder?: string;
   /** When set with `invalid`, links the input to a `FieldValidationError` id for accessibility. */
   errorDescribedById?: string;
   invalid?: boolean;
+  /** Hide catalog prices in the suggestions (professionals never see money). */
+  hidePrices?: boolean;
 };
 
 const DEBOUNCE_MS = 300;
@@ -50,9 +54,11 @@ export function ServiceSearchField({
   onChange,
   id,
   label,
+  labelSrOnly,
   placeholder,
   errorDescribedById,
   invalid,
+  hidePrices = false,
 }: Props) {
   const { t } = useTranslation();
   const inputId = id ?? "service-search-field";
@@ -146,7 +152,9 @@ export function ServiceSearchField({
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <Label htmlFor={inputId}>{labelText}</Label>
+      <Label htmlFor={inputId} className={labelSrOnly ? "sr-only" : undefined}>
+        {labelText}
+      </Label>
       <div className="relative">
         <Input
           id={inputId}
@@ -185,7 +193,7 @@ export function ServiceSearchField({
           id={`${inputId}-listbox`}
           role="listbox"
           aria-label={labelText}
-          className="w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
+          className="w-full rounded-md border border-line bg-surface shadow-lg max-h-72 overflow-y-auto"
         >
           {results.length === 0 && !searching ? (
             <li className="px-3 py-2">
@@ -197,9 +205,11 @@ export function ServiceSearchField({
           {results.map((service) => {
             const metaParts = [
               service.categoryName,
-              t("femme.billing.invoice.lineServicePriceGs", {
-                amount: formatPriceGs(service.priceMinor),
-              }),
+              hidePrices
+                ? null
+                : t("femme.billing.invoice.lineServicePriceGs", {
+                    amount: formatPriceGs(service.priceMinor),
+                  }),
               t("femme.billing.invoice.lineServiceDuration", {
                 minutes: service.durationMinutes,
               }),

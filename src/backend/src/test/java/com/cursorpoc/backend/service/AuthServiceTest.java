@@ -23,10 +23,12 @@ import com.cursorpoc.backend.repository.PasswordResetTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalActivationTokenRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.security.JwtService;
 import com.cursorpoc.backend.web.dto.ActivateProfessionalRequest;
 import com.cursorpoc.backend.web.dto.ForgotPasswordRequest;
 import com.cursorpoc.backend.web.dto.LoginRequest;
+import com.cursorpoc.backend.web.dto.ResetPasswordRequest;
 import com.cursorpoc.backend.web.dto.TokenResponse;
 import io.opentelemetry.api.common.Attributes;
 import java.util.List;
@@ -364,9 +366,54 @@ class AuthServiceTest {
     assertThat(user.isEnabled()).isFalse();
   }
 
+  @Test
+  void activateAccount_withSevenCharPassword_answersPasswordTooWeak_notAGenericError() {
+    // Issue #38 follow-up: a 7-character password used to die in bean validation as
+    // INVALID_REQUEST, which the activation page showed as "invalid or already used link".
+    ResponseStatusException ex =
+        org.junit.jupiter.api.Assertions.assertThrows(
+            ResponseStatusException.class,
+            () ->
+                service.activateAccount(
+                    new ActivateProfessionalRequest("tok", "Abc1@xy", "Abc1@xy", null)));
+
+    assertThat(ex.getStatusCode().value()).isEqualTo(400);
+    assertThat(ex.getReason()).isEqualTo("PASSWORD_TOO_WEAK");
+  }
+
+  @Test
+  void resetPassword_withSevenCharPassword_answersPasswordTooWeak() {
+    ResponseStatusException ex =
+        org.junit.jupiter.api.Assertions.assertThrows(
+            ResponseStatusException.class,
+            () -> service.resetPassword(new ResetPasswordRequest("tok", "Abc1@xy")));
+
+    assertThat(ex.getStatusCode().value()).isEqualTo(400);
+    assertThat(ex.getReason()).isEqualTo("PASSWORD_TOO_WEAK");
+  }
+
   private long loginCount(String outcome, String tenant) {
     return telemetry.counterValue(
         "femme.auth.login",
         Attributes.of(BusinessMetrics.OUTCOME, outcome, BusinessMetrics.TENANT_ID, tenant));
+  }
+
+  @Test
+  void refresh_keepsAnImpersonationSessionAnImpersonation() {
+    // Issue #310: the sliding refresh must not turn root's impersonation token into a plain ADMIN
+    // one (nor drop the tenant).
+    FemmeJwtProperties props = new FemmeJwtProperties();
+    props.setSecret("unit-test-jwt-secret-min-32-characters-long!!");
+    JwtService jwt = new JwtService(props);
+    FemmeUserPrincipal impersonation =
+        new FemmeUserPrincipal(1L, 7L, "root@pelu", UserRole.ADMIN, null, true);
+
+    FemmeUserPrincipal refreshed =
+        jwt.parseAndValidate(service.refresh(impersonation).accessToken()).orElseThrow();
+
+    assertThat(refreshed.isImpersonation()).isTrue();
+    assertThat(refreshed.getTenantId()).isEqualTo(7L);
+    assertThat(refreshed.getUserId()).isEqualTo(1L);
+    assertThat(refreshed.getRole()).isEqualTo(UserRole.ADMIN);
   }
 }

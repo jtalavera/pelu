@@ -6,6 +6,7 @@ import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.TenantStatusChange;
 import com.cursorpoc.backend.domain.TenantTierChange;
 import com.cursorpoc.backend.domain.Tier;
+import com.cursorpoc.backend.domain.enums.TenantSkin;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
@@ -16,6 +17,7 @@ import com.cursorpoc.backend.stock.StockFlagsChangedEvent;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import com.cursorpoc.backend.web.dto.TenantCreateRequest;
 import com.cursorpoc.backend.web.dto.TenantResponse;
+import com.cursorpoc.backend.web.dto.TenantSkinUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantStatusChangeResponse;
 import com.cursorpoc.backend.web.dto.TenantStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantTierChangeResponse;
@@ -129,10 +131,18 @@ public class TenantAdminService implements ApplicationEventPublisherAware {
             .findById(request.tierId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TIER_NOT_FOUND"));
 
+    // The skin is optional at creation (defaults to DURAZNO); a value that is present must be
+    // valid.
+    TenantSkin skin =
+        request.skin() == null || request.skin().isBlank()
+            ? TenantSkin.DEFAULT
+            : parseSkin(request.skin());
+
     Tenant tenant = new Tenant();
     tenant.setName(name);
     tenant.setDomain(domain);
     tenant.setTier(tier);
+    tenant.setSkin(skin);
     tenant.setStatus(TenantStatus.ACTIVE);
     tenantRepository.save(tenant);
     seedDefaultTaxes(tenant);
@@ -229,6 +239,30 @@ public class TenantAdminService implements ApplicationEventPublisherAware {
     }
 
     return toResponse(tenant);
+  }
+
+  /**
+   * Flowbit rebrand: Platform Admin picks the tenant's accent skin ({@link TenantSkin}). Takes
+   * effect on the tenant users' next {@code /api/me}. Nothing else about the tenant changes.
+   */
+  @Transactional
+  public TenantResponse updateSkin(Long id, TenantSkinUpdateRequest request) {
+    Tenant tenant =
+        tenantRepository
+            .findById(id)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
+    tenant.setSkin(parseSkin(request.skin()));
+    tenantRepository.save(tenant);
+    return toResponse(tenant);
+  }
+
+  private static TenantSkin parseSkin(String raw) {
+    try {
+      return TenantSkin.valueOf(raw == null ? "" : raw.trim());
+    } catch (IllegalArgumentException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TENANT_SKIN_INVALID");
+    }
   }
 
   /**
@@ -338,6 +372,7 @@ public class TenantAdminService implements ApplicationEventPublisherAware {
         tier != null ? tier.getId() : null,
         tier != null ? tier.getName() : null,
         tenant.getStatus().name(),
+        tenant.getSkin().name(),
         lastTierChange,
         lastStatusChange);
   }

@@ -82,7 +82,7 @@ describe("SifenCertificatesPage", () => {
     expect(screen.queryByText("Cargar nuevo certificado y clave")).toBeNull();
     expect(femmePostJsonMock).not.toHaveBeenCalled();
 
-    await userEvent.click(screen.getByRole("tab", { name: "Código de seguridad (CSC)" }));
+    await userEvent.click(screen.getByTestId("sifen-fold-csc"));
     expect(await screen.findByTestId("sifen-csc-readonly-note")).toBeTruthy();
     expect(screen.queryByTestId("sifen-csc-form-card")).toBeNull();
   });

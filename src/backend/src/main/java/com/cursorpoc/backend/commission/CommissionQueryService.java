@@ -9,6 +9,7 @@ import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.repository.CommissionEntryRepository;
 import com.cursorpoc.backend.repository.CommissionSettlementRepository;
 import com.cursorpoc.backend.repository.CommissionSettlementStatusChangeRepository;
+import com.cursorpoc.backend.service.SearchRangeLimits;
 import com.cursorpoc.backend.web.dto.CommissionDtos.EntryView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.LineWithoutBeneficiary;
 import com.cursorpoc.backend.web.dto.CommissionDtos.MyEntryView;
@@ -83,8 +84,11 @@ public class CommissionQueryService {
     ZoneId zone = configService.zone();
     PeriodInfo period = configService.currentPeriod(ledger.snapshot(tenantId), Instant.now());
     LocalDate today = LocalDate.now(zone);
+    if (from != null) {
+      SearchRangeLimits.resolveFrom(from, zone, SearchRangeLimits.TOO_OLD);
+    }
     LocalDate f =
-        from != null ? from : period.from() != null ? period.from() : today.withDayOfMonth(1);
+        from != null ? from : period.from() != null ? period.from() : today.minusMonths(1);
     LocalDate t = to != null ? to : period.to() != null ? period.to() : today;
     if (t.isBefore(f)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_PERIOD_INVALID");
@@ -97,7 +101,15 @@ public class CommissionQueryService {
     BigDecimal products = BigDecimal.ZERO;
     BigDecimal adjustments = BigDecimal.ZERO;
     int lines = 0;
+    // Unsettled commissions accrued before the period start are carried over from earlier periods.
+    java.time.Instant periodStart = f.atStartOfDay(zone).toInstant();
+    BigDecimal carried = BigDecimal.ZERO;
+    List<Long> carriedIds = new java.util.ArrayList<>();
     for (CommissionEntry e : entries) {
+      if (e.getAccrualAt().isBefore(periodStart)) {
+        carried = carried.add(e.getCommissionAmount());
+        carriedIds.add(e.getId());
+      }
       if (e.getSourceType() == CommissionEntrySource.ADJUSTMENT) {
         adjustments = adjustments.add(e.getCommissionAmount());
       } else if (e.getItemKind() == ServiceKind.PRODUCT) {
@@ -127,25 +139,34 @@ public class CommissionQueryService {
         adjustments,
         lines,
         entries.stream().map(e -> entryView(e, names, null, reversed)).toList(),
-        drafts);
+        drafts,
+        carried,
+        carriedIds);
   }
 
   // ── Settlements ───────────────────────────────────────────────────────────────────────────
 
+  /** {@code professionalIds} null or empty = every professional. */
   public PagedSettlements listSettlements(
       long tenantId,
-      Long professionalId,
+      List<Long> professionalIds,
       String status,
       LocalDate from,
       LocalDate to,
       int page,
       int size) {
     Map<Long, String> names = configService.professionalNames(tenantId);
+    LocalDate fromLimit =
+        SearchRangeLimits.resolveFrom(from, configService.zone(), SearchRangeLimits.TOO_OLD);
     List<CommissionSettlement> all =
         settlementRepository.findByTenantIdOrderByPeriodFromDescIdDesc(tenantId).stream()
-            .filter(s -> professionalId == null || s.getProfessionalId().equals(professionalId))
+            .filter(
+                s ->
+                    professionalIds == null
+                        || professionalIds.isEmpty()
+                        || professionalIds.contains(s.getProfessionalId()))
             .filter(s -> status == null || status.isBlank() || s.getStatus().name().equals(status))
-            .filter(s -> from == null || !s.getPeriodTo().isBefore(from))
+            .filter(s -> !s.getPeriodTo().isBefore(fromLimit))
             .filter(s -> to == null || !s.getPeriodFrom().isAfter(to))
             .toList();
     int safeSize = Math.max(1, Math.min(size, 100));
@@ -284,16 +305,23 @@ public class CommissionQueryService {
 
   // ── Entries & reports (HU-COM-08) ─────────────────────────────────────────────────────────
 
+  /** {@code professionalIds} null or empty = every professional. */
   public List<EntryView> entries(
       long tenantId,
       LocalDate from,
       LocalDate to,
-      Long professionalId,
+      List<Long> professionalIds,
       String kind,
       String settlementState) {
+    List<Long> ids = professionalIds == null ? List.of() : professionalIds;
+    // A single professional filters in the query; several are filtered below.
+    Long single = ids.size() == 1 ? ids.get(0) : null;
     ZoneId zone = configService.zone();
     Instant fromI =
-        (from != null ? from : LocalDate.now(zone).withDayOfMonth(1))
+        SearchRangeLimits.resolveFrom(
+                from != null ? from : LocalDate.now(zone).minusMonths(1),
+                zone,
+                SearchRangeLimits.TOO_OLD)
             .atStartOfDay(zone)
             .toInstant();
     Instant toI =
@@ -302,7 +330,10 @@ public class CommissionQueryService {
     Map<Long, CommissionSettlementStatus> statuses = new HashMap<>();
     List<EntryView> out = new ArrayList<>();
     java.util.Set<Long> reversed = entryRepository.findReversedIds(tenantId);
-    for (CommissionEntry e : entryRepository.findForReport(tenantId, fromI, toI, professionalId)) {
+    for (CommissionEntry e : entryRepository.findForReport(tenantId, fromI, toI, single)) {
+      if (ids.size() > 1 && !ids.contains(e.getProfessionalId())) {
+        continue;
+      }
       if (kind != null
           && !kind.isBlank()
           && (e.getItemKind() == null || !e.getItemKind().name().equals(kind))) {
@@ -329,9 +360,16 @@ public class CommissionQueryService {
       String kind,
       String settlementState) {
     ZoneId zone = configService.zone();
-    LocalDate f = from != null ? from : LocalDate.now(zone).withDayOfMonth(1);
+    LocalDate f = from != null ? from : LocalDate.now(zone).minusMonths(1);
     LocalDate t = to != null ? to : LocalDate.now(zone);
-    List<EntryView> entries = entries(tenantId, f, t, professionalId, kind, settlementState);
+    List<EntryView> entries =
+        entries(
+            tenantId,
+            f,
+            t,
+            professionalId == null ? List.of() : List.of(professionalId),
+            kind,
+            settlementState);
     BigDecimal total =
         entries.stream().map(EntryView::commissionAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
     return new ReportResponse(
@@ -396,7 +434,10 @@ public class CommissionQueryService {
       long tenantId, LocalDate from, LocalDate to) {
     ZoneId zone = configService.zone();
     Instant fromI =
-        (from != null ? from : LocalDate.now(zone).withDayOfMonth(1))
+        SearchRangeLimits.resolveFrom(
+                from != null ? from : LocalDate.now(zone).minusMonths(1),
+                zone,
+                SearchRangeLimits.TOO_OLD)
             .atStartOfDay(zone)
             .toInstant();
     Instant toI =

@@ -2,8 +2,8 @@
  * Issue #59 — Límite en tablas de historial (pagination + 6-month window)
  *
  * Covers all four history tables:
- *   1. Clientes → Historial → Turnos → Anteriores
- *   2. Clientes → Historial → Comprobantes
+ *   1. Clientes → Turnos → Anteriores
+ *   2. Clientes → Comprobantes
  *   3. Facturación → Comprobantes de Hoy (pagination only)
  *   4. Facturación → Historial (6-month window + pagination)
  */
@@ -18,7 +18,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToInvoiceHistory } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 // ---------------------------------------------------------------------------
@@ -65,35 +65,37 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
     test.setTimeout(60_000);
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     const today = new Date();
     const fromExpected = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-    const fromInput = page.locator("#filter-from");
-    const toInput = page.locator("#filter-to");
+    // The date range sits under "Filters" in the redesigned history.
+    await page.getByTestId("invoice-history-filters-toggle").click();
+    const fromInput = page.locator("#invoice-history-from");
+    const toInput = page.locator("#invoice-history-to");
     await expect(fromInput).toHaveValue(fmt(fromExpected));
     await expect(toInput).toHaveValue(fmt(today));
   });
 
-  test("#59-T4-2 · Historial rejects from-date older than 6 months", async ({ page }) => {
+  test("#59-T4-2 · Historial rejects from-date older than 1 year", async ({ page }) => {
     test.setTimeout(60_000);
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     const tooOld = new Date();
-    tooOld.setMonth(tooOld.getMonth() - 7);
+    tooOld.setMonth(tooOld.getMonth() - 13);
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-    await page.locator("#filter-from").fill(fmt(tooOld));
-    // Trigger search
-    await page.getByRole("button", { name: "Refresh" }).click();
+    await page.getByTestId("invoice-history-filters-toggle").click();
+    // Date filters apply on their own (debounced), no refresh button needed.
+    await page.locator("#invoice-history-from").fill(fmt(tooOld));
 
-    await expect(page.getByRole("alert")).toContainText(/6 months|6 meses/i);
+    await expect(page.getByRole("alert")).toContainText(/1 year|1 año/i);
   });
 
   test("#59-T4-3 · Historial shows PageSizeSelect with options 10/25/50 after issuing invoice", async ({
@@ -108,14 +110,14 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     // Wait for invoice row to appear. History rows are <tr role="button"> (issue #163
     // AC10), so their a11y role is "button", not "row" — match by tag instead.
     // Billing keeps all tabs mounted (hidden via the `hidden` attribute) and the Caja
     // tab's today-invoices rows now also carry role="button" (issue #198), so restrict
     // to the visible (History) tab's rows.
-    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    const historyRows = page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true });
     await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // PageSizeSelect should be present. Billing keeps all tabs mounted (hidden via
@@ -140,9 +142,9 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
-    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    const historyRows = page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true });
     await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // Range text should be present (e.g. "1–1 of 1" or "1–10 of N"). Scope to the
@@ -165,9 +167,9 @@ test.describe("Issue #59 · Table 4 — Invoice History", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
-    const historyRows = page.locator('table tbody tr[role="button"]').filter({ visible: true });
+    const historyRows = page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true });
     await expect(historyRows.first()).toBeVisible({ timeout: 30_000 });
 
     // Should show exactly 10 rows on first page
@@ -213,7 +215,7 @@ test.describe("Issue #59 · Table 3 — Today's Invoices", () => {
     // Wait for session card to show (session is already open)
     await expect(page.getByText(/cash register is open/i)).toBeVisible({ timeout: 30_000 });
 
-    // Wait for a row in the "Comprobantes de hoy" table (Caja is the default tab).
+    // Today's invoices are open by default on the home (issue #384) — wait for a row.
     await expect(
       page.locator('[data-testid^="billing-today-row-"]').first(),
     ).toBeVisible({ timeout: 30_000 });
@@ -252,9 +254,9 @@ test.describe("Issue #59 · Table 3 — Today's Invoices", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tables 1 & 2 — Client → History
+// Tables 1 & 2 — Client → Appointments / Invoices tabs (HU-70)
 // ---------------------------------------------------------------------------
-test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
+test.describe("Issue #59 · Tables 1 & 2 — Client appointments & invoices", () => {
   test.beforeEach(async ({ request }) => {
     const token = await loginAsDemoApi(request);
     await ensureActiveFiscalStampForInvoices(request, token);
@@ -270,16 +272,13 @@ test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
-    await page.getByRole("tab", { name: /history/i }).click();
+    // HU-70: appointments live in their own "Appointments" tab (no more "History" tab).
+    await page.getByRole("tab", { name: "Appointments" }).click();
 
-    // The past-appointments section heading ("Past" / "Anteriores") should be visible
-    await expect(page.getByText(/past|anteriores/i).first()).toBeVisible({ timeout: 20_000 });
-
-    // Even with 0 records, the pagination controls appear after the initial load
-    // (empty state renders instead of table — just verify the section heading is visible)
-    await expect(page.getByText(/no appointments on record/i).first()).toBeVisible({
-      timeout: 20_000,
-    });
+    // Redesign: one compact list (next appointment highlighted, past ones below) with a
+    // "Show more" button instead of a rows-per-page selector; with 0 records only the empty state.
+    await expect(page.getByTestId("client-appointments-empty")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("client-appointments-more")).toHaveCount(0);
   });
 
   test("#59-T2-1 · Client invoices section shows pagination controls after issuing invoice", async ({
@@ -295,26 +294,14 @@ test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
-    await page.getByRole("tab", { name: /history/i }).click();
+    // HU-70: invoices live in their own "Invoices" tab.
+    await page.getByRole("tab", { name: "Invoices" }).click();
 
-    // Invoice table should show at least one row
-    const tbody = page.locator("table tbody");
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
-
-    // PageSizeSelect should be present
-    const select = page.getByLabel("Rows per page:");
-    await expect(select).toBeVisible();
-    await expect(select).toHaveValue("10");
-
-    // Options 10 / 25 / 50
-    const options = select.locator("option");
-    await expect(options).toHaveCount(3);
-    await expect(options.nth(0)).toHaveText("10");
-    await expect(options.nth(1)).toHaveText("25");
-    await expect(options.nth(2)).toHaveText("50");
-
-    // Range text
-    await expect(page.getByText(/\d+–\d+ of \d+|\d+–\d+ de \d+/)).toBeVisible();
+    // Redesign: compact rows with a "Show more" button (10 per load) instead of a pager.
+    await expect(page.getByTestId("client-invoice-item").first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByLabel("Rows per page:")).toHaveCount(0);
+    // A single invoice fits the first load: nothing more to fetch.
+    await expect(page.getByTestId("client-invoices-more")).toHaveCount(0);
   });
 
   test("#59-T2-2 · Client invoices 6-month window — older invoice not returned", async ({
@@ -327,7 +314,8 @@ test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
-    await page.getByRole("tab", { name: /history/i }).click();
+    // HU-70: invoices live in their own "Invoices" tab.
+    await page.getByRole("tab", { name: "Invoices" }).click();
 
     // Wait for invoice section to load
     await page.waitForTimeout(2000);
@@ -339,7 +327,7 @@ test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
     });
   });
 
-  test("#59-T1-2 & T2-3 · Page size selector resets to page 1 when changed", async ({
+  test("#59-T1-2 & T2-3 · Show more appends the next page of invoices", async ({
     page,
     request,
   }) => {
@@ -352,16 +340,19 @@ test.describe("Issue #59 · Tables 1 & 2 — Client History", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
-    await page.getByRole("tab", { name: /history/i }).click();
+    // HU-70: invoices live in their own "Invoices" tab.
+    await page.getByRole("tab", { name: "Invoices" }).click();
 
-    const tbody = page.locator("table tbody");
-    await expect(tbody.getByRole("row").first()).toBeVisible({ timeout: 30_000 });
-
-    // Change page size to 25
-    const select = page.getByLabel("Rows per page:");
-    await select.selectOption("25");
-
-    // Range text updates — still 1 record (1–1 of 1)
-    await expect(page.getByText(/1–1 of \d+|1–1 de \d+/)).toBeVisible({ timeout: 10_000 });
+    // 11 invoices: the first load brings 10 and "Show more" appends the remaining one.
+    for (let i = 0; i < 10; i++) await seedApiInvoice(request, token, seed.serviceId, client.id);
+    await page.reload();
+    await page.getByRole("tab", { name: "Invoices" }).click();
+    const items = page.getByTestId("client-invoice-item");
+    await expect(items).toHaveCount(10, { timeout: 30_000 });
+    const more = page.getByTestId("client-invoices-more");
+    await expect(more).toBeVisible();
+    await more.click();
+    await expect(items).toHaveCount(11, { timeout: 10_000 });
+    await expect(more).toHaveCount(0);
   });
 });

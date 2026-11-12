@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Card, Modal, Spinner, Text } from "@design-system";
+import { Alert, Button, Modal, Spinner, Text } from "@design-system";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { validateRuc } from "../lib/validateRuc";
@@ -55,6 +55,7 @@ export function InvoiceCorrectionForm({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
   // Issue #190: header data shown read-only above the client section + the SIFEN resend-window check.
   const [invoiceNumberFormatted, setInvoiceNumberFormatted] = useState("");
   const [issuedAt, setIssuedAt] = useState<string | null>(null);
@@ -361,6 +362,9 @@ export function InvoiceCorrectionForm({
     correctResendDeadlineAt != null &&
     Date.now() > new Date(correctResendDeadlineAt).getTime();
 
+  const SECTION = "font-heading text-xs font-extrabold uppercase tracking-wider text-primary";
+  const canSubmit = !loading && !loadError;
+
   return (
     <Modal
       open
@@ -372,15 +376,65 @@ export function InvoiceCorrectionForm({
             })
           : t("femme.billing.history.detail.sifen.correctResendTitle")
       }
-      className="max-w-4xl"
+      className="max-w-xl"
+      footer={
+        canSubmit ? (
+          <>
+            <Button type="button" variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={onClose}>
+              {t("femme.billing.history.detail.close")}
+            </Button>
+            <Button
+              type="submit"
+              form="invoice-correction-form"
+              variant="primary"
+              className="min-h-11 w-full sm:w-auto"
+              disabled={submitting}
+              data-testid="sifen-correct-resend-confirm-button"
+            >
+              {submitting
+                ? t("femme.billing.history.detail.sifen.correctResendSubmitting")
+                : t("femme.billing.history.detail.sifen.correctResendSubmit")}
+            </Button>
+          </>
+        ) : undefined
+      }
     >
       <div className="flex flex-col gap-4">
-        <Text variant="muted" className="text-sm">
-          {t("femme.billing.history.detail.sifen.correctResendExplanation")}
-        </Text>
-        <Text variant="muted" className="text-sm" data-testid="sifen-correct-resend-window-hint">
-          {t("femme.billing.history.detail.sifen.correctResendWindowHint")}
-        </Text>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2 text-sm text-ink-2">
+            <span
+              aria-hidden="true"
+              className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-lt text-xs font-extrabold text-primary"
+            >
+              i
+            </span>
+            <span>{t("femme.billing.history.detail.sifen.correctResendShort")}</span>
+          </div>
+          <button
+            type="button"
+            aria-expanded={infoOpen}
+            aria-controls="sifen-correct-resend-info"
+            data-testid="sifen-correct-resend-info-toggle"
+            onClick={() => setInfoOpen((o) => !o)}
+            className="flex min-h-11 w-full items-center justify-between text-left text-sm font-bold text-ink-2"
+          >
+            {t("femme.billing.history.detail.sifen.correctResendMoreInfo")}
+            <span aria-hidden className={`text-ink-3 transition-transform ${infoOpen ? "rotate-180" : ""}`}>
+              ⌄
+            </span>
+          </button>
+          {infoOpen ? (
+            <div
+              id="sifen-correct-resend-info"
+              className="flex flex-col gap-1.5 rounded-card border border-line px-3 py-2.5 text-sm text-ink-3"
+            >
+              <p>{t("femme.billing.history.detail.sifen.correctResendExplanation")}</p>
+              <p data-testid="sifen-correct-resend-window-hint">
+                {t("femme.billing.history.detail.sifen.correctResendWindowHint")}
+              </p>
+            </div>
+          ) : null}
+        </div>
 
         {loading && (
           <div className="flex items-center gap-2">
@@ -394,8 +448,13 @@ export function InvoiceCorrectionForm({
           </Alert>
         )}
 
-        {!loading && !loadError && (
-          <form onSubmit={(e) => void handleSubmit(e)} noValidate className="flex flex-col gap-6">
+        {canSubmit && (
+          <form
+            id="invoice-correction-form"
+            onSubmit={(e) => void handleSubmit(e)}
+            noValidate
+            className="flex flex-col gap-4"
+          >
             {globalErrors.map((err, i) => (
               <Alert key={i} variant="destructive" title={t("femme.billing.errorTitle")}>
                 {err}
@@ -421,15 +480,15 @@ export function InvoiceCorrectionForm({
 
             {/* Issue #190: emission date, read-only, above the client section. */}
             {issuedAt && (
-              <div className="text-sm" data-testid="sifen-correct-resend-emission-date">
-                <span className="font-medium">
+              <div className="text-sm text-ink-2" data-testid="sifen-correct-resend-emission-date">
+                <span className="font-semibold">
                   {t("femme.billing.history.detail.sifen.correctResendEmissionDateLabel")}:{" "}
                 </span>
                 {formatParaguayDateTime(issuedAt, dateLocale)}
               </div>
             )}
 
-            <Card className="p-4 flex flex-col gap-4">
+            <section className="border-t border-line pt-4">
               <InvoiceClientFields
                 value={clientFields}
                 onChange={(v) => {
@@ -438,54 +497,55 @@ export function InvoiceCorrectionForm({
                 }}
                 emailError={clientEmailError}
               />
-            </Card>
+            </section>
 
-            <Card className="p-4">
+            <section className="border-t border-line pt-4">
               <InvoiceLinesEditor
                 lines={lines}
                 onChange={setLines}
                 errors={lineErrors}
                 taxExemptReceiver={taxExemptReceiver}
               />
-            </Card>
+            </section>
 
-            <Card className="p-4 flex flex-col gap-3">
-              <label className="flex flex-col gap-1 text-sm sm:max-w-xs">
-                <span className="font-medium">{t("femme.billing.invoice.discountType")}</span>
+            <section className="flex flex-col gap-3 border-t border-line pt-4">
+              <h3 className={SECTION}>{t("femme.billing.invoice.discountType")}</h3>
+              <div className="flex flex-wrap items-end gap-3">
                 <select
                   id="correction-discount-type"
+                  aria-label={t("femme.billing.invoice.discountType")}
                   value={discountType}
                   onChange={(e) => {
                     setDiscountType(e.target.value);
                     setDiscountValue("");
                   }}
-                  className="rounded border border-[rgb(var(--color-border))] bg-[rgb(var(--color-white))] px-2 py-2"
+                  className="min-h-11 rounded-xl border border-line bg-surface px-3 text-sm"
                 >
                   <option value="NONE">{t("femme.billing.invoice.discountTypeNone")}</option>
                   <option value="FIXED">{t("femme.billing.invoice.discountTypeFixed")}</option>
                   <option value="PERCENT">{t("femme.billing.invoice.discountTypePercent")}</option>
                 </select>
-              </label>
-              {discountType !== "NONE" && (
-                <label className="flex flex-col gap-1 text-sm sm:max-w-xs">
-                  <span className="font-medium">{t("femme.billing.invoice.discountValue")}</span>
-                  <input
-                    id="correction-discount-value"
-                    inputMode={discountType === "FIXED" ? "numeric" : "decimal"}
-                    value={discountValue}
-                    onChange={(e) =>
-                      setDiscountValue(
-                        discountType === "FIXED" ? maskMoneyInput(e.target.value) : e.target.value,
-                      )
-                    }
-                    placeholder="0"
-                    className="rounded border border-[rgb(var(--color-border))] bg-[rgb(var(--color-white))] px-2 py-2"
-                  />
-                </label>
-              )}
-            </Card>
+                {discountType !== "NONE" && (
+                  <label className="flex flex-col gap-1 text-sm">
+                    <span className="text-xs font-semibold text-ink-3">{t("femme.billing.invoice.discountValue")}</span>
+                    <input
+                      id="correction-discount-value"
+                      inputMode={discountType === "FIXED" ? "numeric" : "decimal"}
+                      value={discountValue}
+                      onChange={(e) =>
+                        setDiscountValue(
+                          discountType === "FIXED" ? maskMoneyInput(e.target.value) : e.target.value,
+                        )
+                      }
+                      placeholder="0"
+                      className="min-h-11 w-32 rounded-xl border border-line bg-surface px-3 text-sm"
+                    />
+                  </label>
+                )}
+              </div>
+            </section>
 
-            <Card className="p-4">
+            <section className="border-t border-line pt-4">
               <InvoicePaymentsEditor
                 payments={payments}
                 onChange={setPayments}
@@ -494,23 +554,7 @@ export function InvoiceCorrectionForm({
                 discountAmount={totals.discountAmount}
                 total={totals.total}
               />
-            </Card>
-
-            <div className="flex gap-2">
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={submitting}
-                data-testid="sifen-correct-resend-confirm-button"
-              >
-                {submitting
-                  ? t("femme.billing.history.detail.sifen.correctResendSubmitting")
-                  : t("femme.billing.history.detail.sifen.correctResendSubmit")}
-              </Button>
-              <Button type="button" variant="secondary" onClick={onClose}>
-                {t("femme.billing.history.detail.close")}
-              </Button>
-            </div>
+            </section>
           </form>
         )}
       </div>

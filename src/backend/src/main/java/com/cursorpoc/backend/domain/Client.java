@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.domain;
 
+import com.cursorpoc.backend.domain.enums.ClientAcquisitionChannel;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
 import jakarta.persistence.Column;
@@ -12,7 +13,11 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "clients")
@@ -41,8 +46,50 @@ public class Client {
   @Column(nullable = false)
   private boolean active;
 
+  /**
+   * The tenant's placeholder "cliente ocasional": owns the fichas of turnos booked without a
+   * registered client. Hidden from client lists and never editable.
+   */
+  @Column(name = "is_generic", nullable = false)
+  private boolean generic;
+
+  public boolean isGeneric() {
+    return generic;
+  }
+
+  public void setGeneric(boolean generic) {
+    this.generic = generic;
+  }
+
+  /**
+   * Legacy counter, never incremented anywhere (always 0). Visits are counted from CLOSED service
+   * records instead ({@code ClientService}); kept only because the column is NOT NULL.
+   */
   @Column(name = "visit_count", nullable = false)
   private int visitCount;
+
+  /**
+   * When the client was registered ("Nuevos este mes" filter). Set on insert; rows that predate the
+   * column were backfilled from their first activity (V87) and may be null.
+   */
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "created_at")
+  private Instant createdAt;
+
+  @PrePersist
+  void onCreate() {
+    if (createdAt == null) {
+      createdAt = Instant.now();
+    }
+  }
+
+  public Instant getCreatedAt() {
+    return createdAt;
+  }
+
+  public void setCreatedAt(Instant createdAt) {
+    this.createdAt = createdAt;
+  }
 
   /** Cédula u otro documento de identidad, para clientes sin RUC — SIFEN HU-02 AC-05. */
   @Column(name = "identity_document_number", length = 32)
@@ -83,6 +130,48 @@ public class Client {
   /** SIFEN HU-02 AC-07 — D224/dDesCiuRec, nombre correspondiente a {@link #cityCode}. */
   @Column(name = "city", length = 120)
   private String cityName;
+
+  /** HU-68: ficha técnica — notas libres (una sola nota editable). */
+  @Column(length = 2000)
+  private String notes;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "notes_updated_at")
+  private Instant notesUpdatedAt;
+
+  /** Snapshot of the editor's display name (admin user or professional) at save time. */
+  @Column(name = "notes_updated_by", length = 200)
+  private String notesUpdatedBy;
+
+  /** HU-68: ficha técnica — fórmula de color (texto libre). */
+  @Column(name = "color_formula", length = 2000)
+  private String colorFormula;
+
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "color_formula_updated_at")
+  private Instant colorFormulaUpdatedAt;
+
+  @Column(name = "color_formula_updated_by", length = 200)
+  private String colorFormulaUpdatedBy;
+
+  /** HU-69: birthday — day and month together, year optional. */
+  @Column(name = "birthday_day")
+  private Integer birthdayDay;
+
+  @Column(name = "birthday_month")
+  private Integer birthdayMonth;
+
+  @Column(name = "birthday_year")
+  private Integer birthdayYear;
+
+  /** HU-69: "¿Cómo nos conoció?". */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "acquisition_channel", length = 30)
+  private ClientAcquisitionChannel acquisitionChannel;
+
+  /** Free-text detail, only when {@link #acquisitionChannel} is OTRO. */
+  @Column(name = "acquisition_channel_other", length = 100)
+  private String acquisitionChannelOther;
 
   public Long getId() {
     return id;
@@ -210,5 +299,93 @@ public class Client {
 
   public void setCityName(String cityName) {
     this.cityName = cityName;
+  }
+
+  public String getNotes() {
+    return notes;
+  }
+
+  public void setNotes(String notes) {
+    this.notes = notes;
+  }
+
+  public Instant getNotesUpdatedAt() {
+    return notesUpdatedAt;
+  }
+
+  public void setNotesUpdatedAt(Instant notesUpdatedAt) {
+    this.notesUpdatedAt = notesUpdatedAt;
+  }
+
+  public String getNotesUpdatedBy() {
+    return notesUpdatedBy;
+  }
+
+  public void setNotesUpdatedBy(String notesUpdatedBy) {
+    this.notesUpdatedBy = notesUpdatedBy;
+  }
+
+  public String getColorFormula() {
+    return colorFormula;
+  }
+
+  public void setColorFormula(String colorFormula) {
+    this.colorFormula = colorFormula;
+  }
+
+  public Instant getColorFormulaUpdatedAt() {
+    return colorFormulaUpdatedAt;
+  }
+
+  public void setColorFormulaUpdatedAt(Instant colorFormulaUpdatedAt) {
+    this.colorFormulaUpdatedAt = colorFormulaUpdatedAt;
+  }
+
+  public String getColorFormulaUpdatedBy() {
+    return colorFormulaUpdatedBy;
+  }
+
+  public void setColorFormulaUpdatedBy(String colorFormulaUpdatedBy) {
+    this.colorFormulaUpdatedBy = colorFormulaUpdatedBy;
+  }
+
+  public Integer getBirthdayDay() {
+    return birthdayDay;
+  }
+
+  public void setBirthdayDay(Integer birthdayDay) {
+    this.birthdayDay = birthdayDay;
+  }
+
+  public Integer getBirthdayMonth() {
+    return birthdayMonth;
+  }
+
+  public void setBirthdayMonth(Integer birthdayMonth) {
+    this.birthdayMonth = birthdayMonth;
+  }
+
+  public Integer getBirthdayYear() {
+    return birthdayYear;
+  }
+
+  public void setBirthdayYear(Integer birthdayYear) {
+    this.birthdayYear = birthdayYear;
+  }
+
+  public ClientAcquisitionChannel getAcquisitionChannel() {
+    return acquisitionChannel;
+  }
+
+  public void setAcquisitionChannel(ClientAcquisitionChannel acquisitionChannel) {
+    this.acquisitionChannel = acquisitionChannel;
+  }
+
+  public String getAcquisitionChannelOther() {
+    return acquisitionChannelOther;
+  }
+
+  public void setAcquisitionChannelOther(String acquisitionChannelOther) {
+    this.acquisitionChannelOther = acquisitionChannelOther;
   }
 }

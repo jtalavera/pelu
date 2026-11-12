@@ -63,15 +63,15 @@ describe("ClientsPage", () => {
     femmeJson.mockResolvedValue(pageOf([sampleClient]));
     renderPage();
     expect(await screen.findByRole("heading", { name: /clients/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /new client/i })).toBeTruthy();
+    expect(screen.getByTestId("clients-new")).toBeTruthy();
   });
 
   it("renders client list with name and visit count", async () => {
     femmeJson.mockResolvedValue(pageOf([sampleClient]));
     renderPage();
     expect(await screen.findByText("Ana García")).toBeTruthy();
-    expect(screen.getByText(/3 visit/i)).toBeTruthy();
-    expect(screen.getByText("0981000001")).toBeTruthy();
+    expect(screen.getByText(/0981000001/)).toBeTruthy();
+    expect(screen.getByTestId(`client-switch-${sampleClient.id}`)).toBeTruthy();
   });
 
   it("shows empty state when no clients", async () => {
@@ -94,11 +94,15 @@ describe("ClientsPage", () => {
     femmeJson.mockResolvedValue(pageOf([]));
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
-    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    await userEvent.click(screen.getByTestId("clients-new"));
     const dialog = await screen.findByRole("dialog");
     const form = within(dialog);
     expect(form.getByLabelText(/full name/i)).toBeTruthy();
     expect(form.getByLabelText(/^phone$/i)).toBeTruthy();
+    // Minimal sign-up: only name and phone until "More options" is opened.
+    expect(form.queryByLabelText(/^email$/i)).toBeNull();
+    expect(form.queryByLabelText(/document number/i)).toBeNull();
+    await userEvent.click(form.getByRole("button", { name: /more options/i }));
     expect(form.getByLabelText(/^email$/i)).toBeTruthy();
     expect(form.getByLabelText(/document type/i)).toBeTruthy();
     expect(form.getByLabelText(/document number/i)).toBeTruthy();
@@ -108,7 +112,7 @@ describe("ClientsPage", () => {
     femmeJson.mockResolvedValue(pageOf([]));
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
-    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    await userEvent.click(screen.getByTestId("clients-new"));
     const dialog = await screen.findByRole("dialog");
     await within(dialog).findByLabelText(/full name/i);
     await userEvent.click(within(dialog).getByRole("button", { name: /^save$/i }));
@@ -119,11 +123,12 @@ describe("ClientsPage", () => {
     femmeJson.mockResolvedValue(pageOf([]));
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
-    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    await userEvent.click(screen.getByTestId("clients-new"));
     const dialog = await screen.findByRole("dialog");
     const form = within(dialog);
     await form.findByLabelText(/full name/i);
     await userEvent.type(form.getByLabelText(/full name/i), "Test Client");
+    await userEvent.click(form.getByRole("button", { name: /more options/i }));
     await userEvent.type(form.getByLabelText(/document number/i), "invalid-ruc");
     await userEvent.click(form.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/invalid ruc/i)).toBeTruthy();
@@ -133,7 +138,7 @@ describe("ClientsPage", () => {
     femmeJson.mockResolvedValue(pageOf([]));
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
-    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    await userEvent.click(screen.getByTestId("clients-new"));
     const dialog = await screen.findByRole("dialog");
     const form = within(dialog);
     const phoneField = form.getByLabelText(/^phone$/i) as HTMLInputElement;
@@ -146,7 +151,7 @@ describe("ClientsPage", () => {
     femmeJson.mockResolvedValue(pageOf([]));
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
-    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    await userEvent.click(screen.getByTestId("clients-new"));
     const dialog = await screen.findByRole("dialog");
     const form = within(dialog);
     await userEvent.type(form.getByLabelText(/full name/i), "Test Client");
@@ -161,10 +166,11 @@ describe("ClientsPage", () => {
     femmeJson.mockResolvedValue(pageOf([]));
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
-    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    await userEvent.click(screen.getByTestId("clients-new"));
     const dialog = await screen.findByRole("dialog");
     const form = within(dialog);
     await userEvent.type(form.getByLabelText(/full name/i), "Test Client");
+    await userEvent.click(form.getByRole("button", { name: /more options/i }));
     await userEvent.type(form.getByLabelText(/^email$/i), "@no-prefix.com");
     await userEvent.click(form.getByRole("button", { name: /^save$/i }));
     expect(await screen.findByText(/enter a valid email/i)).toBeTruthy();
@@ -176,25 +182,43 @@ describe("ClientsPage", () => {
     femmePostJson.mockResolvedValue({ ...sampleClient });
     renderPage();
     await screen.findByRole("heading", { name: /clients/i });
-    await userEvent.click(screen.getByRole("button", { name: /new client/i }));
+    await userEvent.click(screen.getByTestId("clients-new"));
     const dialog = await screen.findByRole("dialog");
     const form = within(dialog);
     await form.findByLabelText(/full name/i);
     await userEvent.type(form.getByLabelText(/full name/i), "Ana García");
     await userEvent.click(form.getByRole("button", { name: /^save$/i }));
     await waitFor(() => expect(femmePostJson).toHaveBeenCalled());
+    expect(await screen.findByTestId("clients-toast")).toBeTruthy();
   });
 
-  it("shows kebab menu with Edit information and Deactivate client for active clients", async () => {
+  it("deactivates an active client with the row switch after confirming", async () => {
+    femmeJson.mockResolvedValue(pageOf([sampleClient]));
+    femmePostJson.mockResolvedValue({ ...sampleClient, active: false });
+    renderPage();
+    await screen.findByText("Ana García");
+    const sw = screen.getByTestId(`client-switch-${sampleClient.id}`);
+    expect((sw as HTMLInputElement).checked).toBe(true);
+    await userEvent.click(sw);
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /^deactivate$/i }));
+    await waitFor(() =>
+      expect(femmePostJson).toHaveBeenCalledWith(
+        `/api/clients/${sampleClient.id}/deactivate`,
+        {},
+      ),
+    );
+    expect(await screen.findByTestId("clients-toast")).toBeTruthy();
+  });
+
+  it("filters are All, Active and New this month (no With RUC chip)", async () => {
     femmeJson.mockResolvedValue(pageOf([sampleClient]));
     renderPage();
     await screen.findByText("Ana García");
-    const trigger = screen.getByTestId(`clients-row-${sampleClient.id}-trigger`);
-    await userEvent.click(trigger);
-    expect(
-      await screen.findByRole("menuitem", { name: /edit information/i }),
-    ).toBeTruthy();
-    expect(screen.getByRole("menuitem", { name: /deactivate client/i })).toBeTruthy();
+    expect(screen.getByTestId("clients-filter-all")).toBeTruthy();
+    expect(screen.getByTestId("clients-filter-active")).toBeTruthy();
+    expect(screen.getByTestId("clients-filter-new")).toBeTruthy();
+    expect(screen.queryByText(/with ruc/i)).toBeNull();
   });
 
   it("list with filter All includes both active and inactive clients", async () => {
@@ -207,18 +231,17 @@ describe("ClientsPage", () => {
     expect(screen.getAllByText(/inactive/i).length).toBeGreaterThanOrEqual(1);
   });
 
-  it("inactive clients show inactive badge and a Reactivate item in the kebab menu (no Deactivate)", async () => {
+  it("inactive clients are dimmed, marked inactive and reactivate with the switch", async () => {
     femmeJson.mockResolvedValue(pageOf([{ ...sampleClient, active: false }]));
+    femmePostJson.mockResolvedValue({ ...sampleClient, active: true });
     renderPage();
     await screen.findByText("Ana García");
     expect(screen.getByText(/inactive/i)).toBeTruthy();
-    const trigger = screen.getByTestId(`clients-row-${sampleClient.id}-trigger`);
-    await userEvent.click(trigger);
-    expect(
-      await screen.findByRole("menuitem", { name: /reactivate client/i }),
-    ).toBeTruthy();
-    expect(
-      screen.queryByRole("menuitem", { name: /deactivate client/i }),
-    ).toBeNull();
+    const sw = screen.getByTestId(`client-switch-${sampleClient.id}`);
+    expect((sw as HTMLInputElement).checked).toBe(false);
+    await userEvent.click(sw);
+    await waitFor(() =>
+      expect(femmePostJson).toHaveBeenCalledWith(`/api/clients/${sampleClient.id}/activate`, {}),
+    );
   });
 });

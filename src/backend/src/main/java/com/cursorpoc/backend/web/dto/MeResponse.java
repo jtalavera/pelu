@@ -20,4 +20,16 @@ public record MeResponse(
      * Profile data from the linked Professional; null for admin users without a linked
      * Professional.
      */
-    MeProfileResponse profile) {}
+    MeProfileResponse profile,
+    /**
+     * Issue #310: true when this session is the Platform Admin impersonating the tenant's
+     * administrator ({@code role} is then {@code ADMIN} and {@code email} the Platform Admin's).
+     */
+    boolean impersonation,
+    /** HU-66: true for a professional session opened with her PIN on a shared device. */
+    boolean pinSession,
+    /**
+     * Flowbit rebrand: the tenant's skin name ({@code DURAZNO}, {@code CELESTE}, {@code ROSA});
+     * null only for the tenant-less {@code PLATFORM_ADMIN}, which always uses the default look.
+     */
+    String skin) {}

@@ -14,6 +14,9 @@ public interface CashSessionRepository extends JpaRepository<CashSession, Long> 
 
   Optional<CashSession> findFirstByTenant_IdAndClosedAtIsNullOrderByOpenedAtDesc(Long tenantId);
 
+  /** The most recently closed register: where a withdrawal made with none open is recorded. */
+  Optional<CashSession> findFirstByTenant_IdAndClosedAtIsNotNullOrderByClosedAtDesc(Long tenantId);
+
   Optional<CashSession> findByIdAndTenant_Id(Long id, Long tenantId);
 
   Page<CashSession> findByTenant_IdOrderByOpenedAtDesc(Long tenantId, Pageable pageable);
@@ -61,7 +64,7 @@ public interface CashSessionRepository extends JpaRepository<CashSession, Long> 
       """
       SELECT m.type, COALESCE(SUM(m.amount), 0)
       FROM CashMovement m
-      WHERE m.cashSession.id = :cashSessionId
+      WHERE m.cashSession.id = :cashSessionId AND m.afterClose = false
       GROUP BY m.type
       """)
   List<Object[]> sumMovementsByTypeForSession(@Param("cashSessionId") Long cashSessionId);

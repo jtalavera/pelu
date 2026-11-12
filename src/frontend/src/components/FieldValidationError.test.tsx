@@ -8,11 +8,10 @@ describe("FieldValidationError", () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it("renders role=alert with red Tailwind classes", () => {
+  it("renders role=alert with the danger (red) token class", () => {
     render(<FieldValidationError>Invalid</FieldValidationError>);
     const el = screen.getByRole("alert");
     expect(el.textContent).toBe("Invalid");
-    expect(el.className).toContain("text-red-600");
-    expect(el.className).toContain("dark:text-red-400");
+    expect(el.className).toContain("text-danger");
   });
 });

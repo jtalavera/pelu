@@ -1,17 +1,26 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Client;
+import com.cursorpoc.backend.domain.ClientBirthday;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ClientAcquisitionChannel;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
+import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.ClientRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.util.ParaguayRucValidator;
 import com.cursorpoc.backend.web.dto.ClientRequest;
 import com.cursorpoc.backend.web.dto.ClientResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,21 +34,31 @@ public class ClientService {
 
   private final ClientRepository clientRepository;
   private final TenantRepository tenantRepository;
+  private final FemmeTimeProperties timeProperties;
+  private final ServiceRecordRepository serviceRecordRepository;
 
-  public ClientService(ClientRepository clientRepository, TenantRepository tenantRepository) {
+  static final int ACQUISITION_CHANNEL_OTHER_MAX = 100;
+  static final String GENERIC_CLIENT_NAME = "CLIENTE OCASIONAL";
+
+  public ClientService(
+      ClientRepository clientRepository,
+      TenantRepository tenantRepository,
+      FemmeTimeProperties timeProperties,
+      ServiceRecordRepository serviceRecordRepository) {
+    this.timeProperties = timeProperties;
+    this.serviceRecordRepository = serviceRecordRepository;
     this.clientRepository = clientRepository;
     this.tenantRepository = tenantRepository;
   }
 
   public List<ClientResponse> search(
       long tenantId, String q, Boolean active, Boolean withRuc, Boolean isNew) {
-    return clientRepository
-        .findByTenantFilteredPaged(
-            tenantId, normalizeQuery(q), active, withRuc, isNew, Pageable.unpaged())
-        .getContent()
-        .stream()
-        .map(ClientService::toResponse)
-        .toList();
+    return withVisits(
+        tenantId,
+        clientRepository
+            .findByTenantFilteredPaged(
+                tenantId, normalizeQuery(q), active, withRuc, newSince(isNew), Pageable.unpaged())
+            .getContent());
   }
 
   @Transactional(readOnly = true)
@@ -48,15 +67,57 @@ public class ClientService {
     PageRequest pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
     Page<Client> result =
         clientRepository.findByTenantFilteredPaged(
-            tenantId, normalizeQuery(q), active, withRuc, isNew, pageable);
-    List<ClientResponse> content =
-        result.getContent().stream().map(ClientService::toResponse).toList();
+            tenantId, normalizeQuery(q), active, withRuc, newSince(isNew), pageable);
+    List<ClientResponse> content = withVisits(tenantId, result.getContent());
     return new PageResponse<>(
         content,
         result.getNumber(),
         result.getSize(),
         result.getTotalElements(),
         result.getTotalPages());
+  }
+
+  /**
+   * HU-68 AC12: the professional's view of the client list — id, name and active flag only, and the
+   * query matches the name alone (never phone, email or RUC).
+   */
+  public static List<ClientResponse> nameOnlyForProfessional(List<ClientResponse> rows, String q) {
+    String needle = normalizeQuery(q);
+    String lowered = needle == null ? null : needle.toLowerCase(Locale.ROOT);
+    return rows.stream()
+        .filter(r -> lowered == null || r.fullName().toLowerCase(Locale.ROOT).contains(lowered))
+        .map(
+            r ->
+                new ClientResponse(
+                    r.id(),
+                    r.fullName(),
+                    null,
+                    null,
+                    null,
+                    r.active(),
+                    0,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null))
+        .toList();
+  }
+
+  /** "Nuevos este mes": registered since the 1st of the current month (business zone). */
+  private Instant newSince(Boolean isNew) {
+    if (!Boolean.TRUE.equals(isNew)) return null;
+    var zone = timeProperties.zoneId();
+    return LocalDate.now(zone).withDayOfMonth(1).atStartOfDay(zone).toInstant();
   }
 
   private static String normalizeQuery(String q) {
@@ -79,12 +140,9 @@ public class ClientService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
     }
 
-    if (phone != null && phoneDuplicateExists(tenantId, phone, null)) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_PHONE_DUPLICATE");
-    }
-    if (ruc != null && clientRepository.findByTenantIdAndRuc(tenantId, ruc).isPresent()) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_RUC_DUPLICATE");
-    }
+    ClientAcquisitionChannel channel = parseAcquisitionChannel(request.acquisitionChannel());
+    validateBirthday(request);
+    String channelOther = acquisitionChannelOther(channel, request.acquisitionChannelOther());
 
     Tenant tenant =
         tenantRepository
@@ -108,8 +166,9 @@ public class ClientService {
     client.setDepartmentName(blankToNull(request.departmentName()));
     client.setCityCode(blankToNull(request.cityCode()));
     client.setCityName(blankToNull(request.cityName()));
+    applyProfileExtras(client, request, channel, channelOther);
     clientRepository.save(client);
-    return toResponse(client);
+    return toResponse(client, visits(tenantId, client));
   }
 
   public ClientResponse getById(long tenantId, long clientId) {
@@ -118,7 +177,7 @@ public class ClientService {
             .findByIdAndTenant_Id(clientId, tenantId)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
-    return toResponse(client);
+    return toResponse(client, visits(tenantId, client));
   }
 
   @Transactional
@@ -143,16 +202,9 @@ public class ClientService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_RUC_FORMAT");
     }
 
-    if (phone != null
-        && !phone.equals(client.getPhone())
-        && phoneDuplicateExists(tenantId, phone, client.getId())) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_PHONE_DUPLICATE");
-    }
-    if (ruc != null
-        && !ruc.equals(client.getRuc())
-        && clientRepository.findByTenantIdAndRuc(tenantId, ruc).isPresent()) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_RUC_DUPLICATE");
-    }
+    ClientAcquisitionChannel channel = parseAcquisitionChannel(request.acquisitionChannel());
+    validateBirthday(request);
+    String channelOther = acquisitionChannelOther(channel, request.acquisitionChannelOther());
 
     client.setFullName(fullName);
     client.setPhone(phone);
@@ -166,8 +218,42 @@ public class ClientService {
     client.setDepartmentName(blankToNull(request.departmentName()));
     client.setCityCode(blankToNull(request.cityCode()));
     client.setCityName(blankToNull(request.cityName()));
+    applyProfileExtras(client, request, channel, channelOther);
     clientRepository.save(client);
-    return toResponse(client);
+    return toResponse(client, visits(tenantId, client));
+  }
+
+  /**
+   * The tenant's generic "cliente ocasional", created on first use. Owns the fichas of turnos
+   * booked without a registered client, so those follow the same circuit as any other client.
+   */
+  @Transactional
+  public Client getOrCreateGenericClient(long tenantId) {
+    return clientRepository
+        .findFirstByTenant_IdAndGenericTrue(tenantId)
+        .orElseGet(
+            () -> {
+              Tenant tenant =
+                  tenantRepository
+                      .findById(tenantId)
+                      .orElseThrow(
+                          () ->
+                              new ResponseStatusException(
+                                  HttpStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
+              Client generic = new Client();
+              generic.setTenant(tenant);
+              generic.setFullName(GENERIC_CLIENT_NAME);
+              generic.setActive(true);
+              generic.setGeneric(true);
+              generic.setVisitCount(0);
+              return clientRepository.save(generic);
+            });
+  }
+
+  private static void rejectGeneric(Client client) {
+    if (client.isGeneric()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_GENERIC_READ_ONLY");
+    }
   }
 
   @Transactional
@@ -177,9 +263,10 @@ public class ClientService {
             .findByIdAndTenant_Id(clientId, tenantId)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
+    rejectGeneric(client);
     client.setActive(false);
     clientRepository.save(client);
-    return toResponse(client);
+    return toResponse(client, visits(tenantId, client));
   }
 
   @Transactional
@@ -189,9 +276,10 @@ public class ClientService {
             .findByIdAndTenant_Id(clientId, tenantId)
             .orElseThrow(
                 () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
+    rejectGeneric(client);
     client.setActive(true);
     clientRepository.save(client);
-    return toResponse(client);
+    return toResponse(client, visits(tenantId, client));
   }
 
   private static String blankToNull(String value) {
@@ -206,6 +294,43 @@ public class ClientService {
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_IDENTITY_DOCUMENT_TYPE");
     }
+  }
+
+  /** HU-69: day + month together, optional year, real date, not in the future. */
+  private void validateBirthday(ClientRequest request) {
+    LocalDate today = LocalDate.now(timeProperties.zoneId());
+    if (!ClientBirthday.isValid(
+        request.birthdayDay(), request.birthdayMonth(), request.birthdayYear(), today)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_BIRTHDAY");
+    }
+  }
+
+  private static ClientAcquisitionChannel parseAcquisitionChannel(String raw) {
+    if (raw == null || raw.isBlank()) return null;
+    try {
+      return ClientAcquisitionChannel.valueOf(raw);
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_ACQUISITION_CHANNEL");
+    }
+  }
+
+  /** The free-text detail only exists for OTRO, and is capped at 100 characters. */
+  private static String acquisitionChannelOther(ClientAcquisitionChannel channel, String raw) {
+    String other = channel == ClientAcquisitionChannel.OTRO ? blankToNull(raw) : null;
+    if (other != null && other.length() > ACQUISITION_CHANNEL_OTHER_MAX) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "ACQUISITION_CHANNEL_OTHER_TOO_LONG");
+    }
+    return other;
+  }
+
+  private static void applyProfileExtras(
+      Client client, ClientRequest request, ClientAcquisitionChannel channel, String channelOther) {
+    client.setBirthdayDay(request.birthdayDay());
+    client.setBirthdayMonth(request.birthdayMonth());
+    client.setBirthdayYear(request.birthdayYear());
+    client.setAcquisitionChannel(channel);
+    client.setAcquisitionChannelOther(channelOther);
   }
 
   private static ClientTaxpayerType parseTaxpayerType(String raw) {
@@ -242,25 +367,38 @@ public class ClientService {
   }
 
   /**
-   * Phone duplicate check compares digits only: clients may be created with formatted numbers (e.g.
-   * "(0981) 123-456") or raw digits (e.g. via API integrations), and both represent the same phone
-   * number.
+   * Visits = CLOSED service records, counted on read. The stored {@code clients.visit_count} was
+   * never incremented anywhere (always 0), so it is no longer used.
    */
-  private boolean phoneDuplicateExists(long tenantId, String phone, Long excludeClientId) {
-    String targetDigits = digitsOnly(phone);
-    if (targetDigits == null) return false;
-    return clientRepository.findByTenant_Id(tenantId).stream()
-        .filter(c -> excludeClientId == null || !c.getId().equals(excludeClientId))
-        .anyMatch(c -> targetDigits.equals(digitsOnly(c.getPhone())));
+  record Visits(int count, Instant lastVisitAt) {
+    static final Visits NONE = new Visits(0, null);
   }
 
-  private static String digitsOnly(String value) {
-    if (value == null) return null;
-    String digits = value.replaceAll("\\D+", "");
-    return digits.isEmpty() ? null : digits;
+  private Visits visits(long tenantId, Client client) {
+    if (client.getId() == null) return Visits.NONE;
+    return visitsByClient(tenantId, List.of(client.getId()))
+        .getOrDefault(client.getId(), Visits.NONE);
   }
 
-  static ClientResponse toResponse(Client c) {
+  private Map<Long, Visits> visitsByClient(long tenantId, List<Long> clientIds) {
+    Map<Long, Visits> visits = new HashMap<>();
+    for (Object[] row :
+        serviceRecordRepository.countByClientIds(tenantId, ServiceRecordStatus.CLOSED, clientIds)) {
+      visits.put((Long) row[0], new Visits(((Number) row[1]).intValue(), (Instant) row[2]));
+    }
+    return visits;
+  }
+
+  private List<ClientResponse> withVisits(long tenantId, List<Client> clients) {
+    if (clients.isEmpty()) return List.of();
+    Map<Long, Visits> visits =
+        visitsByClient(tenantId, clients.stream().map(Client::getId).toList());
+    return clients.stream()
+        .map(c -> toResponse(c, visits.getOrDefault(c.getId(), Visits.NONE)))
+        .toList();
+  }
+
+  static ClientResponse toResponse(Client c, Visits visits) {
     return new ClientResponse(
         c.getId(),
         c.getFullName(),
@@ -268,7 +406,7 @@ public class ClientService {
         c.getEmail(),
         c.getRuc(),
         c.isActive(),
-        c.getVisitCount(),
+        visits.count(),
         c.getIdentityDocumentNumber(),
         c.getAddress(),
         c.getDepartmentCode(),
@@ -276,6 +414,12 @@ public class ClientService {
         c.getCityCode(),
         c.getCityName(),
         c.getIdentityDocumentType() == null ? null : c.getIdentityDocumentType().name(),
-        c.getTaxpayerType() == null ? null : c.getTaxpayerType().name());
+        c.getTaxpayerType() == null ? null : c.getTaxpayerType().name(),
+        c.getBirthdayDay(),
+        c.getBirthdayMonth(),
+        c.getBirthdayYear(),
+        c.getAcquisitionChannel() == null ? null : c.getAcquisitionChannel().name(),
+        c.getAcquisitionChannelOther(),
+        visits.lastVisitAt() == null ? null : visits.lastVisitAt().toString());
   }
 }

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { loginAsDemoApi, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome } from "../fixtures/billing";
 
 test.describe("Issue #93 · Orden en lista de clientes del formulario de comprobantes", () => {
   test("'Crear nuevo cliente' y 'Cliente ocasional' aparecen antes que los clientes reales", async ({
@@ -13,7 +13,7 @@ test.describe("Issue #93 · Orden en lista de clientes del formulario de comprob
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
 

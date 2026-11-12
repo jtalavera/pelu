@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAsDemo } from "../fixtures/auth";
 import { apiBaseUrl } from "../fixtures/api";
+import { openProfessionalMoreOptions } from "../fixtures/catalog";
 
 /** Creates a professional via the API and returns their id. */
 async function createProfessional(
@@ -35,6 +36,7 @@ test.describe("HU-23 · Acceso al sistema para profesionales", () => {
     await page.goto("/app/professionals");
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
+    await openProfessionalMoreOptions(page);
     await expect(dlg.locator("#prof-system-access")).toBeVisible();
   });
 
@@ -44,10 +46,16 @@ test.describe("HU-23 · Acceso al sistema para profesionales", () => {
     const name = `E2E NoEmail ${Date.now()}`;
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = page.getByRole("dialog");
+    await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Full name").fill(name);
-    // Enable access without email
+    // Issue #38 (1): without a valid email the toggle can't be turned on at all...
+    await expect(dlg.locator("#prof-system-access")).toBeDisabled();
+    await expect(dlg.getByText(/to enable system access/i)).toBeVisible();
+    // ...and ticking it with an email that is then cleared is caught on save.
+    await dlg.locator("#prof-email").fill(`noemail${Date.now()}@test.com`);
     await dlg.locator("#prof-system-access").check();
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await dlg.locator("#prof-email").fill("");
+    await dlg.getByTestId("prof-save").click();
     await expect(dlg.getByText(/no email configured/i)).toBeVisible();
   });
 
@@ -121,10 +129,30 @@ test.describe("HU-23 · Acceso al sistema para profesionales", () => {
     const { rawToken } = await grantRes.json() as { rawToken: string };
 
     await page.goto(`/activate?token=${rawToken}`);
-    await page.locator("#activate-password").fill("weak");
-    await page.locator("#activate-confirm-password").fill("weak");
+    const passwordErr = page.locator("#activate-password-err");
+    // Each rule is enforced; the error sits on the password field (not the generic "invalid link").
+    // "Abc1@xy" is the 7-character case reported from production (issue #38 follow-up).
+    for (const weak of ["weak", "Abc1@xy", "abc1@xyz", "Abcd@xyz", "Abc12xyz"]) {
+      await page.locator("#activate-password").fill(weak);
+      await page.locator("#activate-confirm-password").fill(weak);
+      await page.getByRole("button", { name: "Set password" }).click();
+      await expect(passwordErr).toContainText(/at least 8 characters long and include an uppercase/i);
+      await expect(page.locator("#activate-password")).toHaveAttribute("aria-invalid", "true");
+      await expect(page.getByText(/invalid or has already been used/i)).toHaveCount(0);
+    }
+
+    // The backend answers the same rule with its own code (not the generic INVALID_REQUEST)...
+    const apiWeak = await request.post(`${base}/api/auth/activate`, {
+      data: { token: rawToken, password: "Abc1@xy", confirmPassword: "Abc1@xy" },
+    });
+    expect(apiWeak.status()).toBe(400);
+    expect(await apiWeak.json()).toEqual({ error: "PASSWORD_TOO_WEAK" });
+
+    // ...and the link is still usable afterwards with a valid password.
+    await page.locator("#activate-password").fill("ValidPass1!");
+    await page.locator("#activate-confirm-password").fill("ValidPass1!");
     await page.getByRole("button", { name: "Set password" }).click();
-    await expect(page.getByText(/at least 8 characters/i)).toBeVisible();
+    await expect(page.getByText(/Password set successfully/i)).toBeVisible();
   });
 
   test("HU-23 · 9 contraseñas que no coinciden son rechazadas", async ({ page, request }) => {

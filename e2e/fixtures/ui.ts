@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 /** Appointment create/edit modal (avoids grabbing the nested date-picker dialog, `aria-label="Calendar"`). */
 export function bookingAppointmentDialog(page: Page): Locator {
@@ -32,6 +32,15 @@ export async function ensureCalendarShowsAppointmentByTestId(
   opts?: { maxAheadWeeks?: number; maxBackWeeks?: number },
 ): Promise<void> {
   await ensureLocatorVisibleByWeekNavigation(page, () => page.getByTestId(testId).first(), opts);
+}
+
+/** Same week sweep for any locator (e.g. a «+N» group card, which has no per-turno test id). */
+export async function ensureCalendarShowsLocator(
+  page: Page,
+  locate: () => Locator,
+  opts?: { maxAheadWeeks?: number; maxBackWeeks?: number },
+): Promise<void> {
+  await ensureLocatorVisibleByWeekNavigation(page, locate, opts);
 }
 
 async function ensureLocatorVisibleByWeekNavigation(
@@ -155,4 +164,174 @@ export async function setControlledInputValue(locator: Locator, value: string): 
   const page = locator.page();
   await page.keyboard.press("Backspace");
   await page.keyboard.type(value, { delay: 25 });
+}
+
+// ── Agenda redesign: professional chips and status actions in the appointment detail ───────────
+
+/** Picks a professional chip of the Agenda ("All professionals" for no filter). */
+/** Opens the professional menu of the calendar's search field and returns it. */
+export async function openProfessionalFilter(page: Page): Promise<Locator> {
+  const panel = page.getByTestId("calendar-prof-panel");
+  if (!(await panel.isVisible())) await page.getByTestId("calendar-prof-trigger").click();
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+/** Picks a professional («All» for everyone) in the calendar's professional menu; the menu closes. */
+export async function filterAgendaByProfessional(page: Page, name: string | RegExp): Promise<void> {
+  const panel = await openProfessionalFilter(page);
+  if (name === "All") {
+    await panel.getByTestId("calendar-prof-chip-all").click();
+  } else {
+    await panel.getByRole("button", { name }).first().click();
+  }
+  await expect(panel).toHaveCount(0);
+}
+
+async function openAppointmentActions(page: Page): Promise<void> {
+  const more = page.getByTestId("calendar-more-actions");
+  if ((await more.getAttribute("aria-expanded")) !== "true") await more.click();
+}
+
+/** Detail dialog → "⋯" → "Mark as completed". */
+export async function completeAppointmentFromDetail(page: Page): Promise<void> {
+  await openAppointmentActions(page);
+  await page.getByTestId("calendar-action-complete").click();
+}
+
+/** Detail dialog → "⋯" → "Cancel appointment" → reason → confirm. */
+export async function cancelAppointmentFromDetail(page: Page, reason?: string): Promise<void> {
+  await openAppointmentActions(page);
+  await page.getByTestId("calendar-action-cancel").click();
+  if (reason) await page.locator("#cancel-reason").fill(reason);
+  await page.getByTestId("calendar-cancel-confirm").click();
+}
+
+/** Detail dialog → "⋯" → "Edit appointment". */
+export async function openEditFromDetail(page: Page): Promise<void> {
+  await openAppointmentActions(page);
+  await page.getByTestId("calendar-action-edit").click();
+}
+
+/**
+ * Opens a service record (ficha) from the redesigned list: shows every status, filters by text and
+ * clicks the first matching row (which opens the detail dialog).
+ */
+export async function openFichaByText(page: import("@playwright/test").Page, text: string) {
+  await page.goto("/app/service-records");
+  await page.getByTestId("service-records-chip-all").click();
+  await page.locator("#service-record-history-text-filter").fill(text);
+  await page
+    .locator('[data-testid^="service-record-row-"]')
+    .filter({ hasText: text })
+    .first()
+    // Top-left of the row (name area): on narrow screens the centre can fall on "Charge".
+    .click({ position: { x: 70, y: 12 } });
+}
+
+/**
+ * Opens the weekly calendar and moves forward (up to 3 weeks) until the appointment with the given
+ * id is on the grid. Seeded slots can land in next week (e.g. on Sunday evening) because the helper
+ * only guarantees "a future slot", not "inside the week shown on open".
+ */
+export async function advanceWeekUntilAppointment(
+  page: import("@playwright/test").Page,
+  appointmentId: number,
+) {
+  const appt = page.getByTestId(`calendar-appt-${appointmentId}`);
+  for (let i = 0; i < 3; i++) {
+    // Give the grid a moment to load its appointments before deciding it is not in this week.
+    if (await appt.waitFor({ state: "visible", timeout: 4_000 }).then(() => true).catch(() => false)) return;
+    await page.getByRole("button", { name: "Next week" }).click();
+    await page.waitForTimeout(500);
+  }
+}
+
+export async function openWeekWithAppointment(
+  page: import("@playwright/test").Page,
+  appointmentId: number,
+) {
+  await page.goto("/app/calendar?view=week");
+  const appt = page.getByTestId(`calendar-appt-${appointmentId}`);
+  for (let i = 0; i < 3; i++) {
+    // Give the grid a moment to load its appointments before deciding it is not in this week.
+    if (await appt.waitFor({ state: "visible", timeout: 4_000 }).then(() => true).catch(() => false)) return;
+    await page.getByRole("button", { name: "Next week" }).click();
+    await page.waitForTimeout(500);
+  }
+}
+
+/** Configuración → SIFEN: the sections are folds (`certificate` | `csc` | `numberVoiding`). Opens one. */
+export async function openSifenSection(
+  page: import("@playwright/test").Page,
+  section: "certificate" | "csc" | "numberVoiding",
+) {
+  await page.goto("/app/settings/sifen");
+  const fold = page.getByTestId(`sifen-fold-${section}`);
+  await fold.waitFor({ state: "visible" });
+  if ((await fold.getAttribute("aria-expanded")) !== "true") await fold.click();
+}
+
+/** Opens one SIFEN fold on the Configuración → SIFEN page that is already loaded. */
+export async function unfoldSifen(
+  page: import("@playwright/test").Page,
+  section: "certificate" | "csc" | "numberVoiding",
+) {
+  const fold = page.getByTestId(`sifen-fold-${section}`);
+  await fold.waitFor({ state: "visible" });
+  if ((await fold.getAttribute("aria-expanded")) !== "true") await fold.click();
+}
+
+/** Configuración → SIFEN → Voided numbering: opens the manual-voiding dialog; returns its form. */
+export async function openManualVoidingForm(page: import("@playwright/test").Page) {
+  await page.getByTestId("sifen-number-voiding-manual-open").click();
+  const form = page.getByTestId("sifen-number-voiding-manual-form");
+  await form.waitFor({ state: "visible" });
+  return form;
+}
+
+/** Configuración → Negocio: opens a fold (`general` | `contact` | `sifen` | `logo`) if closed. */
+export async function openBusinessSection(
+  page: import("@playwright/test").Page,
+  id: "general" | "contact" | "sifen" | "logo",
+) {
+  const toggle = page.getByTestId(`business-section-${id}-toggle`);
+  await toggle.waitFor({ state: "visible" });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+}
+
+/** Configuración → Timbrado: opens the "Add stamp" dialog and waits for its form. */
+export async function openAddStampDialog(page: import("@playwright/test").Page) {
+  await page.goto("/app/settings/fiscal-stamp");
+  await page.getByTestId("fiscal-stamp-add").click();
+  await page.getByLabel("Stamp number", { exact: true }).waitFor({ state: "visible" });
+}
+
+/** Clicks an item (`/^Edit/`, `/^Activate/`, `/^Deactivate/`, `/^Delete/`) of a stamp row's ⋯ menu. */
+export async function stampRowAction(
+  page: import("@playwright/test").Page,
+  row: import("@playwright/test").Locator,
+  action: RegExp,
+) {
+  await row.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  await row.getByRole("button", { name: /actions|acciones/i }).click();
+  // dispatchEvent: the menu of the last row can open below the page end, out of the viewport.
+  await page.getByRole("menuitem", { name: action }).dispatchEvent("click");
+}
+
+/** Resumen: opens the folded "Ver más detalle" block (top services, payment methods, weekdays). */
+export async function openSummaryMore(page: import("@playwright/test").Page) {
+  const toggle = page.getByTestId("summary-more-toggle");
+  await toggle.waitFor({ state: "visible" });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+  await page.getByTestId("summary-more").waitFor({ state: "visible" });
+}
+
+/** Configuración: opens the "More" (⋯) menu and picks one of its items (Taxes | Audit | Shared devices). */
+export async function openSettingsMoreItem(
+  page: import("@playwright/test").Page,
+  name: RegExp | string,
+) {
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await page.getByRole("menuitem", { name }).click();
 }

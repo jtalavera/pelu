@@ -9,7 +9,14 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { pickSearchableOption, setControlledInputValue } from "../fixtures/ui";
+import { openDashboardMore } from "../fixtures/dashboard";
+import { setControlledInputValue } from "../fixtures/ui";
+import { openFichaDialog, clickFichaMenuItem } from "../fixtures/fichas";
+import {
+  filterPropinasByProfessional,
+  openWithdrawDialog,
+  propinasMovements,
+} from "../fixtures/propinas";
 
 test.describe.configure({ mode: "serial" });
 
@@ -94,28 +101,11 @@ async function seedClosedTip(
         discountValue: null,
       },
     ],
-    payments: [{ method: "CASH", amount: params.unitPrice }],
+    payments: [{ method: "CASH", amount: params.unitPrice + params.tipAmount }],
     serviceRecordId: record.id,
     tipsAmount: params.tipAmount,
   });
   return { recordId: record.id, invoiceId: invoice.id };
-}
-
-/** Picks options from the report tab's professional `MultiSelect` filter, one at a time. */
-async function pickMultiSelectOption(
-  page: Page,
-  accessibleName: string,
-  filterText: string,
-  optionNamePattern: RegExp,
-): Promise<void> {
-  const cb = page.getByRole("combobox", { name: accessibleName, exact: true });
-  await cb.click();
-  await cb.fill(filterText);
-  await page
-    .getByRole("listbox", { name: accessibleName, exact: true })
-    .getByRole("button", { name: optionNamePattern })
-    .first()
-    .click();
 }
 
 test.describe("Issue #135 · Ajustes varios v2", () => {
@@ -128,7 +118,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     seed = await seedCategoryServiceProfessional(request, token);
   });
 
-  test("1 · al actualizar una ficha desde Historial de fichas, la pantalla se posiciona arriba mostrando el mensaje de respuesta", async ({
+  test("1 · al actualizar una ficha desde la lista, el diálogo se cierra y el aviso de respuesta queda a la vista", async ({
     page,
     request,
   }) => {
@@ -144,22 +134,12 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History", exact: true }).click();
-    await page.locator("#service-record-history-text-filter").fill(client.fullName);
-    await page
-      .locator('tbody tr[role="button"]')
-      .filter({ hasText: client.fullName })
-      .click();
-
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    const dialog = await openFichaDialog(page, client.fullName);
     const scrollContainer = dialog.locator(".overflow-y-auto");
 
-    // Scroll down to the tips section (bottom of the form) before saving, simulating a user who
-    // scrolled past the top alert area to edit a field further down.
-    // Retry the scroll-then-check as a poll: a transient reflow (e.g. the professionals dropdown
-    // finishing its async load) can otherwise reset scrollTop between the one-shot set and check.
+    // Open the folded tips section and scroll to the bottom of the form before saving, simulating
+    // a user who scrolled past the top while editing a field further down.
+    await clickFichaMenuItem(page, dialog, "service-record-tips-toggle");
     await expect
       .poll(async () => {
         await scrollContainer.evaluate((el) => {
@@ -173,16 +153,14 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     await setControlledInputValue(tipInput, "1000");
     await dialog.getByTestId("service-record-submit").click();
 
-    await expect(dialog.getByText("Changes saved.")).toBeVisible({ timeout: 15_000 });
-    // The alert must be visible without further scrolling — not merely present in the DOM below
-    // the fold — and the container must have scrolled back up from where it was left.
-    await expect(dialog.getByText("Changes saved.")).toBeInViewport();
-    await expect
-      .poll(() => scrollContainer.evaluate((el) => el.scrollTop))
-      .toBeLessThan(50);
+    // Redesign: saving closes the dialog and a toast confirms it, already in view (no scrolling).
+    const toast = page.getByTestId("service-records-toast");
+    await expect(toast).toContainText("Changes saved.", { timeout: 15_000 });
+    await expect(toast).toBeInViewport();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
   });
 
-  test("1b · al actualizar una ficha desde el Panel, la pantalla se posiciona arriba mostrando el mensaje de respuesta", async ({
+  test("1b · al actualizar una ficha desde el Panel, el aviso de respuesta queda a la vista", async ({
     page,
     request,
   }) => {
@@ -199,6 +177,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
 
     await loginAsDemo(page);
     await page.goto("/app");
+    await openDashboardMore(page, "records");
     const grid = page.getByTestId("dashboard-service-records-grid");
     await expect(grid).toBeVisible({ timeout: 15_000 });
     await grid
@@ -209,33 +188,55 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    const scrollContainer = dialog.locator(".overflow-y-auto");
-
-    // Retry the scroll-then-check as a poll: a transient reflow (e.g. the professionals dropdown
-    // finishing its async load) can otherwise reset scrollTop between the one-shot set and check.
-    await expect
-      .poll(async () => {
-        await scrollContainer.evaluate((el) => {
-          el.scrollTop = el.scrollHeight;
-        });
-        return scrollContainer.evaluate((el) => el.scrollTop);
-      })
-      .toBeGreaterThan(0);
-
+    await clickFichaMenuItem(page, dialog, "service-record-tips-toggle");
     const tipInput = dialog.locator(`#service-record-tip-${seed.professionalId}`);
     await setControlledInputValue(tipInput, "1000");
     await dialog.getByTestId("service-record-submit").click();
 
-    await expect(dialog.getByText("Changes saved.")).toBeVisible({ timeout: 15_000 });
-    // The alert must be visible without further scrolling — not merely present in the DOM below
-    // the fold — and the container must have scrolled back up from where it was left.
-    await expect(dialog.getByText("Changes saved.")).toBeInViewport();
-    await expect
-      .poll(() => scrollContainer.evaluate((el) => el.scrollTop))
-      .toBeLessThan(50);
+    // The dialog closes on save; the confirmation is a toast inside the viewport.
+    await expect(page.getByRole("dialog")).toHaveCount(0, { timeout: 15_000 });
+    await expect(page.getByTestId("dashboard-record-toast")).toContainText("Changes saved.");
+    await expect(page.getByTestId("dashboard-record-toast")).toBeInViewport();
   });
 
-  test("2 · el reporte de propinas muestra los retiros manuales por profesional y un total general, ambos en rojo", async ({
+  test("1c · al anular una ficha desde el Panel, el aviso «Ficha anulada» queda a la vista y la ficha deja de figurar abierta", async ({
+    page,
+    request,
+  }) => {
+    const token = await loginAsDemoApi(request);
+    const client = await seedClient(request, token, `E2E135 Anular ${Date.now()}`);
+    await seedOpenRecordWithLines(request, token, {
+      clientId: client.id,
+      serviceId: seed.serviceId,
+      professionalId: seed.professionalId,
+      unitPrice: 50000,
+      lineCount: 1,
+    });
+
+    await loginAsDemo(page);
+    await page.goto("/app");
+    await openDashboardMore(page, "records");
+    const grid = page.getByTestId("dashboard-service-records-grid");
+    await expect(grid).toBeVisible({ timeout: 15_000 });
+    const card = grid.getByTestId("dashboard-service-record-card").filter({ hasText: client.fullName });
+    await card.first().click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await clickFichaMenuItem(page, dialog, "service-record-void-open");
+    await dialog.getByLabel("Reason").fill("E2E anulada desde el Panel");
+    await dialog.getByTestId("service-record-void-confirm").click();
+
+    await expect(page.getByRole("dialog")).toHaveCount(0, { timeout: 15_000 });
+    const toast = page.getByTestId("dashboard-record-toast");
+    await expect(toast).toContainText("Record voided.");
+    await expect(toast).not.toContainText("Changes saved.");
+    await expect(toast).toBeInViewport();
+    // The list is reloaded: the ficha is no longer listed as open.
+    await expect(card.and(page.locator('[data-status="OPEN"]'))).toHaveCount(0, { timeout: 15_000 });
+  });
+
+  test("2 · los movimientos muestran el retiro de cada profesional como una fila con signo menos, con su hora", async ({
     page,
     request,
   }) => {
@@ -262,61 +263,51 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     await loginAsDemo(page);
     await page.goto("/app/propinas");
 
-    // Withdraw part of each professional's balance.
-    await page.getByRole("tab", { name: "Tip withdrawal" }).click();
-    await pickSearchableOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 10.000", { timeout: 15_000 });
+    // Withdraw part of each professional's balance from the balances card.
+    const withdrawStartedAt = Date.now();
+    await openWithdrawDialog(page, seed.professionalId);
+    await expect(page.getByTestId("propinas-dialog-balance")).toHaveText("Gs. 10.000", { timeout: 15_000 });
     await setControlledInputValue(page.locator("#propinas-withdrawal-amount"), "4000");
-    await page.getByRole("button", { name: "Withdraw", exact: true }).click();
-    await expect(page.getByText("Withdrawal completed successfully.")).toBeVisible({
-      timeout: 15_000,
-    });
-
-    await pickSearchableOption(page, "Professional", "E2E135 Prof B", /E2E135 Prof B/i);
-    await expect(page.getByTestId("propinas-balance")).toHaveText("Gs. 8.000", { timeout: 15_000 });
-    await setControlledInputValue(page.locator("#propinas-withdrawal-amount"), "2000");
-    await page.getByRole("button", { name: "Withdraw", exact: true }).click();
-    await expect(page.getByText("Withdrawal completed successfully.")).toBeVisible({
-      timeout: 15_000,
-    });
-
-    // Back on the report tab, filtered to just these two professionals.
-    await page.getByRole("tab", { name: "Tips report" }).click();
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
+    await page.getByTestId("propinas-withdraw-confirm").click();
+    await expect(page.getByTestId("propinas-toast")).toContainText(
+      "Withdrawal completed successfully.",
+      { timeout: 15_000 },
     );
-    await pickMultiSelectOption(page, "Professional", "E2E135 Prof B", /E2E135 Prof B/i);
-    await page.getByRole("button", { name: "Search", exact: true }).click();
 
-    const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");
+    await openWithdrawDialog(page, profB.id);
+    await expect(page.getByTestId("propinas-dialog-balance")).toHaveText("Gs. 8.000", { timeout: 15_000 });
+    await setControlledInputValue(page.locator("#propinas-withdrawal-amount"), "2000");
+    await page.getByTestId("propinas-withdraw-confirm").click();
+    await expect(page.getByTestId("propinas-toast")).toContainText(
+      "Withdrawal completed successfully.",
+      { timeout: 15_000 },
+    );
 
-    const withdrawalRowA = reportRows.filter({
-      hasText: `Manual withdrawal — ${seed.professionalFullName}`,
-    });
-    await expect(withdrawalRowA).toBeVisible({ timeout: 15_000 });
-    await expect(withdrawalRowA.getByText(/^Gs\. 4\.000$/)).toBeVisible();
-    await expect(withdrawalRowA).toHaveClass(/text-red-600/);
+    // Each withdrawal is a movement row of its own professional, with a minus sign.
+    await filterPropinasByProfessional(page, seed.professionalFullName);
+    const rowA = propinasMovements(page).filter({ hasText: "Withdrawal" });
+    await expect(rowA).toHaveCount(1, { timeout: 15_000 });
+    await expect(rowA).toContainText("Gs. 4.000");
+    await expect(rowA).toContainText("−");
+    await expect(rowA).toContainText(seed.professionalFullName);
+    // The date cell also shows the time of the movement (HH:MM, in the browser's own clock).
+    const timeA = (await rowA.locator("td").first().locator("span").innerText()).trim();
+    const expectedTimes = await page.evaluate(
+      ([from, to]) => {
+        const fmt = new Intl.DateTimeFormat("en-US", { hour: "2-digit", minute: "2-digit" });
+        const out: string[] = [];
+        for (let t = from - 60_000; t <= to + 60_000; t += 30_000) out.push(fmt.format(new Date(t)));
+        return out;
+      },
+      [withdrawStartedAt, Date.now()],
+    );
+    expect(timeA).toMatch(/\d{1,2}:\d{2}/);
+    expect(expectedTimes).toContain(timeA);
 
-    const withdrawalRowB = reportRows.filter({
-      hasText: "Manual withdrawal — E2E135 Prof B",
-    });
-    await expect(withdrawalRowB).toBeVisible({ timeout: 15_000 });
-    await expect(withdrawalRowB.getByText(/^Gs\. 2\.000$/)).toBeVisible();
-    await expect(withdrawalRowB).toHaveClass(/text-red-600/);
-
-    // Issue #137: the aggregate "Total manual withdrawals" row was removed — each withdrawal now
-    // lives only inside its professional's own group.
-    await expect(reportRows.filter({ hasText: "Total manual withdrawals" })).toHaveCount(0);
-
-    const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
-    await expect(grandTotalRow.getByText(/^Gs\. 12\.000$/)).toBeVisible();
+    await filterPropinasByProfessional(page, profB.fullName);
+    const rowB = propinasMovements(page).filter({ hasText: "Withdrawal" });
+    await expect(rowB).toHaveCount(1, { timeout: 15_000 });
+    await expect(rowB).toContainText("Gs. 2.000");
+    await expect(rowB).toContainText(profB.fullName);
   });
 });

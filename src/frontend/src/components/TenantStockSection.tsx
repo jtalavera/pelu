@@ -67,7 +67,7 @@ export function TenantStockSection({ tenantId, dateLocale }: { tenantId: number;
         {t("femme.platform.tenants.stock.lastCatalogSync", { date: fmt(status.catalogSyncedAt) })}
       </Text>
       {status.failedEvents > 0 ? (
-        <Text variant="small" className="text-red-600 dark:text-red-400" role="alert">
+        <Text variant="small" className="text-danger" role="alert">
           {t("femme.platform.tenants.stock.failedEvents", { count: status.failedEvents })}
         </Text>
       ) : null}

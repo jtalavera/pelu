@@ -18,4 +18,11 @@ public record ServiceRecordResponse(
     Long invoiceId,
     String invoiceNumberFormatted,
     List<ServiceRecordLineResponse> lines,
-    List<ServiceRecordTipResponse> tips) {}
+    List<ServiceRecordTipResponse> tips,
+    /** The earliest turno this ficha belongs to, if any (id and start), shown on the ficha. */
+    Long appointmentId,
+    Instant appointmentStartAt,
+    /** Every turno this ficha belongs to, earliest first (a ficha may serve several turnos). */
+    List<ServiceRecordAppointmentResponse> appointments,
+    /** The ficha belongs to the generic "cliente ocasional": the UI shows a translated label. */
+    boolean clientGeneric) {}

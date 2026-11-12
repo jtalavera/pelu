@@ -22,6 +22,8 @@ export type CashMovement = {
   createdByEmail: string | null;
   createdAt: string;
   tipWithdrawalId: number | null;
+  /** Recorded after the register closed: listed in it, but never part of its figures. */
+  afterClose?: boolean;
 };
 
 export type CashSessionDetail = {

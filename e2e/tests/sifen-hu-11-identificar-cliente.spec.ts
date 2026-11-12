@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { goToInvoiceHistory, openInvoicePanel, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiBaseUrl,
   apiPostJson,
@@ -72,17 +73,20 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     // checksum) — the shared literal "80000005-6" is also seeded as a client RUC by other spec
     // files (client-identity-document-type, issue-220), and collides with CLIENT_RUC_DUPLICATE
     // when the whole suite shares one tenant across a single run.
+    const ruc = `${Date.now()}-6`;
     const client = await seedClient(
       request,
       token,
       `E2E HU11 conRuc ${Date.now()}-${Math.random()}`,
       undefined,
-      `${Date.now()}-6`,
+      ruc,
     );
+    // The invoice's own RUC (the override) is what makes the receiver "identified": the client's
+    // profile data is never used as a fallback.
     const invoice = await apiPostJson<{ id: number }>(request, token, "/api/invoices", {
       clientId: client.id,
       clientDisplayName: client.fullName,
-      clientRucOverride: null,
+      clientRucOverride: ruc,
       clientIdentityDocumentOverride: null,
       lines: [
         {
@@ -99,9 +103,9 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
 
   async function openInvoiceDetail(page: Page, clientFullName: string) {
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientFullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: clientFullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientFullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: clientFullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
   }
@@ -147,10 +151,10 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    // Issue #161: client identification now lives under its own solapa in the invoice detail modal.
-    // Issue #167 AC3: the form now renders directly in the accordion body — no separate trigger
-    // button anymore; opening the section is enough to see the whole form and its fields.
-    await page.getByTestId("sifen-tab-identify").click();
+    // Client identification lives in the invoice detail's "SIFEN" tab. Issue #167 AC3: the form
+    // renders directly in its section — no separate trigger button; opening the tab is enough to
+    // see the whole form and its fields.
+    await openInvoicePanel(page, "identify");
     await expect(page.getByTestId("sifen-identify-client-button")).toHaveCount(0);
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
     await expect(page.locator("#identify-client-name")).toBeVisible();
@@ -178,6 +182,9 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
+    // Not eligible and no history: the "Identify client" entry is not even in the ⋯ menu.
+    await page.getByRole("dialog").last().getByTestId("invoice-more-actions-button").click();
+    await expect(page.getByTestId("invoice-menu-identify")).toHaveCount(0);
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toHaveCount(0);
   });
 
@@ -196,7 +203,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await openInvoiceDetail(page, invoice.invoiceNumberFormatted);
 
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toHaveCount(0);
-    await page.getByTestId("sifen-tab-identify").click();
+    await openInvoicePanel(page, "identify");
     await expect(page.getByTestId("sifen-client-identification-history")).toBeVisible();
   });
 
@@ -212,7 +219,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, invoice.invoiceNumberFormatted);
 
-    await page.getByTestId("sifen-tab-identify").click();
+    await openInvoicePanel(page, "identify");
     const history = page.getByTestId("sifen-client-identification-history");
     await expect(history).toBeVisible();
     await expect(history).toContainText("isabelzymanscki@gmail.com");
@@ -232,7 +239,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await page.getByTestId("sifen-tab-identify").click();
+    await openInvoicePanel(page, "identify");
     await expect(page.getByTestId("sifen-client-identification-rejected")).toBeVisible();
     await expect(page.getByTestId("sifen-client-identification-rejected")).toContainText(
       "Datos del receptor inconsistentes",
@@ -252,7 +259,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await page.getByTestId("sifen-tab-identify").click();
+    await openInvoicePanel(page, "identify");
     await page.locator("#identify-client-name").fill("Comercial ABC S.A.");
     await page.getByLabel("Company").click();
     await page.locator("#identify-client-ruc").fill("not-a-ruc");
@@ -274,7 +281,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await page.getByTestId("sifen-tab-identify").click();
+    await openInvoicePanel(page, "identify");
     await page.locator("#identify-client-name").fill("John Smith");
     await page.getByLabel("Client from abroad").click();
     await page.locator("#identify-client-document").fill("AB123456");
@@ -292,7 +299,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await page.getByTestId("sifen-tab-identify").click();
+    await openInvoicePanel(page, "identify");
     await page.locator("#identify-client-document").fill("4123456");
     await page.getByTestId("sifen-identify-client-confirm-button").click();
 
@@ -312,7 +319,7 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     await loginAsDemo(page);
     await openInvoiceDetail(page, client.fullName);
 
-    await page.getByTestId("sifen-tab-identify").click();
+    await openInvoicePanel(page, "identify");
     await page.locator("#identify-client-name").fill("María Fernanda Duarte");
     await page.locator("#identify-client-document").fill("4123456");
     await page.getByTestId("sifen-identify-client-confirm-button").click();
@@ -324,12 +331,12 @@ test.describe("SIFEN HU-11 · Identificar al cliente en una factura sin datos", 
     // cancel form), and reloading confirms the invoice was never actually marked identified.
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
     await page.reload();
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
-    await page.getByTestId("sifen-tab-identify").click();
+    await openInvoicePanel(page, "identify");
     await expect(page.getByTestId("sifen-identify-client-confirm-button")).toBeVisible();
   });
 });

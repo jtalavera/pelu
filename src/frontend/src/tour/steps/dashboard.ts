@@ -40,16 +40,4 @@ export const dashboardSteps: FemmeTourStepDef[] = [
     contentKey: "femme.tour.dashboard.viewAgenda.content",
     placement: "top",
   },
-  {
-    target: "[data-tour='dashboard-mini-cal']",
-    titleKey: "femme.tour.dashboard.miniCal.title",
-    contentKey: "femme.tour.dashboard.miniCal.content",
-    placement: "left",
-  },
-  {
-    target: "[data-tour='dashboard-occupancy']",
-    titleKey: "femme.tour.dashboard.occupancy.title",
-    contentKey: "femme.tour.dashboard.occupancy.content",
-    placement: "left",
-  },
 ];

@@ -20,10 +20,10 @@ describe("SyncDocumentTitle", () => {
       </I18nextProvider>,
     );
 
-    await waitFor(() => expect(document.title).toBe("Saloon Management"));
+    await waitFor(() => expect(document.title).toBe("Flowbit"));
 
     await i18n.changeLanguage("es");
 
-    await waitFor(() => expect(document.title).toBe("Gestión Peluquería"));
+    await waitFor(() => expect(document.title).toBe("Flowbit"));
   });
 });

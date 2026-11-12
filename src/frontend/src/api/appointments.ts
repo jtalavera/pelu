@@ -31,6 +31,12 @@ export type Appointment = {
   cancelReason: string | null;
   /** Issue #218 follow-up: null until the ~24h-ahead reminder email was sent for this appointment. */
   reminderSentAt: string | null;
+  /** HU-69: the client's birthday falls on this appointment's day (never reveals date or age). */
+  clientBirthdayOnDay?: boolean;
+  /** The ficha de servicio of this turno; null while it has none. */
+  serviceRecordId?: number | null;
+  /** The issued invoice that charged this turno; null while it is not charged. */
+  invoiceId?: number | null;
 };
 
 export type AppointmentCreateRequest = {
@@ -38,6 +44,8 @@ export type AppointmentCreateRequest = {
   professionalId: number;
   serviceId: number;
   startAt: string;
+  /** Length of the turno in minutes (5–480); omitted = the service's own duration. */
+  durationMinutes?: number;
 };
 
 export type AppointmentUpdateRequest = {
@@ -45,6 +53,8 @@ export type AppointmentUpdateRequest = {
   professionalId: number;
   serviceId: number;
   startAt: string;
+  /** Length of the turno in minutes (5–480); omitted = the service's own duration. */
+  durationMinutes?: number;
 };
 
 export type AppointmentStatusUpdateRequest = {
@@ -115,9 +125,13 @@ export const ALL_STATUSES: AppointmentStatus[] = [
   "NO_SHOW",
 ];
 
-/** Statuses shown on the week calendar grid (HU-19). */
+/**
+ * Statuses shown on the week calendar grid (HU-19). «Completado» stays on it (outlined, marked
+ * «Cobrado» when it has a comprobante): a turno is often charged before its time has passed.
+ */
 export const CALENDAR_GRID_STATUSES: AppointmentStatus[] = [
   "PENDING",
   "CONFIRMED",
   "IN_PROGRESS",
+  "COMPLETED",
 ];

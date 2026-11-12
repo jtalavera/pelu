@@ -1,18 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  Alert,
-  Button,
-  Card,
-  Heading,
-  Input,
-  Label,
-  Spinner,
-  Text,
-  Textarea,
-} from "@design-system";
-import { femmeJson } from "../api/femmeClient";
+import { Alert, Button, Input, Label, Text, Textarea } from "@design-system";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import {
   createServiceRecord,
@@ -23,14 +12,26 @@ import {
 import { ClientSearchField, type ClientSelection } from "./ClientSearchField";
 import { ServiceSearchField, type SalonServiceOption } from "./ServiceSearchField";
 import { SearchableSelect } from "./SearchableSelect";
+import { MoreActionsMenu } from "./MoreActionsMenu";
 import { FieldValidationError } from "./FieldValidationError";
-import { StatusBadge } from "./StatusBadge";
+import { useMe } from "../hooks/useMe";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
-import { formatParaguayDateTime } from "../lib/paraguayDateTime";
+import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
+import { fetchProfessionalOptions, type ProfessionalOption } from "../api/professionalOptions";
+import { billServiceRecord } from "../lib/serviceRecordBilling";
+import { initialsOf } from "../lib/initials";
+import { ProfessionalServiceLines, ServicePickerScreen } from "./ProfessionalServiceLines";
+import { ActionIcon } from "./actionIcons";
+import type { MoreActionsItem } from "./MoreActionsMenu";
 
-type Professional = { id: number; fullName: string; active: boolean };
+type Professional = ProfessionalOption;
+
+/** Data the host started loading before the editor mounted (so nothing waits for the editor). */
+export type ServiceRecordEditorPreload = {
+  professionals: Promise<ProfessionalOption[]>;
+};
 
 type LineForm = {
   key: string;
@@ -64,6 +65,14 @@ type ClientOverride = {
   ruc: string | null;
 };
 
+const SECTION_TITLE = "text-xs font-extrabold uppercase tracking-wider text-primary";
+
+/**
+ * Service-record form (create / edit / read-only), meant to live inside a dialog. Layout: a
+ * CLIENTE block, a SERVICIOS block (quantity + unit price on every line) and tips behind
+ * "Más opciones". The host closes the dialog and shows the success notice via `onSaved` /
+ * `onVoided`.
+ */
 export function ServiceRecordEditor({
   initial,
   allowClientCreateNew,
@@ -72,25 +81,36 @@ export function ServiceRecordEditor({
   onSaved,
   onVoided,
   onClose,
-  active = true,
+  professionalMode = false,
+  preload,
+  onViewInvoice,
+  onViewAppointment,
 }: {
   initial: ServiceRecordDetail | null;
   allowClientCreateNew: boolean;
+  /**
+   * A professional (regular or shared-device session) edits services and quantities only: no
+   * prices or totals, no tips, no void and no "Cobrar". The server enforces the same rules.
+   */
+  professionalMode?: boolean;
+  /** Professionals and frequent services the host already requested, in parallel with the record. */
+  preload?: ServiceRecordEditorPreload;
+  /** Opens the linked comprobante in place; without it the button goes to Facturación. */
+  onViewInvoice?: (invoiceId: number) => void;
+  /** Opens a turno of the ficha in place; without it the link goes to the Agenda. */
+  onViewAppointment?: (appointmentId: number) => void;
   /** Client selected after returning from the "create new client" round trip. */
   initialClientOverride?: ClientOverride | null;
   onInitialClientOverrideConsumed?: () => void;
-  onSaved?: (record: ServiceRecordDetail) => void;
+  onSaved?: (record: ServiceRecordDetail, kind: "created" | "updated") => void;
   onVoided?: (record: ServiceRecordDetail) => void;
-  /** Present only in modal/detail contexts — renders "Cerrar" next to "Anular ficha". */
-  onClose?: () => void;
-  /** Whether this editor is the currently visible tab/view. Defaults to true for modal/detail
-   * usages, which always mount on demand; tab-based hosts (e.g. Nueva ficha / Historial) pass
-   * false while hidden so a stale success banner doesn't resurface when the tab is revisited. */
-  active?: boolean;
+  onClose: () => void;
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const dateLocale = useDateLocale();
+  const { me } = useMe();
+  const myProfessionalId = me?.professionalId ?? null;
   const topRef = useRef<HTMLDivElement>(null);
 
   const [record, setRecord] = useState<ServiceRecordDetail | null>(initial);
@@ -120,36 +140,33 @@ export function ServiceRecordEditor({
             categoryName: "",
             categoryAccentKey: "",
             name: l.description,
-            priceMinor: l.unitPrice,
+            priceMinor: l.unitPrice ?? "0",
             durationMinutes: 0,
             active: true,
           },
           professionalId: l.professionalId ?? "",
           quantity: l.quantity,
-          unitPrice: maskMoneyInput(String(Math.round(Number(l.unitPrice)))),
+          unitPrice: maskMoneyInput(String(Math.round(Number(l.unitPrice ?? 0)))),
         }))
-      : [],
+      : [emptyLine()],
   );
   const [tips, setTips] = useState<Record<number, string>>(() => {
     const map: Record<number, string> = {};
     initial?.tips.forEach((tp) => {
-      map[tp.professionalId] = maskMoneyInput(String(Math.round(Number(tp.amount))));
+      map[tp.professionalId] = maskMoneyInput(String(Math.round(Number(tp.amount ?? 0))));
     });
     return map;
   });
-
-  // Bumped after a successful create to force `ClientSearchField` (which keeps its own
-  // internal query-text state) to remount and clear its displayed text.
-  const [clientFieldResetKey, setClientFieldResetKey] = useState(0);
+  const [tipsOpen, setTipsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const [clientError, setClientError] = useState<string | null>(null);
-  const [lineErrors, setLineErrors] = useState<
-    Record<number, { service?: string; professional?: string; quantity?: string; unitPrice?: string }>
-  >({});
-  const [globalErrors, setGlobalErrors] = useState<string[]>([]);
+  /** Per-line expand/collapse chosen by the user; a line never touched is open when it is the only one or has no service yet. */
+  const [openLines, setOpenLines] = useState<Record<string, boolean>>({});
+  const [lineErrors, setLineErrors] = useState<Record<number, { service?: string }>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccessKind, setSaveSuccessKind] = useState<"created" | "updated" | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const [showVoidForm, setShowVoidForm] = useState(false);
   const [voidReason, setVoidReason] = useState("");
@@ -158,14 +175,15 @@ export function ServiceRecordEditor({
   const [voidError, setVoidError] = useState<string | null>(null);
 
   useEffect(() => {
-    femmeJson<Professional[]>("/api/professionals")
-      .then((list) => setProfessionals((Array.isArray(list) ? list : []).filter((p) => p.active)))
-      .catch(() => setProfessionals([]));
+    let cancelled = false;
+    (preload?.professionals ?? fetchProfessionalOptions()).then((list) => {
+      if (!cancelled) setProfessionals(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (!active) setSaveSuccessKind(null);
-  }, [active]);
 
   useEffect(() => {
     if (initialClientOverride) {
@@ -198,30 +216,70 @@ export function ServiceRecordEditor({
   const isOpen = record ? record.status === "OPEN" : true;
   const isReadOnly = record != null && record.status !== "OPEN";
 
-  const total = lines.reduce(
-    (acc, l) =>
-      acc + (l.pickedService ? parseMaskedMoney(l.unitPrice) * (l.quantity || 0) : 0),
-    0,
-  );
+  const lineSubtotal = (l: LineForm) =>
+    l.pickedService ? parseMaskedMoney(l.unitPrice) * (l.quantity || 0) : 0;
+  const total = lines.reduce((acc, l) => acc + lineSubtotal(l), 0);
   const tipsTotal = distinctProfessionalIds.reduce(
     (acc, id) => acc + parseMaskedMoney(tips[id] ?? ""),
     0,
   );
+
+  // Tips are not a fixed section any more: they show up once there is a tip or the user asks for
+  // them from the «⋯» menu.
+  const tipsVisible = tipsOpen || tipsTotal > 0;
 
   function professionalName(id: number | ""): string {
     if (id === "") return "—";
     return professionals.find((p) => p.id === id)?.fullName ?? String(id);
   }
 
+  /** Professional mode: a service tapped in the picker joins the ficha (same service again adds one). */
+  function pickServiceAsProfessional(service: SalonServiceOption) {
+    setLines((prev) => {
+      const existing = prev.find((l) => l.pickedService?.id === service.id);
+      if (existing) {
+        return prev.map((l) => (l === existing ? { ...l, quantity: (l.quantity || 0) + 1 } : l));
+      }
+      const withoutBlank = prev.filter((l) => !isBlankLine(l));
+      return [
+        ...withoutBlank,
+        { ...emptyLine(), pickedService: service, quantity: 1, unitPrice: maskMoneyInput(String(Math.round(Number(service.priceMinor)))) },
+      ];
+    });
+    setPickerOpen(false);
+  }
+
+  function decrementLine(key: string) {
+    const line = lines.find((l) => l.key === key);
+    if (!line) return;
+    if ((line.quantity || 0) <= 1) removeLine(key);
+    else updateLineQuantity(key, line.quantity - 1);
+  }
+
   function addLine() {
+    // Only adding another service closes the previous (already chosen) service areas; a line still
+    // without a service stays open, and the new blank line opens itself.
+    setOpenLines((o) => {
+      const next = { ...o };
+      lines.forEach((l) => {
+        if (l.pickedService) next[l.key] = false;
+      });
+      return next;
+    });
     setLines((prev) => [...prev, emptyLine()]);
   }
 
   function removeLine(key: string) {
-    setLines((prev) => prev.filter((l) => l.key !== key));
+    setLines((prev) => {
+      if (prev.length > 1) return prev.filter((l) => l.key !== key);
+      // The last service can be removed too (professional mode): it leaves the blank placeholder.
+      return professionalMode ? [emptyLine()] : prev;
+    });
   }
 
   function updateLineService(key: string, service: SalonServiceOption | null) {
+    // Picking a service keeps its area open so the professional field stays reachable.
+    setOpenLines((o) => ({ ...o, [key]: true }));
     setLines((prev) =>
       prev.map((l) =>
         l.key === key
@@ -252,122 +310,77 @@ export function ServiceRecordEditor({
     );
   }
 
+  /** A line nobody touched (no service, professional or price) is ignored: a ficha can be client-only. */
+  const isBlankLine = (l: (typeof lines)[number]) =>
+    !l.pickedService && l.professionalId === "" && !(l.unitPrice && parseMaskedMoney(l.unitPrice) > 0);
+
   function validate(): boolean {
     let ok = true;
-    if (clientSelection?.type !== "client") {
+    if (clientSelection === null) {
       setClientError(t("femme.serviceRecords.clientRequired"));
       ok = false;
     } else {
       setClientError(null);
     }
-
-    const newLineErrors: Record<
-      number,
-      { service?: string; professional?: string; quantity?: string; unitPrice?: string }
-    > = {};
+    const newLineErrors: Record<number, { service?: string }> = {};
     lines.forEach((l, idx) => {
-      const err: { service?: string; professional?: string; quantity?: string; unitPrice?: string } =
-        {};
-      if (!l.pickedService) err.service = t("femme.serviceRecords.lineServiceRequired");
-      if (Object.keys(err).length > 0) newLineErrors[idx] = err;
+      if (!l.pickedService && !isBlankLine(l)) newLineErrors[idx] = { service: t("femme.serviceRecords.lineServiceRequired") };
     });
     setLineErrors(newLineErrors);
     if (Object.keys(newLineErrors).length > 0) ok = false;
-
-    setGlobalErrors([]);
-
     return ok;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  /** Validates and saves; returns the saved record, or null when validation / the request failed. */
+  async function persist(): Promise<ServiceRecordDetail | null> {
     setSaveError(null);
-    setSaveSuccessKind(null);
-    if (!validate() || clientSelection?.type !== "client") return;
-
+    if (!validate() || clientSelection === null) return null;
     const payload = {
-      clientId: clientSelection.client.id,
-      lines: lines.map((l) => ({
+      // "Cliente ocasional" saves with no client id: the server files it under the generic client.
+      clientId: clientSelection.type === "client" ? clientSelection.client.id : null,
+      lines: lines.filter((l) => !isBlankLine(l)).map((l) => ({
         serviceId: l.pickedService!.id,
-        professionalId: l.professionalId === "" ? null : l.professionalId,
+        // A professional never picks the professional: a line without one is hers.
+        professionalId:
+          l.professionalId === "" ? (professionalMode ? myProfessionalId : null) : l.professionalId,
         quantity: l.quantity || null,
-        unitPrice: l.unitPrice && parseMaskedMoney(l.unitPrice) > 0 ? parseMaskedMoney(l.unitPrice) : null,
+        unitPrice:
+          !professionalMode && l.unitPrice && parseMaskedMoney(l.unitPrice) > 0
+            ? parseMaskedMoney(l.unitPrice)
+            : null,
       })),
-      tips: distinctProfessionalIds.map((id) => ({
-        professionalId: id,
-        amount: parseMaskedMoney(tips[id] ?? ""),
-      })),
+      tips: professionalMode
+        ? []
+        : distinctProfessionalIds.map((id) => ({
+            professionalId: id,
+            amount: parseMaskedMoney(tips[id] ?? ""),
+          })),
     };
-
-    const wasCreate = record == null;
     setSaving(true);
     try {
-      const result = wasCreate
+      return record == null
         ? await createServiceRecord(payload)
-        : await updateServiceRecord(record!.id, payload);
-      setSaveSuccessKind(wasCreate ? "created" : "updated");
-      if (wasCreate) {
-        // Reset to a blank "new record" form in place (not a remount) so the success
-        // alert stays visible above the cleared fields.
-        setRecord(null);
-        setClientSelection(null);
-        setClientFieldResetKey((k) => k + 1);
-        setLines([]);
-        setTips({});
-        setClientError(null);
-        setLineErrors({});
-        setGlobalErrors([]);
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      } else {
-        setRecord(result);
-        // Updating an existing record happens inside a modal (opened from Historial de fichas or
-        // the Panel) whose scrollable area is the modal body, not the window — scroll that into view.
-        topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-      onSaved?.(result);
+        : await updateServiceRecord(record.id, payload);
     } catch (err) {
       setSaveError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
-      if (!wasCreate) {
-        topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return null;
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleGenerateInvoice() {
+  async function handleSave() {
+    const wasCreate = record == null;
+    const result = await persist();
+    if (result) onSaved?.(result, wasCreate ? "created" : "updated");
+  }
+
+  /** "Cobrar": saves any pending edits first, then opens Facturación with the record prefilled. */
+  async function handlePay() {
     if (!record) return;
-    // The ficha only carries the client's name/RUC, so load the profile to prefill the invoice's
-    // recipient email (it is written back to the client if edited on the comprobante form).
-    let email: string | null = null;
-    try {
-      const client = await femmeJson<{ email: string | null }>(`/api/clients/${record.clientId}`);
-      email = client.email;
-    } catch {
-      // Best effort: the invoice form still works with a blank email.
-    }
-    navigate("/app/billing", {
-      state: {
-        activeTab: "invoice",
-        prefillServiceRecord: {
-          serviceRecordId: record.id,
-          client: {
-            id: record.clientId,
-            fullName: record.clientFullName,
-            phone: null,
-            email,
-            ruc: record.clientRuc,
-          },
-          lines: record.lines.map((l) => ({
-            serviceId: l.serviceId,
-            description: l.description,
-            unitPrice: l.unitPrice,
-            professionalId: l.professionalId,
-          })),
-          tipsAmount: record.tipsTotal,
-        },
-      },
-    });
+    const result = await persist();
+    if (result) await billServiceRecord(navigate, result);
   }
 
   async function handleVoid(e: React.FormEvent) {
@@ -383,7 +396,6 @@ export function ServiceRecordEditor({
     try {
       const result = await voidServiceRecord(record.id, voidReason.trim());
       setRecord(result);
-      setShowVoidForm(false);
       onVoided?.(result);
     } catch (err) {
       setVoidError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
@@ -392,395 +404,607 @@ export function ServiceRecordEditor({
     }
   }
 
-  return (
-    <div ref={topRef} className="flex flex-col gap-4">
-      {record && (
-        <div className="flex flex-wrap items-center gap-3">
-          <span data-testid="service-record-status">
-            <StatusBadge status={record.status} />
-          </span>
-          {record.status === "VOIDED" && record.voidReason && (
-            <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.serviceRecords.voidedReasonLabel")}: {record.voidReason}
-            </Text>
-          )}
-          {record.status === "CLOSED" && record.invoiceNumberFormatted && (
-            <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-              {t("femme.serviceRecords.linkedInvoice")}: {record.invoiceNumberFormatted}
-            </Text>
-          )}
-          <Text variant="small" className="text-[rgb(var(--color-muted-foreground))]">
-            {t("femme.serviceRecords.createdAt")}: {formatParaguayDateTime(record.createdAt, dateLocale)}
-          </Text>
-        </div>
-      )}
+  const dateText = record ? formatParaguayDateTime(record.createdAt, dateLocale) : null;
 
-      {globalErrors.map((err, i) => (
-        <Alert key={i} variant="destructive" title={t("femme.serviceRecords.errorTitle")}>
-          {err}
-        </Alert>
-      ))}
-      {saveError && (
+  // Every turno of the ficha (it may serve several); falls back to the single first one.
+  const turnos: { id: number; startAt: string }[] =
+    record?.appointments && record.appointments.length > 0
+      ? record.appointments
+      : record?.appointmentId && record.appointmentStartAt
+        ? [{ id: record.appointmentId, startAt: record.appointmentStartAt }]
+        : [];
+  const turnoTimes = turnos.map((a) => formatParaguayTime(a.startAt, dateLocale));
+  const turnoTime = turnoTimes.length > 0 ? turnoTimes.join(" · ") : null;
+  const turnoTag =
+    turnos.length > 1
+      ? t("femme.appointmentFicha.appointmentsTag", { times: turnoTime })
+      : t("femme.appointmentFicha.appointmentTag", { time: turnoTime });
+
+  /**
+   * CLIENTE, its name big and one grey line with the date and, while the ficha is being edited, the
+   * turno it belongs to (the way to open that turno is in the «⋯» menu).
+   */
+  const clientRow = record ? (
+    <section aria-label={t("femme.serviceRecords.clientSection")}>
+      <div className={SECTION_TITLE}>{t("femme.serviceRecords.clientSection")}</div>
+      <div className="break-words font-heading text-xl font-extrabold leading-tight text-ink">
+        {record.clientGeneric ? t("femme.serviceRecords.occasionalClient") : record.clientFullName}
+      </div>
+      <div className="mt-0.5 text-sm text-ink-3">
+        {dateText}
+        {isOpen && turnoTime ? (
+          <>
+            {" · "}
+            <span data-testid="service-record-appointment">{turnoTag}</span>
+          </>
+        ) : null}
+      </div>
+    </section>
+  ) : null;
+
+  /**
+   * One discreet line under the client: the turno this ficha belongs to and, once charged, its
+   * comprobante, each with a small «Ver» link (the tap area stays 44 px). Nothing when the ficha
+   * has neither.
+   */
+  const showTurno = turnos.length > 0;
+  const showInvoice = record?.status === "CLOSED" && Boolean(record.invoiceNumberFormatted);
+  const linkClass =
+    "relative font-bold text-primary hover:underline after:absolute after:-inset-x-2 after:-inset-y-3.5 after:content-['']";
+  const appointmentRow =
+    record && (showTurno || showInvoice) ? (
+      <div
+        data-testid="service-record-meta"
+        className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink-3"
+      >
+        {showTurno ? (
+          <span data-testid="service-record-appointment" className="inline-flex items-center gap-1.5">
+            {turnoTag}
+            <span aria-hidden="true">·</span>
+            <button
+              type="button"
+              data-testid="service-record-view-appointment"
+              aria-label={t("femme.appointmentFicha.viewAppointment")}
+              className={linkClass}
+              onClick={() => openTurno()}
+            >
+              {t("femme.serviceRecords.viewShort")}
+            </button>
+          </span>
+        ) : null}
+        {showTurno && showInvoice ? (
+          <span aria-hidden="true" className="opacity-50">
+            |
+          </span>
+        ) : null}
+        {showInvoice ? (
+          <span data-testid="service-record-invoice-line" className="inline-flex items-center gap-1.5">
+            {t("femme.serviceRecords.invoiceShort", { number: record.invoiceNumberFormatted })}
+            {record.invoiceId != null ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <button
+                  type="button"
+                  data-testid="service-record-view-invoice"
+                  aria-label={t("femme.serviceRecords.viewInvoice")}
+                  className={linkClass}
+                  onClick={() => {
+                    const invoiceId = record.invoiceId as number;
+                    if (onViewInvoice) {
+                      // The host opens the comprobante right here, on top of the ficha.
+                      onViewInvoice(invoiceId);
+                      return;
+                    }
+                    onClose();
+                    navigate("/app/billing", { state: { openInvoiceId: invoiceId } });
+                  }}
+                >
+                  {t("femme.serviceRecords.viewShort")}
+                </button>
+              </>
+            ) : null}
+          </span>
+        ) : null}
+      </div>
+    ) : null;
+
+  /**
+   * Opens a turno of this ficha, the earliest by default: in place when the host can (like the
+   * comprobante), otherwise the Agenda with its detail open.
+   */
+  function openTurno(target: { id: number; startAt: string } | undefined = turnos[0]) {
+    if (!target) return;
+    const appointmentId = target.id;
+    const startAt = target.startAt;
+    if (onViewAppointment) {
+      onViewAppointment(appointmentId);
+      return;
+    }
+    onClose();
+    navigate("/app/calendar", {
+      state: {
+        selectedDate: new Date(startAt).toLocaleDateString("sv-SE"),
+        openAppointmentId: appointmentId,
+      },
+    });
+  }
+
+  // Everything that is not the main flow lives in «⋯»: the turno, the tips and voiding the ficha.
+  const menuItems: MoreActionsItem[] = [];
+  if (record && turnos.length === 1) {
+    menuItems.push({
+      id: "turno",
+      label: t("femme.appointmentFicha.viewAppointment"),
+      icon: <ActionIcon name="file" />,
+      testId: "service-record-view-appointment",
+      onSelect: () => openTurno(),
+    });
+  } else if (record && turnos.length > 1) {
+    turnos.forEach((turno, index) => {
+      menuItems.push({
+        id: `turno-${turno.id}`,
+        label: t("femme.appointmentFicha.viewAppointmentAt", { time: turnoTimes[index] }),
+        icon: <ActionIcon name="file" />,
+        testId: index === 0 ? "service-record-view-appointment" : `service-record-view-appointment-${turno.id}`,
+        onSelect: () => openTurno(turno),
+      });
+    });
+  }
+  if (!professionalMode && !tipsVisible) {
+    menuItems.push({
+      id: "tips",
+      label: t("femme.serviceRecords.tipsSection"),
+      icon: <ActionIcon name="tag" />,
+      testId: "service-record-tips-toggle",
+      onSelect: () => setTipsOpen(true),
+    });
+  }
+  if (!professionalMode && record && isOpen && !showVoidForm) {
+    menuItems.push({
+      id: "void",
+      label: t("femme.serviceRecords.voidButton"),
+      icon: <ActionIcon name="ban" />,
+      destructive: true,
+      testId: "service-record-void-open",
+      onSelect: () => setShowVoidForm(true),
+    });
+  }
+
+  if (isReadOnly && record) {
+    const tipRows = record.tips.filter((tp) => Number(tp.amount) > 0);
+    return (
+      <div ref={topRef} className="flex flex-col gap-3" data-testid="service-record-readonly">
+        {clientRow}
+        {appointmentRow}
+        {record.status === "VOIDED" && record.voidReason ? (
+          <Text variant="small" className="text-ink-3">
+            {t("femme.serviceRecords.voidedReasonLabel")}: {record.voidReason}
+          </Text>
+        ) : null}
+        <section className="flex flex-col gap-2 border-t border-line pt-3" aria-labelledby="sr-lines-h">
+          <h3 id="sr-lines-h" className={SECTION_TITLE}>
+            {t("femme.serviceRecords.linesSection")}
+          </h3>
+          <ul className="flex flex-col" role="list">
+            {record.lines.map((l) => (
+              <li
+                key={l.id}
+                className="flex justify-between gap-3 border-t border-line py-2 first:border-t-0"
+              >
+                <span className="min-w-0 break-words text-ink">
+                  {l.description}
+                  {l.professionalName ? ` · ${l.professionalName}` : ""}
+                  {l.quantity > 1 ? ` ×${l.quantity}` : ""}
+                </span>
+                <span className="shrink-0 font-semibold">{formatAmountDecimal(l.lineTotal)}</span>
+              </li>
+            ))}
+            {tipRows.map((tp) => (
+              <li
+                key={`tip-${tp.professionalId}`}
+                className="flex justify-between gap-3 border-t border-line py-2 text-sm text-ink-3"
+              >
+                <span>
+                  {t("femme.serviceRecords.tipsAmountLabel")} · {tp.professionalName}
+                </span>
+                <span>{formatAmountDecimal(tp.amount)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex justify-between font-heading text-lg font-extrabold">
+            <span>{t("femme.serviceRecords.total")}</span>
+            <span>{formatAmountDecimal(record.totalAmount)}</span>
+          </div>
+        </section>
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-11"
+            onClick={onClose}
+            data-testid="service-record-close"
+          >
+            {t("femme.serviceRecords.close")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const CAPTION = "text-xs font-semibold text-ink-3";
+
+  if (professionalMode && pickerOpen) {
+    return <ServicePickerScreen onPick={pickServiceAsProfessional} onBack={() => setPickerOpen(false)} />;
+  }
+
+  return (
+    <div ref={topRef} className="flex flex-col gap-3">
+      {saveError ? (
         <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")}>
           {saveError}
         </Alert>
-      )}
-      {saveSuccessKind && (
-        <Alert variant="success">
-          {saveSuccessKind === "created"
-            ? t("femme.serviceRecords.createdSuccess")
-            : t("femme.serviceRecords.updatedSuccess")}
-        </Alert>
-      )}
-      {voidError && (
-        <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")}>
-          {voidError}
-        </Alert>
-      )}
+      ) : null}
 
-      <form onSubmit={(e) => void handleSubmit(e)} noValidate className="flex flex-col gap-6">
-        <Card className="p-4 sm:p-6 flex flex-col gap-4">
-          <Heading as="h3" className="text-base">
-            {t("femme.serviceRecords.clientSection")}
-          </Heading>
-          {isReadOnly ? (
-            <Text>{record?.clientFullName}</Text>
-          ) : (
-            <>
-              <ClientSearchField
-                key={clientFieldResetKey}
-                id="service-record-client-search"
-                value={clientSelection}
-                onChange={(sel) => {
-                  setClientSelection(sel);
-                  setClientError(null);
-                }}
-                activeOnly
-                hideOccasional
-                onCreateNew={
-                  allowClientCreateNew
-                    ? (q) =>
-                        navigate("/app/clients", {
-                          state: {
-                            openCreateClient: true,
-                            prefilledName: q,
-                            returnTo: "/app/service-records",
-                            returnTab: "new",
-                          },
-                        })
-                    : undefined
-                }
-                label={t("femme.serviceRecords.clientSearchLabel")}
-                placeholder={t("femme.serviceRecords.clientPlaceholder")}
-              />
-              <FieldValidationError id="service-record-client-err">{clientError}</FieldValidationError>
-            </>
-          )}
-        </Card>
-
-        <Card className="p-4 sm:p-6 flex flex-col gap-4">
-          <Heading as="h3" className="text-base">
-            {t("femme.serviceRecords.linesSection")}
-          </Heading>
-          <div className="flex flex-col gap-3 overflow-x-auto">
-            {lines.map((line, idx) => (
-              <div
-                key={line.key}
-                className="grid grid-cols-12 gap-2 items-start border border-[rgb(var(--color-border))] rounded p-3"
-              >
-                <div className="col-span-12 sm:col-span-4">
-                  {isReadOnly ? (
-                    <>
-                      <Label>{t("femme.serviceRecords.linesSection")}</Label>
-                      <Text>{line.pickedService?.name}</Text>
-                    </>
-                  ) : (
-                    <>
-                      <ServiceSearchField
-                        id={`service-record-line-svc-${idx}`}
-                        value={line.pickedService}
-                        onChange={(svc) => updateLineService(line.key, svc)}
-                        invalid={!!lineErrors[idx]?.service}
-                        errorDescribedById={`service-record-line-svc-err-${idx}`}
-                      />
-                      <FieldValidationError id={`service-record-line-svc-err-${idx}`}>
-                        {lineErrors[idx]?.service}
-                      </FieldValidationError>
-                    </>
-                  )}
-                </div>
-                <div className="col-span-12 sm:col-span-3">
-                  {isReadOnly ? (
-                    <>
-                      <Label>{t("femme.serviceRecords.lineProfessionalLabel")}</Label>
-                      <Text>{professionalName(line.professionalId)}</Text>
-                    </>
-                  ) : (
-                    <>
-                      <SearchableSelect<number>
-                        id={`service-record-line-prof-${idx}`}
-                        label={t("femme.serviceRecords.lineProfessionalLabel")}
-                        value={line.professionalId}
-                        onChange={(v) => updateLineProfessional(line.key, v)}
-                        options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
-                        filterPlaceholder={t("femme.serviceRecords.lineProfessionalPlaceholder")}
-                        noResultsText={t("femme.serviceRecords.lineProfessionalNoResults")}
-                        invalid={!!lineErrors[idx]?.professional}
-                        describedBy={
-                          lineErrors[idx]?.professional
-                            ? `service-record-line-prof-err-${idx}`
-                            : undefined
-                        }
-                      />
-                      <FieldValidationError id={`service-record-line-prof-err-${idx}`}>
-                        {lineErrors[idx]?.professional}
-                      </FieldValidationError>
-                    </>
-                  )}
-                </div>
-                <div className="col-span-6 sm:col-span-2">
-                  {isReadOnly ? (
-                    <>
-                      <Label>{t("femme.serviceRecords.lineUnitPriceLabel")}</Label>
-                      <Text>{line.pickedService ? line.unitPrice || "—" : "—"}</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Label htmlFor={`service-record-line-price-${idx}`}>
-                        {t("femme.serviceRecords.lineUnitPriceLabel")}
-                      </Label>
-                      <Input
-                        id={`service-record-line-price-${idx}`}
-                        inputMode="numeric"
-                        value={line.unitPrice}
-                        onChange={(e) => updateLineUnitPrice(line.key, e.target.value)}
-                        invalid={!!lineErrors[idx]?.unitPrice}
-                        aria-describedby={
-                          lineErrors[idx]?.unitPrice
-                            ? `service-record-line-price-err-${idx}`
-                            : undefined
-                        }
-                      />
-                      <FieldValidationError id={`service-record-line-price-err-${idx}`}>
-                        {lineErrors[idx]?.unitPrice}
-                      </FieldValidationError>
-                    </>
-                  )}
-                </div>
-                <div className="col-span-6 sm:col-span-2">
-                  {isReadOnly ? (
-                    <>
-                      <Label>{t("femme.serviceRecords.lineQuantityLabel")}</Label>
-                      <Text>{line.quantity}</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Label htmlFor={`service-record-line-qty-${idx}`}>
-                        {t("femme.serviceRecords.lineQuantityLabel")}
-                      </Label>
-                      <Input
-                        id={`service-record-line-qty-${idx}`}
-                        type="number"
-                        min={1}
-                        step={1}
-                        inputMode="numeric"
-                        value={line.quantity}
-                        onChange={(e) =>
-                          updateLineQuantity(line.key, Math.max(0, Math.floor(Number(e.target.value))))
-                        }
-                        invalid={!!lineErrors[idx]?.quantity}
-                        aria-describedby={
-                          lineErrors[idx]?.quantity
-                            ? `service-record-line-qty-err-${idx}`
-                            : undefined
-                        }
-                      />
-                      <FieldValidationError id={`service-record-line-qty-err-${idx}`}>
-                        {lineErrors[idx]?.quantity}
-                      </FieldValidationError>
-                    </>
-                  )}
-                </div>
-                {!isReadOnly && (
-                  <div className="col-span-12 sm:col-span-1 flex items-end justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeLine(line.key)}
-                      aria-label={t("femme.serviceRecords.removeLine")}
-                    >
-                      ×
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          {!isReadOnly && (
-            <Button type="button" variant="secondary" size="sm" className="w-fit" onClick={addLine}>
-              {t("femme.serviceRecords.addLine")}
-            </Button>
-          )}
-        </Card>
-
-        {distinctProfessionalIds.length > 0 && (
-          <Card className="p-4 sm:p-6 flex flex-col gap-4">
-            <Heading as="h3" className="text-base">
-              {t("femme.serviceRecords.tipsSection")}
-            </Heading>
-            <div className="flex flex-col gap-3">
-              {distinctProfessionalIds.map((id) => (
-                <div key={id} className="flex flex-wrap items-center gap-3">
-                  <span className="min-w-[160px] text-sm font-medium">{professionalName(id)}</span>
-                  {isReadOnly ? (
-                    <Text>{formatAmountDecimal(tips[id] ? parseMaskedMoney(tips[id]) : 0)}</Text>
-                  ) : (
-                    <Input
-                      id={`service-record-tip-${id}`}
-                      inputMode="numeric"
-                      value={tips[id] ?? ""}
-                      onChange={(e) =>
-                        setTips((prev) => ({ ...prev, [id]: maskMoneyInput(e.target.value) }))
-                      }
-                      placeholder="0"
-                      aria-label={`${t("femme.serviceRecords.tipsAmountLabel")} — ${professionalName(id)}`}
-                      className="w-32"
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleSave();
+        }}
+        noValidate
+        className="flex flex-col gap-3"
+      >
+        {record ? (
+          clientRow
+        ) : (
+          <section className="flex flex-col gap-2" aria-labelledby="sr-client-h">
+            <h3 id="sr-client-h" className={SECTION_TITLE}>
+              {t("femme.serviceRecords.clientSection")}
+            </h3>
+            <ClientSearchField
+              id="service-record-client-search"
+              value={clientSelection}
+              onChange={(sel) => {
+                setClientSelection(sel);
+                setClientError(null);
+              }}
+              activeOnly
+              onCreateNew={
+                allowClientCreateNew
+                  ? (q) =>
+                      navigate("/app/clients", {
+                        state: {
+                          openCreateClient: true,
+                          prefilledName: q,
+                          returnTo: "/app/service-records",
+                          returnTab: "new",
+                        },
+                      })
+                  : undefined
+              }
+              label={t("femme.serviceRecords.clientSearchLabel")}
+              placeholder={t("femme.serviceRecords.clientPlaceholder")}
+            />
+            <FieldValidationError id="service-record-client-err">{clientError}</FieldValidationError>
+          </section>
         )}
 
-        <div className="flex flex-col gap-1 text-sm">
-          <div className="flex justify-between font-semibold">
-            <span>{t("femme.serviceRecords.total")}</span>
-            <span>{formatAmountDecimal(total.toFixed(2))}</span>
-          </div>
-          {tipsTotal > 0 && (
-            <div className="flex justify-between">
-              <span className="text-[rgb(var(--color-muted-foreground))]">
-                {t("femme.serviceRecords.tipsTotal")}
-              </span>
-              <span>{formatAmountDecimal(tipsTotal.toFixed(2))}</span>
+        <section className="flex flex-col gap-1" aria-labelledby="sr-lines-h">
+          <h3 id="sr-lines-h" className={SECTION_TITLE}>
+            {t("femme.serviceRecords.linesSection")}
+          </h3>
+          {professionalMode ? (
+            <ProfessionalServiceLines
+              items={lines
+                .filter((l) => !isBlankLine(l))
+                .map((l) => ({ key: l.key, name: l.pickedService?.name ?? "", quantity: l.quantity }))}
+              onIncrement={(key) => updateLineQuantity(key, (lines.find((l) => l.key === key)?.quantity ?? 0) + 1)}
+              onDecrement={decrementLine}
+              onAdd={() => setPickerOpen(true)}
+            />
+          ) : (
+            <>
+          {lines.map((line, idx) => {
+            const professionalName =
+              professionals.find((p) => p.id === line.professionalId)?.fullName ??
+              record?.lines.find((l) => l.professionalId === line.professionalId)?.professionalName ??
+              undefined;
+            // Rows are plain text; only a new (empty) line, one with an error or one the user tapped
+            // opens its fields.
+            const expanded = !!lineErrors[idx]?.service || (openLines[line.key] ?? !line.pickedService);
+            const bodyId = `service-record-line-body-${idx}`;
+            const summaryName = line.pickedService?.name ?? t("femme.serviceRecords.newServiceLine");
+            const summarySub = professionalName || t("femme.serviceRecords.lineFillIn");
+            return (
+              <div
+                key={line.key}
+                data-testid="service-record-line"
+                className="border-t border-line first:border-t-0"
+              >
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  aria-controls={bodyId}
+                  data-testid="service-record-line-toggle"
+                  onClick={() => setOpenLines((o) => ({ ...o, [line.key]: !expanded }))}
+                  className="flex min-h-14 w-full items-center gap-3 rounded-lg px-1 py-2.5 text-left hover:bg-bg"
+                >
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <b className="truncate text-ink">{summaryName}</b>
+                    <span className="truncate text-sm text-ink-3">{summarySub}</span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <b
+                      className="block whitespace-nowrap font-heading text-ink"
+                      data-testid="service-record-line-subtotal"
+                    >
+                      {formatAmountDecimal(lineSubtotal(line).toFixed(2))}
+                    </b>
+                    {line.quantity > 1 ? (
+                      <span className="block text-xs text-ink-3">× {line.quantity}</span>
+                    ) : null}
+                  </span>
+                  <span aria-hidden="true" className="w-4 shrink-0 text-center text-ink-3">
+                    {expanded ? "⌃" : "✎"}
+                  </span>
+                </button>
+                {expanded ? (
+                  <div id={bodyId} className="mb-2 flex flex-col gap-2 rounded-card bg-bg p-3.5">
+                    <ServiceSearchField
+                      id={`service-record-line-svc-${idx}`}
+                      label={t("femme.serviceRecords.lineServiceAria", { n: idx + 1 })}
+                      labelSrOnly
+                      hidePrices={professionalMode}
+                      value={line.pickedService}
+                      onChange={(svc) => updateLineService(line.key, svc)}
+                      invalid={!!lineErrors[idx]?.service}
+                      errorDescribedById={`service-record-line-svc-err-${idx}`}
+                    />
+                    <FieldValidationError id={`service-record-line-svc-err-${idx}`}>
+                      {lineErrors[idx]?.service}
+                    </FieldValidationError>
+                    <div
+                      className={`grid grid-cols-[4rem_minmax(0,1fr)] items-end gap-x-2 gap-y-2 ${
+                        professionalMode ? "sm:grid-cols-[minmax(0,1fr)_4rem]" : "sm:grid-cols-[minmax(0,1fr)_4rem_7rem]"
+                      }`}
+                    >
+                      {professionalMode ? null : (
+                      <div className="order-last col-span-2 flex min-w-0 flex-col gap-1 sm:order-none sm:col-span-1">
+                        <span aria-hidden="true" className={CAPTION}>
+                          {t("femme.serviceRecords.lineProfessionalLabel")}
+                        </span>
+                        <SearchableSelect<number>
+                          id={`service-record-line-prof-${idx}`}
+                          label={t("femme.serviceRecords.lineProfessionalAria", { n: idx + 1 })}
+                          labelSrOnly
+                          value={line.professionalId}
+                          onChange={(v) => updateLineProfessional(line.key, v)}
+                          options={professionals.map((p) => ({ value: p.id, label: p.fullName }))}
+                          filterPlaceholder={t("femme.serviceRecords.lineProfessionalPlaceholder")}
+                          noResultsText={t("femme.serviceRecords.lineProfessionalNoResults")}
+                        />
+                      </div>
+                      )}
+                      <div className="flex flex-col gap-1">
+                        <span aria-hidden="true" className={CAPTION}>
+                          {t("femme.serviceRecords.colQty")}
+                        </span>
+                        <Label htmlFor={`service-record-line-qty-${idx}`} className="sr-only">
+                          {t("femme.serviceRecords.lineQuantityLabel")}
+                        </Label>
+                        <Input
+                          id={`service-record-line-qty-${idx}`}
+                          type="number"
+                          min={1}
+                          step={1}
+                          inputMode="numeric"
+                          aria-label={t("femme.serviceRecords.lineQuantityLabel")}
+                          value={line.quantity}
+                          onChange={(e) =>
+                            updateLineQuantity(line.key, Math.max(0, Math.floor(Number(e.target.value))))
+                          }
+                        />
+                      </div>
+                      {professionalMode ? null : (
+                      <div className="flex flex-col gap-1">
+                        <span aria-hidden="true" className={CAPTION}>
+                          {t("femme.serviceRecords.colPrice")}
+                        </span>
+                        <Label htmlFor={`service-record-line-price-${idx}`} className="sr-only">
+                          {t("femme.serviceRecords.lineUnitPriceLabel")}
+                        </Label>
+                        <Input
+                          id={`service-record-line-price-${idx}`}
+                          inputMode="numeric"
+                          value={line.unitPrice}
+                          placeholder="0"
+                          onChange={(e) => updateLineUnitPrice(line.key, e.target.value)}
+                        />
+                      </div>
+                      )}
+                    </div>
+                    {lines.length > 1 || (professionalMode && line.pickedService) ? (
+                      <button
+                        type="button"
+                        onClick={() => removeLine(line.key)}
+                        data-testid="service-record-line-remove"
+                        className="min-h-11 self-end rounded-lg px-3 text-sm font-semibold text-ink-3 hover:bg-bg hover:text-danger"
+                      >
+                        ✕ {t("femme.serviceRecords.removeLine")}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+          <button
+            type="button"
+            onClick={addLine}
+            data-testid="service-record-add-line"
+            className="mt-1 flex min-h-11 items-center gap-1.5 bg-transparent px-1 text-sm font-bold text-primary underline-offset-2 hover:underline"
+          >
+            + {t("femme.serviceRecords.addLine")}
+          </button>
+            </>
+          )}
+          {professionalMode ? null : (
+            <div className="flex items-baseline justify-between pt-1" data-testid="service-record-total">
+              <span className="text-sm font-bold text-ink-2">{t("femme.serviceRecords.total")}</span>
+              <span className="font-heading text-2xl font-extrabold text-ink">{formatAmountDecimal(total.toFixed(2))}</span>
             </div>
           )}
-        </div>
+        </section>
 
-        {!isReadOnly && (
-          <div className="flex flex-wrap gap-3">
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={saving || clientSelection?.type !== "client"}
-              data-testid="service-record-submit"
-            >
-              {saving
-                ? t("femme.serviceRecords.saving")
-                : record
-                  ? t("femme.serviceRecords.saveChanges")
-                  : t("femme.serviceRecords.save")}
-            </Button>
-            {record && isOpen && (
-              <Button
-                type="button"
-                variant="success"
-                onClick={handleGenerateInvoice}
-                data-testid="service-record-generate-invoice"
-              >
-                {t("femme.serviceRecords.generateInvoice")}
-              </Button>
-            )}
-            {record && isOpen && (
-              <Button
-                type="button"
-                variant="danger"
-                disabled={showVoidForm}
-                onClick={() => setShowVoidForm(true)}
-              >
-                {t("femme.serviceRecords.voidButton")}
-              </Button>
-            )}
-            {record && isOpen && showVoidForm && (
-              <Button type="button" variant="secondary" onClick={() => setShowVoidForm(false)}>
-                {t("femme.serviceRecords.voidCancel")}
-              </Button>
-            )}
-            {onClose && (
+        {professionalMode || !tipsVisible ? null : (
+        <section aria-label={t("femme.serviceRecords.tipsSection")}>
+          <div className="flex min-h-11 items-center justify-between">
+            <span className={SECTION_TITLE}>{t("femme.serviceRecords.tipsSection")}</span>
+            {tipsTotal > 0 ? (
+              <span data-testid="service-record-tips-total" className="text-sm font-bold text-ink-3">
+                {t("femme.serviceRecords.tipsTotal")} {formatAmountDecimal(tipsTotal.toFixed(2))}
+              </span>
+            ) : null}
+          </div>
+          {tipsVisible ? (
+            <div id="service-record-tips-body" className="flex flex-col gap-1 pb-2">
+              {distinctProfessionalIds.length === 0 ? (
+                <Text variant="muted" className="text-sm">
+                  {t("femme.serviceRecords.tipsNeedProfessional")}
+                </Text>
+              ) : (
+                <div
+                  className="flex flex-col rounded-card border border-line bg-page px-3"
+                  data-testid="service-record-tips"
+                >
+                  {distinctProfessionalIds.map((id) => (
+                    <div key={id} className="flex items-center gap-3 border-t border-line py-2 first:border-t-0">
+                      <span
+                        aria-hidden="true"
+                        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-lt font-heading text-xs font-extrabold text-primary"
+                      >
+                        {initialsOf(professionalName(id))}
+                      </span>
+                      <Label htmlFor={`service-record-tip-${id}`} className="min-w-0 flex-1 break-words font-semibold">
+                        {professionalName(id)}
+                      </Label>
+                      <Input
+                        id={`service-record-tip-${id}`}
+                        inputMode="numeric"
+                        aria-label={`${t("femme.serviceRecords.tipsAmountLabel")} · ${professionalName(id)}`}
+                        className="w-32 shrink-0 text-right"
+                        value={tips[id] ?? ""}
+                        onChange={(e) =>
+                          setTips((prev) => ({ ...prev, [id]: maskMoneyInput(e.target.value) }))
+                        }
+                        placeholder="0"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </section>
+        )}
+
+        {!professionalMode && record && isOpen && showVoidForm ? (
+          <div
+            className="flex flex-col gap-3 rounded-xl border border-line p-3"
+            data-testid="service-record-void-form"
+          >
+            {voidError ? (
+              <Alert variant="destructive" title={t("femme.serviceRecords.errorTitle")}>
+                {voidError}
+              </Alert>
+            ) : null}
+            <div>
+              <Label htmlFor="service-record-void-reason">{t("femme.serviceRecords.voidReason")}</Label>
+              <Textarea
+                id="service-record-void-reason"
+                value={voidReason}
+                onChange={(e) => {
+                  setVoidReason(e.target.value);
+                  setVoidReasonError(null);
+                }}
+                placeholder={t("femme.serviceRecords.voidReasonPlaceholder")}
+                rows={2}
+                aria-invalid={!!voidReasonError}
+                aria-describedby={voidReasonError ? "service-record-void-reason-err" : undefined}
+                className="mt-1 w-full"
+              />
+              <FieldValidationError id="service-record-void-reason-err">
+                {voidReasonError}
+              </FieldValidationError>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
               <Button
                 type="button"
                 variant="secondary"
-                size="sm"
-                onClick={onClose}
-                data-testid="service-record-close"
+                className="min-h-11"
+                onClick={() => setShowVoidForm(false)}
               >
-                {t("femme.serviceRecords.close")}
+                {t("femme.serviceRecords.voidCancel")}
               </Button>
-            )}
+              <Button
+                type="button"
+                variant="danger"
+                className="min-h-11"
+                disabled={voiding}
+                data-testid="service-record-void-confirm"
+                onClick={(e) => void handleVoid(e)}
+              >
+                {voiding ? t("femme.serviceRecords.voiding") : t("femme.serviceRecords.voidConfirm")}
+              </Button>
+            </div>
           </div>
-        )}
-        {isReadOnly && onClose && (
-          <div className="flex flex-wrap gap-3">
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-11"
+            onClick={onClose}
+            data-testid="service-record-close"
+          >
+            {record ? t("femme.serviceRecords.close") : t("femme.serviceRecords.cancel")}
+          </Button>
+          <Button
+            type="submit"
+            variant={record && !professionalMode ? "outline" : "primary"}
+            className="min-h-11"
+            disabled={saving || clientSelection === null}
+            data-testid="service-record-submit"
+          >
+            {saving ? t("femme.serviceRecords.saving") : t("femme.serviceRecords.saveShort")}
+          </Button>
+          <span className="flex-1" aria-hidden="true" />
+          {!professionalMode && record && isOpen ? (
             <Button
               type="button"
-              variant="secondary"
-              size="sm"
-              onClick={onClose}
-              data-testid="service-record-close"
+              variant="primary"
+              className="min-h-11"
+              disabled={saving}
+              onClick={() => void handlePay()}
+              data-testid="service-record-generate-invoice"
             >
-              {t("femme.serviceRecords.close")}
+              {t("femme.serviceRecords.pay")}
             </Button>
-          </div>
-        )}
-      </form>
-
-      {record && isOpen && showVoidForm && (
-        <form
-          className="border-t border-[rgb(var(--color-border))] pt-4 flex flex-col gap-3"
-          onSubmit={(e) => void handleVoid(e)}
-          noValidate
-        >
-          <Heading as="h3" className="text-base">
-            {t("femme.serviceRecords.voidTitle")}
-          </Heading>
-          <div>
-            <Label htmlFor="service-record-void-reason">{t("femme.serviceRecords.voidReason")}</Label>
-            <Textarea
-              id="service-record-void-reason"
-              value={voidReason}
-              onChange={(e) => {
-                setVoidReason(e.target.value);
-                setVoidReasonError(null);
-              }}
-              placeholder={t("femme.serviceRecords.voidReasonPlaceholder")}
-              rows={2}
-              aria-invalid={!!voidReasonError}
-              aria-describedby={voidReasonError ? "service-record-void-reason-err" : undefined}
-              className="mt-1 w-full"
+          ) : null}
+          {menuItems.length > 0 ? (
+            <MoreActionsMenu
+              compact
+              label={t("femme.calendar.action.more")}
+              items={menuItems}
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
+              triggerTestId="service-record-more"
+              menuTestId="service-record-actions-panel"
+              disabled={saving}
             />
-            <FieldValidationError id="service-record-void-reason-err">
-              {voidReasonError}
-            </FieldValidationError>
-          </div>
-          <div className="flex gap-2">
-            <Button type="submit" variant="danger" size="sm" disabled={voiding}>
-              {voiding ? t("femme.serviceRecords.voiding") : t("femme.serviceRecords.voidConfirm")}
-            </Button>
-          </div>
-        </form>
-      )}
-    </div>
-  );
-}
-
-export function ServiceRecordEditorLoadingFallback() {
-  const { t } = useTranslation();
-  return (
-    <div className="flex items-center gap-2">
-      <Spinner size="sm" />
-      <Text>{t("femme.serviceRecords.loading")}</Text>
+          ) : null}
+        </div>
+      </form>
     </div>
   );
 }

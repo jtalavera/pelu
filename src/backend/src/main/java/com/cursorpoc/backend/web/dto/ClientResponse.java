@@ -17,4 +17,12 @@ public record ClientResponse(
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
     String identityDocumentType,
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientTaxpayerType}, o null. */
-    String taxpayerType) {}
+    String taxpayerType,
+    /** HU-69: birthday (day + month, optional year) and "¿cómo nos conoció?". */
+    Integer birthdayDay,
+    Integer birthdayMonth,
+    Integer birthdayYear,
+    String acquisitionChannel,
+    String acquisitionChannelOther,
+    /** Last CLOSED service record (same rule as the visit count), ISO instant, or null. */
+    String lastVisitAt) {}

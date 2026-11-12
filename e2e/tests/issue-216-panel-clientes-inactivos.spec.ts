@@ -10,6 +10,7 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openDashboardMore } from "../fixtures/dashboard";
 
 /**
  * Issue #216 · "Panel de clientes inactivos" — Dashboard widget listing active clients with at
@@ -72,6 +73,7 @@ type WidgetRow = { fullName: string; phone: string; inactivity: string };
  * concatenated cell text with no separator can otherwise merge e.g. a phone number with a
  * following "N days" into one bogus digit run). */
 async function widgetRows(page: import("@playwright/test").Page): Promise<WidgetRow[]> {
+  await openDashboardMore(page, "inactive");
   await expect(page.getByTestId("dashboard-inactive-clients")).toBeVisible();
   const rowLocators = await page.getByTestId("dashboard-inactive-client-row").all();
   const rows: WidgetRow[] = [];

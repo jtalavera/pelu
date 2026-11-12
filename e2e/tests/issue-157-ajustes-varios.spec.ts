@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { loginAsDemoApi, seedCategoryServiceProfessional, seedClient } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { goToCatalog } from "../fixtures/catalog";
+import { ensureCashSessionOpen, goToBillingHome } from "../fixtures/billing";
 
 test.describe("Issue #157 · Ajustes varios", () => {
-  test("AC1 · el mensaje de éxito de edición se muestra dentro del formulario, sin cerrar el modal", async ({
+  test("AC1 · el mensaje de éxito de edición se muestra una sola vez en la lista tras cerrar el formulario", async ({
     page,
     request,
   }) => {
@@ -12,7 +13,7 @@ test.describe("Issue #157 · Ajustes varios", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);
-    await page.goto("/app/services");
+    await goToCatalog(page, "services");
     await page.locator("#services-list-filter").fill(seed.serviceFullName);
     const card = page.getByTestId(`svc-row-${seed.serviceId}`);
     await expect(card).toBeVisible({ timeout: 20_000 });
@@ -20,13 +21,11 @@ test.describe("Issue #157 · Ajustes varios", () => {
     const dlg = page.getByRole("dialog", { name: "Edit service" });
     await dlg.getByRole("button", { name: "Save" }).click();
 
-    // The success message renders inside the edit form itself — the modal must stay open
-    // and interactive (not close back to the table with the message shown there instead).
-    await expect(dlg.getByRole("alert").filter({ hasText: "Changes saved successfully." })).toBeVisible({
+    // Catalog redesign: the form closes on save and one passing notice confirms it on the list.
+    await expect(page.getByRole("alert").filter({ hasText: "Changes saved successfully." })).toHaveCount(1, {
       timeout: 10_000,
     });
-    await expect(dlg.getByLabel("Name")).toBeVisible();
-    await expect(page.getByRole("alert").filter({ hasText: "Changes saved successfully." })).toHaveCount(1);
+    await expect(dlg).toHaveCount(0);
   });
 
   test("AC2 · el formulario de edición de cliente ya no tiene botón de cerrar (x)", async ({
@@ -44,7 +43,7 @@ test.describe("Issue #157 · Ajustes varios", () => {
     await expect(page).toHaveURL(/\/app\/clients$/);
   });
 
-  test("AC3 · tildar 'Comprobante sin nominar' vacía Nombre/Número; destildar los restaura", async ({
+  test("AC3 · vaciar el buscador de cliente vuelve a 'Sin nombre' (vacía Nombre/Número); volver a elegirlo los restaura", async ({
     page,
     request,
   }) => {
@@ -54,7 +53,7 @@ test.describe("Issue #157 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 12));
     await page.getByRole("button", { name: client.fullName }).click();
@@ -62,18 +61,21 @@ test.describe("Issue #157 · Ajustes varios", () => {
     const nameInput = page.locator("#client-display-name");
     const numberInput = page.locator("#client-identity-document-number");
     const typeSelect = page.locator("#client-identity-document-type");
-    const checkbox = page.getByLabel("Unnamed invoice (no client identified)");
 
     await expect(nameInput).toHaveValue(client.fullName);
     await expect(numberInput).toHaveValue(ruc);
     await expect(typeSelect).toHaveValue("RUC");
 
-    await checkbox.check();
-    await expect(nameInput).toHaveValue("");
-    await expect(numberInput).toHaveValue("");
-    await expect(typeSelect).toHaveValue("INNOMINADO");
+    // Redesign: instead of the "Unnamed invoice" checkbox, clearing the client search goes back to
+    // the "No name" default (the identification fields are emptied and hidden)...
+    await page.locator("#billing-client-search").fill("");
+    await expect(page.getByTestId("billing-client-default")).toBeVisible();
+    await expect(nameInput).toHaveCount(0);
+    await expect(numberInput).toHaveCount(0);
 
-    await checkbox.uncheck();
+    // ...and picking the client again restores them.
+    await page.locator("#billing-client-search").fill(client.fullName.slice(0, 12));
+    await page.getByRole("button", { name: client.fullName }).click();
     await expect(nameInput).toHaveValue(client.fullName);
     await expect(numberInput).toHaveValue(ruc);
     await expect(typeSelect).toHaveValue("RUC");

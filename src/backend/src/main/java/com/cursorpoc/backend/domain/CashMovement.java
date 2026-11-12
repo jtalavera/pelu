@@ -46,6 +46,10 @@ public class CashMovement {
   @Column(name = "tip_withdrawal_id")
   private Long tipWithdrawalId;
 
+  /** Recorded after the register was closed: shown in its movements, never part of its figures. */
+  @Column(name = "after_close", nullable = false)
+  private boolean afterClose;
+
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "created_by_user_id")
   private AppUser createdByUser;
@@ -108,6 +112,14 @@ public class CashMovement {
 
   public void setTipWithdrawalId(Long tipWithdrawalId) {
     this.tipWithdrawalId = tipWithdrawalId;
+  }
+
+  public boolean isAfterClose() {
+    return afterClose;
+  }
+
+  public void setAfterClose(boolean afterClose) {
+    this.afterClose = afterClose;
   }
 
   public AppUser getCreatedByUser() {

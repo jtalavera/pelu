@@ -10,6 +10,7 @@ import {
   restoreCommissionsGlobal,
   voidInvoice,
   type CommissionWorld,
+  openCommissionsMore,
 } from "../../fixtures/commissions";
 
 /** HU-COM-13 · Asignar un profesional a una línea facturada sin profesional. */
@@ -50,7 +51,7 @@ test("desde «Líneas sin profesional»: elige un profesional, genera su comisi�
 
   await loginAdminUi(page, w);
   await page.getByRole("link", { name: "Commissions" }).click();
-  await page.getByRole("tab", { name: "Reports" }).click();
+  await openCommissionsMore(page, "Reports");
   const row = page.getByTestId(`orphan-line-${lineId}`);
   await expect(row).toContainText(w.service.name);
   await row.getByRole("button", { name: "Assign professional" }).click();
@@ -86,7 +87,7 @@ test("desde «Líneas sin profesional»: elige un profesional, genera su comisi�
   const movement = page.getByTestId("movement-row").filter({ hasText: w.bea.name });
   await expect(movement).toContainText("50.000");
   await expect(movement).toContainText("No se cargó al facturar");
-  await expect(movement.getByRole("button", { name: "Change professional" })).toBeVisible();
+  await expect(movement.getByRole("button", { name: /actions/i })).toBeVisible();
 });
 
 test("anular la factura después de asignar revierte la comisión del profesional asignado", async ({ request }) => {

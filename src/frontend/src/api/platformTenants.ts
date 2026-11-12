@@ -17,6 +17,11 @@ export type TenantStatusChange = {
   newStatus: TenantStatus;
 };
 
+/** Accent skin of a tenant's UI (brand manual, "Variación en Interfaces"); see styles/skins.css. */
+export type TenantSkin = "DURAZNO" | "CELESTE" | "ROSA";
+
+export const TENANT_SKINS: readonly TenantSkin[] = ["DURAZNO", "CELESTE", "ROSA"];
+
 export type PlatformTenant = {
   id: number;
   name: string;
@@ -24,6 +29,7 @@ export type PlatformTenant = {
   tierId: number | null;
   tierName: string | null;
   status: TenantStatus;
+  skin: TenantSkin;
   lastTierChange: TenantTierChange | null;
   lastStatusChange: TenantStatusChange | null;
 };
@@ -75,6 +81,11 @@ export function updateTenant(
   payload: UpdateTenantPayload,
 ): Promise<PlatformTenant> {
   return femmePutJson<PlatformTenant>(`/api/platform/tenants/${id}`, payload);
+}
+
+/** Platform Admin picks the tenant's accent skin. */
+export function updateTenantSkin(id: number, skin: TenantSkin): Promise<PlatformTenant> {
+  return femmePutJson<PlatformTenant>(`/api/platform/tenants/${id}/skin`, { skin });
 }
 
 /** HU-40 AC-1/AC-4: suspend or reactivate a tenant. */
@@ -161,4 +172,19 @@ export function resendTenantUserInvitation(
     `/api/platform/tenants/${tenantId}/admins/${userId}/resend-invitation`,
     {},
   );
+}
+
+export type ImpersonationToken = {
+  accessToken: string;
+  expiresInSeconds: number;
+  tokenType: string;
+};
+
+/**
+ * Issue #310: the Platform Admin impersonates the tenant's administrator — returns a tenant-bound
+ * ADMIN access token (flagged as an impersonation) for the new tab opened by
+ * `openImpersonationInNewTab`.
+ */
+export function impersonateTenant(tenantId: number): Promise<ImpersonationToken> {
+  return femmePostJson<ImpersonationToken>(`/api/platform/tenants/${tenantId}/impersonation`, {});
 }

@@ -19,7 +19,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
 
   @Query(
       """
-      SELECT c FROM Client c WHERE c.tenant.id = :tenantId
+      SELECT c FROM Client c WHERE c.tenant.id = :tenantId AND c.generic = false
       AND (:q IS NULL
            OR LOWER(c.fullName) LIKE LOWER(CONCAT('%', :q, '%'))
            OR (c.phone IS NOT NULL AND c.phone LIKE CONCAT('%', :q, '%'))
@@ -27,7 +27,7 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
            OR (c.ruc IS NOT NULL AND c.ruc LIKE CONCAT('%', :q, '%')))
       AND (:active IS NULL OR c.active = :active)
       AND (:withRuc IS NULL OR c.ruc IS NOT NULL)
-      AND (:isNew IS NULL OR c.visitCount = 0)
+      AND (:createdSince IS NULL OR c.createdAt >= :createdSince)
       ORDER BY c.fullName ASC
       """)
   Page<Client> findByTenantFilteredPaged(
@@ -35,12 +35,10 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
       @Param("q") String q,
       @Param("active") Boolean active,
       @Param("withRuc") Boolean withRuc,
-      @Param("isNew") Boolean isNew,
+      @Param("createdSince") Instant createdSince,
       Pageable pageable);
 
-  @Query(
-      "SELECT c FROM Client c WHERE c.tenant.id = :tenantId AND c.ruc = :ruc AND c.ruc IS NOT NULL")
-  Optional<Client> findByTenantIdAndRuc(@Param("tenantId") Long tenantId, @Param("ruc") String ruc);
+  Optional<Client> findFirstByTenant_IdAndGenericTrue(Long tenantId);
 
   long deleteByTenant_Id(Long tenantId);
 
@@ -67,10 +65,13 @@ public interface ClientRepository extends JpaRepository<Client, Long> {
              MAX(a.startAt) AS lastCompletedVisit
       FROM Client c
       LEFT JOIN Appointment a ON a.client = c AND a.status = :completedStatus AND a.tenant.id = :tenantId
-      WHERE c.tenant.id = :tenantId AND c.active = true
+      WHERE c.tenant.id = :tenantId AND c.active = true AND c.generic = false
       GROUP BY c.id, c.fullName, c.phone
       """)
   List<InactiveClientRow> findActiveClientsWithLastCompletedVisit(
       @Param("tenantId") Long tenantId,
       @Param("completedStatus") AppointmentStatus completedStatus);
+
+  /** HU-69: active clients with a birthday on file (dashboard alerts). */
+  List<Client> findByTenant_IdAndActiveTrueAndBirthdayMonthIsNotNull(Long tenantId);
 }

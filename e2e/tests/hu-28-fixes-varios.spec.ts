@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import {
+  API_BASE,
   apiGetJson,
   apiPostJson,
+  authHeaders,
   calendarVisibleWeekSlotIso,
   ensureActiveFiscalStampForInvoices,
   ensureCashSessionOpenApi,
@@ -9,9 +11,10 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { DEMO_EMAIL, DEMO_PASSWORD, loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome, openMoreOptions, openLineMoreOptions } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
-import { ensureCalendarShowsAppointmentByTestId, pickSearchableOption } from "../fixtures/ui";
+import { ensureCalendarShowsAppointmentByTestId, filterAgendaByProfessional, pickSearchableOption } from "../fixtures/ui";
+import { openItemMoreOptions } from "../fixtures/catalog";
 
 test.describe("HU-28 · Fixes varios", () => {
   // AC1 — Login subtitle
@@ -57,7 +60,10 @@ test.describe("HU-28 · Fixes varios", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await page.goto("/app/professionals");
-    const nameCell = page.locator("tr").filter({ hasText: seed.professionalFullName }).first();
+    // The list is server-side paginated: search so the seeded professional is on the first page
+    // however many professionals other specs have created.
+    await page.locator("#professionals-inline-search").fill(seed.professionalFullName);
+    const nameCell = page.locator('[data-testid^="prof-row-"]').filter({ hasText: seed.professionalFullName }).first();
     await expect(nameCell).toBeVisible({ timeout: 15_000 });
     await nameCell.click();
     // The edit dialog should appear pre-filled with the professional's name
@@ -74,7 +80,7 @@ test.describe("HU-28 · Fixes varios", () => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     // Open the new appointment dialog
     await page.getByRole("button", { name: /New appointment|Nuevo turno/ }).first().click();
     const dlg = page.getByRole("dialog");
@@ -178,6 +184,7 @@ test.describe("HU-28 · Fixes varios", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 5_000 });
     // The tax select must exist and default to IVA 10% (or first active as fallback)
+    await openItemMoreOptions(page);
     const taxSelect = dialog.getByLabel(/Tipo de impuesto|Tax type/);
     await expect(taxSelect).toBeVisible();
     const selectedValue = await taxSelect.inputValue();
@@ -196,23 +203,21 @@ test.describe("HU-28 · Fixes varios", () => {
     await ensureCashSessionOpen(page);
     await page.goto("/app/billing");
     // Click "New Invoice" inside the Cash Register tab
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible({ timeout: 5_000 });
-    // Wait for the form
-    const form = page.locator("[data-testid='new-invoice-form'], form").first();
-    // Fill the first line
-    const priceInput = page.locator("[id^='line-price-']").first();
+    // The price and the per-item discount belong to an item row, so pick an item first.
+    const seed = await seedCategoryServiceProfessional(request, token);
+    await pickServiceLine(page, seed.serviceFullName, 0);
+    const priceInput = page.locator("#line-price-0");
     await priceInput.fill("100000");
-    // Enable discount for first line
-    const discountToggle = page.locator("[id^='line-disc-toggle-']").first();
-    await discountToggle.check();
+    // Per-item discount lives in the line's "More options"; enable it for the first line.
+    await openLineMoreOptions(page, 0);
+    await page.locator("#line-disc-toggle-0").check();
     // Fill 10% discount
-    const discountValueInput = page.locator("[id^='line-disc-val-']").first();
-    await discountValueInput.fill("10");
+    await page.locator("#line-disc-val-0").fill("10");
     // Line total should reflect 90000 (100000 - 10%)
-    const lineTotal = page.locator(".tabular-nums").first();
-    await expect(lineTotal).toContainText("90.000");
+    await expect(page.getByTestId("line-total-0")).toContainText("90.000");
   });
 
   // AC9 — Billing: submit scrolls/focuses first invalid field
@@ -227,7 +232,7 @@ test.describe("HU-28 · Fixes varios", () => {
     await ensureCashSessionOpen(page);
     await page.goto("/app/billing");
     // Click "New Invoice" inside the Cash Register tab
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     // The submit button is disabled until client+item+payment are filled (tested in HU-14.13).
     // Trigger form submit programmatically to verify the validation-focus behavior.
@@ -251,24 +256,21 @@ test.describe("HU-28 · Fixes varios", () => {
     expect(focusedId).not.toBe("");
   });
 
-  // AC10 — Dashboard date click navigates to calendar for that date
-  test("HU-28 · AC10 clic en fecha del mini-calendario del dashboard navega al calendario en esa fecha", async ({
+  // AC10 — (Inicio redesign) the monthly mini-calendar was removed from the dashboard: the
+  // Calendario screen already shows the month, and "Ver agenda" is the way in.
+  test("HU-28 · AC10 el Inicio ya no muestra el mini-calendario y «View agenda» lleva al calendario", async ({
     page,
   }) => {
     await loginAsDemo(page);
     await page.goto("/app");
-    // Wait for the dashboard to load
-    await page.waitForLoadState("networkidle");
-    // Find a day cell with role="button" (current-month days) in the mini calendar.
-    // The cells contain just a number (the day).
-    const dayBtn = page.locator("[role='button']").filter({ hasText: /^\d{1,2}$/ }).first();
-    await expect(dayBtn).toBeVisible({ timeout: 10_000 });
-    await dayBtn.click();
+    await expect(page.getByTestId("dashboard-summary")).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("[data-tour='dashboard-mini-cal']")).toHaveCount(0);
+    await page.getByRole("link", { name: "View agenda →" }).click();
     await expect(page).toHaveURL(/\/app\/calendar/, { timeout: 5_000 });
   });
 
   // AC11 — Calendar blocks: PENDING has dotted border, CONFIRMED has check icon
-  test("HU-28 · AC11 bloques del calendario: PENDING tiene borde punteado y CONFIRMED tiene ícono de check", async ({
+  test("HU-28 · AC11 bloques del calendario: PENDING lleva su ícono de estado y CONFIRMED el ícono de check", async ({
     page,
     request,
   }) => {
@@ -282,16 +284,28 @@ test.describe("HU-28 · Fixes varios", () => {
       startAt: calendarVisibleWeekSlotIso(10, 0),
     });
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
+    // Only this professional's turnos: others of the same hour would fold ours into «+N».
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
     await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
-    // Check PENDING block has dotted border style (status is reflected via inline borderLeft style)
+    // Week grid redesign: the status is an icon on the card (no dotted border any more).
     const pendingBlock = page.getByTestId(`calendar-appt-${appt.id}`);
-    if (await pendingBlock.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      const borderStyle = await pendingBlock.evaluate(
-        (el) => window.getComputedStyle(el).borderLeftStyle,
-      );
-      expect(borderStyle).toBe("dotted");
-    }
+    await expect(pendingBlock).toBeVisible();
+    await expect(pendingBlock.getByTestId(`status-icon-${appt.id}`)).toHaveAttribute("data-status", "PENDING");
+    await expect(pendingBlock.getByTestId(`status-icon-${appt.id}`)).toHaveAttribute("aria-label", "Pending");
+    expect(await pendingBlock.evaluate((el) => getComputedStyle(el).borderLeftStyle)).toBe("solid");
+
+    // Once confirmed, the card shows the check icon instead.
+    const res = await request.patch(`${API_BASE}/api/appointments/${appt.id}/status`, {
+      headers: authHeaders(token),
+      data: { status: "CONFIRMED", cancelReason: null },
+    });
+    expect(res.ok(), await res.text()).toBeTruthy();
+    await page.reload();
+    await filterAgendaByProfessional(page, new RegExp(seed.professionalFullName));
+    await ensureCalendarShowsAppointmentByTestId(page, `calendar-appt-${appt.id}`);
+    await expect(page.getByTestId(`confirmed-check-${appt.id}`)).toBeVisible();
+    await expect(page.getByTestId(`status-icon-${appt.id}`)).toHaveCount(0);
   });
 
   // AC12 — Tour persistence: seen state persisted to backend

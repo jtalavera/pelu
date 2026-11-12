@@ -1,15 +1,22 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Appointment;
 import com.cursorpoc.backend.domain.Client;
+import com.cursorpoc.backend.domain.ClientBirthday;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.SalonService;
+import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.AppointmentStatus;
+import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
+import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.AppointmentCreateRequest;
 import com.cursorpoc.backend.web.dto.AppointmentResponse;
@@ -19,9 +26,10 @@ import com.cursorpoc.backend.web.dto.PageResponse;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -41,6 +49,10 @@ public class AppointmentService {
   private final SalonServiceRepository salonServiceRepository;
   private final ClientRepository clientRepository;
   private final BusinessMetrics businessMetrics;
+  private final ServiceRecordRepository serviceRecordRepository;
+  private final InvoiceRepository invoiceRepository;
+
+  private final FemmeTimeProperties timeProperties;
 
   public AppointmentService(
       AppointmentRepository appointmentRepository,
@@ -48,7 +60,13 @@ public class AppointmentService {
       ProfessionalRepository professionalRepository,
       SalonServiceRepository salonServiceRepository,
       ClientRepository clientRepository,
-      BusinessMetrics businessMetrics) {
+      BusinessMetrics businessMetrics,
+      FemmeTimeProperties timeProperties,
+      ServiceRecordRepository serviceRecordRepository,
+      InvoiceRepository invoiceRepository) {
+    this.serviceRecordRepository = serviceRecordRepository;
+    this.invoiceRepository = invoiceRepository;
+    this.timeProperties = timeProperties;
     this.appointmentRepository = appointmentRepository;
     this.tenantRepository = tenantRepository;
     this.professionalRepository = professionalRepository;
@@ -60,14 +78,15 @@ public class AppointmentService {
   /** Maximum months of history returned by the client history endpoint. */
   public static final int CLIENT_HISTORY_MONTHS = 6;
 
+  public static final int MIN_DURATION_MINUTES = 5;
+  public static final int MAX_DURATION_MINUTES = 480;
+
   @Transactional(readOnly = true)
   public List<AppointmentResponse> list(
       long tenantId, Instant from, Instant to, Long professionalId, Long clientId) {
-    return appointmentRepository
-        .findInRangeFiltered(tenantId, from, to, professionalId, clientId)
-        .stream()
-        .map(this::toResponse)
-        .toList();
+    return toResponses(
+        tenantId,
+        appointmentRepository.findInRangeFiltered(tenantId, from, to, professionalId, clientId));
   }
 
   /**
@@ -85,8 +104,7 @@ public class AppointmentService {
     Page<Appointment> apptPage =
         appointmentRepository.findClientHistoryPaged(
             tenantId, clientId, sixMonthsAgo, now, pageable);
-    List<AppointmentResponse> content =
-        apptPage.getContent().stream().map(this::toResponse).collect(Collectors.toList());
+    List<AppointmentResponse> content = toResponses(tenantId, apptPage.getContent());
     return new PageResponse<>(
         content,
         apptPage.getNumber(),
@@ -109,7 +127,8 @@ public class AppointmentService {
 
     Instant startAt = parseInstant(request.startAt());
     validateStartNotInPast(startAt);
-    Instant endAt = startAt.plusSeconds((long) service.getDurationMinutes() * 60);
+    Instant endAt =
+        startAt.plusSeconds(resolveDurationMinutes(request.durationMinutes(), service) * 60L);
 
     validateNoOverlap(tenantId, professional.getId(), startAt, endAt, null);
 
@@ -149,8 +168,25 @@ public class AppointmentService {
     appointmentRepository.save(appointment);
     if (newStatus != previousStatus) {
       recordStatusTransition(tenantId, appointment, newStatus);
+      if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.NO_SHOW) {
+        releaseOpenServiceRecord(appointment);
+      }
     }
     return toResponse(appointment);
+  }
+
+  /**
+   * A cancelled / no-show turno lets go of its ficha when it is still open: the ficha stays open
+   * (it is not voided), keeps its other turnos and can be assigned to another turno. A charged
+   * ficha keeps its link.
+   */
+  private void releaseOpenServiceRecord(Appointment appointment) {
+    ServiceRecord record = appointment.getServiceRecord();
+    if (record != null && record.getStatus() == ServiceRecordStatus.OPEN) {
+      record.getAppointments().remove(appointment);
+      appointment.setServiceRecord(null);
+      appointmentRepository.save(appointment);
+    }
   }
 
   /** Issue #268: counts only transitions into CANCELLED / NO_SHOW (re-saving is not counted). */
@@ -181,7 +217,8 @@ public class AppointmentService {
 
     Instant startAt = parseInstant(request.startAt());
     validateStartNotInPast(startAt);
-    Instant endAt = startAt.plusSeconds((long) service.getDurationMinutes() * 60);
+    Instant endAt =
+        startAt.plusSeconds(resolveDurationMinutes(request.durationMinutes(), service) * 60L);
 
     validateNoOverlap(tenantId, professional.getId(), startAt, endAt, appointmentId);
 
@@ -207,6 +244,17 @@ public class AppointmentService {
 
     appointmentRepository.save(appointment);
     return toResponse(appointment);
+  }
+
+  /** The turno's own length (5–480 min) or, when none is given, the service's duration. */
+  static int resolveDurationMinutes(Integer requested, SalonService service) {
+    if (requested == null) {
+      return service.getDurationMinutes();
+    }
+    if (requested < MIN_DURATION_MINUTES || requested > MAX_DURATION_MINUTES) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "APPOINTMENT_DURATION_INVALID");
+    }
+    return requested;
   }
 
   private void validateStartNotInPast(Instant startAt) {
@@ -273,7 +321,37 @@ public class AppointmentService {
     }
   }
 
+  private List<AppointmentResponse> toResponses(long tenantId, List<Appointment> appointments) {
+    Map<Long, Long> invoiceIds = new HashMap<>();
+    if (!appointments.isEmpty()) {
+      List<Long> ids = appointments.stream().map(Appointment::getId).toList();
+      for (Object[] row :
+          invoiceRepository.findInvoiceIdsByAppointmentIds(tenantId, ids, InvoiceStatus.ISSUED)) {
+        invoiceIds.put((Long) row[0], (Long) row[1]);
+      }
+    }
+    return appointments.stream()
+        .map(a -> toResponse(a, recordIdOf(a), invoiceIds.get(a.getId())))
+        .toList();
+  }
+
   private AppointmentResponse toResponse(Appointment a) {
+    Long recordId = recordIdOf(a);
+    Long invoiceId = null;
+    for (Object[] row :
+        invoiceRepository.findInvoiceIdsByAppointmentIds(
+            a.getTenant().getId(), List.of(a.getId()), InvoiceStatus.ISSUED)) {
+      invoiceId = (Long) row[1];
+    }
+    return toResponse(a, recordId, invoiceId);
+  }
+
+  /** The turno's ficha id (the lazy reference needs no extra query), or null. */
+  private static Long recordIdOf(Appointment a) {
+    return a.getServiceRecord() != null ? a.getServiceRecord().getId() : null;
+  }
+
+  private AppointmentResponse toResponse(Appointment a, Long serviceRecordId, Long invoiceId) {
     String clientName = null;
     Long clientId = null;
     if (a.getClient() != null) {
@@ -285,14 +363,21 @@ public class AppointmentService {
         clientId,
         clientName,
         a.getProfessional().getId(),
-        a.getProfessional().getFullName(),
+        a.getProfessional().getDisplayName(),
         a.getSalonService().getId(),
         a.getSalonService().getName(),
-        a.getSalonService().getDurationMinutes(),
+        (int) java.time.Duration.between(a.getStartAt(), a.getEndAt()).toMinutes(),
         a.getStartAt().toString(),
         a.getEndAt().toString(),
         a.getStatus().name(),
         a.getCancelReason(),
-        a.getReminderSentAt() != null ? a.getReminderSentAt().toString() : null);
+        a.getReminderSentAt() != null ? a.getReminderSentAt().toString() : null,
+        a.getClient() != null
+            && ClientBirthday.isBirthdayOn(
+                a.getClient().getBirthdayDay(),
+                a.getClient().getBirthdayMonth(),
+                a.getStartAt().atZone(timeProperties.zoneId()).toLocalDate()),
+        serviceRecordId,
+        invoiceId);
   }
 }

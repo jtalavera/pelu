@@ -6,6 +6,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openManualVoidingForm, unfoldSifen } from "../fixtures/ui";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
@@ -41,34 +42,35 @@ test.describe("Issue #194 · Configuración → SIFEN por solapas", () => {
     await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
   });
 
-  test("AC1 · la pantalla se organiza en las solapas 'Certificado', 'Código de seguridad (CSC)' y 'Numeración inutilizada'", async ({
+  test("AC1 · la pantalla se organiza en secciones plegables 'Certificado', 'Código de seguridad (CSC)' y 'Numeración inutilizada'", async ({
     page,
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/settings/sifen");
 
-    const certTab = page.getByRole("tab", { name: "Certificate" });
-    const voidingTab = page.getByRole("tab", { name: "Voided numbering" });
-    await expect(certTab).toBeVisible();
-    await expect(voidingTab).toBeVisible();
+    // Redesign: the three sections are folds (not tabs).
+    const certFold = page.getByTestId("sifen-fold-certificate");
+    const cscFold = page.getByTestId("sifen-fold-csc");
+    const voidingFold = page.getByTestId("sifen-fold-numberVoiding");
+    await expect(certFold).toBeVisible();
+    await expect(cscFold).toBeVisible();
+    await expect(voidingFold).toBeVisible();
 
-    await expect(page.getByRole("tab", { name: "Security code (CSC)" })).toBeVisible();
-
-    // "Certificado" is the default active solapa: the (read-only) list is visible — the upload
-    // belongs to the platform's root user — and the voiding table is hidden.
-    await expect(certTab).toHaveAttribute("aria-selected", "true");
+    // "Certificate" is open by default: the (read-only) list is visible — the upload belongs to
+    // the platform's root user — and the voiding section is closed.
+    await expect(certFold).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByTestId("sifen-certificate-list-section")).toBeVisible();
     await expect(page.getByTestId("sifen-certificate-upload-section")).toHaveCount(0);
+    await expect(voidingFold).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByTestId("sifen-number-voiding-section")).toBeHidden();
 
-    // Switching to "Numeración inutilizada" hides the certificate content and shows the voiding one.
-    await voidingTab.click();
-    await expect(voidingTab).toHaveAttribute("aria-selected", "true");
+    // Opening "Voided numbering" shows the voiding content.
+    await voidingFold.click();
+    await expect(voidingFold).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByTestId("sifen-number-voiding-section")).toBeVisible();
-    await expect(page.getByTestId("sifen-certificate-list-section")).toBeHidden();
   });
 
-  test("AC1 · en 'Numeración inutilizada' el formulario de alta manual va antes de la tabla", async ({
+  test("AC1 · en 'Numeración inutilizada' el alta manual se abre desde un enlace bajo la lista y muestra su formulario", async ({
     page,
     request,
   }) => {
@@ -77,19 +79,19 @@ test.describe("Issue #194 · Configuración → SIFEN por solapas", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/settings/sifen");
-    await page.getByRole("tab", { name: "Voided numbering" }).click();
+    await unfoldSifen(page, "numberVoiding");
 
-    const form = page.getByTestId("sifen-number-voiding-manual-form");
+    // Redesign: the manual-registration option is a link under the list that opens a dialog.
+    const open = page.getByTestId("sifen-number-voiding-manual-open");
     const firstRow = page.getByTestId("sifen-number-voiding-row").first();
-    await expect(form).toBeVisible();
+    await expect(open).toBeVisible();
     await expect(firstRow).toBeVisible();
-
-    const formBox = await form.boundingBox();
+    const openBox = await open.boundingBox();
     const rowBox = await firstRow.boundingBox();
-    expect(formBox).not.toBeNull();
-    expect(rowBox).not.toBeNull();
-    // The manual-registration option sits above the table.
-    expect(formBox!.y).toBeLessThan(rowBox!.y);
+    expect(openBox!.y).toBeGreaterThan(rowBox!.y);
+    const form = await openManualVoidingForm(page);
+    await expect(form.locator("#manual-range-from")).toBeVisible();
+    await expect(form.locator("#manual-range-to")).toBeVisible();
   });
 
   test("AC2 · la tabla de numeración inutilizada está paginada como el historial de comprobantes", async ({
@@ -101,10 +103,10 @@ test.describe("Issue #194 · Configuración → SIFEN por solapas", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/settings/sifen");
-    await page.getByRole("tab", { name: "Voided numbering" }).click();
+    await unfoldSifen(page, "numberVoiding");
 
     const section = page.getByTestId("sifen-number-voiding-section");
-    await expect(section.getByRole("table")).toBeVisible();
+    await expect(page.getByTestId("sifen-number-voiding-row").first()).toBeVisible();
 
     // Default page size is 10 — exactly one page's worth of rows shown.
     await expect(page.getByTestId("sifen-number-voiding-row")).toHaveCount(10);

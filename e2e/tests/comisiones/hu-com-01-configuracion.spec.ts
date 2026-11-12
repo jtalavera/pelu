@@ -7,6 +7,7 @@ import {
   restoreCommissionsGlobal,
   setTenantFlag,
   type CommissionWorld,
+  openCommissionsMore,
 } from "../../fixtures/commissions";
 
 /** HU-COM-01 · Configurar el módulo de comisiones del negocio (base y comisión general en Reglas → Reglas generales). */
@@ -23,19 +24,11 @@ test.afterAll(async ({ request }) => {
 
 async function openSettings(page: import("@playwright/test").Page) {
   await page.getByRole("link", { name: "Commissions" }).click();
-  await page.getByRole("tab", { name: "Settings" }).click();
+  await openCommissionsMore(page, "Settings");
   await expect(page.getByTestId("commission-settings")).toBeVisible();
 }
 
-async function openGeneralRules(page: import("@playwright/test").Page) {
-  await page.getByRole("link", { name: "Commissions" }).click();
-  await page.getByRole("tab", { name: "Rules", exact: true }).click();
-  await page.getByRole("tab", { name: "General rules" }).click();
-  await expect(page.getByTestId("rules-general")).toBeVisible();
-}
-
-async function saveAllImmediately(page: import("@playwright/test").Page) {
-  await page.getByTestId("rules-save").click();
+async function applyImmediately(page: import("@playwright/test").Page) {
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText(/never modify accrued commissions/).first()).toBeVisible();
   await dialog.getByTestId("commission-apply-mode-IMMEDIATE").check();
@@ -43,46 +36,55 @@ async function saveAllImmediately(page: import("@playwright/test").Page) {
   await expect(page.getByRole("status").filter({ hasText: "Change applied." })).toBeVisible();
 }
 
-test("la base por defecto es «Sin IVA», con ayuda y ejemplo, en Reglas generales; cambiarla pide cómo aplicarla y queda auditada", async ({
+async function changeSetting(page: import("@playwright/test").Page, scope: string) {
+  await page.getByTestId(`commission-setting-change-${scope}`).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+}
+
+test("la base por defecto es «Sin IVA», con ayuda y ejemplo, en Configuración; cambiarla pide cómo aplicarla y queda auditada", async ({
   page,
 }) => {
   await loginAdminUi(page, w);
-  await openGeneralRules(page);
+  await openSettings(page);
+  await expect(page.getByTestId("commission-setting-BASE")).toContainText("Excluding VAT");
+  await changeSetting(page, "BASE");
   await expect(page.getByTestId("commission-base-NET_OF_TAX")).toBeChecked();
   await expect(page.getByText("Line total after discounts, minus the line's VAT.")).toBeVisible();
   await expect(page.getByText(/excluding VAT 40,000 Gs; including VAT 44,000 Gs/).first()).toBeVisible();
 
   await page.getByTestId("commission-base-TAX_INCLUDED").check();
-  await expect(page.getByTestId("rules-pending-count")).toHaveText("1 unsaved change");
-  await saveAllImmediately(page);
-  await expect(page.getByTestId("rules-pending-count")).toHaveCount(0);
+  await page.getByTestId("commission-setting-save").click();
+  await applyImmediately(page);
+  await expect(page.getByTestId("commission-setting-BASE")).toContainText("Including VAT");
 
-  await page.getByRole("tab", { name: "Settings" }).click();
+  await page.getByTestId("commission-history-toggle").click();
   const history = page.getByTestId("commission-settings-history");
   await expect(history.getByText("Calculation base").first()).toBeVisible();
   await expect(history.getByText("Including VAT").first()).toBeVisible();
   await expect(history.getByText(w.adminEmail).first()).toBeVisible();
 });
 
-test("comisión general de servicios y de productos: valida el rango con ejemplo y se guardan juntas con «Guardar cambios»", async ({
+test("comisión general de servicios y de productos: valida el rango con ejemplo y se guarda con «Aplicar»", async ({
   page,
   request,
 }) => {
   await loginAdminUi(page, w);
-  await openGeneralRules(page);
-  await page.locator("#commission-DEFAULT_SERVICE").fill("120");
-  await page.locator("#commission-DEFAULT_SERVICE").blur();
-  const err = page.locator("#commission-DEFAULT_SERVICE-error");
+  await openSettings(page);
+  await changeSetting(page, "DEFAULT_SERVICE");
+  await page.locator("#commission-setting-percent").fill("120");
+  await page.getByTestId("commission-setting-save").click();
+  const err = page.locator("#commission-setting-percent-error");
   await expect(err).toHaveText(/between 0 and 100.*e\.g\. 40\.5/);
-  await expect(page.locator("#commission-DEFAULT_SERVICE")).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByTestId("rules-save")).toBeDisabled();
+  await expect(page.locator("#commission-setting-percent")).toHaveAttribute("aria-invalid", "true");
 
-  await page.locator("#commission-DEFAULT_SERVICE").fill("35,5");
-  await page.locator("#commission-DEFAULT_SERVICE").blur();
-  await page.locator("#commission-DEFAULT_PRODUCT").fill("8");
-  await page.locator("#commission-DEFAULT_PRODUCT").blur();
-  await expect(page.getByTestId("rules-pending-count")).toHaveText("2 unsaved changes");
-  await saveAllImmediately(page);
+  await page.locator("#commission-setting-percent").fill("35,5");
+  await page.getByTestId("commission-setting-save").click();
+  await applyImmediately(page);
+
+  await changeSetting(page, "DEFAULT_PRODUCT");
+  await page.locator("#commission-setting-percent").fill("8");
+  await page.getByTestId("commission-setting-save").click();
+  await applyImmediately(page);
 
   const s = await apiGetJson<{ defaultPercentService: number; defaultPercentProduct: number }>(
     request,
@@ -91,7 +93,7 @@ test("comisión general de servicios y de productos: valida el rango con ejemplo
   );
   expect(Number(s.defaultPercentService)).toBe(35.5);
   expect(Number(s.defaultPercentProduct)).toBe(8);
-  await expect(page.locator("#commission-DEFAULT_SERVICE")).toHaveValue("35,5");
+  await expect(page.getByTestId("commission-setting-DEFAULT_SERVICE")).toContainText("35,5");
 });
 
 test("la periodicidad se elige entre semanal, quincenal, mensual y manual sin preguntar cómo aplicarla", async ({
@@ -99,6 +101,7 @@ test("la periodicidad se elige entre semanal, quincenal, mensual y manual sin pr
 }) => {
   await loginAdminUi(page, w);
   await openSettings(page);
+  await changeSetting(page, "PERIODICITY");
   const select = page.locator("#commission-periodicity");
   await expect(select.locator("option")).toHaveText([
     "Weekly (Monday to Sunday)",
@@ -107,12 +110,14 @@ test("la periodicidad se elige entre semanal, quincenal, mensual y manual sin pr
     "Manual (free range)",
   ]);
   await select.selectOption("WEEKLY");
-  await page.getByTestId("commission-save-periodicity").click();
+  await page.getByTestId("commission-setting-save").click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: "Periodicity updated." })).toBeVisible();
+  await changeSetting(page, "PERIODICITY");
   await select.selectOption("MONTHLY");
-  await page.getByTestId("commission-save-periodicity").click();
+  await page.getByTestId("commission-setting-save").click();
   await expect(page.getByRole("status").filter({ hasText: "Periodicity updated." })).toBeVisible();
+  await expect(page.getByTestId("commission-setting-PERIODICITY")).toContainText("Monthly");
 });
 
 test("con la flag apagada la sección no aparece y la API responde FEATURE_NOT_ENABLED", async ({ page, request }) => {

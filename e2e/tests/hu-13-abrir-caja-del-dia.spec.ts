@@ -1,13 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { API_BASE, apiPostJsonStatus, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { goToBillingHome } from "../fixtures/billing";
 
 test.describe("HU-13 · Abrir caja del día", () => {
   test("HU-13 · 1 abrir caja con monto inicial y ver confirmación", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await expect(page.getByText("Manage the daily cash register and issue invoices.")).toBeVisible();
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    // Redesign: the screen opens on the billing home — title plus the cash register status chip.
+    await expect(page.getByRole("heading", { name: "Billing", level: 1 })).toBeVisible();
+    await goToBillingHome(page);
     const openBtn = page.getByRole("button", { name: "Open cash register" });
     if (await openBtn.isVisible()) {
       await page.getByLabel("Initial cash amount").fill("50000");

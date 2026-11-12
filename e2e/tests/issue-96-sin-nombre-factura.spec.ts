@@ -10,7 +10,7 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome } from "../fixtures/billing";
 import {
   clickIssueInvoiceAndExpectSuccess,
   pdfContainsText,
@@ -70,7 +70,7 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
@@ -83,7 +83,7 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
 
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     const issued = await clickIssueInvoiceAndExpectSuccess(page);
 
     const pdf = await fetchInvoicePdf(request, token, issued.id);
@@ -92,7 +92,7 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
     expect(pdfContainsText(pdf, client.fullName)).toBe(false);
   });
 
-  test("marcar 'Comprobante sin nominar' sin elegir cliente habilita 'Issue invoice'", async ({
+  test("sin elegir cliente (Sin nombre por defecto) 'Issue invoice' queda habilitado", async ({
     page,
     request,
   }) => {
@@ -104,18 +104,17 @@ test.describe("Issue #96 · 'Sin nombre' cuando no se solicita factura con RUC",
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     await ensurePaymentMethodChosen(page);
 
-    // No client picked from the search field at all — button stays disabled until identified.
-    await expect(page.getByRole("button", { name: "Issue invoice" })).toBeDisabled();
-
-    await page.getByLabel("Unnamed invoice (no client identified)").check();
+    // Redesign: no client picked from the search field means "No name" — it no longer needs a
+    // checkbox, so the button is enabled as soon as there is an item and a payment method.
+    await expect(page.getByTestId("billing-client-default")).toBeVisible();
     await expect(page.getByRole("button", { name: "Issue invoice" })).toBeEnabled();
     await clickIssueInvoiceAndExpectSuccess(page);
   });

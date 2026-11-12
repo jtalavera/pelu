@@ -9,7 +9,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome } from "../fixtures/billing";
 import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // SIFEN Manual Técnico V150, campo D205/iTiContRec (tipo de contribuyente del receptor): previously
@@ -36,6 +36,8 @@ test.describe("SIFEN D205 · Tipo de contribuyente (Física/Jurídica)", () => {
 
     const name = `E2E TaxpayerType ${Date.now()}`;
     await dlg.getByLabel("Full name").fill(name);
+    // Redesign: tax data lives under the dialog's "More data" fold.
+    await dlg.getByTestId("client-more-toggle").click();
     await expect(dlg.locator("#client-taxpayer-type")).toBeVisible();
 
     // Switching away from RUC hides the field (D205 doesn't apply without a RUC).
@@ -74,6 +76,7 @@ test.describe("SIFEN D205 · Tipo de contribuyente (Física/Jurídica)", () => {
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
+    await page.getByTestId("client-section-fiscal-toggle").click();
     await expect(page.locator("#detail-taxpayer-type")).toHaveValue("PERSONA_FISICA");
 
     await page.locator("#detail-taxpayer-type").selectOption("PERSONA_JURIDICA");
@@ -105,7 +108,7 @@ test.describe("SIFEN D205 · Tipo de contribuyente (Física/Jurídica)", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(clientName.slice(0, 14));
     await page.getByRole("button", { name: clientName }).click();
@@ -114,7 +117,7 @@ test.describe("SIFEN D205 · Tipo de contribuyente (Física/Jurídica)", () => {
 
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("50000");
-    await page.locator("#pay-amount-0").fill("50000");
+    await fillPaymentAmount(page, "50000");
 
     await ensurePaymentMethodChosen(page);
     const [res] = await Promise.all([

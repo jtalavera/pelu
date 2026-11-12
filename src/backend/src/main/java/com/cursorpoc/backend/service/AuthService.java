@@ -20,7 +20,6 @@ import com.cursorpoc.backend.security.JwtService;
 import com.cursorpoc.backend.web.dto.ActivateProfessionalRequest;
 import com.cursorpoc.backend.web.dto.ActivationTokenInfoResponse;
 import com.cursorpoc.backend.web.dto.ForgotPasswordRequest;
-import com.cursorpoc.backend.web.dto.GrantAccessResponse;
 import com.cursorpoc.backend.web.dto.LoginRequest;
 import com.cursorpoc.backend.web.dto.ResetPasswordRequest;
 import com.cursorpoc.backend.web.dto.TokenResponse;
@@ -228,6 +227,13 @@ public class AuthService {
 
   public TokenResponse refresh(FemmeUserPrincipal principal) {
     Instant now = Instant.now();
+    if (principal.isPinSession()) {
+      // HU-66: a PIN session stays a (short, device-bound) PIN session across refreshes.
+      return new TokenResponse(
+          jwtService.createPinSessionToken(principal, now),
+          JwtService.PIN_SESSION_TTL_SECONDS,
+          "Bearer");
+    }
     String token =
         jwtService.createAccessToken(
             principal.getUserId(),
@@ -237,7 +243,9 @@ public class AuthService {
             principal.getUsername(),
             principal.getRole(),
             principal.getProfessionalId(),
-            now);
+            now,
+            // Issue #310: an impersonation session stays one across sliding refreshes.
+            principal.isImpersonation());
     return new TokenResponse(token, jwtProperties.getAccessTokenTtlSeconds(), "Bearer");
   }
 
@@ -340,6 +348,11 @@ public class AuthService {
 
   @Transactional
   public void resetPassword(ResetPasswordRequest request) {
+    // Same minimum length the request DTO used to enforce, but answered with a code the reset page
+    // can explain instead of the generic INVALID_REQUEST.
+    if (request.newPassword().length() < 8) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PASSWORD_TOO_WEAK");
+    }
     String hash = sha256Hex(request.token());
     PasswordResetToken token =
         passwordResetTokenRepository
@@ -354,61 +367,6 @@ public class AuthService {
     token.setUsed(true);
     appUserRepository.save(user);
     passwordResetTokenRepository.save(token);
-  }
-
-  @Transactional
-  public GrantAccessResponse grantProfessionalAccess(
-      long tenantId, long professionalId, Locale locale) {
-    Professional professional =
-        professionalRepository
-            .findByIdAndTenant_Id(professionalId, tenantId)
-            .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
-
-    if (professional.getEmail() == null || professional.getEmail().isBlank()) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "PROFESSIONAL_EMAIL_REQUIRED_FOR_ACCESS");
-    }
-
-    String email = professional.getEmail().trim().toLowerCase();
-
-    // Invalidate any existing activation tokens for this professional
-    activationTokenRepository.invalidateAllForProfessional(professionalId);
-
-    String raw = UUID.randomUUID().toString();
-    String hash = sha256Hex(raw);
-    ProfessionalActivationToken token = new ProfessionalActivationToken();
-    token.setProfessional(professional);
-    token.setTokenHash(hash);
-    token.setExpiresAt(Instant.now().plus(48, ChronoUnit.HOURS));
-    token.setUsed(false);
-    activationTokenRepository.save(token);
-
-    professional.setSystemAccessAllowed(true);
-    professionalRepository.save(professional);
-
-    String activationUrl = frontendUrl + "/activate?token=" + raw;
-    emailService.sendActivationLink(
-        email, activationUrl, professional.getTenant().getName(), locale);
-
-    return new GrantAccessResponse(true, raw);
-  }
-
-  @Transactional
-  public void revokeProfessionalAccess(long tenantId, long professionalId) {
-    Professional professional =
-        professionalRepository
-            .findByIdAndTenant_Id(professionalId, tenantId)
-            .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
-
-    professional.setSystemAccessAllowed(false);
-    if (professional.getUser() != null) {
-      professional.getUser().setEnabled(false);
-      appUserRepository.save(professional.getUser());
-    }
-    activationTokenRepository.invalidateAllForProfessional(professionalId);
-    professionalRepository.save(professional);
   }
 
   /**
@@ -506,6 +464,18 @@ public class AuthService {
     Optional<AppUser> existing = appUserRepository.findByEmailAndTenant_Id(email, tenantId);
     if (existing.isPresent()) {
       user = existing.get();
+      // Issue #38 (3): only reuse a PROFESSIONAL user that is hers already or nobody's — never an
+      // admin's account (its password would be overwritten) nor another professional's.
+      boolean reusable =
+          user.getRole() == UserRole.PROFESSIONAL
+              && professionalRepository
+                  .findByUser_Id(user.getId())
+                  .map(linked -> linked.getId().equals(professional.getId()))
+                  .orElse(true);
+      if (!reusable) {
+        throw new ResponseStatusException(
+            HttpStatus.CONFLICT, "PROFESSIONAL_EMAIL_USED_BY_ANOTHER_USER");
+      }
       user.setEnabled(true);
     } else {
       user = new AppUser();

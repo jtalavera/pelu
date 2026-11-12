@@ -2,10 +2,12 @@ package com.cursorpoc.backend.config;
 
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
+import com.cursorpoc.backend.repository.SharedDeviceRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.security.CorrelationIdFilter;
 import com.cursorpoc.backend.security.JwtAuthenticationFilter;
 import com.cursorpoc.backend.security.JwtService;
+import com.cursorpoc.backend.security.ProfessionalAccessPolicy;
 import com.cursorpoc.backend.stock.IntegrationAuthenticationFilter;
 import com.cursorpoc.backend.stock.IntegrationTokenService;
 import java.util.ArrayList;
@@ -42,9 +44,14 @@ public class SecurityConfig {
       JwtService jwtService,
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
-      ProfessionalRepository professionalRepository) {
+      ProfessionalRepository professionalRepository,
+      SharedDeviceRepository sharedDeviceRepository) {
     return new JwtAuthenticationFilter(
-        jwtService, tenantRepository, appUserRepository, professionalRepository);
+        jwtService,
+        tenantRepository,
+        appUserRepository,
+        professionalRepository,
+        sharedDeviceRepository);
   }
 
   /** RT-21 (Hardening_SIFEN.md): see the filter's own javadoc for why it runs after JWT auth. */
@@ -78,6 +85,10 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/api/auth/**")
                     .permitAll()
+                    // HU-66: the shared device's PIN picker and PIN login authenticate with the
+                    // device credential header (checked by SharedDeviceService), not a JWT.
+                    .requestMatchers("/api/shared-device/**")
+                    .permitAll()
                     .requestMatchers("/api/admin/seed/reset")
                     .permitAll()
                     .requestMatchers("/api/admin/sifen-test-support/**")
@@ -92,8 +103,9 @@ public class SecurityConfig {
                     // IntegrationAuthenticationFilter (integration tokens only).
                     .requestMatchers(IntegrationAuthenticationFilter.TOKEN_PATH)
                     .permitAll()
+                    // HU-24 / issue #38: deny-by-default for PROFESSIONAL; others: authenticated.
                     .anyRequest()
-                    .authenticated())
+                    .access(new ProfessionalAccessPolicy()))
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(integrationFilter, JwtAuthenticationFilter.class)
         .addFilterAfter(correlationIdFilter, JwtAuthenticationFilter.class)

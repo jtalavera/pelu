@@ -56,20 +56,40 @@ describe("FiscalStampSettingsPage (HU-02b)", () => {
     cleanup();
   });
 
-  it("lists registered stamps section and add form when empty", async () => {
+  async function openEditDialog(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: /actions for stamp/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /^edit stamp$/i }));
+    return (await screen.findAllByRole("dialog"))[0];
+  }
+
+  it("shows the empty state with an Add stamp action that opens the form in a dialog", async () => {
+    const user = userEvent.setup();
     renderPage();
     expect(await screen.findByText(/No stamps yet/i)).toBeTruthy();
-    expect(screen.getByRole("button", { name: /add stamp/i })).toBeTruthy();
-    expect(screen.getByLabelText(/stamp number/i)).toBeTruthy();
+    expect(screen.queryByLabelText(/stamp number/i)).toBeNull();
+    await user.click(screen.getByTestId("fiscal-stamp-add"));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText(/stamp number/i)).toBeTruthy();
+  });
+
+  it("lists each stamp as a row with its status and next number, actions in a menu", async () => {
+    femmeJsonMock.mockResolvedValueOnce([ACTIVE_STAMP]);
+    const user = userEvent.setup();
+    renderPage();
+    const row = await screen.findByTestId(`fiscal-stamp-row-${ACTIVE_STAMP.id}`);
+    expect(row.textContent).toMatch(/Stamp 12345678/);
+    expect(row.textContent).toMatch(/001-001-0000005/);
+    await user.click(within(row).getByRole("button", { name: /actions for stamp/i }));
+    expect(await screen.findByRole("menuitem", { name: /deactivate/i })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: /^delete$/i })).toBeTruthy();
   });
 
   it("edit dialog lets every field be edited while the stamp has no invoices (issue #290)", async () => {
     femmeJsonMock.mockResolvedValueOnce([ACTIVE_STAMP]);
     const user = userEvent.setup();
     renderPage();
-    await screen.findByText(ACTIVE_STAMP.stampNumber);
-    await user.click(screen.getAllByRole("button", { name: /^edit stamp$/i })[0]);
-    const dialog = (await screen.findAllByRole("dialog"))[0];
+    await screen.findByTestId(`fiscal-stamp-row-${ACTIVE_STAMP.id}`);
+    const dialog = await openEditDialog(user);
     const expectations: [RegExp, string][] = [
       [/^stamp number$/i, ACTIVE_STAMP.stampNumber],
       [/^validity start$/i, ACTIVE_STAMP.validFrom],
@@ -93,9 +113,8 @@ describe("FiscalStampSettingsPage (HU-02b)", () => {
     femmeJsonMock.mockResolvedValueOnce([usedStamp]);
     const user = userEvent.setup();
     renderPage();
-    await screen.findByText(usedStamp.stampNumber);
-    await user.click(screen.getAllByRole("button", { name: /^edit stamp$/i })[0]);
-    const dialog = (await screen.findAllByRole("dialog"))[0];
+    await screen.findByTestId(`fiscal-stamp-row-${usedStamp.id}`);
+    const dialog = await openEditDialog(user);
     const field = (label: RegExp) => within(dialog).getByLabelText(label) as HTMLInputElement;
     for (const locked of [
       /^stamp number$/i,
@@ -116,9 +135,8 @@ describe("FiscalStampSettingsPage (HU-02b)", () => {
     femmePutJsonMock.mockResolvedValue({ ...ACTIVE_STAMP, nextEmissionNumber: 25 });
     const user = userEvent.setup();
     renderPage();
-    await screen.findByText(ACTIVE_STAMP.stampNumber);
-    await user.click(screen.getAllByRole("button", { name: /^edit stamp$/i })[0]);
-    const dialog = (await screen.findAllByRole("dialog"))[0];
+    await screen.findByTestId(`fiscal-stamp-row-${ACTIVE_STAMP.id}`);
+    const dialog = await openEditDialog(user);
     const replace = async (label: RegExp, value: string) => {
       const input = within(dialog).getByLabelText(label);
       await user.clear(input);
@@ -146,12 +164,14 @@ describe("FiscalStampSettingsPage (HU-02b)", () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText(/No stamps yet/i);
+    await user.click(screen.getByTestId("fiscal-stamp-add"));
+    await screen.findByRole("dialog");
     await user.type(screen.getByLabelText(/^stamp number$/i), "12345678");
     const vf = screen.getByLabelText(/^validity start$/i);
     await user.type(vf, "2026-10-10");
     await user.type(screen.getByLabelText(/^number from$/i), "1");
     await user.type(screen.getByLabelText(/starting invoice number/i), "1");
-    await user.click(screen.getByRole("button", { name: /add stamp/i }));
+    await user.click(screen.getByTestId("fiscal-stamp-create-submit"));
     expect(femmePostJsonMock).toHaveBeenCalledWith(
       "/api/fiscal-stamps",
       expect.objectContaining({
@@ -178,7 +198,7 @@ describe("FiscalStampSettingsPage (HU-02b)", () => {
       expect(row.textContent).not.toMatch(/2025/);
       expect(row.textContent).toMatch(/Dec 31, 2026/);
       const openEnded = screen.getByTestId("fiscal-stamp-row-8");
-      expect(within(openEnded).getAllByText("—")).toHaveLength(2);
+      expect(openEnded.textContent).toMatch(/–\s—\s·/);
     } finally {
       vi.unstubAllEnvs();
     }

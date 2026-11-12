@@ -10,6 +10,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { goToBillingHome, goToInvoiceHistory, openInvoiceMainTab, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 
 // Billing tables (Caja → today's invoices, and Historial) and the invoice detail dialog refresh an invoice's SIFEN status on
 // their own as soon as the backend records it — no reload, no click. SIFEN statuses change in the
@@ -56,7 +57,7 @@ async function supportPost(request: APIRequestContext, path: string, data?: unkn
 
 function visibleRow(page: Page, clientName: string) {
   return page
-    .locator('tbody tr[role="button"]')
+    .locator('[data-testid^="invoice-history-row-"]')
     .filter({ hasText: clientName })
     .filter({ visible: true });
 }
@@ -81,9 +82,14 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    const row = visibleRow(page, clientName);
+    // Home: today's invoices are open by default (issue #384).
+    await goToBillingHome(page);
+    const row = page
+      .locator('[data-testid^="billing-today-row-"]')
+      .filter({ hasText: clientName })
+      .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await expect(row.getByText("Pending verification", { exact: true })).toBeVisible();
+    await expect(row.getByText("In progress", { exact: true })).toBeVisible();
 
     await supportPost(request, `/invoices/${invoiceId}/simulate-batch-result`, {
       batchResultCode: "0362",
@@ -108,11 +114,11 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
     const row = visibleRow(page, clientName);
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await expect(row.getByText("Pending verification", { exact: true })).toBeVisible();
+    await expect(row.getByText("In progress", { exact: true })).toBeVisible();
 
     await supportPost(request, `/invoices/${invoiceId}/simulate-batch-result`, {
       batchResultCode: "0362",
@@ -122,7 +128,7 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
       message: "RUC del emisor no está habilitado para utilizar este tipo de servicio",
     });
 
-    await expect(row.getByText("Not found / Rejected", { exact: true })).toBeVisible({
+    await expect(row.getByText("Needs attention", { exact: true })).toBeVisible({
       timeout: LIVE_UPDATE_TIMEOUT,
     });
   });
@@ -137,11 +143,11 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
     const row = visibleRow(page, clientName);
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await expect(row.getByText("Queued", { exact: true })).toBeVisible();
+    await expect(row.getByText("In progress", { exact: true })).toBeVisible();
 
     await supportPost(request, `/invoices/${invoiceId}/prepare-with-status/APPROVED`);
 
@@ -160,14 +166,14 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
     const row = visibleRow(page, clientName);
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
+    await openInvoiceSifenTab(page);
     const section = page.getByTestId("sifen-status-section");
-    await expect(section).toBeVisible();
     await expect(section.getByText("Pending verification", { exact: true })).toBeVisible();
 
     await supportPost(request, `/invoices/${invoiceId}/simulate-batch-result`, {
@@ -182,7 +188,8 @@ test.describe("Billing · el estado SIFEN se actualiza solo en las tablas de fac
       timeout: LIVE_UPDATE_TIMEOUT,
     });
     await expect(section.getByText("Pending verification", { exact: true })).toHaveCount(0);
-    // Once approved, the dialog offers the KuDE download — no reopen needed.
+    // Once approved, the dialog offers the KuDE download (on its "Invoice" tab) — no reopen needed.
+    await openInvoiceMainTab(page);
     await expect(page.getByTestId("sifen-kude-download-button")).toBeVisible();
   });
 });

@@ -10,6 +10,8 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { goToInvoiceHistory, searchInvoiceHistory } from "../fixtures/billing";
+import { unfoldSifen } from "../fixtures/ui";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
@@ -56,14 +58,32 @@ async function issueRejectedInvoice(
 }
 
 test.describe("Issue #190 · Ajustes varios", () => {
-  test("AC1 · el encabezado de la columna de fecha del comprobante dice 'Fecha factura'", async ({
+  // Redesign: the history rows have no column headers. The comprobante date and the SIFEN
+  // transmission date stay distinguishable: the first is the row's date, the second is labelled
+  // "Sent to SIFEN".
+  test("AC1 · la fecha del comprobante se distingue de la fecha de envío a SIFEN", async ({
     page,
+    request,
   }) => {
+    test.setTimeout(90_000);
+    const token = await loginAsDemoApi(request);
+    await ensureActiveFiscalStampForInvoices(request, token);
+    await ensureCashSessionOpenApi(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
+    const clientName = `E2E190 AC1 ${Date.now()}`;
+    await issueRejectedInvoice(request, token, seed.serviceId, seed.serviceFullName, clientName);
+
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await expect(page.getByRole("columnheader", { name: "Invoice date" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Date", exact: true })).toHaveCount(0);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
+    const row = page
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: clientName })
+      .filter({ visible: true });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await expect(row.getByTestId("invoice-row-date")).toContainText(/\d{1,2}:\d{2}/);
+    await expect(row.getByTestId("invoice-row-sifen-sent")).toContainText("Sent to SIFEN");
+    await expect(page.getByRole("columnheader")).toHaveCount(0);
   });
 
   test("AC2 + AC3 · 'Corregir y reenviar' muestra el número y la fecha de emisión del comprobante", async ({
@@ -82,16 +102,16 @@ test.describe("Issue #190 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
 
     const row = page
-      .locator('tbody tr[role="button"]', { hasText: clientName })
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: clientName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.locator('[data-testid^="invoice-row-correct-resend-"]').click();
 
-    const form = page.getByRole("dialog", { name: "Correct and resend" });
+    const form = page.getByRole("dialog", { name: /^Correct and resend/ });
     // AC3 — number next to the title, same shape as the detail modal ("Invoice #0001038").
     await expect(
       form.getByRole("heading", { name: /Correct and resend — Invoice #\d+/ }),
@@ -126,16 +146,17 @@ test.describe("Issue #190 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
     const row = page
-      .locator('tbody tr[role="button"]', { hasText: clientName })
+      .locator('[data-testid^="invoice-history-row-"]', { hasText: clientName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.locator('[data-testid^="invoice-row-correct-resend-"]').click();
 
-    const form = page.getByRole("dialog", { name: "Correct and resend" });
-    // AC5 — the permanent hint about the SIFEN restriction is always there.
+    const form = page.getByRole("dialog", { name: /^Correct and resend/ });
+    // AC5 — the hint about the SIFEN restriction is always one tap away under "More information".
+    await form.getByTestId("sifen-correct-resend-info-toggle").click();
     await expect(form.getByTestId("sifen-correct-resend-window-hint")).toBeVisible();
     // AC4 — past the window, a warning shows…
     await expect(form.getByTestId("sifen-correct-resend-window-expired")).toBeVisible();
@@ -171,20 +192,20 @@ test.describe("Issue #190 · Ajustes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(token190);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, token190);
 
     const pager = page.getByRole("navigation", { name: "Pagination" });
     await expect(pager).toContainText("1 / 2");
     await expect(
-      page.locator('tbody tr[role="button"]').filter({ visible: true }),
+      page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }),
     ).toHaveCount(10);
 
     // To the last page…
     await pager.getByRole("button", { name: "Next" }).click();
     await expect(pager).toContainText("2 / 2");
     await expect(
-      page.locator('tbody tr[role="button"]').filter({ visible: true }),
+      page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }),
     ).toHaveCount(2);
     await expect(pager.getByRole("button", { name: "Next" })).toBeDisabled();
 
@@ -192,9 +213,9 @@ test.describe("Issue #190 · Ajustes varios", () => {
     await pager.getByRole("button", { name: "Previous" }).click();
     await expect(pager).toContainText("1 / 2");
     await expect(
-      page.locator('tbody tr[role="button"]').filter({ visible: true }),
+      page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }),
     ).toHaveCount(10);
-    await expect(page.getByRole("heading", { name: "Invoice history" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "History", level: 1 })).toBeVisible();
   });
 
   test("AC7 · Configuración → SIFEN muestra certificados y numeración inutilizada en tablas", async ({
@@ -221,17 +242,14 @@ test.describe("Issue #190 · Ajustes varios", () => {
 
       // Certificates table (issue #194: now under the "Certificate" tab, the default one).
       const certSection = page.getByTestId("sifen-certificate-list-section");
-      await expect(certSection.getByRole("table")).toBeVisible();
-      await expect(certSection.getByRole("columnheader", { name: "Upload date" })).toBeVisible();
-      await expect(certSection.getByRole("columnheader", { name: "Status" })).toBeVisible();
+      // Redesign: the certificates are rows (name, upload date, status), not a table.
+      await expect(certSection).toBeVisible();
       await expect(page.getByTestId("sifen-certificate-row").first()).toBeVisible();
 
       // Voided-numbers table, with a per-row action column + the submit button in the row.
-      await page.getByRole("tab", { name: "Voided numbering" }).click();
+      await unfoldSifen(page, "numberVoiding");
       const voidingSection = page.getByTestId("sifen-number-voiding-section");
-      await expect(voidingSection.getByRole("table")).toBeVisible();
-      await expect(voidingSection.getByRole("columnheader", { name: "Range" })).toBeVisible();
-      await expect(voidingSection.getByRole("columnheader", { name: "Action" })).toBeVisible();
+      await expect(voidingSection).toBeVisible();
       const row = page.getByTestId("sifen-number-voiding-row").first();
       await expect(row).toBeVisible();
       await expect(row.getByLabel("Reason")).toBeVisible();

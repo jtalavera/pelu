@@ -26,15 +26,15 @@ export const Switch = forwardRef<HTMLInputElement, SwitchProps>(
         />
         <span
           className={cn(
-            "pointer-events-none absolute inset-0 rounded-full bg-slate-200 transition-colors dark:bg-slate-600",
-            "peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-indigo-600 dark:peer-focus-visible:outline-indigo-400",
-            "peer-checked:bg-indigo-600 peer-disabled:opacity-50 dark:peer-checked:bg-indigo-500",
+            "pointer-events-none absolute inset-0 rounded-full bg-line transition-colors",
+            "peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary",
+            "peer-checked:bg-primary peer-disabled:opacity-50",
           )}
           aria-hidden
         />
         <span
           className={cn(
-            "pointer-events-none absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow transition-transform dark:bg-slate-100",
+            "pointer-events-none absolute left-0.5 top-0.5 size-4 rounded-full bg-surface shadow transition-transform",
             "peer-checked:translate-x-4",
           )}
           aria-hidden

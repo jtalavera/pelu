@@ -261,6 +261,75 @@ class CommissionFlowIntegrationTest {
   }
 
   @Test
+  void generateForAllWithAPaidSettlementAsksAndCanSkipTheOverlappingOnes() {
+    change("IMMEDIATE", rule(corte, null, "40"));
+    accrue(invoice(corte, ana, "110000"));
+    LocalDate today = LocalDate.now(configService.zone());
+    CommissionSettlement paid =
+        settlementService
+            .generate(
+                tenant.getId(),
+                "a",
+                new GenerateSettlementsRequest(today, today, List.of(ana.getId())))
+            .get(0);
+    settlementService.approve(tenant.getId(), paid.getId(), "a");
+    settlementService.pay(tenant.getId(), paid.getId(), "a", new PayRequest("CASH", today, ""));
+    // New commissions for both after Ana was already paid for the period.
+    accrue(invoice(corte, ana, "110000"));
+    accrue(invoice(corte, bea, "110000"));
+
+    GenerateSettlementsRequest all = new GenerateSettlementsRequest(today, today, null);
+    assertThatThrownBy(() -> settlementService.generate(tenant.getId(), "a", all))
+        .hasMessageContaining("COMMISSION_PERIOD_OVERLAP");
+
+    var check = settlementService.checkGeneration(tenant.getId(), all);
+    assertThat(check.conflicts()).hasSize(1);
+    assertThat(check.conflicts().get(0).professionalId()).isEqualTo(ana.getId());
+    assertThat(check.conflicts().get(0).status()).isEqualTo("PAID");
+    assertThat(check.conflicts().get(0).settlementId()).isEqualTo(paid.getId());
+    assertThat(check.generatable()).isEqualTo(1);
+
+    List<CommissionSettlement> created =
+        settlementService.generate(
+            tenant.getId(), "a", new GenerateSettlementsRequest(today, today, null, true));
+    assertThat(created).hasSize(1);
+    assertThat(created.get(0).getProfessionalId()).isEqualTo(bea.getId());
+    // Nothing left: the remaining one now has its settlement too.
+    assertThat(settlementService.checkGeneration(tenant.getId(), all).generatable()).isZero();
+  }
+
+  @Test
+  void entriesAndSettlementsFilterBySeveralProfessionals() {
+    change("IMMEDIATE", rule(corte, null, "40"));
+    accrue(invoice(corte, ana, "110000"));
+    accrue(invoice(corte, bea, "110000"));
+    LocalDate today = LocalDate.now(configService.zone());
+    settlementService.generate(
+        tenant.getId(), "a", new GenerateSettlementsRequest(today, today, null));
+
+    assertThat(queryService.entries(tenant.getId(), today, today, List.of(ana.getId()), null, null))
+        .extracting(e -> e.professionalId())
+        .containsOnly(ana.getId());
+    assertThat(
+            queryService.entries(
+                tenant.getId(), today, today, List.of(ana.getId(), bea.getId()), null, null))
+        .extracting(e -> e.professionalId())
+        .containsExactlyInAnyOrder(ana.getId(), bea.getId());
+    assertThat(
+            queryService
+                .listSettlements(tenant.getId(), List.of(bea.getId()), null, null, null, 0, 20)
+                .items())
+        .extracting(v -> v.professionalId())
+        .containsOnly(bea.getId());
+    assertThat(
+            queryService
+                .listSettlements(
+                    tenant.getId(), List.of(ana.getId(), bea.getId()), null, null, null, 0, 20)
+                .total())
+        .isEqualTo(2);
+  }
+
+  @Test
   void settlementLifecycleWithAdjustmentsAndNegativeCarry() {
     change("IMMEDIATE", rule(corte, null, "40"));
     accrue(invoice(corte, ana, "110000"));
@@ -479,6 +548,33 @@ class CommissionFlowIntegrationTest {
     assertThat(preview.lines()).isEqualTo(2);
     assertThat(queryService.settlementPreview(tenant.getId(), bea.getId(), null, null).total())
         .isEqualByComparingTo("0");
+  }
+
+  @Test
+  void settlementPreviewSeparatesWhatIsCarriedFromEarlierPeriods() {
+    change(
+        "IMMEDIATE",
+        rule(corte, null, "40"),
+        new ConfigChange("DEFAULT_PRODUCT", null, null, "10", null));
+    accrue(invoice(corte, ana, "110000", shampoo, ana, "110000"));
+    java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("America/Asuncion"));
+
+    // The period starts after the commissions accrued: everything is carried over, but the total
+    // is the same (the period only labels what comes from before it).
+    var later =
+        queryService.settlementPreview(
+            tenant.getId(), ana.getId(), today.plusDays(2), today.plusDays(30));
+    assertThat(later.total()).isEqualByComparingTo("50000");
+    assertThat(later.carriedAmount()).isEqualByComparingTo("50000");
+    assertThat(later.carriedEntryIds()).hasSize(2);
+
+    // The period includes the day they accrued: nothing is carried.
+    var current =
+        queryService.settlementPreview(
+            tenant.getId(), ana.getId(), today.minusDays(3), today.plusDays(3));
+    assertThat(current.total()).isEqualByComparingTo("50000");
+    assertThat(current.carriedAmount()).isEqualByComparingTo("0");
+    assertThat(current.carriedEntryIds()).isEmpty();
   }
 
   @Test

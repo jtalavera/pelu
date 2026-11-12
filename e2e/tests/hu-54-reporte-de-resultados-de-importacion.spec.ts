@@ -131,7 +131,7 @@ test.describe("HU-54 · Reporte de resultados de importación", () => {
     await expect(importedRows).toHaveCount(2);
 
     await expect(table).toContainText("Price is not a valid number");
-    await expect(table).toContainText("Price must be greater than zero");
+    await expect(table).toContainText("Price cannot be negative");
     await expect(table).toContainText("Duration must be at least 1 minute");
     await expect(table).toContainText("does not exist for this tenant");
     await expect(table).toContainText("Duplicate row");

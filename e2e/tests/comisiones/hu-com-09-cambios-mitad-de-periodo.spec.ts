@@ -12,6 +12,7 @@ import {
   provisionCommissionWorld,
   restoreCommissionsGlobal,
   type CommissionWorld,
+  openCommissionsMore,
 } from "../../fixtures/commissions";
 
 /** HU-COM-09 · Aplicar cambios de cálculo a mitad de periodo (§4.4). */
@@ -31,8 +32,9 @@ test.beforeEach(async ({ request }) => {
 });
 
 async function openItemRules(page: Page) {
-  await page.getByRole("link", { name: "Services" }).click();
+  await page.getByRole("link", { name: "Catalog" }).click();
   await page.getByTestId(`svc-row-${w.service.id}`).click();
+  await page.getByTestId("svc-tab-commission").click();
   await expect(page.getByTestId("item-commission-section")).toBeVisible();
 }
 
@@ -102,7 +104,8 @@ test("«Desde el inicio del próximo periodo»: queda programado, no altera el p
   // Listed in settings with what / current / new / date / author, and cancellable.
   await page.keyboard.press("Escape");
   await page.getByRole("link", { name: "Commissions" }).click();
-  await page.getByRole("tab", { name: "Settings" }).click();
+  await openCommissionsMore(page, "Settings");
+  await page.getByTestId("commission-scheduled-toggle").click();
   const row = page.getByTestId("commission-scheduled-row");
   await expect(row).toContainText(w.service.name);
   await expect(row).toContainText("40 %");
@@ -111,6 +114,7 @@ test("«Desde el inicio del próximo periodo»: queda programado, no altera el p
   await row.getByRole("button", { name: "Cancel change" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Cancel change" }).click();
   await expect(page.getByTestId("commission-scheduled-row")).toHaveCount(0);
+  await page.getByTestId("commission-history-toggle").click();
   await expect(page.getByTestId("commission-settings-history").getByText("Cancelled").first()).toBeVisible();
 });
 

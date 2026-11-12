@@ -10,7 +10,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, openMoreOptions, openLineMoreOptions } from "../fixtures/billing";
 import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { setControlledInputValue } from "../fixtures/ui";
 
@@ -45,34 +45,41 @@ test.describe("HU-29 · Fixes varios", () => {
   test("HU-29 · 2 subtotal con descuento por ítem en verde", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     await setBusinessRuc(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await setControlledInputValue(page.locator("#line-price-0"), "10000");
     // No discount yet → field hidden
     await expect(page.getByTestId("line-discounted-total-0")).toHaveCount(0);
 
+    await openLineMoreOptions(page, 0);
     await page.locator("#line-disc-toggle-0").check();
     await page.locator("#line-disc-val-0").fill("10");
 
     const discounted = page.getByTestId("line-discounted-total-0");
     await expect(discounted).toBeVisible();
     await expect(discounted).toContainText("9.000");
-    await expect(discounted).toHaveClass(/text-emerald-600/);
+    await expect(discounted).toHaveClass(/text-success/);
   });
 
   // AC3 — combined discount (per-item + global) shown in the payment summary.
   test("HU-29 · 3 descuento combinado en resumen de pago", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     await setBusinessRuc(request, token);
+    const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
+    await pickServiceLine(page, seed.serviceFullName, 0);
     await setControlledInputValue(page.locator("#line-price-0"), "10000");
+    await openLineMoreOptions(page, 0);
+    await openMoreOptions(page);
     await page.locator("#line-disc-toggle-0").check();
     await page.locator("#line-disc-val-0").fill("10"); // 10% of 10.000 = 1.000
 
@@ -91,15 +98,16 @@ test.describe("HU-29 · Fixes varios", () => {
     const client = await seedClient(request, token, `E2E HU29 ${Date.now()}`);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("10000");
-    await page.locator("#pay-amount-0").fill("10000");
+    await fillPaymentAmount(page, "10000");
 
+    await openLineMoreOptions(page, 0);
     await page.locator("#line-disc-toggle-0").check();
     await page.locator("#line-disc-val-0").fill("150");
 
@@ -163,14 +171,14 @@ test.describe("HU-29 · Fixes varios", () => {
 
   // AC8 — table options menu overlays the table (rendered in a portal on document.body).
   test("HU-29 · 8 menú de opciones de tabla se superpone (portal)", async ({ page, request }) => {
-    const token = await loginAsDemoApi(request);
-    const name = `E2E HU29 Kebab ${Date.now()}`;
-    const client = await seedClient(request, token, name);
+    await loginAsDemoApi(request);
     await loginAsDemo(page);
-    await page.goto("/app/clients");
-    // Search by name so the new client is on page 1 regardless of total count (server-side pagination).
-    await page.getByPlaceholder(/Search by name, phone, or RUC/i).fill(name);
-    const trigger = page.getByTestId(`clients-row-${client.id}-trigger`);
+    // Redesign: the clients list uses a switch, so the kebab menu is checked on the stamp rows.
+    await page.goto("/app/settings/fiscal-stamp");
+    const trigger = page
+      .getByTestId("fiscal-stamp-current-section")
+      .getByRole("button", { name: /actions/i })
+      .first();
     await expect(trigger).toBeVisible({ timeout: 20_000 });
     await trigger.click();
 
@@ -187,6 +195,9 @@ test.describe("HU-29 · Fixes varios", () => {
     await loginAsDemo(page);
     await page.goto("/app/settings/fiscal-stamp");
     await expect(page.getByTestId("fiscal-stamp-current-section")).toBeVisible({ timeout: 20_000 });
+    // The new-stamp form lives in its own dialog, opened from "+ Add stamp".
+    await expect(page.getByTestId("fiscal-stamp-create-section")).toHaveCount(0);
+    await page.getByTestId("fiscal-stamp-add").click();
     await expect(page.getByTestId("fiscal-stamp-create-section")).toBeVisible();
   });
 
@@ -222,7 +233,8 @@ test.describe("HU-29 · Fixes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
+    // Today's invoices are open by default on the home (issue #384).
     const row = page.getByTestId(`billing-today-row-${inv.id}`);
     await expect(row).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId(`billing-today-view-${inv.id}`)).toHaveCount(0);

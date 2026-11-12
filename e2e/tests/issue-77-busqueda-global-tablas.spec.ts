@@ -21,6 +21,7 @@ import {
   loginAsDemoApi,
   seedClient,
 } from "../fixtures/api";
+import { goToInvoiceHistory, searchInvoiceHistory } from "../fixtures/billing";
 
 // ── Seeding helpers ─────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ test.describe("Issue #77 · Clients search is global", () => {
 
     // Active pill: the deactivated client (on page 1 alphabetically) drops out
     // of the total count — proving the filter ran server-side, not on the page.
-    await page.getByRole("button", { name: "Active", exact: true }).click();
+    await page.getByTestId("clients-filter-active").click();
     await page.waitForTimeout(600);
     await expect(page.getByText(/1–10 of 11/)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(`${tag} A00`, { exact: true })).toHaveCount(0);
@@ -162,12 +163,13 @@ test.describe("Issue #77 · Clients search is global", () => {
 
     await gotoClients(page);
     await searchClients(page, tag);
-    await page.getByRole("button", { name: "Active", exact: true }).click();
+    await page.getByTestId("clients-filter-active").click();
     await page.waitForTimeout(600);
     await expect(page.getByText(/1–10 of 11/)).toBeVisible({ timeout: 10_000 });
 
     const downloadPromise = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Export", exact: true }).click();
+    await page.getByRole("button", { name: "More actions" }).click();
+    await page.getByRole("menuitem", { name: "Export" }).click();
     const download = await downloadPromise;
     const path = await download.path();
     const fs = await import("node:fs/promises");
@@ -274,13 +276,13 @@ test.describe("Issue #77 · Services and billing history searches are global", (
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await page.waitForTimeout(600);
     // The history row displays the linked client's stored (UPPERCASE, issue #155 AC3) name,
     // not the raw clientDisplayName text sent above — see issue-139 AC8.
     await expect(page.getByText(clientName.toUpperCase(), { exact: true })).toHaveCount(0);
 
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await searchInvoiceHistory(page, clientName);
     await page.waitForTimeout(600);
     await expect(page.getByText(clientName.toUpperCase(), { exact: true }).first()).toBeVisible({
       timeout: 10_000,
@@ -342,12 +344,12 @@ test.describe("Issue #77 · Services and billing history searches are global", (
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await page.waitForTimeout(600);
     await expect(page.getByText(target.invoiceNumberFormatted, { exact: true })).toHaveCount(0);
 
     // Full zero-padded number (as displayed) must find the invoice via exact match.
-    await page.locator("#invoice-history-text-filter").fill(target.invoiceNumberFormatted);
+    await searchInvoiceHistory(page, target.invoiceNumberFormatted);
     await page.waitForTimeout(600);
     await expect(
       page.getByText(target.invoiceNumberFormatted, { exact: true }).first(),
@@ -355,7 +357,7 @@ test.describe("Issue #77 · Services and billing history searches are global", (
 
     // Unpadded digits (as a user would naturally type them) must also match.
     const unpadded = String(Number(target.invoiceNumberFormatted));
-    await page.locator("#invoice-history-text-filter").fill(unpadded);
+    await searchInvoiceHistory(page, unpadded);
     await page.waitForTimeout(600);
     await expect(
       page.getByText(target.invoiceNumberFormatted, { exact: true }).first(),

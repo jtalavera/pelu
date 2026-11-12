@@ -46,8 +46,9 @@ import org.springframework.web.server.ResponseStatusException;
  * <ul>
  *   <li>AC-2: a {@code categoria} that doesn't exist yet in the tenant is created automatically
  *       before the service that references it.
- *   <li>AC-3: non-numeric/negative/zero {@code precio}, or non-numeric/&lt;1-minute {@code
- *       duracion_minutos}, rejects only that row.
+ *   <li>AC-3: non-numeric/negative {@code precio}, or non-numeric/&lt;1-minute {@code
+ *       duracion_minutos}, rejects only that row. A zero {@code precio} is allowed, same as the
+ *       manual Servicios/Productos screens (price ≥ 0).
  *   <li>AC-4: a non-blank {@code impuesto} that doesn't match an existing tenant {@code Tax} by
  *       name rejects the row with a clear reason; a blank {@code impuesto} creates the service
  *       untaxed.
@@ -238,7 +239,7 @@ public class ServiceImportService {
       return ImportRowOutcome.rejected(excelRowNumber, ERROR_PRICE_NOT_NUMERIC, nombre.trim());
     }
     BigDecimal priceMinor = priceValue.value();
-    if (priceMinor.compareTo(BigDecimal.ZERO) <= 0) {
+    if (priceMinor.signum() < 0) {
       return ImportRowOutcome.rejected(excelRowNumber, ERROR_PRICE_INVALID, nombre.trim());
     }
 

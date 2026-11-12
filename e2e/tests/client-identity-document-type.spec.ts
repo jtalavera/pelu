@@ -8,7 +8,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 
 // Explicit document-type selector (RUC / Cédula paraguaya / Pasaporte / Cédula extranjera /
@@ -32,7 +32,7 @@ test.describe("Selector de tipo de documento de identidad", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -43,7 +43,7 @@ test.describe("Selector de tipo de documento de identidad", () => {
 
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     const issued = await clickIssueInvoiceAndExpectSuccess(page);
 
     const invoice = await apiGetJson<{
@@ -56,24 +56,24 @@ test.describe("Selector de tipo de documento de identidad", () => {
     expect(invoice.clientRucOverride).toBeNull();
   });
 
-  test("factura: 'Sin identificar' deshabilita el campo de número", async ({ page, request }) => {
+  // Redesign: "Sin identificar" is no longer a document type to pick — an invoice with no client is
+  // "Sin nombre" by default, and it simply carries no identity fields.
+  test("factura: 'Sin nombre' (por defecto) no tiene campos de documento", async ({ page, request }) => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
-    await page.getByLabel("Search or select client").click();
-    await page.getByRole("button", { name: "Occasional client" }).click();
-
-    await page.locator("#client-identity-document-type").selectOption("INNOMINADO");
-    await expect(page.locator("#client-identity-document-number")).toBeDisabled();
+    await expect(page.getByTestId("billing-client-default")).toBeVisible();
+    await expect(page.locator("#client-identity-document-type")).toHaveCount(0);
+    await expect(page.locator("#client-identity-document-number")).toHaveCount(0);
 
     // Below the Gs. 7.000.000 threshold, an unidentified client is still allowed to issue.
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     const issued = await clickIssueInvoiceAndExpectSuccess(page);
 
     const invoice = await apiGetJson<{
@@ -98,6 +98,7 @@ test.describe("Selector de tipo de documento de identidad", () => {
 
     const fullName = `E2E Cedula ${Date.now()}`;
     await dlg.getByLabel("Full name").fill(fullName);
+    await dlg.getByTestId("client-more-toggle").click();
     await expect(dlg.getByLabel("Document type")).toHaveValue("RUC");
     await dlg.getByLabel("Document type").selectOption("CEDULA_PARAGUAYA");
     await dlg.getByLabel("Document number").fill("4123456");
@@ -125,12 +126,15 @@ test.describe("Selector de tipo de documento de identidad", () => {
   }) => {
     const token = await loginAsDemoApi(request);
     const fullName = `E2E Edit Doc ${Date.now()}`;
-    const client = await seedClient(request, token, fullName, undefined, "80000005-6");
+    // RUC must be unique per tenant: derive it from the clock so reruns never collide.
+    const ruc = `8${String(Date.now()).slice(-6)}-6`;
+    const client = await seedClient(request, token, fullName, undefined, ruc);
 
     await loginAsDemo(page);
     await page.goto(`/app/clients/${client.id}`);
+    await page.getByTestId("client-section-fiscal-toggle").click();
     await expect(page.locator("#detail-identity-document-type")).toHaveValue("RUC");
-    await expect(page.locator("#detail-identity-document-number")).toHaveValue("80000005-6");
+    await expect(page.locator("#detail-identity-document-number")).toHaveValue(ruc);
 
     await page.locator("#detail-identity-document-type").selectOption("PASAPORTE");
     await page.locator("#detail-identity-document-number").fill("XY987654");
@@ -156,6 +160,7 @@ test.describe("Selector de tipo de documento de identidad", () => {
     const dlg = page.getByRole("dialog");
 
     await dlg.getByLabel("Full name").fill(`E2E Otro ${Date.now()}`);
+    await dlg.getByTestId("client-more-toggle").click();
     await dlg.getByLabel("Document type").selectOption("OTRO");
     await dlg.getByLabel("Document number").fill("not-a-ruc-format");
     await dlg.getByRole("button", { name: "Save" }).click();

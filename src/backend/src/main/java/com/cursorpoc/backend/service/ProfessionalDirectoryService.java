@@ -6,7 +6,9 @@ import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.ProfessionalScheduleRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
+import com.cursorpoc.backend.web.dto.GrantAccessResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
+import com.cursorpoc.backend.web.dto.ProfessionalOptionResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalResponse;
 import com.cursorpoc.backend.web.dto.ProfessionalScheduleRequest;
 import com.cursorpoc.backend.web.dto.ProfessionalUpsertRequest;
@@ -14,11 +16,13 @@ import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -31,20 +35,55 @@ public class ProfessionalDirectoryService {
   private final TenantRepository tenantRepository;
   private final ProfessionalRepository professionalRepository;
   private final ProfessionalScheduleRepository professionalScheduleRepository;
+  private final ProfessionalAccessService professionalAccessService;
+  private final SharedDeviceService sharedDeviceService;
+  private final PasswordEncoder passwordEncoder;
 
   public ProfessionalDirectoryService(
       TenantRepository tenantRepository,
       ProfessionalRepository professionalRepository,
-      ProfessionalScheduleRepository professionalScheduleRepository) {
+      ProfessionalScheduleRepository professionalScheduleRepository,
+      ProfessionalAccessService professionalAccessService,
+      SharedDeviceService sharedDeviceService,
+      PasswordEncoder passwordEncoder) {
     this.tenantRepository = tenantRepository;
     this.professionalRepository = professionalRepository;
     this.professionalScheduleRepository = professionalScheduleRepository;
+    this.professionalAccessService = professionalAccessService;
+    this.sharedDeviceService = sharedDeviceService;
+    this.passwordEncoder = passwordEncoder;
   }
 
   @Transactional(readOnly = true)
   public List<ProfessionalResponse> list(long tenantId) {
+    List<Professional> all = professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId);
+    Map<Long, List<ProfessionalSchedule>> schedules = schedulesByProfessional(all);
+    return all.stream()
+        .map(p -> toResponse(p, schedules.getOrDefault(p.getId(), List.of())))
+        .toList();
+  }
+
+  /** Just what a picker needs: id, names and active flag (no photo, schedules or access data). */
+  @Transactional(readOnly = true)
+  public List<ProfessionalOptionResponse> listOptions(long tenantId) {
     return professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
-        .map(p -> toResponse(p, schedulesFor(p.getId())))
+        .map(
+            p ->
+                new ProfessionalOptionResponse(
+                    p.getId(), p.getFullName(), p.getNickname(), p.getDisplayName(), p.isActive()))
+        .toList();
+  }
+
+  /**
+   * Issue #38 follow-up: the professional filter / appointment form a logged-in professional sees —
+   * names, photo and schedules only; contact data and access/PIN details stay admin-only.
+   */
+  @Transactional(readOnly = true)
+  public List<ProfessionalResponse> listDirectory(long tenantId) {
+    List<Professional> all = professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId);
+    Map<Long, List<ProfessionalSchedule>> schedules = schedulesByProfessional(all);
+    return all.stream()
+        .map(p -> toDirectoryResponse(p, schedules.getOrDefault(p.getId(), List.of())))
         .toList();
   }
 
@@ -54,9 +93,10 @@ public class ProfessionalDirectoryService {
     PageRequest pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
     Page<Professional> result =
         professionalRepository.findByTenantFilteredPaged(tenantId, qTrimmed, pageable);
+    Map<Long, List<ProfessionalSchedule>> schedules = schedulesByProfessional(result.getContent());
     List<ProfessionalResponse> content =
         result.getContent().stream()
-            .map(p -> toResponse(p, schedulesFor(p.getId())))
+            .map(p -> toResponse(p, schedules.getOrDefault(p.getId(), List.of())))
             .collect(Collectors.toList());
     return new PageResponse<>(
         content,
@@ -67,23 +107,84 @@ public class ProfessionalDirectoryService {
   }
 
   @Transactional
-  public ProfessionalResponse create(long tenantId, ProfessionalUpsertRequest request) {
+  public ProfessionalResponse create(
+      long tenantId, ProfessionalUpsertRequest request, Locale locale) {
     Tenant tenant = loadTenantOrThrow(tenantId);
     Professional p = new Professional();
     p.setTenant(tenant);
     applyUpsert(p, request, tenantId);
     p.setActive(true);
+    boolean wantsAccess = Boolean.TRUE.equals(request.systemAccessAllowed());
+    if (wantsAccess) {
+      professionalAccessService.requireEligibleForAccess(p);
+    }
     professionalRepository.save(p);
+    if (wantsAccess) {
+      professionalAccessService.invite(p, locale);
+    }
     return toResponse(p, schedulesFor(p.getId()));
   }
 
+  /**
+   * Issue #38: details and "Acceso al sistema" are saved together, in one transaction — a request
+   * that turns access on without a valid, free email is rejected before anything is stored (1)(3),
+   * and an email change detaches the old-email user, re-inviting the new email when access stays on
+   * (2). {@code systemAccessAllowed == null} keeps the current access setting.
+   */
   @Transactional
   public ProfessionalResponse update(
-      long tenantId, long professionalId, ProfessionalUpsertRequest request) {
+      long tenantId, long professionalId, ProfessionalUpsertRequest request, Locale locale) {
     Professional p = loadProfessionalOrThrow(tenantId, professionalId);
+    String previousEmail = ProfessionalAccessService.normalize(p.getEmail());
+    boolean hadAccess = p.isSystemAccessAllowed();
     applyUpsert(p, request, tenantId);
+    boolean wantsAccess =
+        request.systemAccessAllowed() == null ? hadAccess : request.systemAccessAllowed();
+    boolean emailChanged =
+        !Objects.equals(previousEmail, ProfessionalAccessService.normalize(p.getEmail()));
+    boolean issuesInvitation = wantsAccess && (!hadAccess || emailChanged);
+    if (issuesInvitation) {
+      professionalAccessService.requireEligibleForAccess(p);
+    }
     professionalRepository.save(p);
+    if (emailChanged) {
+      professionalAccessService.detachForEmailChange(p);
+    }
+    if (issuesInvitation) {
+      professionalAccessService.invite(p, locale);
+    } else if (!wantsAccess && hadAccess) {
+      professionalAccessService.revoke(p);
+    }
     return toResponse(p, schedulesFor(p.getId()));
+  }
+
+  /** HU-23 AC-4/13: (re)issue the invitation, no cooldown — the explicit "grant" action. */
+  @Transactional
+  public GrantAccessResponse grantAccess(long tenantId, long professionalId, Locale locale) {
+    return professionalAccessService.invite(
+        loadProfessionalOrThrow(tenantId, professionalId), locale);
+  }
+
+  /** Issue #38 (5): the "Reenviar invitación" button — pending invitations only, with cooldown. */
+  @Transactional
+  public ProfessionalResponse resendAccess(long tenantId, long professionalId, Locale locale) {
+    Professional p = loadProfessionalOrThrow(tenantId, professionalId);
+    professionalAccessService.resend(p, locale);
+    return toResponse(p, schedulesFor(p.getId()));
+  }
+
+  /** HU-66: lifts the professional's PIN lock on every shared device. */
+  @Transactional
+  public ProfessionalResponse unlockPin(long tenantId, long professionalId) {
+    Professional p = loadProfessionalOrThrow(tenantId, professionalId);
+    sharedDeviceService.unlockProfessional(tenantId, professionalId);
+    return toResponse(p, schedulesFor(p.getId()));
+  }
+
+  /** HU-23 AC-14. */
+  @Transactional
+  public void revokeAccess(long tenantId, long professionalId) {
+    professionalAccessService.revoke(loadProfessionalOrThrow(tenantId, professionalId));
   }
 
   @Transactional
@@ -118,6 +219,11 @@ public class ProfessionalDirectoryService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PROFESSIONAL_NAME_REQUIRED");
     }
     p.setFullName(name);
+    String nickname = blankToNull(request.nickname());
+    if (nickname != null && nickname.length() > MAX_NICKNAME_LENGTH) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PROFESSIONAL_NICKNAME_TOO_LONG");
+    }
+    p.setNickname(nickname);
     p.setPhone(blankToNull(request.phone()));
     String email = blankToNull(request.email());
     if (email != null) {
@@ -148,7 +254,12 @@ public class ProfessionalDirectoryService {
     }
     String trimmed = rawPin.trim();
     if (trimmed.isEmpty()) {
+      if (p.hasPin()) {
+        // HU-66: clearing the PIN ends any PIN session she has open.
+        p.setPinVersion(p.getPinVersion() + 1);
+      }
       p.setPinFingerprint(null);
+      p.setPinHash(null);
       return;
     }
     if (!trimmed.matches("\\d{4,7}")) {
@@ -167,7 +278,13 @@ public class ProfessionalDirectoryService {
     if (duplicate) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "PIN_ALREADY_IN_USE");
     }
+    if (!fingerprint.equals(p.getPinFingerprint())) {
+      // HU-66: a new PIN ends any PIN session opened with the previous one.
+      p.setPinVersion(p.getPinVersion() + 1);
+    }
     p.setPinFingerprint(fingerprint);
+    // HU-66: the PIN is a credential on shared devices — salted hash, like a password.
+    p.setPinHash(passwordEncoder.encode(trimmed));
   }
 
   private void validateSchedules(List<ProfessionalScheduleRequest> schedules) {
@@ -224,6 +341,19 @@ public class ProfessionalDirectoryService {
     }
   }
 
+  /** The schedules of all the given professionals with ONE query, grouped by professional id. */
+  private Map<Long, List<ProfessionalSchedule>> schedulesByProfessional(
+      List<Professional> professionals) {
+    if (professionals.isEmpty()) {
+      return Map.of();
+    }
+    return professionalScheduleRepository
+        .findByProfessionalIdInOrderByDayOfWeekAscIdAsc(
+            professionals.stream().map(Professional::getId).toList())
+        .stream()
+        .collect(Collectors.groupingBy(s -> s.getProfessional().getId()));
+  }
+
   private List<ProfessionalSchedule> schedulesFor(Long professionalId) {
     return professionalScheduleRepository.findByProfessionalIdOrderByDayOfWeekAscIdAsc(
         professionalId);
@@ -242,7 +372,10 @@ public class ProfessionalDirectoryService {
             () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
   }
 
-  static ProfessionalResponse toResponse(Professional p, List<ProfessionalSchedule> schedules) {
+  static final int MAX_NICKNAME_LENGTH = 60;
+
+  private ProfessionalResponse toResponse(Professional p, List<ProfessionalSchedule> schedules) {
+    ProfessionalAccessService.AccessInfo access = professionalAccessService.info(p);
     return new ProfessionalResponse(
         p.getId(),
         p.getFullName(),
@@ -250,15 +383,51 @@ public class ProfessionalDirectoryService {
         p.getEmail(),
         p.getPhotoDataUrl(),
         p.isActive(),
-        schedules.stream()
-            .map(
-                s ->
-                    new ProfessionalResponse.Schedule(
-                        s.getDayOfWeek(), s.getStartTime(), s.getEndTime()))
-            .toList(),
+        toScheduleResponses(schedules),
         p.getPinFingerprint() != null,
         p.isSystemAccessAllowed(),
-        p.getUser() != null);
+        p.getUser() != null,
+        access.status().name(),
+        access.loginEmail(),
+        access.invitationSentAt(),
+        access.invitationExpiresAt(),
+        access.resendAvailableAt(),
+        p.getId() == null ? List.of() : sharedDeviceService.activeLocks(p.getId()),
+        p.getNickname(),
+        p.getDisplayName());
+  }
+
+  private static ProfessionalResponse toDirectoryResponse(
+      Professional p, List<ProfessionalSchedule> schedules) {
+    return new ProfessionalResponse(
+        p.getId(),
+        p.getFullName(),
+        null,
+        null,
+        p.getPhotoDataUrl(),
+        p.isActive(),
+        toScheduleResponses(schedules),
+        false,
+        false,
+        false,
+        null,
+        null,
+        null,
+        null,
+        null,
+        List.of(),
+        p.getNickname(),
+        p.getDisplayName());
+  }
+
+  private static List<ProfessionalResponse.Schedule> toScheduleResponses(
+      List<ProfessionalSchedule> schedules) {
+    return schedules.stream()
+        .map(
+            s ->
+                new ProfessionalResponse.Schedule(
+                    s.getDayOfWeek(), s.getStartTime(), s.getEndTime()))
+        .toList();
   }
 
   private static void validatePhotoDataUrl(String dataUrl) {

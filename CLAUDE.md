@@ -148,10 +148,11 @@ src/backend/src/main/java/com/cursorpoc/backend/
 - Mobile-first: use Tailwind `sm:` / `md:` breakpoints. Avoid fixed widths; prefer `w-full`, `min-w-0`, `max-w-*`.
 - Touch targets ≥ 44×44 px (the design-system `Button` handles this; extend `min-h-11` + padding for custom controls).
 - Wide data (tables, nav) must live inside `overflow-x-auto` containers.
+- Buttons in an action row (dialog footers, page action bars, «Más acciones») share one size: pass `ACTION_BUTTON` (`src/frontend/src/components/actionButtons.ts`: 44 px tall, 14 px text) to the design-system `Button`. Use `MoreActionsMenu` (not a bare «⋯») for secondary actions in those rows.
 
 ### Form validation
 
-- Show field-level errors in red using `FieldValidationError` (`text-red-600 dark:text-red-400`). Do **not** use `--color-destructive` CSS var (undefined).
+- Show field-level errors in red using `FieldValidationError` (`text-danger`, the theme-aware red token from the Flowbit palette). Do **not** use `--color-destructive` CSS var (undefined).
 - Error messages must state the failing rule and include a concrete format example (e.g. RUC: `80000005-6`). Copy must be in both `en.json` and `es.json`.
 - Use `role="alert"` on inline error text; associate controls with `aria-invalid` and `aria-describedby`.
 - Non-validation failures (network errors) use `Alert variant="destructive"`.

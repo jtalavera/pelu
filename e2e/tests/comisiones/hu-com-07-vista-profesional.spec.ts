@@ -53,11 +53,11 @@ test("ve sus comisiones del periodo (servicios y productos) y sus liquidaciones,
   await expect(page.getByTestId("my-commissions-services")).toContainText("40.000");
   await expect(page.getByTestId("my-commissions-products")).toContainText("10.000");
   const entries = page.getByTestId("my-commissions-entries");
-  await expect(entries).toContainText("Excluding VAT");
+  await expect(entries).toContainText("excl. VAT");
   await expect(entries.getByRole("button")).toHaveCount(0);
   const settlements = page.getByTestId("my-commissions-settlements");
   await expect(settlements).toContainText("Draft");
-  await settlements.getByRole("button", { name: "View" }).click();
+  await settlements.getByRole("button").first().click();
   await expect(page.getByTestId("my-settlement-detail")).toContainText("50.000");
 });
 

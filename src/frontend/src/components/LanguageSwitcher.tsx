@@ -17,7 +17,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
       role="group"
       aria-label={t("language.label")}
     >
-      <div className="flex flex-wrap gap-1 rounded-[var(--radius-md)] border border-[var(--color-stone-md)] bg-[var(--color-stone)] p-1">
+      <div className="flex flex-wrap gap-1 rounded-full border border-transparent bg-[var(--color-white)] p-1">
         {languages.map(({ code, labelKey }) => (
           <Button
             key={code}

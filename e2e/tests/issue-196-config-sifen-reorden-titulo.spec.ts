@@ -6,6 +6,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { unfoldSifen } from "../fixtures/ui";
 
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
@@ -35,7 +36,7 @@ test.describe("Issue #196 · Configuración → SIFEN, reorden del título", () 
     await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
   });
 
-  test("el título 'Numeración inutilizada' va debajo del alta manual y encima de la tabla", async ({
+  test("la acción de alta manual va debajo de la lista de numeración inutilizada", async ({
     page,
     request,
   }) => {
@@ -44,27 +45,22 @@ test.describe("Issue #196 · Configuración → SIFEN, reorden del título", () 
 
     await loginAsDemo(page);
     await page.goto("/app/settings/sifen");
-    await page.getByRole("tab", { name: "Voided numbering" }).click();
+    await unfoldSifen(page, "numberVoiding");
 
+    // Redesign: the fold label is the section title; the lead paragraph sits above the list and
+    // "+ Register a manual voiding" is the last element of the section.
     const section = page.getByTestId("sifen-number-voiding-section");
-    const manualTitle = section.getByText("Register a manual voiding", { exact: true });
-    const sectionTitle = section.getByText("Voided document numbers", { exact: true });
+    const lead = section.locator("p, span").first();
     const firstRow = page.getByTestId("sifen-number-voiding-row").first();
-
-    await expect(manualTitle).toBeVisible();
-    await expect(sectionTitle).toBeVisible();
+    const open = page.getByTestId("sifen-number-voiding-manual-open");
     await expect(firstRow).toBeVisible();
+    await expect(open).toBeVisible();
+    await expect(lead).toBeVisible();
 
-    const manualBox = await manualTitle.boundingBox();
-    const titleBox = await sectionTitle.boundingBox();
-    const rowBox = await firstRow.boundingBox();
-    expect(manualBox).not.toBeNull();
-    expect(titleBox).not.toBeNull();
-    expect(rowBox).not.toBeNull();
-
-    // Section title sits below the manual-voiding title…
-    expect(titleBox!.y).toBeGreaterThan(manualBox!.y);
-    // …and above the table.
-    expect(titleBox!.y).toBeLessThan(rowBox!.y);
+    const leadBox = (await lead.boundingBox())!;
+    const rowBox = (await firstRow.boundingBox())!;
+    const openBox = (await open.boundingBox())!;
+    expect(leadBox.y).toBeLessThan(rowBox.y);
+    expect(openBox.y).toBeGreaterThan(rowBox.y);
   });
 });

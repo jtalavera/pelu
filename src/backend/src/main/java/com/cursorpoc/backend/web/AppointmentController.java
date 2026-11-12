@@ -33,6 +33,8 @@ public class AppointmentController {
 
   private static final Logger log = LoggerFactory.getLogger(AppointmentController.class);
 
+  static final String NOT_OWN_APPOINTMENT = "APPOINTMENT_NOT_OWNED_BY_PROFESSIONAL";
+
   private final AppointmentService appointmentService;
 
   public AppointmentController(AppointmentService appointmentService) {
@@ -72,12 +74,10 @@ public class AppointmentController {
     requirePrincipal(principal);
     Instant fromInstant = parseInstantParam(from, "from");
     Instant toInstant = parseInstantParam(to, "to");
-    Long effectiveProfessionalId = professionalId;
-    if (principal.getRole() == UserRole.PROFESSIONAL) {
-      effectiveProfessionalId = principal.getProfessionalId();
-    }
+    // Issue #38 follow-up: professionals see every professional's agenda (and may filter by
+    // professional like an admin); editing stays restricted to their own appointments.
     return appointmentService.list(
-        principal.getTenantId(), fromInstant, toInstant, effectiveProfessionalId, clientId);
+        principal.getTenantId(), fromInstant, toInstant, professionalId, clientId);
   }
 
   @GetMapping("/{id}")
@@ -93,12 +93,7 @@ public class AppointmentController {
       @AuthenticationPrincipal FemmeUserPrincipal principal,
       @Valid @RequestBody AppointmentCreateRequest request) {
     requirePrincipal(principal);
-    if (principal.getRole() == UserRole.PROFESSIONAL) {
-      Long ownId = principal.getProfessionalId();
-      if (ownId == null || !ownId.equals(request.professionalId())) {
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN");
-      }
-    }
+    requireOwnProfessional(principal, request.professionalId());
     return appointmentService.create(principal.getTenantId(), request);
   }
 
@@ -108,6 +103,7 @@ public class AppointmentController {
       @PathVariable("id") long id,
       @Valid @RequestBody AppointmentStatusUpdateRequest request) {
     requirePrincipal(principal);
+    requireOwnAppointment(principal, id);
     return appointmentService.updateStatus(principal.getTenantId(), id, request);
   }
 
@@ -117,13 +113,31 @@ public class AppointmentController {
       @PathVariable("id") long id,
       @Valid @RequestBody AppointmentUpdateRequest request) {
     requirePrincipal(principal);
-    if (principal.getRole() == UserRole.PROFESSIONAL) {
-      Long ownId = principal.getProfessionalId();
-      if (ownId == null || !ownId.equals(request.professionalId())) {
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN");
-      }
-    }
+    // Both the appointment being edited and its (possibly new) professional must be her own, so
+    // a professional can neither edit someone else's appointment nor take it over / hand hers off.
+    requireOwnAppointment(principal, id);
+    requireOwnProfessional(principal, request.professionalId());
     return appointmentService.update(principal.getTenantId(), id, request);
+  }
+
+  /** HU-24 AC-8/10: a professional only books for herself. No-op for any other role. */
+  private static void requireOwnProfessional(FemmeUserPrincipal principal, Long professionalId) {
+    if (principal.getRole() != UserRole.PROFESSIONAL) {
+      return;
+    }
+    Long ownId = principal.getProfessionalId();
+    if (ownId == null || !ownId.equals(professionalId)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, NOT_OWN_APPOINTMENT);
+    }
+  }
+
+  /** HU-24 AC-11 (issue #38 follow-up): a professional only modifies her own appointments. */
+  private void requireOwnAppointment(FemmeUserPrincipal principal, long appointmentId) {
+    if (principal.getRole() != UserRole.PROFESSIONAL) {
+      return;
+    }
+    AppointmentResponse existing = appointmentService.get(principal.getTenantId(), appointmentId);
+    requireOwnProfessional(principal, existing.professionalId());
   }
 
   private static void requirePrincipal(FemmeUserPrincipal principal) {

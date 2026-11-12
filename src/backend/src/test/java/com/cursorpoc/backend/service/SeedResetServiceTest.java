@@ -69,6 +69,7 @@ class SeedResetServiceTest {
   @Mock private PasswordResetTokenRepository passwordResetTokenRepository;
   @Mock private AppUserTourStateRepository appUserTourStateRepository;
   @Mock private TipWithdrawalRepository tipWithdrawalRepository;
+  @Mock private com.cursorpoc.backend.repository.ManualTipRepository manualTipRepository;
   @Mock private SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository;
   @Mock private SifenCertificateRepository sifenCertificateRepository;
   @Mock private FemmeDataInitializer femmeDataInitializer;
@@ -89,6 +90,9 @@ class SeedResetServiceTest {
             professionalRepository,
             professionalScheduleRepository,
             professionalActivationTokenRepository,
+            org.mockito.Mockito.mock(
+                com.cursorpoc.backend.repository.ProfessionalPinLockRepository.class),
+            org.mockito.Mockito.mock(com.cursorpoc.backend.repository.SharedDeviceRepository.class),
             appUserActivationTokenRepository,
             clientRepository,
             appointmentRepository,
@@ -99,6 +103,7 @@ class SeedResetServiceTest {
             passwordResetTokenRepository,
             appUserTourStateRepository,
             tipWithdrawalRepository,
+            manualTipRepository,
             sifenNumberVoidingEventRepository,
             sifenCertificateRepository,
             femmeDataInitializer);

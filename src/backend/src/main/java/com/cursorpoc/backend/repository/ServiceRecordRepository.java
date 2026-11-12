@@ -3,6 +3,8 @@ package com.cursorpoc.backend.repository;
 import com.cursorpoc.backend.domain.ServiceRecord;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +17,67 @@ public interface ServiceRecordRepository extends JpaRepository<ServiceRecord, Lo
   Optional<ServiceRecord> findByIdAndTenant_Id(Long id, Long tenantId);
 
   long deleteByTenant_Id(Long tenantId);
+
+  /**
+   * Ids of the most used active services (not products) on the tenant's fichas created since {@code
+   * since}, voided fichas excluded: most lines first, ties by name.
+   */
+  @Query(
+      """
+      SELECT l.salonService.id FROM ServiceRecordLine l
+      WHERE l.serviceRecord.tenant.id = :tenantId
+      AND l.serviceRecord.createdAt >= :since
+      AND l.serviceRecord.status <> :voided
+      AND l.salonService.kind = :kind AND l.salonService.active = true
+      GROUP BY l.salonService.id, l.salonService.name
+      ORDER BY COUNT(l) DESC, l.salonService.name ASC
+      """)
+  List<Long> findFrequentServiceIds(
+      @Param("tenantId") Long tenantId,
+      @Param("since") Instant since,
+      @Param("voided") ServiceRecordStatus voided,
+      @Param("kind") com.cursorpoc.backend.domain.enums.ServiceKind kind,
+      Pageable pageable);
+
+  /**
+   * Open fichas of a client created in the range; a ficha may serve several turnos, so any is
+   * assignable.
+   */
+  @Query(
+      """
+      SELECT r FROM ServiceRecord r
+      WHERE r.tenant.id = :tenantId AND r.client.id = :clientId
+      AND r.status = :status
+      AND r.createdAt >= :from AND r.createdAt <= :to
+      ORDER BY r.createdAt DESC
+      """)
+  List<ServiceRecord> findAssignable(
+      @Param("tenantId") Long tenantId,
+      @Param("clientId") Long clientId,
+      @Param("status") ServiceRecordStatus status,
+      @Param("from") Instant from,
+      @Param("to") Instant to);
+
+  /** Like {@link #findByTenantWithFiltersPaged}, for the fichas already paid or voided. */
+  @Query(
+      """
+      SELECT r FROM ServiceRecord r
+      WHERE r.tenant.id = :tenantId
+      AND (:fromDate IS NULL OR r.createdAt >= :fromDate)
+      AND (:toDate IS NULL OR r.createdAt <= :toDate)
+      AND (:clientId IS NULL OR r.client.id = :clientId)
+      AND r.status <> :open
+      AND (:q IS NULL OR LOWER(r.client.fullName) LIKE LOWER(CONCAT('%', :q, '%')))
+      ORDER BY r.createdAt DESC
+      """)
+  Page<ServiceRecord> findNotOpenWithFiltersPaged(
+      @Param("tenantId") Long tenantId,
+      @Param("fromDate") Instant fromDate,
+      @Param("toDate") Instant toDate,
+      @Param("clientId") Long clientId,
+      @Param("open") ServiceRecordStatus open,
+      @Param("q") String q,
+      Pageable pageable);
 
   @Query(
       """
@@ -35,4 +98,37 @@ public interface ServiceRecordRepository extends JpaRepository<ServiceRecord, Lo
       @Param("status") ServiceRecordStatus status,
       @Param("q") String q,
       Pageable pageable);
+
+  /** HU-67: a client's records in one status, with lines, item and professional fetched. */
+  @Query(
+      """
+      SELECT DISTINCT r FROM ServiceRecord r
+      LEFT JOIN FETCH r.lines l
+      LEFT JOIN FETCH l.salonService
+      LEFT JOIN FETCH l.professional
+      WHERE r.tenant.id = :tenantId
+      AND r.client.id = :clientId
+      AND r.status = :status
+      """)
+  List<ServiceRecord> findByTenantAndClientAndStatusWithLines(
+      @Param("tenantId") Long tenantId,
+      @Param("clientId") Long clientId,
+      @Param("status") ServiceRecordStatus status);
+
+  /**
+   * Visits per client — CLOSED service records, same rule as the profile summary (HU-67): rows of
+   * {@code [clientId, count, lastClosedAt]}.
+   */
+  @Query(
+      """
+      SELECT r.client.id, COUNT(r), MAX(r.closedAt) FROM ServiceRecord r
+      WHERE r.tenant.id = :tenantId
+      AND r.status = :status
+      AND r.client.id IN :clientIds
+      GROUP BY r.client.id
+      """)
+  List<Object[]> countByClientIds(
+      @Param("tenantId") Long tenantId,
+      @Param("status") ServiceRecordStatus status,
+      @Param("clientIds") Collection<Long> clientIds);
 }

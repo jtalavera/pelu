@@ -85,9 +85,13 @@ describe("BusinessSettingsPage", () => {
   it("shows a success alert at the top after saving", async () => {
     const user = userEvent.setup();
     renderPage();
-    await screen.findByLabelText(/business or legal name/i);
-    const saveBtns = screen.getAllByRole("button", { name: /save changes/i });
-    await user.click(saveBtns[0]);
+    const name = await screen.findByLabelText(/business or legal name/i);
+    // Save is only enabled once something changed.
+    const save = screen.getByRole("button", { name: /save changes/i }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    await user.type(name, " 2");
+    expect(screen.getByTestId("business-unsaved").textContent).toMatch(/unsaved changes/i);
+    await user.click(save);
     expect(await screen.findByText("Saved")).toBeTruthy();
     expect(
       screen.getByText(/Your business details were saved/i),
@@ -97,6 +101,7 @@ describe("BusinessSettingsPage", () => {
   it("formats the phone field with the Paraguay mask while typing", async () => {
     const user = userEvent.setup();
     renderPage();
+    await user.click(await screen.findByTestId("business-section-contact-toggle"));
     const phoneField = (await screen.findAllByLabelText(/^phone$/i))[0] as HTMLInputElement;
     await user.click(phoneField);
     await user.keyboard("0981123456");
@@ -106,6 +111,7 @@ describe("BusinessSettingsPage", () => {
   it("blocks save when the phone has fewer than 10 digits", async () => {
     const user = userEvent.setup();
     renderPage();
+    await user.click(await screen.findByTestId("business-section-contact-toggle"));
     const phoneField = (await screen.findAllByLabelText(/^phone$/i))[0];
     await user.click(phoneField);
     await user.keyboard("0981123");
@@ -118,6 +124,7 @@ describe("BusinessSettingsPage", () => {
   it("blocks save when the contact email is invalid", async () => {
     const user = userEvent.setup();
     renderPage();
+    await user.click(await screen.findByTestId("business-section-contact-toggle"));
     const emailField = (await screen.findAllByLabelText(/contact email/i))[0];
     await user.click(emailField);
     await user.keyboard("@invalid.com");
@@ -171,6 +178,7 @@ describe("BusinessSettingsPage", () => {
     await screen.findByLabelText(/business or legal name/i);
     expect(screen.getByText(/SIFEN tax data/i)).toBeTruthy();
 
+    await user.click(screen.getByTestId("business-section-sifen-toggle"));
     await user.click(screen.getByRole("radio", { name: /legal entity/i }));
     await user.type(screen.getByLabelText(/economic activity code/i), "96020");
     await user.type(

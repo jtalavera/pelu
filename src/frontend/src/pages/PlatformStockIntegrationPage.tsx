@@ -296,9 +296,9 @@ export default function PlatformStockIntegrationPage() {
                                   <span
                                     className={
                                       m.level === "ERROR"
-                                        ? "text-red-600 dark:text-red-400"
+                                        ? "text-danger"
                                         : m.level === "WARN"
-                                          ? "text-amber-700 dark:text-amber-400"
+                                          ? "text-warning"
                                           : "text-[var(--color-ink)]"
                                     }
                                   >

@@ -177,22 +177,22 @@ export const TimeCombobox = forwardRef<HTMLInputElement, TimeComboboxProps>(
           }}
           onKeyDown={handleKeyDown}
           className={cn(
-            "flex min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors placeholder:text-slate-400",
-            "focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/20",
-            "dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus-visible:border-indigo-400 dark:focus-visible:ring-indigo-400/25",
-            "disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-60 dark:disabled:bg-slate-800",
+            "flex min-h-[44px] w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm text-ink transition-colors placeholder:text-ink-3",
+            "focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+            "",
+            "disabled:cursor-not-allowed disabled:bg-page disabled:opacity-60",
             invalid &&
-              "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/20 dark:border-red-500 dark:focus-visible:ring-red-500/30",
+              "border-danger focus-visible:border-danger focus-visible:ring-danger/20",
           )}
         />
         <FloatingDropdown anchorRef={containerRef} open={open && !disabled} ref={panelRef}>
           <ul
             id={listId}
             role="listbox"
-            className="max-h-60 w-full min-w-[8rem] overflow-y-auto rounded-md border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+            className="max-h-60 w-full min-w-[8rem] overflow-y-auto rounded-xl border border-line bg-surface shadow-lg"
           >
             {filtered.length === 0 ? (
-              <li className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400">
+              <li className="px-3 py-2 text-sm text-ink-3">
                 {placeholder ?? ""}
               </li>
             ) : (
@@ -206,8 +206,8 @@ export const TimeCombobox = forwardRef<HTMLInputElement, TimeComboboxProps>(
                     data-testid={`${id}-option-${opt}`}
                     className={cn(
                       "cursor-pointer px-3 py-2 text-sm",
-                      "hover:bg-slate-100 dark:hover:bg-slate-800",
-                      selected && "bg-slate-100 font-medium dark:bg-slate-800",
+                      "hover:bg-page",
+                      selected && "bg-page font-medium",
                     )}
                     onMouseDown={(e) => {
                       e.preventDefault();

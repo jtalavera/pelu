@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { apiPostJson, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome } from "../fixtures/billing";
 
 test.describe("Issue #95 · Orden de servicio en formulario de comprobantes", () => {
   test("los ítems de 'Servicios profesionales' aparecen primero, en carga inicial y en búsqueda", async ({
@@ -41,7 +41,7 @@ test.describe("Issue #95 · Orden de servicio en formulario de comprobantes", ()
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     const input = page.locator("#billing-line-svc-0");

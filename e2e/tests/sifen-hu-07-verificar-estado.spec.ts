@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiPostJson,
   ensureActiveFiscalStampForInvoices,
@@ -84,18 +85,17 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
+    // The SIFEN status and its "check status" button live in the invoice detail's "SIFEN" tab.
+    await openInvoiceSifenTab(page);
     const section = page.getByTestId("sifen-status-section");
-    await expect(section).toBeVisible();
     await expect(section.getByText("Pending verification", { exact: true })).toBeVisible();
 
-    // Issue #205 AC-5: "Estado en SIFEN" now starts closed — open it to reach the button.
-    await page.getByTestId("sifen-tab-status").locator("summary").click();
     const checkButton = page.getByTestId("sifen-check-status-button");
     await expect(checkButton).toBeVisible();
 
@@ -145,13 +145,19 @@ test.describe("SIFEN HU-07 · Verificar en SIFEN el estado de una factura pendie
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(client.fullName);
-    const row = page.locator("tbody tr[role=\"button\"]").filter({ hasText: client.fullName }).filter({ visible: true });
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, client.fullName);
+    const row = page.locator('[data-testid^="invoice-history-row-"]').filter({ hasText: client.fullName }).filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
     await expect(page.getByRole("heading", { name: /Invoice #/ })).toBeVisible();
     await expect(page.getByTestId("sifen-status-section")).toHaveCount(0);
+    // Without SIFEN data there is nothing SIFEN to offer: no share panel, no SIFEN-only menu items.
+    await expect(page.getByTestId("invoice-share-button")).toHaveCount(0);
+    await page.getByTestId("invoice-more-actions-button").click();
+    await expect(page.getByTestId("invoice-menu-revalidate")).toHaveCount(0);
+    await expect(page.getByTestId("invoice-menu-cancel-sifen")).toHaveCount(0);
+    await expect(page.getByTestId("invoice-menu-technical-detail")).toBeVisible();
   });
 });

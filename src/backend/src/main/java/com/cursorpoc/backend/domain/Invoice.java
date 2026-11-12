@@ -313,6 +313,11 @@ public class Invoice {
   @JoinColumn(name = "service_record_id")
   private ServiceRecord serviceRecord;
 
+  /** The turno this invoice charged (through its ficha or directly), if any. */
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "appointment_id")
+  private Appointment appointment;
+
   @OneToMany(
       mappedBy = "invoice",
       cascade = CascadeType.ALL,
@@ -326,6 +331,14 @@ public class Invoice {
       orphanRemoval = true,
       fetch = FetchType.LAZY)
   private List<InvoicePaymentAllocation> paymentAllocations = new ArrayList<>();
+
+  /** Tips entered on the comprobante form itself (invoices not generated from a ficha). */
+  @OneToMany(
+      mappedBy = "invoice",
+      cascade = CascadeType.ALL,
+      orphanRemoval = true,
+      fetch = FetchType.LAZY)
+  private List<InvoiceTip> tips = new ArrayList<>();
 
   public Long getId() {
     return id;
@@ -809,6 +822,10 @@ public class Invoice {
     return paymentAllocations;
   }
 
+  public List<InvoiceTip> getTips() {
+    return tips;
+  }
+
   public void setPaymentAllocations(List<InvoicePaymentAllocation> paymentAllocations) {
     this.paymentAllocations = paymentAllocations;
   }
@@ -819,6 +836,14 @@ public class Invoice {
 
   public void setTipsAmount(BigDecimal tipsAmount) {
     this.tipsAmount = tipsAmount;
+  }
+
+  public Appointment getAppointment() {
+    return appointment;
+  }
+
+  public void setAppointment(Appointment appointment) {
+    this.appointment = appointment;
   }
 
   public ServiceRecord getServiceRecord() {

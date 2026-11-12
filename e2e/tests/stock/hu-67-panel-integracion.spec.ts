@@ -238,11 +238,11 @@ test.describe("HU-67 · Panel de integración con Stock", () => {
     await status.selectOption("ALL");
     const badge = (id: number) => page.getByTestId(`stock-outbox-status-${id}`).locator("[data-status]");
     await expect(badge(failed.id)).toHaveAttribute("data-status", "FAILED");
-    await expect(badge(failed.id)).toHaveClass(/bg-red-100/);
+    await expect(badge(failed.id)).toHaveClass(/bg-danger-lt/);
     await expect(badge(discarded.id)).toHaveAttribute("data-status", "DISCARDED");
-    await expect(badge(discarded.id)).toHaveClass(/bg-slate-100/);
+    await expect(badge(discarded.id)).toHaveClass(/bg-page/);
     await expect(badge(delivered.id)).toHaveAttribute("data-status", "DONE");
-    await expect(badge(delivered.id)).toHaveClass(/bg-emerald-100/);
+    await expect(badge(delivered.id)).toHaveClass(/bg-success-lt/);
     await expect(badge(delivered.id)).toHaveText("Delivered");
 
     // Leave the salon's queue clean for the next tests.

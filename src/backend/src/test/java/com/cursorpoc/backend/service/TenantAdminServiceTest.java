@@ -10,6 +10,7 @@ import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.TenantStatusChange;
 import com.cursorpoc.backend.domain.TenantTierChange;
 import com.cursorpoc.backend.domain.Tier;
+import com.cursorpoc.backend.domain.enums.TenantSkin;
 import com.cursorpoc.backend.domain.enums.TenantStatus;
 import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
@@ -18,6 +19,7 @@ import com.cursorpoc.backend.repository.TenantTierChangeRepository;
 import com.cursorpoc.backend.repository.TierRepository;
 import com.cursorpoc.backend.web.dto.TenantCreateRequest;
 import com.cursorpoc.backend.web.dto.TenantResponse;
+import com.cursorpoc.backend.web.dto.TenantSkinUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.TenantUpdateRequest;
 import java.util.Optional;
@@ -397,6 +399,71 @@ class TenantAdminServiceTest {
             () ->
                 service.updateStatus(
                     404L, new TenantStatusUpdateRequest("SUSPENDED"), 1L, "a@b.com"))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("TENANT_NOT_FOUND");
+  }
+
+  // Flowbit rebrand: per-tenant accent skin.
+  @Test
+  void newTenantDefaultsToTheDuraznoSkin() {
+    TenantResponse response = service.create(new TenantCreateRequest("Salon Skin", null, 1L));
+
+    assertThat(response.skin()).isEqualTo(TenantSkin.DURAZNO.name());
+  }
+
+  @Test
+  void createsTenantWithAnExplicitSkin() {
+    TenantResponse response =
+        service.create(new TenantCreateRequest("Barberia Skin", null, 1L, "CELESTE"));
+
+    assertThat(response.skin()).isEqualTo(TenantSkin.CELESTE.name());
+  }
+
+  @Test
+  void rejectsAnInvalidSkinOnCreate() {
+    assertThatThrownBy(
+            () -> service.create(new TenantCreateRequest("Salon Skin", null, 1L, "VERDE")))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("TENANT_SKIN_INVALID");
+  }
+
+  @Test
+  void updatesTheSkinWithoutTouchingTheRest() {
+    Tenant existing = existingTenant(30L, "Salon", "salon.pelu.app", tier);
+    lenient().when(tenantRepository.findById(30L)).thenReturn(Optional.of(existing));
+
+    TenantResponse response = service.updateSkin(30L, new TenantSkinUpdateRequest("ROSA"));
+
+    assertThat(response.skin()).isEqualTo(TenantSkin.ROSA.name());
+    assertThat(response.name()).isEqualTo("Salon");
+    assertThat(response.domain()).isEqualTo("salon.pelu.app");
+    assertThat(response.tierId()).isEqualTo(1L);
+    assertThat(response.status()).isEqualTo(TenantStatus.ACTIVE.name());
+    Mockito.verify(tenantRepository).save(existing);
+  }
+
+  @Test
+  void rejectsInvalidOrBlankSkinOnUpdate() {
+    Tenant existing = existingTenant(31L, "Salon", null, tier);
+    lenient().when(tenantRepository.findById(31L)).thenReturn(Optional.of(existing));
+
+    assertThatThrownBy(() -> service.updateSkin(31L, new TenantSkinUpdateRequest("BOGUS")))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("TENANT_SKIN_INVALID");
+    assertThatThrownBy(() -> service.updateSkin(31L, new TenantSkinUpdateRequest("  ")))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("TENANT_SKIN_INVALID");
+    assertThatThrownBy(() -> service.updateSkin(31L, new TenantSkinUpdateRequest(null)))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("TENANT_SKIN_INVALID");
+    assertThat(existing.getSkin()).isEqualTo(TenantSkin.DURAZNO);
+  }
+
+  @Test
+  void rejectsSkinUpdateOfUnknownTenant() {
+    lenient().when(tenantRepository.findById(404L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.updateSkin(404L, new TenantSkinUpdateRequest("ROSA")))
         .isInstanceOf(ResponseStatusException.class)
         .hasMessageContaining("TENANT_NOT_FOUND");
   }

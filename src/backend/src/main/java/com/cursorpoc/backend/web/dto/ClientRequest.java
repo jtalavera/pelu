@@ -21,10 +21,22 @@ public record ClientRequest(
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType}, o null. */
     String identityDocumentType,
     /** Nombre de {@link com.cursorpoc.backend.domain.enums.ClientTaxpayerType}, o null. */
-    String taxpayerType) {
+    String taxpayerType,
+    /** HU-69: day + month together, year optional; all null = no birthday. */
+    Integer birthdayDay,
+    Integer birthdayMonth,
+    Integer birthdayYear,
+    /**
+     * HU-69: name of {@link com.cursorpoc.backend.domain.enums.ClientAcquisitionChannel}, or null.
+     */
+    String acquisitionChannel,
+    /** HU-69: detail when the channel is OTRO (max 100 chars). */
+    String acquisitionChannelOther) {
 
   public ClientRequest(String fullName, String phone, String email, String ruc) {
-    this(fullName, phone, email, ruc, null, null, null, null, null, null, null, null);
+    this(
+        fullName, phone, email, ruc, null, null, null, null, null, null, null, null, null, null,
+        null, null, null);
   }
 
   public ClientRequest(
@@ -49,6 +61,11 @@ public record ClientRequest(
         departmentName,
         cityCode,
         cityName,
+        null,
+        null,
+        null,
+        null,
+        null,
         null,
         null);
   }
@@ -77,6 +94,45 @@ public record ClientRequest(
         cityCode,
         cityName,
         identityDocumentType,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
+  }
+
+  /** Pre-HU-69 shape (no birthday / acquisition channel). */
+  public ClientRequest(
+      String fullName,
+      String phone,
+      String email,
+      String ruc,
+      String identityDocumentNumber,
+      String address,
+      String departmentCode,
+      String departmentName,
+      String cityCode,
+      String cityName,
+      String identityDocumentType,
+      String taxpayerType) {
+    this(
+        fullName,
+        phone,
+        email,
+        ruc,
+        identityDocumentNumber,
+        address,
+        departmentCode,
+        departmentName,
+        cityCode,
+        cityName,
+        identityDocumentType,
+        taxpayerType,
+        null,
+        null,
+        null,
+        null,
         null);
   }
 }

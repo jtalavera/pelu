@@ -19,7 +19,7 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { choosePaymentMethod, ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory, openInvoicePanel, openInvoiceSifenTab, openMoreOptions, searchInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 // Issue #174 "Cambios en factura electrónica (Parte 2)":
@@ -64,7 +64,7 @@ async function enableSifen(request: APIRequestContext, token: string) {
 async function openNewInvoiceForm(page: Page) {
   await page.goto("/app/billing");
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 }
 
@@ -166,6 +166,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
 
     await expect(page.getByTestId("billing-tax-exempt-note")).toBeVisible();
     // Total is now net of the 10% IVA: 55.000 / 1,10 = 50.000.
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("50.000");
     await clickIssueInvoiceAndExpectSuccess(page);
   });
@@ -193,14 +194,17 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await page.locator("#billing-client-email").fill("e2e174-ac2@example.com");
 
     await page.locator("#line-price-0").fill("40000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("40.000");
 
     // Switch the first row away from CASH — it stays aligned with Total.
-    await page.locator("#pay-method-0").selectOption("TRANSFER");
+    await choosePaymentMethod(page, "TRANSFER");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("40.000");
 
     // Change Total → the first "Monto" follows even though it's a TRANSFER row.
     await page.locator("#line-price-0").fill("75000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("75.000");
     await clickIssueInvoiceAndExpectSuccess(page);
   });
@@ -222,15 +226,17 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     await loginAsDemo(page);
     await openNewInvoiceForm(page);
 
+    // Redesign: the date is a header line ("Today · date · Change"); the field only appears once
+    // the user chooses to change it.
     const dateField = page.locator("#billing-issue-date");
-    await expect(dateField).toBeDisabled();
+    await expect(dateField).toHaveCount(0);
+    await expect(page.getByTestId("billing-issue-date-label")).toBeVisible();
+    await page.getByTestId("billing-issue-date-open").click();
+    await expect(dateField).toBeEnabled();
     // Issue #181: the legend copy was shortened.
     await expect(
       page.getByText(/30 days in the past or 5 days in the future/),
     ).toBeVisible();
-
-    await page.getByLabel("Edit the issue date").check();
-    await expect(dateField).toBeEnabled();
 
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -314,7 +320,7 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     for (const [testId, ext, sig] of [
       ["invoice-history-report-xlsx", "xlsx", "PK"],
@@ -340,15 +346,17 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
     test.setTimeout(60_000);
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
 
     const today = new Date();
     const from = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
     const pad = (n: number) => String(n).padStart(2, "0");
     const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
-    await expect(page.locator("#filter-from")).toHaveValue(ymd(from));
-    await expect(page.locator("#filter-to")).toHaveValue(ymd(today));
+    // The date range sits under "Filters" in the redesigned history.
+    await page.getByTestId("invoice-history-filters-toggle").click();
+    await expect(page.locator("#invoice-history-from")).toHaveValue(ymd(from));
+    await expect(page.locator("#invoice-history-to")).toHaveValue(ymd(today));
   });
 
   // ── AC-03 ──────────────────────────────────────────────────────────────────
@@ -383,22 +391,22 @@ test.describe("Issue #174 · Cambios en factura electrónica (Parte 2)", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.locator("#invoice-history-text-filter").fill(clientName);
+    await goToInvoiceHistory(page);
+    await searchInvoiceHistory(page, clientName);
     const row = page
-      .locator('tbody tr[role="button"]')
+      .locator('[data-testid^="invoice-history-row-"]')
       .filter({ hasText: clientName })
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await row.click();
 
     const modal = page.getByRole("dialog");
-    await modal.getByTestId("sifen-tab-identify").click();
-    // The client-identification form is now open, but there is no inner <h3> repeating the
-    // accordion's own "Identify client" label.
+    await openInvoicePanel(page, "identify");
+    // The client-identification form is shown, and the section's own "Identify client" title is
+    // the only heading with that label — no inner heading repeating it.
     await expect(
       modal.getByTestId("sifen-identify-client-confirm-button"),
     ).toBeVisible();
-    await expect(modal.getByRole("heading", { name: "Identify client" })).toHaveCount(0);
+    await expect(modal.getByRole("heading", { name: "Identify client" })).toHaveCount(1);
   });
 });

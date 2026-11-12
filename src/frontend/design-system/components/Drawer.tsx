@@ -1,6 +1,7 @@
 import { useEffect, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
+import { lockBodyScroll } from "../lib/bodyScrollLock";
 import { Button } from "./Button";
 
 export type DrawerProps = {
@@ -30,13 +31,14 @@ export function Drawer({
       if (e.key === "Escape") onClose?.();
     };
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  // Page scroll lock shared by every open dialog (depends only on `open`, never on `onClose`).
+  useEffect(() => {
+    if (!open) return;
+    return lockBodyScroll();
+  }, [open]);
 
   if (!open) return null;
 
@@ -49,13 +51,13 @@ export function Drawer({
     >
       <button
         type="button"
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px] dark:bg-black/60"
+        className="absolute inset-0 bg-tinta/40 backdrop-blur-[1px]"
         aria-label={closeLabel}
         onClick={onClose}
       />
       <aside
         className={cn(
-          "relative z-10 flex h-full w-full max-w-md flex-col border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900",
+          "relative z-10 flex h-full w-full max-w-md flex-col border-line bg-surface shadow-2xl",
           side === "right" ? "border-l" : "border-r",
           className,
         )}
@@ -63,11 +65,11 @@ export function Drawer({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
       >
-        <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
+        <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3">
           {title ? (
             <h2
               id={titleId}
-              className="text-base font-semibold text-slate-900 dark:text-slate-100"
+              className="text-base font-semibold text-ink"
             >
               {title}
             </h2>
@@ -79,7 +81,7 @@ export function Drawer({
               type="button"
               variant="ghost"
               size="icon"
-              className="shrink-0 text-slate-500 dark:text-slate-400"
+              className="shrink-0 text-ink-3"
               onClick={onClose}
               aria-label={closeLabel}
             >

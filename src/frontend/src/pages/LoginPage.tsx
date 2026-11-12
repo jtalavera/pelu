@@ -6,8 +6,10 @@ import { apiBaseUrl } from "../api/baseUrl";
 import { ACCESS_TOKEN_STORAGE_KEY } from "../api/baseUrl";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { FieldValidationError } from "../components/FieldValidationError";
+import { AuthBrandHeader } from "../components/AuthBrandHeader";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { broadcastLogout } from "../auth/sessionBroadcast";
+import { getSharedDevice, markRegularSession, SHARED_DEVICE_PATH } from "../auth/sharedDevice";
 import { useTour } from "../tour/useTour";
 import { loginSteps } from "../tour/steps/login";
 
@@ -53,6 +55,7 @@ export default function LoginPage() {
       }
       const data = (await res.json()) as { accessToken: string };
       sessionStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, data.accessToken);
+      markRegularSession();
       // Decode JWT payload to get role without an extra API call
       const payloadBase64 = data.accessToken.split(".")[1] ?? "";
       let role = "ADMIN";
@@ -68,11 +71,7 @@ export default function LoginPage() {
       const destination =
         role === "PLATFORM_ADMIN"
           ? "/platform"
-          : from !== "/app"
-            ? from
-            : role === "PROFESSIONAL"
-              ? "/app/calendar"
-              : "/app";
+          : from;
       navigate(destination, { replace: true });
     } catch {
       setError(t("femme.login.errorNetwork"));
@@ -82,11 +81,11 @@ export default function LoginPage() {
   }
 
   const inputClassName =
-    "mt-1 w-full border-[var(--color-stone-md)] bg-[var(--color-white)] text-[var(--color-ink)] placeholder:text-[var(--color-ink-3)] focus-visible:border-[var(--color-rose)] focus-visible:ring-2 focus-visible:ring-[var(--color-rose-lt)] dark:focus-visible:ring-[var(--color-rose-md)]";
+    "mt-1 w-full border-[var(--color-stone-md)] bg-[var(--color-white)] text-[var(--color-ink)] placeholder:text-[var(--color-ink-3)] focus-visible:border-[var(--color-rose)] focus-visible:ring-2 focus-visible:ring-[var(--color-rose-lt)])]";
 
   return (
     <div
-      className="min-h-screen bg-[var(--color-stone)] px-4 py-10 text-[var(--color-ink)]"
+      className="min-h-screen fb-auth-bg px-4 py-10 text-[var(--color-ink)]"
       style={{
         paddingBottom: "max(2.5rem, env(safe-area-inset-bottom))",
         paddingLeft: "max(1rem, env(safe-area-inset-left))",
@@ -96,22 +95,17 @@ export default function LoginPage() {
     >
       <div className="mx-auto flex max-w-md flex-col gap-6">
         <div className="flex items-center justify-between gap-4">
-          <span
-            className="text-lg font-medium text-[var(--color-rose)]"
-            style={{ letterSpacing: "-0.01em" }}
-          >
-            {t("femme.appName")}
-          </span>
+          <AuthBrandHeader />
           <LanguageSwitcher />
         </div>
 
         <div
           data-tour="login-form"
-          className="rounded-[var(--radius-xl)] p-6 md:p-8"
+          className="rounded-[var(--radius-2xl)] p-6 md:p-8"
           style={{
             background: "var(--color-white)",
             border: "var(--border-default)",
-            boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+            boxShadow: "none",
           }}
         >
           <Heading as="h1" className="mb-1 !text-[var(--color-ink)]">
@@ -171,7 +165,7 @@ export default function LoginPage() {
               data-tour="login-submit"
               type="submit"
               variant="primary"
-              className="min-h-11 w-full rounded-[var(--radius-md)]"
+              className="min-h-11 w-full"
               style={{
                 background: "var(--color-rose)",
                 color: "var(--color-on-primary)",
@@ -191,6 +185,18 @@ export default function LoginPage() {
               {t("femme.login.forgotPassword")}
             </Link>
           </div>
+          {/* HU-66: on a shared salon device, back to the professional picker. */}
+          {getSharedDevice() ? (
+            <div className="mt-2 text-center">
+              <Link
+                to={SHARED_DEVICE_PATH}
+                data-testid="login-back-to-shared-device"
+                className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--color-rose)] underline-offset-4 hover:underline"
+              >
+                {t("femme.sharedDevice.backToPicker")}
+              </Link>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>

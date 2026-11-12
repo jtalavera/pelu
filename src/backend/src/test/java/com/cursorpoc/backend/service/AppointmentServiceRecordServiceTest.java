@@ -1,0 +1,285 @@
+package com.cursorpoc.backend.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.cursorpoc.backend.config.FemmeTimeProperties;
+import com.cursorpoc.backend.domain.Appointment;
+import com.cursorpoc.backend.domain.Client;
+import com.cursorpoc.backend.domain.Professional;
+import com.cursorpoc.backend.domain.SalonService;
+import com.cursorpoc.backend.domain.ServiceRecord;
+import com.cursorpoc.backend.domain.ServiceRecordLine;
+import com.cursorpoc.backend.domain.enums.AppointmentStatus;
+import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
+import com.cursorpoc.backend.repository.AppointmentRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
+import com.cursorpoc.backend.web.dto.ServiceRecordRequest;
+import com.cursorpoc.backend.web.dto.ServiceRecordResponse;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.server.ResponseStatusException;
+
+@ExtendWith(MockitoExtension.class)
+class AppointmentServiceRecordServiceTest {
+
+  private static final long TENANT = 1L;
+
+  @Mock private AppointmentRepository appointmentRepository;
+  @Mock private ServiceRecordRepository serviceRecordRepository;
+  @Mock private ServiceRecordService serviceRecordService;
+  @Mock private ClientService clientService;
+  @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
+
+  private AppointmentServiceRecordService service;
+  private Appointment appointment;
+  private Client client;
+
+  @BeforeEach
+  void setUp() {
+    service =
+        new AppointmentServiceRecordService(
+            appointmentRepository,
+            serviceRecordRepository,
+            serviceRecordService,
+            timeProperties,
+            clientService);
+    client = new Client();
+    client.setId(5L);
+    Professional professional = new Professional();
+    professional.setId(3L);
+    SalonService salonService = new SalonService();
+    salonService.setId(11L);
+    appointment = new Appointment();
+    appointment.setId(100L);
+    appointment.setClient(client);
+    appointment.setProfessional(professional);
+    appointment.setSalonService(salonService);
+    appointment.setStatus(AppointmentStatus.CONFIRMED);
+    when(appointmentRepository.findByIdAndTenant_Id(100L, TENANT))
+        .thenReturn(Optional.of(appointment));
+  }
+
+  private ServiceRecord openRecord(long id, Long clientId) {
+    Client c = new Client();
+    c.setId(clientId);
+    ServiceRecord r = new ServiceRecord();
+    r.setId(id);
+    r.setClient(c);
+    r.setStatus(ServiceRecordStatus.OPEN);
+    return r;
+  }
+
+  @Test
+  void createFromAppointment_copiesClientServiceAndProfessional_andStartsTheTurno() {
+    ServiceRecord record = openRecord(9L, 5L);
+    ServiceRecordResponse created = mock(ServiceRecordResponse.class);
+    when(created.id()).thenReturn(9L);
+    when(serviceRecordService.createServiceRecord(any(Long.class), any())).thenReturn(created);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.createFromAppointment(TENANT, 100L);
+
+    ArgumentCaptor<ServiceRecordRequest> req = ArgumentCaptor.forClass(ServiceRecordRequest.class);
+    org.mockito.Mockito.verify(serviceRecordService)
+        .createServiceRecord(any(Long.class), req.capture());
+    assertThat(req.getValue().clientId()).isEqualTo(5L);
+    assertThat(req.getValue().lines()).hasSize(1);
+    assertThat(req.getValue().lines().get(0).serviceId()).isEqualTo(11L);
+    assertThat(req.getValue().lines().get(0).professionalId()).isEqualTo(3L);
+    assertThat(appointment.getServiceRecord()).isSameAs(record);
+    assertThat(record.getAppointments()).containsExactly(appointment);
+    assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.IN_PROGRESS);
+  }
+
+  @Test
+  void assign_linksAnOpenFichaOfTheSameClient_andStartsThePendingTurno() {
+    appointment.setStatus(AppointmentStatus.PENDING);
+    ServiceRecord record = openRecord(9L, 5L);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.assign(TENANT, 100L, 9L);
+
+    assertThat(appointment.getServiceRecord()).isSameAs(record);
+    assertThat(record.getAppointments()).containsExactly(appointment);
+    assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.IN_PROGRESS);
+  }
+
+  @Test
+  void assign_rejectsAnotherClientsFicha() {
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT))
+        .thenReturn(Optional.of(openRecord(9L, 77L)));
+    assertThatThrownBy(() -> service.assign(TENANT, 100L, 9L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SERVICE_RECORD_CLIENT_MISMATCH");
+  }
+
+  @Test
+  void assign_acceptsAFichaAlreadyLinkedToAnotherTurno_soAFichaCanServeSeveralTurnos() {
+    ServiceRecord record = openRecord(9L, 5L);
+    Appointment other = new Appointment();
+    other.setId(200L);
+    other.setServiceRecord(record);
+    record.getAppointments().add(other);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.assign(TENANT, 100L, 9L);
+
+    assertThat(appointment.getServiceRecord()).isSameAs(record);
+    assertThat(record.getAppointments()).containsExactlyInAnyOrder(other, appointment);
+    assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.IN_PROGRESS);
+  }
+
+  @Test
+  void assign_toAFichaOfAnotherTurno_doesNotTakeOverThatTurnosProfessionalLine() {
+    ServiceRecord record = openRecord(9L, 5L);
+    ServiceRecordLine existing = line(11L, 4L, 1, "50000");
+    existing.setServiceRecord(record);
+    record.getLines().add(existing);
+    Appointment other = new Appointment();
+    other.setId(200L);
+    other.setServiceRecord(record);
+    record.getAppointments().add(other);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.assign(TENANT, 100L, 9L);
+
+    // Same service, but professional 4 already has it for the other turno: this turno (professional
+    // 3) gets its own line instead of overwriting that one.
+    assertThat(record.getLines()).hasSize(2);
+    assertThat(existing.getProfessional().getId()).isEqualTo(4L);
+    assertThat(record.getLines().get(1).getProfessional().getId()).isEqualTo(3L);
+  }
+
+  @Test
+  void assign_rejectsAChargedFicha() {
+    ServiceRecord record = openRecord(9L, 5L);
+    record.setStatus(ServiceRecordStatus.CLOSED);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+    assertThatThrownBy(() -> service.assign(TENANT, 100L, 9L))
+        .hasMessageContaining("SERVICE_RECORD_NOT_OPEN");
+  }
+
+  @Test
+  void aTurnoWithAFichaCannotGetAnother() {
+    appointment.setServiceRecord(openRecord(1L, 5L));
+    assertThatThrownBy(() -> service.createFromAppointment(TENANT, 100L))
+        .hasMessageContaining("APPOINTMENT_ALREADY_HAS_SERVICE_RECORD");
+    assertThatThrownBy(() -> service.assign(TENANT, 100L, 9L))
+        .hasMessageContaining("APPOINTMENT_ALREADY_HAS_SERVICE_RECORD");
+  }
+
+  @Test
+  void aCancelledTurnoCannotGetAFicha() {
+    appointment.setStatus(AppointmentStatus.CANCELLED);
+    assertThatThrownBy(() -> service.createFromAppointment(TENANT, 100L))
+        .hasMessageContaining("APPOINTMENT_NOT_ACTIVE");
+  }
+
+  @Test
+  void aTurnoWithoutClient_createsTheFichaUnderTheGenericOccasionalClient() {
+    appointment.setClient(null);
+    Client generic = new Client();
+    generic.setId(77L);
+    generic.setGeneric(true);
+    when(clientService.getOrCreateGenericClient(TENANT)).thenReturn(generic);
+    ServiceRecord record = openRecord(9L, 77L);
+    ServiceRecordResponse created = mock(ServiceRecordResponse.class);
+    when(created.id()).thenReturn(9L);
+    when(serviceRecordService.createServiceRecord(any(Long.class), any())).thenReturn(created);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.createFromAppointment(TENANT, 100L);
+
+    ArgumentCaptor<ServiceRecordRequest> req = ArgumentCaptor.forClass(ServiceRecordRequest.class);
+    org.mockito.Mockito.verify(serviceRecordService)
+        .createServiceRecord(any(Long.class), req.capture());
+    assertThat(req.getValue().clientId()).isEqualTo(77L);
+    assertThat(appointment.getServiceRecord()).isSameAs(record);
+    assertThat(record.getAppointments()).containsExactly(appointment);
+    assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.IN_PROGRESS);
+  }
+
+  @Test
+  void aTurnoWithoutClient_cannotAssignAFicha() {
+    appointment.setClient(null);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT))
+        .thenReturn(Optional.of(openRecord(9L, 77L)));
+    assertThatThrownBy(() -> service.assign(TENANT, 100L, 9L))
+        .hasMessageContaining("SERVICE_RECORD_CLIENT_MISMATCH");
+  }
+
+  private ServiceRecordLine line(long serviceId, long professionalId, int qty, String price) {
+    SalonService svc = new SalonService();
+    svc.setId(serviceId);
+    svc.setName("S" + serviceId);
+    Professional p = new Professional();
+    p.setId(professionalId);
+    ServiceRecordLine l = new ServiceRecordLine();
+    l.setSalonService(svc);
+    l.setProfessional(p);
+    l.setQuantity(qty);
+    l.setUnitPrice(new java.math.BigDecimal(price));
+    return l;
+  }
+
+  @Test
+  void assign_addsTheTurnoServiceWhenTheFichaDoesNotHaveIt() {
+    appointment.getSalonService().setName("Color");
+    appointment.getSalonService().setPriceMinor(new java.math.BigDecimal("90000"));
+    ServiceRecord record = openRecord(9L, 5L);
+    record.getLines().add(line(77L, 8L, 2, "30000"));
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.assign(TENANT, 100L, 9L);
+
+    assertThat(record.getLines()).hasSize(2);
+    ServiceRecordLine added = record.getLines().get(1);
+    assertThat(added.getSalonService().getId()).isEqualTo(11L);
+    assertThat(added.getProfessional().getId()).isEqualTo(3L);
+    assertThat(added.getQuantity()).isEqualTo(1);
+    assertThat(added.getUnitPrice()).isEqualByComparingTo("90000");
+    // The line that was already there is untouched.
+    assertThat(record.getLines().get(0).getQuantity()).isEqualTo(2);
+    assertThat(record.getLines().get(0).getProfessional().getId()).isEqualTo(8L);
+    assertThat(record.getTotalAmount()).isEqualByComparingTo("150000");
+  }
+
+  @Test
+  void assign_withTheSameServiceAssignsTheTurnoProfessionalWithoutDuplicating() {
+    ServiceRecord record = openRecord(9L, 5L);
+    record.getLines().add(line(11L, 8L, 2, "40000"));
+    record.getLines().add(line(11L, 8L, 1, "40000"));
+    record.setTotalAmount(new java.math.BigDecimal("120000"));
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.assign(TENANT, 100L, 9L);
+
+    assertThat(record.getLines()).hasSize(2);
+    assertThat(record.getLines().get(0).getProfessional().getId()).isEqualTo(3L);
+    assertThat(record.getLines().get(1).getProfessional().getId()).isEqualTo(8L);
+    assertThat(record.getLines().get(0).getQuantity()).isEqualTo(2);
+    assertThat(record.getTotalAmount()).isEqualByComparingTo("120000");
+  }
+
+  @Test
+  void assign_toAnEmptyFichaAddsTheTurnoService() {
+    ServiceRecord record = openRecord(9L, 5L);
+    when(serviceRecordRepository.findByIdAndTenant_Id(9L, TENANT)).thenReturn(Optional.of(record));
+
+    service.assign(TENANT, 100L, 9L);
+
+    assertThat(record.getLines()).hasSize(1);
+    assertThat(record.getLines().get(0).getSalonService().getId()).isEqualTo(11L);
+    assertThat(record.getLines().get(0).getProfessional().getId()).isEqualTo(3L);
+  }
+}

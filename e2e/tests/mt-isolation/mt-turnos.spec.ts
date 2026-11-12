@@ -168,7 +168,7 @@ test.describe("mt-turnos · calendar & appointment isolation", () => {
     const pageA = await ctxA.newPage();
     try {
       await loginAs(pageA, world.tenantA.adminEmail, world.tenantA.adminPassword);
-      await pageA.goto("/app/calendar");
+      await pageA.goto("/app/calendar?view=week");
       await pageA.getByRole("button", { name: "New appointment" }).first().click();
       const dlgA = bookingAppointmentDialog(pageA);
       await fillAppointmentDateIso(dlgA, aSlotDay);
@@ -204,7 +204,7 @@ test.describe("mt-turnos · calendar & appointment isolation", () => {
     const pageB = await ctxB.newPage();
     try {
       await loginAs(pageB, world.tenantB.adminEmail, world.tenantB.adminPassword);
-      await pageB.goto("/app/calendar");
+      await pageB.goto("/app/calendar?view=week");
       await pageB.waitForResponse(
         (r) =>
           r.request().method() === "GET" &&

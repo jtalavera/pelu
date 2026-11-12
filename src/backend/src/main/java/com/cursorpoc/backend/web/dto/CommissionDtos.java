@@ -162,6 +162,16 @@ public final class CommissionDtos {
   /** HU-COM-13: assign a professional to an issued line billed without one. */
   public record AssignLineRequest(Long professionalId, String note) {}
 
+  /** One line → professional pair of {@link AssignInvoiceLinesRequest}. */
+  public record LineAssignment(Long invoiceLineId, Long professionalId) {}
+
+  /**
+   * "Asignar profesional" from the comprobante detail: several lines of one issued invoice at once,
+   * all-or-nothing. A line without professional gets one; a line that has one is reassigned. {@code
+   * note} is optional (the reason of a reassignment).
+   */
+  public record AssignInvoiceLinesRequest(List<LineAssignment> assignments, String note) {}
+
   /** What the professional would be paid today for an open period (replaces the simulator). */
   public record SettlementPreview(
       Long professionalId,
@@ -174,10 +184,43 @@ public final class CommissionDtos {
       BigDecimal adjustmentsTotal,
       int lines,
       List<EntryView> entries,
-      List<SettlementView> draftSettlements) {}
+      List<SettlementView> draftSettlements,
+      // Part of {@code total} accrued BEFORE {@code periodFrom} (unsettled commissions carried from
+      // earlier periods), and the ids of those entries; {@code total - carriedAmount} is the part
+      // of the period itself.
+      BigDecimal carriedAmount,
+      List<Long> carriedEntryIds) {}
 
+  /**
+   * {@code skipOverlapping}: professionals that already have a (non-voided) settlement overlapping
+   * the period are skipped instead of failing the whole request with {@code
+   * COMMISSION_PERIOD_OVERLAP}.
+   */
   public record GenerateSettlementsRequest(
-      LocalDate periodFrom, LocalDate periodTo, List<Long> professionalIds) {}
+      LocalDate periodFrom,
+      LocalDate periodTo,
+      List<Long> professionalIds,
+      Boolean skipOverlapping) {
+    public GenerateSettlementsRequest(
+        LocalDate periodFrom, LocalDate periodTo, List<Long> professionalIds) {
+      this(periodFrom, periodTo, professionalIds, false);
+    }
+  }
+
+  /** A professional that already has a settlement overlapping the period to generate. */
+  public record SettlementConflict(
+      long professionalId,
+      String professionalName,
+      long settlementId,
+      String status,
+      LocalDate periodFrom,
+      LocalDate periodTo) {}
+
+  /**
+   * What «Generar» would do: the overlapping settlements that block it, and how many settlements it
+   * can still create for the remaining professionals (those with unsettled commissions).
+   */
+  public record SettlementGenerationCheck(List<SettlementConflict> conflicts, int generatable) {}
 
   public record AdjustmentRequest(BigDecimal amount, String reason) {}
 

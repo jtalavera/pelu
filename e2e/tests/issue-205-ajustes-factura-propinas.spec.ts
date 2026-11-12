@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from "@playwright/test";
+import { goToInvoiceHistory, openInvoiceSifenTab, searchInvoiceHistory } from "../fixtures/billing";
 import {
   apiBaseUrl,
   apiPostJson,
@@ -10,6 +11,8 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { filterPropinasByProfessional, propinasMovements } from "../fixtures/propinas";
+import { openSifenSection } from "../fixtures/ui";
 
 // DEMO_TENANT_ID=1 has SIFEN_ELECTRONIC_INVOICING OFF by default in the e2e profile (see
 // hu-33-ajustes-facturacion-electronica.spec.ts's own note) — the "Numeración inutilizada" tab
@@ -19,23 +22,6 @@ import { loginAsDemo } from "../fixtures/auth";
 // would otherwise start requiring a SIFEN certificate).
 const DEMO_TENANT_ID = 1;
 const SIFEN_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
-
-/** Picks options from the report tab's professional `MultiSelect` filter, one at a time. */
-async function pickMultiSelectOption(
-  page: Page,
-  accessibleName: string,
-  filterText: string,
-  optionNamePattern: RegExp,
-): Promise<void> {
-  const cb = page.getByRole("combobox", { name: accessibleName, exact: true });
-  await cb.click();
-  await cb.fill(filterText);
-  await page
-    .getByRole("listbox", { name: accessibleName, exact: true })
-    .getByRole("button", { name: optionNamePattern })
-    .first()
-    .click();
-}
 
 // Issue #205 "Ajustes en factura electronica 10_09": covers the ACs that are observable through
 // the UI without a live SIFEN round-trip —
@@ -70,10 +56,10 @@ async function createInvoice(request: APIRequestContext, token: string): Promise
 
 async function openInvoiceDetail(page: Page, clientFullName: string) {
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "History" }).click();
-  await page.locator("#invoice-history-text-filter").fill(clientFullName);
+  await goToInvoiceHistory(page);
+  await searchInvoiceHistory(page, clientFullName);
   const row = page
-    .locator("tbody tr[role=\"button\"]")
+    .locator('[data-testid^="invoice-history-row-"]')
     .filter({ hasText: clientFullName })
     .filter({ visible: true });
   await expect(row).toBeVisible({ timeout: 30_000 });
@@ -81,8 +67,8 @@ async function openInvoiceDetail(page: Page, clientFullName: string) {
 }
 
 async function openVoidingTab(page: Page) {
-  await page.goto("/app/settings/sifen");
-  await page.getByRole("tab", { name: "Voided numbering" }).click();
+  // Redesign: SIFEN settings are folds; "Voided numbering" is one of them.
+  await openSifenSection(page, "numberVoiding");
 }
 
 /**
@@ -107,7 +93,7 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
     await setTenantFeatureFlag(request, DEMO_TENANT_ID, SIFEN_FLAG_KEY, false);
   });
 
-  test("AC5 · el acordeón \"Estado en SIFEN\" aparece cerrado al abrir el detalle del comprobante", async ({
+  test("AC5 · el detalle del comprobante es una sola vista; el estado SIFEN está en «Detalle técnico»", async ({
     page,
     request,
   }) => {
@@ -125,13 +111,17 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
     await loginAsDemo(page);
     await openInvoiceDetail(page, clientDisplayName);
 
-    // The section (its own <details>/<summary>) is visible, but its body content is collapsed —
-    // native <details> keeps the content in the DOM (just hidden), so check visibility, not count.
-    await expect(page.getByTestId("sifen-tab-status")).toBeVisible();
-    await expect(page.getByText(/SIFEN message/)).toBeHidden();
+    // Redesign: the detail is one view. The SIFEN status (and its message history) lives in the
+    // "Technical detail" panel behind "⋯", closed until the user opens it.
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByTestId("invoice-detail-view")).toBeVisible();
+    await expect(dialog.getByRole("tab")).toHaveCount(0);
+    await expect(page.getByTestId("sifen-tab-status")).toBeHidden();
+    await expect(page.getByTestId("sifen-history-button")).toBeHidden();
 
-    await page.getByTestId("sifen-tab-status").locator("summary").click();
-    await expect(page.getByText(/SIFEN message/)).toBeVisible();
+    await openInvoiceSifenTab(page);
+    await expect(page.getByTestId("sifen-tab-status")).toBeVisible();
+    await expect(page.getByTestId("sifen-history-button")).toBeVisible();
   });
 
   test("AC2 · el historial de mensajes SIFEN muestra todas las respuestas registradas", async ({
@@ -155,7 +145,7 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
 
     await loginAsDemo(page);
     await openInvoiceDetail(page, clientDisplayName);
-    await page.getByTestId("sifen-tab-status").locator("summary").click();
+    await openInvoiceSifenTab(page);
     await page.getByTestId("sifen-history-button").click();
 
     const entries = page.getByTestId("sifen-history-entry");
@@ -240,7 +230,7 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
     await expect(row.getByRole("button", { name: "Submit to SIFEN" })).toHaveCount(0);
   });
 
-  test("Propinas AC · separador visual entre los registros de cada profesional en el reporte", async ({
+  test("Propinas AC · cada movimiento muestra su profesional, sin mezclar los de otra", async ({
     page,
     request,
   }) => {
@@ -277,7 +267,7 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
             discountValue: null,
           },
         ],
-        payments: [{ method: "CASH", amount: 50000 }],
+        payments: [{ method: "CASH", amount: 50000 + tipAmount }],
         serviceRecordId: record.id,
         tipsAmount: tipAmount,
       });
@@ -288,53 +278,17 @@ test.describe("Issue #205 · Ajustes en factura electrónica y propinas", () => 
 
     await loginAsDemo(page);
     await page.goto("/app/propinas");
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      seed.professionalFullName.slice(0, 10),
-      new RegExp(seed.professionalFullName),
-    );
-    await pickMultiSelectOption(
-      page,
-      "Professional",
-      profBRes.fullName.slice(0, 10),
-      new RegExp(profBRes.fullName),
-    );
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    // Redesign: one movements table whose "Professional" column labels every row.
+    await filterPropinasByProfessional(page, seed.professionalFullName);
+    const rowA = propinasMovements(page).filter({ hasText: clientA.fullName });
+    await expect(rowA).toHaveCount(1, { timeout: 15_000 });
+    await expect(rowA).toContainText(seed.professionalFullName);
+    await expect(propinasMovements(page).filter({ hasText: clientB.fullName })).toHaveCount(0);
 
-    const reportRows = page.getByTestId("propinas-report-table").locator("tbody tr");
-    const rowA = reportRows.filter({ hasText: clientA.fullName });
-    await expect(rowA).toBeVisible({ timeout: 15_000 });
-
-    // The separator header for each professional must sit directly above their first data row.
-    const allRows = await reportRows.all();
-    const headerAIndex = await findRowIndex(allRows, seed.professionalFullName);
-    const dataAIndex = await findRowIndex(allRows, clientA.fullName);
-    const headerBIndex = await findRowIndex(allRows, profBRes.fullName, clientB.fullName);
-    const dataBIndex = await findRowIndex(allRows, clientB.fullName);
-
-    expect(headerAIndex).toBeGreaterThanOrEqual(0);
-    expect(headerBIndex).toBeGreaterThanOrEqual(0);
-    expect(headerAIndex).toBeLessThan(dataAIndex);
-    expect(headerBIndex).toBeLessThan(dataBIndex);
+    await filterPropinasByProfessional(page, profBRes.fullName);
+    const rowB = propinasMovements(page).filter({ hasText: clientB.fullName });
+    await expect(rowB).toHaveCount(1, { timeout: 15_000 });
+    await expect(rowB).toContainText(profBRes.fullName);
+    await expect(propinasMovements(page).filter({ hasText: clientA.fullName })).toHaveCount(0);
   });
 });
-
-/**
- * Finds the index of the first row containing `text` but not `exclude` — used to distinguish a
- * professional's own separator-header row (name only) from a data row that happens to also
- * contain that professional's name inside another column's text.
- */
-async function findRowIndex(
-  rows: Locator[],
-  text: string,
-  exclude?: string,
-): Promise<number> {
-  for (let i = 0; i < rows.length; i++) {
-    const content = await rows[i].textContent();
-    if (content?.includes(text) && (!exclude || !content.includes(exclude))) {
-      return i;
-    }
-  }
-  return -1;
-}

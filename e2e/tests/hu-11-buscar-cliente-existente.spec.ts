@@ -51,7 +51,10 @@ test.describe("HU-11 · Buscar cliente existente", () => {
     await loginAsDemo(page);
     await page.goto("/app/clients");
     await page.getByPlaceholder("Search by name, phone, or RUC…").first().fill(name);
-    await expect(page.getByText(phone, { exact: true })).toBeVisible();
-    await expect(page.getByText(ruc, { exact: true })).toBeVisible();
+    // The row shows the phone in its secondary line; the RUC is searchable but not listed.
+    const row = page.locator('[data-testid^="client-row-"]').filter({ hasText: phone });
+    await expect(row).toHaveCount(1);
+    await page.getByPlaceholder("Search by name, phone, or RUC…").first().fill(ruc);
+    await expect(row).toHaveCount(1);
   });
 });

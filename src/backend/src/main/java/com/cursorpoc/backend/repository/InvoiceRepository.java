@@ -102,6 +102,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       AND (:toDate IS NULL OR i.issuedAt <= :toDate)
       AND (:clientId IS NULL OR i.client.id = :clientId)
       AND (:status IS NULL OR i.status = :status)
+      AND (:sifenFilter = false
+           OR i.sifenSubmissionStatus IN :sifenStatuses
+           OR (:sifenIncludeNone = true AND i.sifenSubmissionStatus IS NULL))
       AND (:q IS NULL
            OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%'))
            OR CAST(i.invoiceNumber AS string) LIKE CONCAT('%', :q, '%')
@@ -114,6 +117,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("toDate") Instant toDate,
       @Param("clientId") Long clientId,
       @Param("status") InvoiceStatus status,
+      @Param("sifenFilter") boolean sifenFilter,
+      @Param("sifenStatuses") java.util.Collection<SifenSubmissionStatus> sifenStatuses,
+      @Param("sifenIncludeNone") boolean sifenIncludeNone,
       @Param("q") String q,
       @Param("qInvoiceNumber") Integer qInvoiceNumber,
       Pageable pageable);
@@ -144,6 +150,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       AND (:toDate IS NULL OR i.issuedAt <= :toDate)
       AND (:clientId IS NULL OR i.client.id = :clientId)
       AND (:status IS NULL OR i.status = :status)
+      AND (:sifenFilter = false
+           OR i.sifenSubmissionStatus IN :sifenStatuses
+           OR (:sifenIncludeNone = true AND i.sifenSubmissionStatus IS NULL))
       AND (:q IS NULL
            OR LOWER(i.clientDisplayName) LIKE LOWER(CONCAT('%', :q, '%'))
            OR CAST(i.invoiceNumber AS string) LIKE CONCAT('%', :q, '%')
@@ -156,6 +165,9 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
       @Param("toDate") Instant toDate,
       @Param("clientId") Long clientId,
       @Param("status") InvoiceStatus status,
+      @Param("sifenFilter") boolean sifenFilter,
+      @Param("sifenStatuses") java.util.Collection<SifenSubmissionStatus> sifenStatuses,
+      @Param("sifenIncludeNone") boolean sifenIncludeNone,
       @Param("q") String q,
       @Param("qInvoiceNumber") Integer qInvoiceNumber,
       Pageable pageable);
@@ -330,6 +342,27 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
   boolean existsByClient_Id(Long clientId);
 
   boolean existsByServiceRecord_Id(Long serviceRecordId);
+
+  boolean existsByAppointment_IdAndStatus(Long appointmentId, InvoiceStatus status);
+
+  /**
+   * Rows of [appointmentId, invoiceId]: the latest issued invoice of each turno, whether linked to
+   * the turno itself or to the ficha that was charged (a ficha may serve several turnos, all
+   * charged by one invoice).
+   */
+  @Query(
+      """
+      SELECT a.id, MAX(i.id) FROM Appointment a, Invoice i
+      WHERE a.tenant.id = :tenantId AND i.tenant.id = :tenantId AND i.status = :status
+      AND a.id IN :appointmentIds
+      AND (i.appointment.id = a.id
+           OR (a.serviceRecord IS NOT NULL AND i.serviceRecord.id = a.serviceRecord.id))
+      GROUP BY a.id
+      """)
+  List<Object[]> findInvoiceIdsByAppointmentIds(
+      @Param("tenantId") Long tenantId,
+      @Param("appointmentIds") java.util.Collection<Long> appointmentIds,
+      @Param("status") InvoiceStatus status);
 
   Optional<Invoice> findByServiceRecord_Id(Long serviceRecordId);
 }

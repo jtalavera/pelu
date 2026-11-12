@@ -72,6 +72,50 @@ async function demoLoginAlreadyWorks(): Promise<boolean> {
   return res.ok && !!res.json?.accessToken;
 }
 
+/**
+ * The backend answers `/health` (what Playwright waits for) a moment BEFORE its startup seeding has
+ * created the platform admin, so a login sent right then can come back 401 INVALID_CREDENTIALS
+ * (seen in CI, gone on re-run). Retry that case — and a backend that is still coming up — for up to
+ * ~45 s. Wrong credentials keep failing after the last attempt, with the real response.
+ */
+const LOGIN_ATTEMPTS = 18;
+const LOGIN_RETRY_DELAY_MS = 2_500;
+
+async function platformAdminLoginWithRetry(): Promise<{
+  ok: boolean;
+  status: number;
+  json: { accessToken: string } | null;
+  text: string;
+}> {
+  let last: { ok: boolean; status: number; json: { accessToken: string } | null; text: string } = {
+    ok: false,
+    status: 0,
+    json: null,
+    text: "no response",
+  };
+  for (let attempt = 1; attempt <= LOGIN_ATTEMPTS; attempt += 1) {
+    try {
+      last = await postJson<{ accessToken: string }>("/api/auth/login", {
+        email: PLATFORM_ADMIN_EMAIL,
+        password: PLATFORM_ADMIN_PASSWORD,
+      });
+      // Anything but «not seeded yet» (401) or «still starting» (5xx) is a final answer.
+      if (last.ok || (last.status !== 401 && last.status < 500)) return last;
+    } catch (err) {
+      // Connection refused / reset while the backend is still starting.
+      last = { ok: false, status: 0, json: null, text: String(err) };
+    }
+    if (attempt < LOGIN_ATTEMPTS) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[e2e/global-setup] platform admin login not ready (${last.status}) — retry ${attempt}/${LOGIN_ATTEMPTS - 1}.`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, LOGIN_RETRY_DELAY_MS));
+    }
+  }
+  return last;
+}
+
 export default async function globalSetup(): Promise<void> {
   if (await demoLoginAlreadyWorks()) {
     // eslint-disable-next-line no-console
@@ -81,10 +125,7 @@ export default async function globalSetup(): Promise<void> {
     return;
   }
 
-  const loginRes = await postJson<{ accessToken: string }>("/api/auth/login", {
-    email: PLATFORM_ADMIN_EMAIL,
-    password: PLATFORM_ADMIN_PASSWORD,
-  });
+  const loginRes = await platformAdminLoginWithRetry();
   if (!loginRes.ok || !loginRes.json?.accessToken) {
     throw new Error(
       `[e2e/global-setup] platform admin login failed (${loginRes.status}): ${loginRes.text}`,

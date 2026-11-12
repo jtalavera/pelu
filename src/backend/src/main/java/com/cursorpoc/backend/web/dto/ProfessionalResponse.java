@@ -1,5 +1,7 @@
 package com.cursorpoc.backend.web.dto;
 
+import com.cursorpoc.backend.service.SharedDeviceService;
+import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -13,6 +15,18 @@ public record ProfessionalResponse(
     List<Schedule> schedules,
     boolean hasPinSet,
     boolean systemAccessAllowed,
-    boolean hasUserAccount) {
+    boolean hasUserAccount,
+    // Issue #38 (4)/(5): NO_ACCESS | INVITATION_SENT | INVITATION_EXPIRED | ACTIVE, plus what the
+    // status line and the resend button need. All null in the professional-facing directory.
+    String accessStatus,
+    String accessLoginEmail,
+    Instant invitationSentAt,
+    Instant invitationExpiresAt,
+    Instant resendAvailableAt,
+    // HU-66: shared devices where her PIN login is locked right now (empty in the directory view).
+    List<SharedDeviceService.PinLockResponse> pinLocks,
+    // Optional nickname and what lists show (the nickname when set, otherwise the full name).
+    String nickname,
+    String displayName) {
   public record Schedule(short dayOfWeek, LocalTime startTime, LocalTime endTime) {}
 }

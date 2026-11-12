@@ -3,28 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <script>
+      // Same key and default as useTheme (light unless the user chose dark): avoids a flash of the
+      // wrong theme before React mounts. The OS color-scheme preference is intentionally ignored.
       (function () {
         try {
-          var s = localStorage.getItem("theme");
-          if (s === "dark") document.documentElement.classList.add("dark");
-          else if (s === "light") document.documentElement.classList.remove("dark");
-          else if (window.matchMedia("(prefers-color-scheme: dark)").matches)
+          if (localStorage.getItem("femme-theme") === "dark")
             document.documentElement.classList.add("dark");
         } catch (e) {}
       })();
     </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap"
-      rel="stylesheet"
-    />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <title>Gestión Peluquería</title>
+    <meta name="theme-color" content="#0E767E" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/flowbit-app-icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/flowbit-app-icon-180.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <title>Flowbit</title>
   </head>
   <body>
     <div id="root"></div>

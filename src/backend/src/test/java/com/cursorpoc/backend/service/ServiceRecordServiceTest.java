@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.SalonService;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -45,6 +47,8 @@ class ServiceRecordServiceTest {
   @Mock private SalonServiceRepository salonServiceRepository;
   @Mock private TenantRepository tenantRepository;
   @Mock private InvoiceRepository invoiceRepository;
+  @Mock private ClientService clientService;
+  @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   @InjectMocks private ServiceRecordService serviceRecordService;
 
@@ -74,6 +78,53 @@ class ServiceRecordServiceTest {
     salonService.setTenant(tenant);
     salonService.setName("Corte");
     salonService.setPriceMinor(new BigDecimal("50000"));
+  }
+
+  @Test
+  void createServiceRecord_withoutClient_usesTheGenericOccasionalClient() {
+    Client generic = new Client();
+    generic.setId(77L);
+    generic.setTenant(tenant);
+    generic.setFullName("CLIENTE OCASIONAL");
+    generic.setGeneric(true);
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(clientService.getOrCreateGenericClient(1L)).thenReturn(generic);
+    when(salonServiceRepository.findByIdAndTenant_Id(9L, 1L)).thenReturn(Optional.of(salonService));
+    when(professionalRepository.findByIdAndTenant_Id(3L, 1L)).thenReturn(Optional.of(professional));
+    when(serviceRecordRepository.save(org.mockito.ArgumentMatchers.any(ServiceRecord.class)))
+        .thenAnswer(
+            inv -> {
+              ServiceRecord r = inv.getArgument(0);
+              r.setId(101L);
+              return r;
+            });
+
+    var line = new ServiceRecordLineRequest(9L, 3L, 1, new BigDecimal("50000"));
+    ServiceRecordResponse result =
+        serviceRecordService.createServiceRecord(
+            1L, new ServiceRecordRequest(null, List.of(line), List.of()));
+
+    assertThat(result.clientId()).isEqualTo(77L);
+    assertThat(result.clientGeneric()).isTrue();
+  }
+
+  @Test
+  void createServiceRecord_withARealClient_isNotGeneric() {
+    when(tenantRepository.findById(1L)).thenReturn(Optional.of(tenant));
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(client));
+    when(serviceRecordRepository.save(org.mockito.ArgumentMatchers.any(ServiceRecord.class)))
+        .thenAnswer(
+            inv -> {
+              ServiceRecord r = inv.getArgument(0);
+              r.setId(102L);
+              return r;
+            });
+
+    ServiceRecordResponse result =
+        serviceRecordService.createServiceRecord(
+            1L, new ServiceRecordRequest(7L, List.of(), List.of()));
+
+    assertThat(result.clientGeneric()).isFalse();
   }
 
   @Test
@@ -221,6 +272,70 @@ class ServiceRecordServiceTest {
     assertThat(result.lines().get(0).quantity()).isEqualTo(1);
     assertThat(result.lines().get(0).unitPrice()).isEqualByComparingTo(BigDecimal.ZERO);
     assertThat(result.totalAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+  }
+
+  @Test
+  void listServiceRecords_includesServicesAndProfessionalsSummary() {
+    ServiceRecord record = new ServiceRecord();
+    record.setId(55L);
+    record.setTenant(tenant);
+    record.setClient(client);
+    record.setStatus(ServiceRecordStatus.OPEN);
+    record.setTotalAmount(new BigDecimal("100000"));
+    record.setCreatedAt(Instant.parse("2026-10-26T13:30:00Z"));
+    SalonService brushing = new SalonService();
+    brushing.setId(10L);
+    brushing.setName("Brushing");
+    Professional ana = new Professional();
+    ana.setId(4L);
+    ana.setFullName("Ana");
+    for (Object[] spec :
+        new Object[][] {
+          {salonService, professional},
+          {brushing, ana},
+          {salonService, professional},
+          {brushing, null}
+        }) {
+      ServiceRecordLine l = new ServiceRecordLine();
+      l.setServiceRecord(record);
+      l.setSalonService((SalonService) spec[0]);
+      l.setProfessional((Professional) spec[1]);
+      record.getLines().add(l);
+    }
+    when(serviceRecordRepository.findByTenantWithFiltersPaged(
+            org.mockito.ArgumentMatchers.eq(1L),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.any()))
+        .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(record)));
+
+    var page = serviceRecordService.listServiceRecords(1L, null, null, null, null, null, 0, 10);
+
+    assertThat(page.content()).hasSize(1);
+    assertThat(page.content().get(0).servicesSummary()).isEqualTo("Corte, Brushing");
+    assertThat(page.content().get(0).professionalsSummary()).isEqualTo("Bea Stylist, Ana");
+  }
+
+  @Test
+  void listServiceRecords_notOpenStatus_asksForThePaidAndVoidedOnes() {
+    when(serviceRecordRepository.findNotOpenWithFiltersPaged(
+            org.mockito.ArgumentMatchers.eq(1L),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.eq(ServiceRecordStatus.OPEN),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.any()))
+        .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+
+    var page =
+        serviceRecordService.listServiceRecords(1L, null, null, null, "NOT_OPEN", null, 0, 10);
+
+    assertThat(page.content()).isEmpty();
+    assertThat(page.totalElements()).isZero();
   }
 
   @Test
@@ -417,5 +532,188 @@ class ServiceRecordServiceTest {
         .isInstanceOf(ResponseStatusException.class)
         .hasFieldOrPropertyWithValue("statusCode", HttpStatus.CONFLICT)
         .hasMessageContaining("SERVICE_RECORD_NOT_OPEN");
+  }
+
+  // ── Professional view: open fichas of today, no money ─────────────────────────────────────
+
+  private ServiceRecord openRecordToday(long id) {
+    ServiceRecord r = new ServiceRecord();
+    r.setId(id);
+    r.setTenant(tenant);
+    r.setClient(client);
+    r.setStatus(ServiceRecordStatus.OPEN);
+    r.setCreatedAt(Instant.now());
+    r.setTotalAmount(new BigDecimal("50000"));
+    ServiceRecordLine line = new ServiceRecordLine();
+    line.setServiceRecord(r);
+    line.setSalonService(salonService);
+    line.setProfessional(professional);
+    line.setDescription("Corte");
+    line.setQuantity(1);
+    line.setUnitPrice(new BigDecimal("40000"));
+    r.getLines().add(line);
+    ServiceRecordTip tip = new ServiceRecordTip();
+    tip.setServiceRecord(r);
+    tip.setProfessional(professional);
+    tip.setAmount(new BigDecimal("5000"));
+    r.getTips().add(tip);
+    return r;
+  }
+
+  @Test
+  void professionalGet_returnsOpenRecordOfTodayWithoutAnyAmount() {
+    ServiceRecord open = openRecordToday(60L);
+    when(serviceRecordRepository.findByIdAndTenant_Id(60L, 1L)).thenReturn(Optional.of(open));
+
+    ServiceRecordResponse result = serviceRecordService.getOpenTodayForProfessional(1L, 60L);
+
+    assertThat(result.totalAmount()).isNull();
+    assertThat(result.tipsTotal()).isNull();
+    assertThat(result.clientRuc()).isNull();
+    assertThat(result.tips()).isEmpty();
+    assertThat(result.lines()).hasSize(1);
+    assertThat(result.lines().get(0).unitPrice()).isNull();
+    assertThat(result.lines().get(0).lineTotal()).isNull();
+    assertThat(result.lines().get(0).quantity()).isEqualTo(1);
+  }
+
+  @Test
+  void professionalGet_recordFromAnotherDay_isNotFound() {
+    ServiceRecord old = openRecordToday(61L);
+    old.setCreatedAt(Instant.now().minus(java.time.Duration.ofDays(2)));
+    when(serviceRecordRepository.findByIdAndTenant_Id(61L, 1L)).thenReturn(Optional.of(old));
+
+    assertThatThrownBy(() -> serviceRecordService.getOpenTodayForProfessional(1L, 61L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasFieldOrPropertyWithValue("statusCode", HttpStatus.NOT_FOUND);
+  }
+
+  @Test
+  void professionalGet_closedRecord_isRejected() {
+    ServiceRecord closed = openRecordToday(62L);
+    closed.setStatus(ServiceRecordStatus.CLOSED);
+    when(serviceRecordRepository.findByIdAndTenant_Id(62L, 1L)).thenReturn(Optional.of(closed));
+
+    assertThatThrownBy(() -> serviceRecordService.getOpenTodayForProfessional(1L, 62L))
+        .isInstanceOf(ResponseStatusException.class)
+        .hasMessageContaining("SERVICE_RECORD_NOT_OPEN");
+  }
+
+  @Test
+  void professionalUpdate_ignoresPricesAndTips_keepsPriceOfKeptServiceAndUsesCatalogForNew() {
+    SalonService color = new SalonService();
+    color.setId(10L);
+    color.setTenant(tenant);
+    color.setName("Color");
+    color.setPriceMinor(new BigDecimal("30000"));
+
+    ServiceRecord open = openRecordToday(63L);
+    when(serviceRecordRepository.findByIdAndTenant_Id(63L, 1L)).thenReturn(Optional.of(open));
+    when(salonServiceRepository.findByIdAndTenant_Id(9L, 1L)).thenReturn(Optional.of(salonService));
+    when(salonServiceRepository.findByIdAndTenant_Id(10L, 1L)).thenReturn(Optional.of(color));
+    when(professionalRepository.findByIdAndTenant_Id(3L, 1L)).thenReturn(Optional.of(professional));
+
+    // The request tries to set a price (999) and a tip: both must be ignored.
+    var kept = new ServiceRecordLineRequest(9L, 3L, 2, new BigDecimal("999"));
+    var added = new ServiceRecordLineRequest(10L, 3L, 1, new BigDecimal("999"));
+    var tip = new ServiceRecordTipRequest(3L, new BigDecimal("999"));
+    var request = new ServiceRecordRequest(99L, List.of(kept, added), List.of(tip));
+
+    ServiceRecordResponse result =
+        serviceRecordService.updateServicesAsProfessional(1L, 63L, request, 3L);
+
+    // The response carries no money…
+    assertThat(result.totalAmount()).isNull();
+    assertThat(result.lines()).hasSize(2);
+    // …but the stored record: kept service keeps 40.000, the new one takes the catalog 30.000.
+    assertThat(open.getLines().get(0).getUnitPrice()).isEqualByComparingTo("40000");
+    assertThat(open.getLines().get(0).getQuantity()).isEqualTo(2);
+    assertThat(open.getLines().get(1).getUnitPrice()).isEqualByComparingTo("30000");
+    assertThat(open.getTotalAmount()).isEqualByComparingTo("110000");
+    // The client is untouched and the existing tip keeps its amount.
+    assertThat(open.getClient().getId()).isEqualTo(7L);
+    assertThat(open.getTips()).hasSize(1);
+    assertThat(open.getTips().get(0).getAmount()).isEqualByComparingTo("5000");
+  }
+
+  @Test
+  void professionalUpdate_removingTheTippedProfessionalsLines_dropsHerTip() {
+    ServiceRecord open = openRecordToday(64L);
+    when(serviceRecordRepository.findByIdAndTenant_Id(64L, 1L)).thenReturn(Optional.of(open));
+    when(salonServiceRepository.findByIdAndTenant_Id(9L, 1L)).thenReturn(Optional.of(salonService));
+
+    // The only line is re-saved without a professional: nobody is left to hold the tip.
+    var line = new ServiceRecordLineRequest(9L, null, 1, null);
+    var request = new ServiceRecordRequest(7L, List.of(line), null);
+
+    serviceRecordService.updateServicesAsProfessional(1L, 64L, request, null);
+
+    assertThat(open.getTips()).isEmpty();
+    assertThat(open.getLines()).hasSize(1);
+  }
+
+  @Test
+  void professionalUpdate_lineWithoutProfessional_belongsToTheProfessionalWhoEdits() {
+    ServiceRecord open = openRecordToday(65L);
+    when(serviceRecordRepository.findByIdAndTenant_Id(65L, 1L)).thenReturn(Optional.of(open));
+    when(salonServiceRepository.findByIdAndTenant_Id(9L, 1L)).thenReturn(Optional.of(salonService));
+    when(professionalRepository.findByIdAndTenant_Id(3L, 1L)).thenReturn(Optional.of(professional));
+
+    var line = new ServiceRecordLineRequest(9L, null, 1, null);
+    var request = new ServiceRecordRequest(7L, List.of(line), null);
+
+    serviceRecordService.updateServicesAsProfessional(1L, 65L, request, 3L);
+
+    assertThat(open.getLines()).hasSize(1);
+    assertThat(open.getLines().get(0).getProfessional().getId()).isEqualTo(3L);
+    // Her tip survives because she is still on a line.
+    assertThat(open.getTips()).hasSize(1);
+  }
+
+  @Test
+  void frequentServicesKeepsUsageOrderAndDropsOtherTenants() {
+    SalonService other = new SalonService();
+    other.setId(10L);
+    other.setTenant(tenant);
+    other.setName("Corte");
+    salonService.setName("Brushing");
+    com.cursorpoc.backend.domain.ServiceCategory category =
+        new com.cursorpoc.backend.domain.ServiceCategory();
+    category.setId(5L);
+    category.setName("Cat");
+    other.setCategory(category);
+    salonService.setCategory(category);
+    Tenant foreign = new Tenant();
+    foreign.setId(2L);
+    SalonService leaked = new SalonService();
+    leaked.setId(11L);
+    leaked.setTenant(foreign);
+    leaked.setName("Ajeno");
+    when(serviceRecordRepository.findFrequentServiceIds(
+            org.mockito.ArgumentMatchers.eq(1L),
+            org.mockito.ArgumentMatchers.any(Instant.class),
+            org.mockito.ArgumentMatchers.eq(ServiceRecordStatus.VOIDED),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()))
+        .thenReturn(List.of(10L, 11L, 9L));
+    when(salonServiceRepository.findAllById(List.of(10L, 11L, 9L)))
+        .thenReturn(List.of(salonService, other, leaked));
+
+    var result = serviceRecordService.frequentServices(1L, 3);
+
+    assertThat(result).extracting(r -> r.id()).containsExactly(10L, 9L);
+  }
+
+  @Test
+  void frequentServicesIsEmptyWithoutHistory() {
+    when(serviceRecordRepository.findFrequentServiceIds(
+            org.mockito.ArgumentMatchers.eq(1L),
+            org.mockito.ArgumentMatchers.any(Instant.class),
+            org.mockito.ArgumentMatchers.eq(ServiceRecordStatus.VOIDED),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()))
+        .thenReturn(List.of());
+
+    assertThat(serviceRecordService.frequentServices(1L, 3)).isEmpty();
   }
 }

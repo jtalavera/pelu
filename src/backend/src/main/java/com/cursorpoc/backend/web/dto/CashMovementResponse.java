@@ -12,4 +12,5 @@ public record CashMovementResponse(
     String reason,
     String createdByEmail,
     Instant createdAt,
-    Long tipWithdrawalId) {}
+    Long tipWithdrawalId,
+    boolean afterClose) {}

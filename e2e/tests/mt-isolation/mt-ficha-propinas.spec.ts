@@ -16,6 +16,7 @@ import {
   snapshotTenant,
 } from "../../fixtures/mt/probe";
 import { getMtWorld, mtLoginToken } from "../../fixtures/mt/world";
+import { goToInvoiceHistory } from "../../fixtures/billing";
 
 /**
  * Task 7 — mt-ficha-propinas: service sheet (ficha de servicio) & tips (propinas) isolation.
@@ -54,8 +55,11 @@ import { getMtWorld, mtLoginToken } from "../../fixtures/mt/world";
 
 const world = getMtWorld();
 
-/** `Instant.parse`-compatible bounds wide enough to capture every tip row regardless of clock. */
-const WIDE_REPORT_QUERY = "from=2000-01-01T00:00:00Z&to=2100-01-01T00:00:00Z";
+/**
+ * `Instant.parse`-compatible bounds wide enough to capture every tip row regardless of clock;
+ * «from» is as far back as a search may go (one year), never older.
+ */
+const WIDE_REPORT_QUERY = `from=${new Date(Date.now() - 360 * 24 * 3600_000).toISOString()}&to=2100-01-01T00:00:00Z`;
 
 /** Per-run seed so re-runs against a reused mt backend never collide on recipient emails. */
 const RUN_SEED = Date.now();
@@ -153,7 +157,7 @@ async function closeFichaViaInvoice(
         discountValue: null,
       },
     ],
-    payments: [{ method: "CASH", amount: params.unitPrice }],
+    payments: [{ method: "CASH", amount: params.unitPrice + params.tipsAmount }],
     serviceRecordId: params.fichaId,
     tipsAmount: params.tipsAmount,
     ...(params.sifenEmail ? { email: params.sifenEmail } : {}),
@@ -194,22 +198,6 @@ async function fullNameOf(
     throw new Error(`fullNameOf: id ${id} not found in ${path}`);
   }
   return row.fullName;
-}
-
-/** Picks one option from the report tab's professional `MultiSelect` filter (issue-120 pattern). */
-async function pickReportProfessional(
-  page: Page,
-  filterText: string,
-  optionNamePattern: RegExp,
-): Promise<void> {
-  const cb = page.getByRole("combobox", { name: "Professional", exact: true });
-  await cb.click();
-  await cb.fill(filterText);
-  await page
-    .getByRole("listbox", { name: "Professional", exact: true })
-    .getByRole("button", { name: optionNamePattern })
-    .first()
-    .click();
 }
 
 async function tipBalance(
@@ -281,9 +269,12 @@ test.describe("mt-ficha-propinas · service sheet & tips isolation", () => {
     try {
       await loginAs(pageA, world.tenantA.adminEmail, world.tenantA.adminPassword);
       await pageA.goto("/app/service-records");
-      await pageA.getByRole("tab", { name: "History" }).click();
+      // The list opens on "Open" (pending to charge): A's new ficha is OPEN, so it is right there.
       await pageA.locator("#service-record-history-text-filter").fill(aClientName);
-      const row = pageA.locator("tbody tr").filter({ hasText: aClientName }).first();
+      const row = pageA
+        .locator('[data-testid^="service-record-row-"]')
+        .filter({ hasText: aClientName })
+        .first();
       await expect(row).toBeVisible({ timeout: 15_000 });
       await row.click();
       await expect(pageA.getByRole("dialog", { name: "Service record detail" })).toBeVisible({
@@ -299,19 +290,23 @@ test.describe("mt-ficha-propinas · service sheet & tips isolation", () => {
     try {
       await loginAs(pageB, world.tenantB.adminEmail, world.tenantB.adminPassword);
       await pageB.goto("/app/service-records");
+      // "All" so a hidden OPEN-only filter can't make the absence trivially true.
+      await pageB.getByTestId("service-records-chip-all").click();
       await Promise.all([
         pageB.waitForResponse(
           (r) =>
             new URL(r.url()).pathname === "/api/service-records" &&
-            r.request().method() === "GET",
+            r.request().method() === "GET" &&
+            new URL(r.url()).searchParams.has("q"),
           { timeout: 25_000 },
         ),
-        pageB.getByRole("tab", { name: "History" }).click(),
+        pageB.locator("#service-record-history-text-filter").fill(aClientName),
       ]);
-      await pageB.locator("#service-record-history-text-filter").fill(aClientName);
       // The A client's name simply does not exist in B's tenant (B's clients are "MT Cliente
-      // Boreal N") — so it must never surface in B's ficha history table.
-      await expect(pageB.locator("tbody tr").filter({ hasText: aClientName })).toHaveCount(0);
+      // Boreal N") — so it must never surface in B's ficha list.
+      await expect(
+        pageB.locator('[data-testid^="service-record-row-"]').filter({ hasText: aClientName }),
+      ).toHaveCount(0);
     } finally {
       await ctxB.close();
     }
@@ -415,21 +410,30 @@ test.describe("mt-ficha-propinas · service sheet & tips isolation", () => {
     try {
       await loginAs(pageA, world.tenantA.adminEmail, world.tenantA.adminPassword);
       await pageA.goto("/app/propinas");
-      await expect(
-        pageA.getByRole("tab", { name: "Tips report", selected: true }),
-      ).toBeVisible({ timeout: 15_000 });
+      // One screen: the period chips (30 days by default) replace the old date form and tabs.
+      await expect(pageA.getByTestId("propinas-period-30")).toHaveAttribute("aria-pressed", "true", {
+        timeout: 15_000,
+      });
 
-      await pickReportProfessional(pageA, aProfName.slice(0, 10), rxExact(aProfName));
-      await pageA.getByRole("button", { name: "Search", exact: true }).click();
+      // Narrow to A's professional through the folded "Filters" section.
+      await pageA.getByTestId("propinas-filters-toggle").click();
+      const aProfOption = pageA
+        .locator("#propinas-filter-professional option")
+        .filter({ hasText: rxExact(aProfName) });
+      await pageA
+        .locator("#propinas-filter-professional")
+        .selectOption({ value: (await aProfOption.first().getAttribute("value")) ?? "" });
 
-      const reportRows = pageA.getByTestId("propinas-report-table").locator("tbody tr");
-      const tipRow = reportRows.filter({ hasText: aClientName }).first();
+      // The tip shows up in the compact movements list, in house money format.
+      const tipRow = pageA
+        .getByTestId("propinas-movement")
+        .filter({ hasText: aClientName })
+        .first();
       await expect(tipRow).toBeVisible({ timeout: 15_000 });
-      expectMoneyFormat(await tipRow.locator("td").nth(1).innerText());
+      expectMoneyFormat(await tipRow.getByTestId("propinas-movement-amount").innerText());
 
-      const grandTotalRow = reportRows.filter({ hasText: "Grand total" });
-      await expect(grandTotalRow).toBeVisible();
-      expectMoneyFormat(await grandTotalRow.locator("td").nth(1).innerText());
+      // The period summary renders the same format.
+      expectMoneyFormat(await pageA.getByTestId("propinas-tips-total").innerText());
     } finally {
       await ctxA.close();
     }

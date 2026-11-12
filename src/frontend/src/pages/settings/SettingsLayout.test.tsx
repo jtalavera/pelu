@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
 import i18n from "../../i18n";
@@ -58,7 +59,23 @@ describe("SettingsLayout", () => {
     // other tabs are unaffected
     expect(screen.getByRole("link", { name: "Negocio" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Timbrado" })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Impuestos" })).toBeTruthy();
+  });
+
+  it("lists Impuestos, Auditoría and Dispositivos compartidos under the more menu for an admin", async () => {
+    renderLayout();
+    expect(screen.queryByRole("link", { name: "Impuestos" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Más" }));
+    expect(screen.getByRole("menuitem", { name: "Impuestos" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Auditoría" })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "Dispositivos compartidos" })).toBeTruthy();
+  });
+
+  it("a non-admin only gets Impuestos in the more menu", async () => {
+    meRole = "PROFESSIONAL";
+    renderLayout();
+    await userEvent.click(screen.getByRole("button", { name: "Más" }));
+    expect(screen.getByRole("menuitem", { name: "Impuestos" })).toBeTruthy();
+    expect(screen.queryByRole("menuitem", { name: "Auditoría" })).toBeNull();
   });
 
   it("hides the SIFEN tab for a non-admin even when the flag is enabled", () => {

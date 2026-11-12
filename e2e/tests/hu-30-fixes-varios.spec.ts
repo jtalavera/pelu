@@ -9,8 +9,9 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
+import { openProfessionalMoreOptions } from "../fixtures/catalog";
 
 test.describe.configure({ mode: "serial" });
 
@@ -34,7 +35,7 @@ test.describe("HU-30 · Fixes varios", () => {
     const client = await seedClient(request, token, `E2E HU30 Reset ${Date.now()}`);
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     // Fill the form
@@ -42,9 +43,11 @@ test.describe("HU-30 · Fixes varios", () => {
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("50000");
-    await page.locator("#pay-amount-0").fill("50000");
+    await fillPaymentAmount(page, "50000");
 
     await clickIssueInvoiceAndExpectSuccess(page);
+    // Redesign: a success screen follows the emission; "+ New invoice" goes back to the form.
+    await page.getByTestId("billing-success-new-invoice").click();
 
     // After emit, the client search field should be empty (remounted)
     await expect(page.getByLabel("Search or select client")).toHaveValue("");
@@ -53,6 +56,7 @@ test.describe("HU-30 · Fixes varios", () => {
     await expect(page.locator("#billing-line-svc-0")).toHaveValue("");
 
     // Payment amount reset
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("");
   });
 
@@ -62,7 +66,7 @@ test.describe("HU-30 · Fixes varios", () => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
     // Wait for page to load
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("catalog-professionals-list")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText("GABRIELA", { exact: true })).toHaveCount(0);
   });
 
@@ -111,36 +115,26 @@ test.describe("HU-30 · Fixes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.waitForResponse(
-      (r) => r.url().includes("/api/invoices") && r.request().method() === "GET",
-    );
+    await goToInvoiceHistory(page);
 
     // Open the Ver modal for this invoice via the history tab
-    await page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first().click();
+    await page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }).first().click();
 
     // Wait for modal
     const modal = page.getByRole("dialog");
     await expect(modal).toBeVisible({ timeout: 15_000 });
 
-    // AC-3: Two new split column headers replace the old "Item Discount" single column
-    await expect(modal.getByText("Discount Type")).toBeVisible();
-    await expect(modal.getByText("Discount Value")).toBeVisible();
-    // Old unified header should no longer exist
-    await expect(modal.getByText("Item Discount", { exact: true })).toHaveCount(0);
-
-    // PERCENT line: Tipo Dto. = "10%", Valor Dto. = "1.000" (dot-separator, no decimals)
-    await expect(modal.getByText("10%")).toBeVisible();
-    await expect(modal.getByText("1.000")).toBeVisible();
-
-    // FIXED line: Tipo Dto. = "Fixed amount", Valor Dto. = "500" (no thousands sep needed).
-    // Exact match avoids also matching "4.500" / "13.500" elsewhere in the modal.
-    await expect(modal.getByText("Fixed amount")).toBeVisible();
-    await expect(modal.getByText("500", { exact: true })).toBeVisible();
+    // AC-3 (redesign): the item list has no column headers; each discounted line states its
+    // discount type and amount under its name — percent and fixed are told apart.
+    await expect(modal.getByRole("columnheader")).toHaveCount(0);
+    // PERCENT line: "Discount: 10% (−1.000)"
+    await expect(modal.getByText(/Discount: 10% \(−1\.000\)/)).toBeVisible();
+    // FIXED line: "Discount: Fixed amount (−500)"
+    await expect(modal.getByText(/Discount: Fixed amount \(−500\)/)).toBeVisible();
 
     // AC-4: "Invoice discount" label (not plain "Discount")
     await expect(modal.getByText("Invoice discount")).toBeVisible();
-    // "Discount" alone should NOT appear as a standalone label
+    // "Discount" alone should NOT appear as a standalone label for the invoice-level discount
     const discountRows = modal.getByText("Discount", { exact: true });
     await expect(discountRows).toHaveCount(0);
   });
@@ -150,8 +144,8 @@ test.describe("HU-30 · Fixes varios", () => {
     await loginAsDemoApi(request);
     await loginAsDemo(page);
     await page.goto("/app/settings/taxes");
-    // Wait for tax table to load
-    await expect(page.locator("table").first()).toBeVisible({ timeout: 20_000 });
+    // Wait for the taxes list to load (rows, not a table, after the redesign)
+    await expect(page.getByTestId("taxes-list")).toBeVisible({ timeout: 20_000 });
 
     // Should have at least one row with a KebabMenu trigger (⋮ button)
     const firstRowTrigger = page.getByRole("button", { name: "Actions" }).first();
@@ -213,23 +207,23 @@ test.describe("HU-30 · Fixes varios", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
-    await page.waitForResponse((r) => r.url().includes("/api/invoices") && r.request().method() === "GET");
+    await goToInvoiceHistory(page);
 
-    // Table should be present (Clientes-style card). Billing keeps all tabs mounted
-    // (hidden via `hidden`), so scope to the visible (History) tab's table.
-    await expect(page.locator("table").filter({ visible: true }).first()).toBeVisible({
+    // Redesign: the list is a card of rows (no <table>). Billing keeps all screens mounted
+    // (hidden via `hidden`), so scope to the visible (History) list.
+    await expect(page.getByTestId("invoice-history-list").filter({ visible: true })).toBeVisible({
       timeout: 20_000,
     });
 
     // Clicking a row opens the detail modal (issue #163: the standalone "View" button was removed)
-    await page.locator("tbody tr[role=\"button\"]").filter({ visible: true }).first().click();
+    await page.locator('[data-testid^="invoice-history-row-"]').filter({ visible: true }).first().click();
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 15_000 });
     await page.keyboard.press("Escape");
   });
 
   // AC-8 — Professional access email is sent with Accept-Language header from frontend
-  test("HU-30 · 8 solicitud grant-access lleva Accept-Language del idioma activo", async ({
+  // Issue #38: the invitation is now sent by the professional save itself (PUT), atomically.
+  test("HU-30 · 8 el guardado que envía la invitación lleva Accept-Language del idioma activo", async ({
     page,
     request,
   }) => {
@@ -251,27 +245,26 @@ test.describe("HU-30 · Fixes varios", () => {
     // click its row to open the edit dialog. Data rows are <tr> elements (CSS `tr`); their
     // a11y role is "button", so getByRole("row") does not match them.
     await page.locator("#professionals-inline-search").fill(profName);
-    const row = page.locator("tr").filter({ hasText: profName }).first();
+    const row = page.locator('[data-testid^="prof-row-"]').filter({ hasText: profName }).first();
     await expect(row).toBeVisible({ timeout: 15_000 });
     await row.click();
 
     // Enable system access in the edit dialog.
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await openProfessionalMoreOptions(page);
     const accessToggle = dialog.locator("#prof-system-access");
     await expect(accessToggle).toBeVisible({ timeout: 10_000 });
     await accessToggle.check();
 
-    // Saving with access enabled fires the grant-access request; assert its Accept-Language.
+    // Saving with access enabled sends the invitation (PUT /api/professionals/{id}); the email
+    // language comes from its Accept-Language.
     const [grantReq] = await Promise.all([
       page.waitForRequest(
-        (req) =>
-          req.url().includes("/api/professionals/") &&
-          req.url().includes("/grant-access") &&
-          req.method() === "POST",
+        (req) => /\/api\/professionals\/\d+$/.test(req.url()) && req.method() === "PUT",
         { timeout: 20_000 },
       ),
-      dialog.getByRole("button", { name: "Save and set schedule" }).click(),
+      dialog.getByTestId("prof-save").click(),
     ]);
     const acceptLang = grantReq.headers()["accept-language"];
     expect(acceptLang).toBeTruthy();
@@ -285,7 +278,7 @@ test.describe("HU-30 · Fixes varios", () => {
 
     // Simulate a mobile viewport
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
 
     // On mobile, we should see day navigation (not "Week navigation")
     // The nav label should be the day label (not week range "Jun 1 – Jun 7")
@@ -294,13 +287,16 @@ test.describe("HU-30 · Fixes varios", () => {
     await expect(prevDayBtn).toBeVisible({ timeout: 20_000 });
     await expect(nextDayBtn).toBeVisible();
 
-    // Should NOT show 7 day columns — only 1
+    // Phones only have the Day view (a list of the day's turnos): no week grid, no 7 columns.
     const dayCols = page.locator("[data-testid^='calendar-day-col-']");
-    await expect(dayCols).toHaveCount(1, { timeout: 10_000 });
+    await expect(page.getByTestId("calendar-day-list")).toBeVisible({ timeout: 10_000 });
+    await expect(dayCols).toHaveCount(0);
 
     // Navigate to next day
+    const label = await page.getByTestId("calendar-range-label").textContent();
     await nextDayBtn.click();
-    await expect(dayCols).toHaveCount(1);
+    await expect(page.getByTestId("calendar-range-label")).not.toHaveText(label ?? "");
+    await expect(dayCols).toHaveCount(0);
 
     // "New appointment" button should still work (toolbar + per-day-column buttons both
     // expose this name on mobile, so assert the first).

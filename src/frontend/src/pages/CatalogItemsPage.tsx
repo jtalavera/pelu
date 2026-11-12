@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
@@ -11,13 +12,17 @@ import {
   Alert,
   Button,
   Input,
-  KebabMenu,
   Label,
   Modal,
   Pagination,
   PageSizeSelect,
   Select,
   Spinner,
+  Switch,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Text,
 } from "@design-system";
 import { downloadPriceListPdf } from "../api/downloadPriceListPdf";
@@ -26,7 +31,6 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { listServicesPaged } from "../api/services";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { FieldValidationError } from "../components/FieldValidationError";
-import { StatusBadge } from "../components/StatusBadge";
 import { SearchInput } from "../components/ui/SearchInput";
 import { useFilteredList } from "../hooks/useFilteredList";
 import {
@@ -36,6 +40,9 @@ import {
 } from "../util/categoryAccent";
 import { formatGuaraniesGs } from "../lib/formatMoney";
 import { maskMoneyInput, moneyDigitsOnly, parseMaskedMoney } from "../lib/moneyInputMask";
+import { MoreActionsMenu } from "../components/MoreActionsMenu";
+import { ACTION_BUTTON } from "../components/actionButtons";
+import { ActionIcon } from "../components/actionIcons";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -85,7 +92,14 @@ type ServicesDeactivateTarget =
  * Copy comes from `femme.services.*`; the product screen overrides any key it needs under
  * `femme.products.*` (same sub-paths) and falls back to the services copy for the rest.
  */
-export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
+export default function CatalogItemsPage({
+  kind,
+  actionsSlot,
+}: {
+  kind: ItemKind;
+  /** Header slot of the Catalog screen: the "+ New" button and the "⋯" menu render into it. */
+  actionsSlot?: HTMLElement | null;
+}) {
   const { t: translate } = useTranslation();
   const isProduct = kind === "PRODUCT";
   const t = useMemo(() => {
@@ -105,7 +119,11 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
     undefined,
     guidedTourEnabled,
   );
-  const [tab, setTab] = useState<"items" | "categories">("items");
+  /** Categories live in a dialog opened from the "⋯" menu (catalog redesign). */
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  /** "Más opciones" of the item form: tax (and SKU for products). */
+  const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +134,8 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
 
   const [categoryFilterId, setCategoryFilterId] = useState<string>("all");
   /** Client-side quick filter: list order is always active first when "all". */
-  const [serviceStatusFilter, setServiceStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  // Catalog redesign: no status filter — inactive items stay in the list (greyed, after the active ones).
+  const serviceStatusFilter = "all" as const;
 
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryEditing, setCategoryEditing] = useState<ServiceCategory | null>(null);
@@ -127,6 +146,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
   const [categorySaving, setCategorySaving] = useState(false);
 
   const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [serviceTab, setServiceTab] = useState<"details" | "commission">("details");
   // HU-COM-02: «Comisión» section + warning on items without a general percent (ADMIN only).
   const commissionsEnabled = useFeatureFlag("COMMISSIONS");
   const [itemsWithoutRule, setItemsWithoutRule] = useState<Set<number>>(new Set());
@@ -163,6 +183,8 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
   const [deactivateTarget, setDeactivateTarget] = useState<ServicesDeactivateTarget>(null);
   const [editSuccess, setEditSuccess] = useState(false);
   const [createSuccess, setCreateSuccess] = useState(false);
+  /** Saving an edit closes the form and says so here, on the list screen. */
+  const [updateSuccess, setUpdateSuccess] = useState(false);
   const [serviceStatusSuccess, setServiceStatusSuccess] = useState<"activated" | "deactivated" | null>(
     null,
   );
@@ -176,7 +198,6 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
   const [svcReloadTick, setSvcReloadTick] = useState(0);
   const svcDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [serviceSearchQuery, setServiceSearchQuery] = useState("");
-  const [hoveredServiceId, setHoveredServiceId] = useState<number | null>(null);
   // ─────────────────────────────────────────────────────────────────────────
 
   const activeCategories = useMemo(() => categories.filter((c) => c.active), [categories]);
@@ -282,11 +303,6 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
     setSvcPage(0);
   }
 
-  function handleServiceStatusPill(val: "all" | "active" | "inactive") {
-    setServiceStatusFilter(val);
-    setSvcPage(0);
-  }
-
   function openNewCategory() {
     setCategoryEditing(null);
     setCategoryName("");
@@ -364,11 +380,14 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
     setServiceSaveError(null);
     setEditSuccess(false);
     dismissServicePageSuccess();
+    setServiceTab("details");
+    setMoreOptionsOpen(false);
     setServiceModalOpen(true);
   }
 
   function dismissServicePageSuccess() {
     setCreateSuccess(false);
+    setUpdateSuccess(false);
     setServiceStatusSuccess(null);
   }
 
@@ -423,15 +442,11 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
       } else {
         await femmePostJson<SalonService>("/api/services", payload);
       }
-      if (wasEdit) {
-        // Keep the modal open so the success message shows in the edit form itself,
-        // not on the main table page behind it.
-        setEditSuccess(true);
-      } else {
-        setServiceModalOpen(false);
-        setCreateSuccess(true);
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }
+      // Saved (new or edited): the form closes and the success message shows on the list screen.
+      setServiceModalOpen(false);
+      if (wasEdit) setUpdateSuccess(true);
+      else setCreateSuccess(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
       // A service doesn't affect categories/taxes — refresh only the services table.
       setSvcReloadTick((n) => n + 1);
     } catch (e) {
@@ -511,16 +526,6 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
     ];
   }, [activeCategories, t]);
 
-  const statusFilterOptions = useMemo(
-    () =>
-      [
-        { value: "all" as const, label: t("femme.services.filter.statusAll") },
-        { value: "active" as const, label: t("femme.services.filter.statusActive") },
-        { value: "inactive" as const, label: t("femme.services.filter.statusInactive") },
-      ] as const,
-    [t],
-  );
-
   // Services tab is now server-side paginated; svcPageData holds the current page.
   // The `services` state (full list) is kept for the categories-tab service count badge.
   const svcContent = svcPageData?.content ?? [];
@@ -570,10 +575,12 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
     setServiceSaveError(null);
     setEditSuccess(false);
     dismissServicePageSuccess();
+    setServiceTab("details");
+    setMoreOptionsOpen(false);
     setServiceModalOpen(true);
   }
 
-  const onRowKeyOpenService = (s: SalonService) => (e: KeyboardEvent<HTMLTableRowElement>) => {
+  const onRowKeyOpenService = (s: SalonService) => (e: KeyboardEvent<HTMLElement>) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       openEditService(s);
@@ -610,21 +617,6 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
   // boxes read as a smaller, secondary element instead of competing with the table.
   const pageAlertStyle: React.CSSProperties = { fontSize: 12, padding: "8px 12px" };
 
-  const primaryBtn: React.CSSProperties = {
-    background: "var(--color-rose)",
-    color: "var(--color-on-primary)",
-    border: "none",
-    borderRadius: "var(--radius-md)",
-    padding: "8px 16px",
-    fontSize: 12,
-    fontWeight: 500,
-    cursor: "pointer",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    whiteSpace: "nowrap",
-  };
-
   const pillBase: React.CSSProperties = {
     padding: "5px 12px",
     borderRadius: "var(--radius-pill)",
@@ -644,88 +636,67 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
     fontWeight: 500,
   };
 
-  const tabBase: React.CSSProperties = {
-    padding: "6px 14px",
-    borderRadius: "var(--radius-md)",
-    fontSize: 12,
-    cursor: "pointer",
-    border: "var(--border-default)",
-    background: "var(--color-white)",
-    color: "var(--color-ink-2)",
-  };
-
-  const tabActive: React.CSSProperties = {
-    ...tabBase,
-    background: "var(--color-rose-lt)",
-    borderColor: "var(--color-rose-md)",
-    color: "var(--color-rose-dk)",
-    fontWeight: 500,
-  };
-
-  const thStyle: React.CSSProperties = {
-    padding: "9px 12px",
-    fontSize: 10,
-    fontWeight: 500,
-    color: "var(--color-ink-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    textAlign: "left",
-    background: "var(--color-stone)",
-    whiteSpace: "nowrap",
-  };
+  const actionsNode = (
+    <div data-tour="services-header" className="flex items-center gap-2">
+      <Button
+        type="button"
+        variant="primary"
+        className={ACTION_BUTTON}
+        data-tour="services-add"
+        data-testid="catalog-new-button"
+        onClick={openNewService}
+      >
+        {t("femme.services.services.addNew")}
+      </Button>
+      <MoreActionsMenu
+        label={t("femme.catalog.moreActions")}
+        open={moreOpen}
+        onOpenChange={setMoreOpen}
+        triggerTestId="catalog-more-trigger"
+        menuTestId="catalog-more-menu"
+        items={[
+          {
+            id: "price-list",
+            testId: "catalog-more-item-price-list",
+            icon: <ActionIcon name="download" />,
+            label: priceListDownloading
+              ? t("femme.services.priceList.downloading")
+              : t("femme.services.priceList.downloadButton"),
+            disabled: priceListDownloading,
+            onSelect: () => void handleDownloadPriceList(),
+          },
+          {
+            id: "categories",
+            testId: "catalog-more-item-categories",
+            icon: <ActionIcon name="tag" />,
+            label: t("femme.catalog.manageCategories"),
+            onSelect: () => setCategoriesOpen(true),
+          },
+        ]}
+      />
+    </div>
+  );
 
   return (
-    <div>
-      {/* ── Page header ── */}
-      <div
-        data-tour="services-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 16,
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 500, color: "var(--color-ink)" }}>
-            {t("femme.services.title")}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
-            {t("femme.services.lead")}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="min-h-11"
-            disabled={priceListDownloading}
-            data-testid="download-price-list-button"
-            onClick={() => void handleDownloadPriceList()}
-          >
-            {priceListDownloading
-              ? t("femme.services.priceList.downloading")
-              : t("femme.services.priceList.downloadButton")}
-          </Button>
-          {tab === "items" ? (
-            <button type="button" style={primaryBtn} onClick={openNewService}>
-              {t("femme.services.services.addNew")}
-            </button>
-          ) : (
-            <button data-tour="services-add-category" type="button" style={primaryBtn} onClick={openNewCategory}>
-              {t("femme.services.categories.addNew")}
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="flex min-w-0 flex-col">
+      {/* ── Actions: "+ New" and "⋯" (rendered into the Catalog header) ── */}
+      {actionsSlot === undefined ? (
+        <div className="mb-3 flex justify-end">{actionsNode}</div>
+      ) : actionsSlot ? (
+        createPortal(actionsNode, actionsSlot)
+      ) : null}
 
       {/* ── Success / Error ── */}
-      {(createSuccess || serviceStatusSuccess || error || priceListError) && (
+      {(createSuccess || updateSuccess || serviceStatusSuccess || error || priceListError) && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
           {createSuccess && (
             <Alert variant="success" style={pageAlertStyle}>
               {t("femme.services.createSuccess")}
+            </Alert>
+          )}
+          {updateSuccess && (
+            <Alert variant="success" style={pageAlertStyle} data-testid="catalog-update-success">
+              {t("femme.services.editSuccess")}
             </Alert>
           )}
           {serviceStatusSuccess && (
@@ -753,23 +724,8 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
         </div>
       )}
 
-      {/* ── Custom tabs ── */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 14 }}>
-        {(["items", "categories"] as const).map((v) => (
-          <button
-            key={v}
-            type="button"
-            style={tab === v ? tabActive : tabBase}
-            onClick={() => setTab(v)}
-          >
-            {t(`femme.services.tabs.${v}`)}
-          </button>
-        ))}
-      </div>
-
       {/* ── Services tab ── */}
-      {tab === "items" && (
-        <div>
+      <div>
         <div data-tour="services-list">
           {/* Toolbar */}
           <div
@@ -790,7 +746,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
               resultCount={svcTotalElements}
               totalCount={services.length}
               maxWidth={480}
-              style={{ flex: 1 }}
+              style={{ flex: 1, minWidth: "min(100%, 320px)" }}
             />
             <div data-tour="services-filters" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             {filterOptions.map((o) => (
@@ -803,38 +759,10 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
                 {o.label}
               </button>
             ))}
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              style={{
-                width: 1,
-                alignSelf: "stretch",
-                minHeight: 28,
-                background: "var(--color-stone-md)",
-                flexShrink: 0,
-                margin: "0 4px",
-              }}
-            />
-            <div
-              role="group"
-              aria-label={t("femme.services.filter.statusLabel")}
-              style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}
-            >
-              {statusFilterOptions.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  style={serviceStatusFilter === o.value ? pillActive : pillBase}
-                  onClick={() => handleServiceStatusPill(o.value)}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
             </div>
           </div>
 
-          {/* Items table */}
+          {/* Items list */}
           {svcPageLoading && !svcPageData ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "20px 0" }}>
               <Spinner size="sm" />
@@ -843,220 +771,86 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
           ) : (
             <div
               data-tour="services-list"
-              style={{
-                background: "var(--color-white)",
-                borderRadius: "var(--radius-xl)",
-                border: "var(--border-default)",
-                overflow: "hidden",
-              }}
+              data-testid="catalog-items-list"
+              className="overflow-hidden rounded-card border border-line bg-surface"
             >
-              <div style={{ overflowX: "auto" }}>
-              <table style={{ tableLayout: "fixed", width: "100%", borderCollapse: "collapse" }}>
-                <colgroup>
-                  <col style={{ width: "34%" }} />
-                  <col style={{ width: "20%" }} />
-                  <col style={{ width: "14%" }} />
-                  <col style={{ width: "14%" }} />
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "6%" }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>{t("femme.services.colService")}</th>
-                    <th style={thStyle}>{t("femme.services.colCategory")}</th>
-                    <th style={thStyle}>
-                      {isProduct ? t("femme.services.colSku") : t("femme.services.colDuration")}
-                    </th>
-                    <th style={thStyle}>{t("femme.services.colPrice")}</th>
-                    <th style={thStyle}>{t("femme.services.colStatus")}</th>
-                    <th style={thStyle} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {svcTotalElements === 0 && services.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        style={{
-                          padding: "20px 12px",
-                          textAlign: "center",
-                          fontSize: 12,
-                          color: "var(--color-ink-3)",
-                        }}
-                      >
-                        {t("femme.services.services.emptyBody")}
-                      </td>
-                    </tr>
-                  ) : svcTotalElements === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        style={{
-                          padding: "20px 12px",
-                          textAlign: "center",
-                          fontSize: 12,
-                          color: "var(--color-ink-3)",
-                        }}
-                      >
-                        {t("femme.listFilter.noMatches")}
-                      </td>
-                    </tr>
-                  ) : (
-                    svcContent.map((s, index) => {
-                      const ic = categoryAccentStyle(s.categoryAccentKey);
-                      const anterior = svcContent[index - 1];
-                      const hayCambioDeEstado =
-                        index > 0 &&
-                        anterior.active === true &&
-                        s.active === false;
-                      const isHov = hoveredServiceId === s.id;
-                      const tdBg = isHov ? "var(--color-rose-lt)" : undefined;
-                      const tdStyle: React.CSSProperties = {
-                        padding: "10px 12px",
-                        fontSize: 12,
-                        color: "var(--color-ink)",
-                        verticalAlign: "middle",
-                        borderBottom: "0.5px solid var(--color-stone)",
-                        background: tdBg,
-                      };
-                      return (
-                        <Fragment key={s.id}>
-                          {hayCambioDeEstado ? (
-                            <tr>
-                              <td
-                                colSpan={6}
-                                style={{
-                                  padding: "6px 14px",
-                                  fontSize: 10,
-                                  fontWeight: 500,
-                                  letterSpacing: "0.06em",
-                                  textTransform: "uppercase",
-                                  color: "var(--color-ink-3)",
-                                  background: "var(--color-stone)",
-                                  borderBottom: "0.5px solid var(--color-stone-md)",
-                                }}
-                              >
-                                {t("femme.services.services.separatorInactive")}
-                              </td>
-                            </tr>
-                          ) : null}
-                          <tr
-                            role="button"
-                            tabIndex={0}
-                            aria-label={t("femme.services.services.openEdit", { name: s.name })}
-                            data-testid={`svc-row-${s.id}`}
-                            onClick={() => openEditService(s)}
-                            onKeyDown={onRowKeyOpenService(s)}
-                            onMouseEnter={() => setHoveredServiceId(s.id)}
-                            onMouseLeave={() => setHoveredServiceId(null)}
-                            style={{ cursor: "pointer" }}
+              {svcTotalElements === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-ink-3">
+                  {services.length === 0
+                    ? t("femme.services.services.emptyBody")
+                    : t("femme.listFilter.noMatches")}
+                </div>
+              ) : (
+                <ul className="flex flex-col px-1 sm:px-2">
+                  {svcContent.map((s, index) => {
+                    const anterior = svcContent[index - 1];
+                    const hayCambioDeEstado = index > 0 && anterior.active === true && s.active === false;
+                    const detail = [
+                      s.categoryName,
+                      isProduct ? s.sku : `${s.durationMinutes} min`,
+                      formatGuaraniesGs(s.priceMinor),
+                      s.active ? null : t("femme.status.INACTIVE"),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ");
+                    return (
+                      <Fragment key={s.id}>
+                        {hayCambioDeEstado ? (
+                          <li className="px-3 pb-1 pt-3 text-[11px] font-bold uppercase tracking-wider text-ink-3">
+                            {t("femme.services.services.separatorInactive")}
+                          </li>
+                        ) : null}
+                        <li
+                          role="button"
+                          tabIndex={0}
+                          aria-label={t("femme.services.services.openEdit", { name: s.name })}
+                          data-testid={`svc-row-${s.id}`}
+                          data-active={s.active ? "true" : "false"}
+                          onClick={() => openEditService(s)}
+                          onKeyDown={onRowKeyOpenService(s)}
+                          className="flex min-h-14 cursor-pointer items-center gap-3 border-t border-line px-3 py-2.5 first:border-t-0 hover:bg-bg"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="cat-ic size-2.5 shrink-0 rounded-full"
+                            style={{ background: categoryAccentStyle(s.categoryAccentKey).color }}
+                          />
+                          <div className={`min-w-0 flex-1 ${s.active ? "" : "opacity-60"}`}>
+                            <div className="break-words font-semibold text-ink">
+                              {s.name}
+                              {commissionsEnabled && s.active && itemsWithoutRule.has(s.id) ? (
+                                <span
+                                  className="ml-2 inline-block rounded bg-warning-lt px-1.5 py-0.5 text-[10px] font-medium text-warning"
+                                  data-testid={`svc-no-commission-${s.id}`}
+                                  title={t("femme.commissions.rules.noGeneralWarning")}
+                                >
+                                  {t("femme.commissions.rules.noGeneralBadge")}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="break-words text-sm text-ink-3">{detail}</div>
+                          </div>
+                          <div
+                            className="shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
                           >
-                            <td style={tdStyle}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                <div
-                                  className="cat-ic cell-icon"
-                                  style={{
-                                    width: 32,
-                                    height: 32,
-                                    borderRadius: "var(--radius-md)",
-                                    background: ic.bg,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    flexShrink: 0,
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      width: 14,
-                                      height: 14,
-                                      borderRadius: 3,
-                                      background: ic.color,
-                                    }}
-                                  />
-                                </div>
-                                <div
-                                  className="cell-name"
-                                  style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}
-                                >
-                                  {s.name}
-                                  {commissionsEnabled && s.active && itemsWithoutRule.has(s.id) ? (
-                                    <span
-                                      className="ml-2 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
-                                      data-testid={`svc-no-commission-${s.id}`}
-                                      title={t("femme.commissions.rules.noGeneralWarning")}
-                                    >
-                                      {t("femme.commissions.rules.noGeneralBadge")}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </div>
-                            </td>
-                            <td style={tdStyle}>
-                              {s.categoryName}
-                            </td>
-                            <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-                              {isProduct ? (s.sku ?? "—") : `${s.durationMinutes} min`}
-                            </td>
-                            <td
-                              style={{
-                                ...tdStyle,
-                                fontSize: 13,
-                                fontWeight: 500,
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {formatGuaraniesGs(s.priceMinor)}
-                            </td>
-                            <td style={tdStyle}>
-                              <StatusBadge status={s.active ? "ACTIVE" : "INACTIVE"} />
-                            </td>
-                            <td
-                              style={{ ...tdStyle, textAlign: "right" }}
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => e.stopPropagation()}
-                            >
-                              <KebabMenu
-                                id={`services-row-${s.id}`}
-                                triggerAriaLabel={t("femme.rowActions.trigger")}
-                                items={
-                                  s.active
-                                    ? [
-                                        {
-                                          id: "edit-details",
-                                          label: t("femme.rowActions.services.editDetails"),
-                                          onSelect: () => openEditService(s),
-                                        },
-                                        {
-                                          id: "deactivate",
-                                          label: t("femme.rowActions.services.deactivate"),
-                                          destructive: true,
-                                          onSelect: () => requestDeactivateService(s),
-                                        },
-                                      ]
-                                    : [
-                                        {
-                                          id: "edit-details",
-                                          label: t("femme.rowActions.services.editDetails"),
-                                          onSelect: () => openEditService(s),
-                                        },
-                                        {
-                                          id: "activate",
-                                          label: t("femme.rowActions.services.activate"),
-                                          onSelect: () => void activateSalonServiceFromList(s),
-                                        },
-                                      ]
-                                }
-                              />
-                            </td>
-                          </tr>
-                        </Fragment>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                            <Switch
+                              className="min-h-11 min-w-11 justify-center"
+                              checked={s.active}
+                              aria-label={t("femme.catalog.toggleAria", { name: s.name })}
+                              data-testid={`svc-switch-${s.id}`}
+                              onChange={() =>
+                                s.active ? requestDeactivateService(s) : void activateSalonServiceFromList(s)
+                              }
+                            />
+                          </div>
+                        </li>
+                      </Fragment>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           )}
         </div>
@@ -1082,11 +876,14 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
           />
         </div>
       </div>
-      )}
 
-      {/* ── Categories tab ── */}
-      {tab === "categories" && (
-        <div>
+      {/* ── Categories dialog ── */}
+      <Modal
+        open={categoriesOpen}
+        onClose={() => setCategoriesOpen(false)}
+        title={t("femme.catalog.manageCategories")}
+      >
+        <div data-testid="catalog-categories-dialog">
           <div
             style={{
               display: "flex",
@@ -1096,6 +893,16 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
               flexWrap: "wrap",
             }}
           >
+            <Button
+              type="button"
+              variant="primary"
+              className="min-h-11"
+              data-tour="services-add-category"
+              data-testid="catalog-add-category"
+              onClick={openNewCategory}
+            >
+              {t("femme.services.categories.addNew")}
+            </Button>
             <SearchInput
               id="categories-list-filter"
               value={categorySearchQuery}
@@ -1304,7 +1111,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
           </div>
           ) : null}
         </div>
-      )}
+      </Modal>
 
       <Modal
         open={categoryModalOpen}
@@ -1378,7 +1185,7 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
             </div>
           </fieldset>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="ghost" onClick={() => setCategoryModalOpen(false)} className="min-h-11">
+            <Button type="button" variant="secondary" onClick={() => setCategoryModalOpen(false)} className="min-h-11">
               {t("femme.services.cancel")}
             </Button>
             <Button type="button" onClick={saveCategory} disabled={categorySaving} className="min-h-11">
@@ -1408,142 +1215,204 @@ export default function CatalogItemsPage({ kind }: { kind: ItemKind }) {
           ) : null}
 
           {serviceEditing ? (
-            <div className="flex flex-col gap-2 rounded-md border border-[rgb(var(--color-border))] bg-[rgb(var(--color-muted))]/30 p-3 dark:bg-[rgb(var(--color-muted))]/20">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-[rgb(var(--color-muted-foreground))]">
-                  {t("femme.services.services.statusLabel")}
+            serviceEditing.active ? (
+              <div
+                data-testid="catalog-item-status-row"
+                data-status="ACTIVE"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1"
+              >
+                <span className="inline-flex min-h-8 items-center gap-2 rounded-full bg-success-lt px-3 py-1 text-sm font-semibold text-success">
+                  <span aria-hidden className="size-2 rounded-full bg-success" />
+                  <span className="sr-only">{t("femme.services.services.statusLabel")}:</span>
+                  {t("femme.status.ACTIVE")}
                 </span>
-                <StatusBadge status={serviceEditing.active ? "ACTIVE" : "INACTIVE"} />
+                <Text variant="muted" className="text-sm">
+                  {t("femme.services.services.activeHint")}
+                </Text>
               </div>
-              {!serviceEditing.active ? (
-                <>
+            ) : (
+              <div
+                data-testid="catalog-item-status-row"
+                data-status="INACTIVE"
+                className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning-lt px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-sm font-semibold text-ink">
+                    <span className="sr-only">{t("femme.services.services.statusLabel")}:</span>
+                    {t("femme.services.services.inactiveTitle")}
+                  </span>
                   <Text variant="muted" className="text-sm">
                     {t("femme.services.services.inactiveHint")}
                   </Text>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-fit min-h-11 border-[rgb(var(--color-success))] text-[rgb(var(--color-success))] hover:bg-[rgb(var(--color-success))]/10"
-                    disabled={serviceReactivating}
-                    onClick={() => void activateSalonServiceFromModal()}
-                  >
-                    {serviceReactivating
-                      ? t("femme.services.saving")
-                      : t("femme.services.services.activate")}
-                  </Button>
-                </>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div>
-            <Label htmlFor="svc-name">{t("femme.services.services.name")}</Label>
-            <Input
-              id="svc-name"
-              value={serviceName}
-              onChange={(e) => setServiceName(e.target.value)}
-              aria-invalid={serviceFieldError?.name ? "true" : "false"}
-              aria-describedby={serviceFieldError?.name ? "svc-name-err" : undefined}
-            />
-            <FieldValidationError id="svc-name-err">{serviceFieldError?.name}</FieldValidationError>
-          </div>
-
-          {/* HU-59: optional SKU (products only — only products go to Stock). */}
-          {isProduct ? (
-            <div>
-              <Label htmlFor="svc-sku">{t("femme.services.services.sku")}</Label>
-              <Input
-                id="svc-sku"
-                value={serviceSku}
-                maxLength={64}
-                placeholder={t("femme.services.services.skuPlaceholder")}
-                onChange={(e) => setServiceSku(e.target.value)}
-              />
-            </div>
-          ) : null}
-
-          <div>
-            <Label htmlFor="svc-cat">{t("femme.services.services.category")}</Label>
-            <Select
-              id="svc-cat"
-              value={serviceCategoryId}
-              onChange={(e) => setServiceCategoryId(e.target.value)}
-              aria-invalid={serviceFieldError?.categoryId ? "true" : "false"}
-              aria-describedby={serviceFieldError?.categoryId ? "svc-cat-err" : undefined}
-            >
-              <option value="">{t("femme.services.services.categoryPlaceholder")}</option>
-              {serviceCategorySelectOptions.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
-                  {!c.active ? ` ${t("femme.services.categories.inactive")}` : ""}
-                </option>
-              ))}
-            </Select>
-            <FieldValidationError id="svc-cat-err">{serviceFieldError?.categoryId}</FieldValidationError>
-          </div>
-
-          <div>
-            <Label htmlFor="svc-tax">{t("femme.services.services.tax")}</Label>
-            <Select
-              id="svc-tax"
-              value={serviceTaxId}
-              onChange={(e) => setServiceTaxId(e.target.value)}
-            >
-              <option value="">{t("femme.services.services.taxPlaceholder")}</option>
-              {serviceTaxSelectOptions.map((tx) => (
-                <option key={tx.id} value={String(tx.id)}>
-                  {tx.name} ({tx.rate}%)
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div className={isProduct ? undefined : "grid gap-4 sm:grid-cols-2"}>
-            <div>
-              <Label htmlFor="svc-price">{t("femme.services.services.price")}</Label>
-              <Input
-                id="svc-price"
-                inputMode="numeric"
-                value={servicePrice}
-                onChange={(e) => setServicePrice(maskMoneyInput(e.target.value))}
-                aria-invalid={serviceFieldError?.price ? "true" : "false"}
-                aria-describedby={serviceFieldError?.price ? "svc-price-err" : undefined}
-              />
-              <FieldValidationError id="svc-price-err">{serviceFieldError?.price}</FieldValidationError>
-            </div>
-            {isProduct ? null : (
-              <div>
-                <Label htmlFor="svc-duration">{t("femme.services.services.duration")}</Label>
-                <Input
-                  id="svc-duration"
-                  inputMode="numeric"
-                  value={serviceDuration}
-                  onChange={(e) => setServiceDuration(e.target.value)}
-                  aria-invalid={serviceFieldError?.duration ? "true" : "false"}
-                  aria-describedby={serviceFieldError?.duration ? "svc-duration-err" : undefined}
-                />
-                <FieldValidationError id="svc-duration-err">{serviceFieldError?.duration}</FieldValidationError>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-fit shrink-0 min-h-11 border-success text-success hover:bg-success/10"
+                  disabled={serviceReactivating}
+                  onClick={() => void activateSalonServiceFromModal()}
+                >
+                  {serviceReactivating
+                    ? t("femme.services.saving")
+                    : t("femme.services.services.activate")}
+                </Button>
               </div>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="ghost" onClick={() => setServiceModalOpen(false)} className="min-h-11">
-              {t("femme.services.cancel")}
-            </Button>
-            <Button type="button" onClick={saveService} disabled={serviceSaving} className="min-h-11">
-              {serviceSaving ? t("femme.services.saving") : t("femme.services.save")}
-            </Button>
-          </div>
-
-          {serviceEditing && commissionsEnabled ? (
-            <section className="flex flex-col gap-2 border-t pt-4" aria-labelledby="svc-commission-title">
-              <h3 id="svc-commission-title" className="text-sm font-semibold">
-                {t("femme.commissions.rules.sectionTitle")}
-              </h3>
-              <ItemRulesEditor serviceId={serviceEditing.id} />
-            </section>
+            )
           ) : null}
+
+          {(() => {
+            const detailsPanel = (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <Label htmlFor="svc-name">{t("femme.services.services.name")}</Label>
+                  <Input
+                    id="svc-name"
+                    value={serviceName}
+                    onChange={(e) => setServiceName(e.target.value)}
+                    aria-invalid={serviceFieldError?.name ? "true" : "false"}
+                    aria-describedby={serviceFieldError?.name ? "svc-name-err" : undefined}
+                  />
+                  <FieldValidationError id="svc-name-err">{serviceFieldError?.name}</FieldValidationError>
+                </div>
+
+                <div>
+                  <Label htmlFor="svc-cat">{t("femme.services.services.category")}</Label>
+                  <Select
+                    id="svc-cat"
+                    value={serviceCategoryId}
+                    onChange={(e) => setServiceCategoryId(e.target.value)}
+                    aria-invalid={serviceFieldError?.categoryId ? "true" : "false"}
+                    aria-describedby={serviceFieldError?.categoryId ? "svc-cat-err" : undefined}
+                  >
+                    <option value="">{t("femme.services.services.categoryPlaceholder")}</option>
+                    {serviceCategorySelectOptions.map((c) => (
+                      <option key={c.id} value={String(c.id)}>
+                        {c.name}
+                        {!c.active ? ` ${t("femme.services.categories.inactive")}` : ""}
+                      </option>
+                    ))}
+                  </Select>
+                  <FieldValidationError id="svc-cat-err">{serviceFieldError?.categoryId}</FieldValidationError>
+                </div>
+
+                <div className={isProduct ? undefined : "grid gap-4 sm:grid-cols-2"}>
+                  <div>
+                    <Label htmlFor="svc-price">{t("femme.services.services.price")}</Label>
+                    <Input
+                      id="svc-price"
+                      inputMode="numeric"
+                      value={servicePrice}
+                      onChange={(e) => setServicePrice(maskMoneyInput(e.target.value))}
+                      aria-invalid={serviceFieldError?.price ? "true" : "false"}
+                      aria-describedby={serviceFieldError?.price ? "svc-price-err" : undefined}
+                    />
+                    <FieldValidationError id="svc-price-err">{serviceFieldError?.price}</FieldValidationError>
+                  </div>
+                  {isProduct ? null : (
+                    <div>
+                      <Label htmlFor="svc-duration">{t("femme.services.services.duration")}</Label>
+                      <Input
+                        id="svc-duration"
+                        inputMode="numeric"
+                        value={serviceDuration}
+                        onChange={(e) => setServiceDuration(e.target.value)}
+                        aria-invalid={serviceFieldError?.duration ? "true" : "false"}
+                        aria-describedby={serviceFieldError?.duration ? "svc-duration-err" : undefined}
+                      />
+                      <FieldValidationError id="svc-duration-err">{serviceFieldError?.duration}</FieldValidationError>
+                    </div>
+                  )}
+                </div>
+
+                {/* Catalog redesign: tax (and the optional SKU of products) are rarely changed. */}
+                <div className="border-t border-line">
+                  <button
+                    type="button"
+                    className="flex min-h-12 w-full items-center justify-between text-left font-bold text-ink"
+                    aria-expanded={moreOptionsOpen}
+                    aria-controls="svc-more-options"
+                    data-testid="svc-more-options-toggle"
+                    onClick={() => setMoreOptionsOpen((o) => !o)}
+                  >
+                    {t("femme.catalog.moreOptions")}
+                    <span aria-hidden className={`text-ink-3 transition-transform ${moreOptionsOpen ? "rotate-180" : ""}`}>
+                      ⌄
+                    </span>
+                  </button>
+                  {moreOptionsOpen ? (
+                    <div id="svc-more-options" className="flex flex-col gap-4 pb-2">
+                  {/* HU-59: optional SKU (products only — only products go to Stock). */}
+                  {isProduct ? (
+                    <div>
+                      <Label htmlFor="svc-sku">{t("femme.services.services.sku")}</Label>
+                      <Input
+                        id="svc-sku"
+                        value={serviceSku}
+                        maxLength={64}
+                        placeholder={t("femme.services.services.skuPlaceholder")}
+                        onChange={(e) => setServiceSku(e.target.value)}
+                      />
+                    </div>
+                  ) : null}
+
+                  <div>
+                    <Label htmlFor="svc-tax">{t("femme.services.services.tax")}</Label>
+                    <Select
+                      id="svc-tax"
+                      value={serviceTaxId}
+                      onChange={(e) => setServiceTaxId(e.target.value)}
+                    >
+                      <option value="">{t("femme.services.services.taxPlaceholder")}</option>
+                      {serviceTaxSelectOptions.map((tx) => (
+                        <option key={tx.id} value={String(tx.id)}>
+                          {tx.name} ({tx.rate}%)
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col gap-2 border-t border-line pt-4 sm:flex-row sm:justify-end">
+                  <Button type="button" variant="secondary" onClick={() => setServiceModalOpen(false)} className="min-h-11">
+                    {t("femme.services.cancel")}
+                  </Button>
+                  <Button type="button" onClick={saveService} disabled={serviceSaving} className="min-h-11">
+                    {serviceSaving ? t("femme.services.saving") : t("femme.services.save")}
+                  </Button>
+                </div>
+              </div>
+            );
+            if (!(serviceEditing && commissionsEnabled)) return detailsPanel;
+            return (
+              <Tabs
+                value={serviceTab}
+                onValueChange={(v) => setServiceTab(v as "details" | "commission")}
+              >
+                <TabsList aria-label={t("femme.services.services.tabs.ariaLabel")}>
+                  <TabsTrigger value="details" data-testid="svc-tab-details">
+                    {t("femme.services.services.tabs.details")}
+                  </TabsTrigger>
+                  <TabsTrigger value="commission" data-testid="svc-tab-commission">
+                    {t("femme.services.services.tabs.commission")}
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="details" data-testid="svc-panel-details">
+                  {detailsPanel}
+                </TabsContent>
+                <TabsContent value="commission" data-testid="svc-panel-commission">
+                  <section aria-labelledby="svc-commission-title" className="flex flex-col gap-2">
+                    <h3 id="svc-commission-title" className="sr-only">
+                      {t("femme.commissions.rules.sectionTitle")}
+                    </h3>
+                    <ItemRulesEditor serviceId={serviceEditing.id} />
+                  </section>
+                </TabsContent>
+              </Tabs>
+            );
+          })()}
         </div>
       </Modal>
 

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "../test/renderWithTour";
+import { cleanup, fireEvent, render, screen, waitFor } from "../test/renderWithTour";
 import { MemoryRouter } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
 import i18n from "../i18n";
 import DashboardPage from "./DashboardPage";
-import { listAppointments } from "../api/appointments";
+import { listAppointments, type AppointmentStatus } from "../api/appointments";
 
 const femmeJson = vi.fn();
 
@@ -107,8 +107,11 @@ describe("DashboardPage fiscal alerts (HU-02b)", () => {
       inactiveClientsThresholdDays: 60,
     });
     renderPage();
-    expect(await screen.findByText(/^Gs\.[\s\u00a0]*890/)).toBeTruthy();
-    expect(screen.getByText(/^1,284$/)).toBeTruthy();
+    // Billing redesign: Inicio shows a one-line summary; week/month totals live in Dashboards.
+    expect((await screen.findByTestId("dashboard-summary-collected")).textContent).toMatch(
+      /^Gs\.[\s\u00a0]*890.*collected$/,
+    );
+    expect(screen.queryByText(/^1,284$/)).toBeNull();
   });
 });
 
@@ -134,6 +137,7 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
   it("shows the empty state when there are no inactive clients", async () => {
     femmeJson.mockResolvedValue(baseDashboard([]));
     renderPage();
+    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
     expect(await screen.findByText("No inactive clients right now")).toBeTruthy();
   });
 
@@ -157,6 +161,7 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
       ]),
     );
     renderPage();
+    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
 
     const rows = await screen.findAllByTestId("dashboard-inactive-client-row");
     expect(rows).toHaveLength(2);
@@ -180,14 +185,164 @@ describe("DashboardPage inactive clients widget (issue #216)", () => {
       ]),
     );
     renderPage();
+    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
     expect(await screen.findByTestId("dashboard-inactive-clients-view-all")).toBeTruthy();
   });
 
   it("uses the server-provided threshold in the subtitle copy, not a hardcoded frontend value", async () => {
     femmeJson.mockResolvedValue(baseDashboard([], 45));
     renderPage();
+    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
     expect(
       await screen.findByText("Active clients with no completed visit in the last 45 days"),
     ).toBeTruthy();
+  });
+});
+
+describe("DashboardPage · Turnos de hoy (por atender o cobrar, cobrados plegados)", () => {
+  const todayAt = (hour: number) => {
+    const d = new Date();
+    d.setHours(hour, 0, 0, 0);
+    return d.toISOString();
+  };
+  const appt = (id: number, hour: number, name: string, status: AppointmentStatus, invoiceId: number | null) => ({
+    id,
+    clientId: id,
+    clientName: name,
+    professionalId: 3,
+    professionalName: "Maria",
+    serviceId: 11,
+    serviceName: "SPA DE PIES",
+    durationMinutes: 60,
+    startAt: todayAt(hour),
+    endAt: todayAt(hour + 1),
+    status,
+    cancelReason: null,
+    reminderSentAt: null,
+    serviceRecordId: null,
+    invoiceId,
+  });
+
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    listAppointmentsMock.mockReset();
+    femmeJson.mockReset();
+    femmeJson.mockResolvedValue({
+      appointmentsToday: { total: 4, pending: 1, confirmed: 0, inProgress: 1, completed: 2 },
+      revenueDay: { invoiced: "0", collected: "0" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+    });
+    listAppointmentsMock.mockResolvedValue([
+      appt(1, 8, "ANA DUARTE", "COMPLETED", 501), // charged
+      appt(2, 9, "PEDRO LÓPEZ", "COMPLETED", null), // completed, not charged yet
+      appt(3, 10, "TANIA NUÑEZ Z", "IN_PROGRESS", null),
+      appt(4, 12, "LUCÍA GÓMEZ", "PENDING", null),
+    ]);
+  });
+
+  it("keeps what is still to attend or charge on view and folds only the charged ones", async () => {
+    renderPage();
+    await screen.findAllByTestId("dashboard-appointment-row");
+    const rows = screen.getAllByTestId("dashboard-appointment-row").map((r) => r.textContent ?? "");
+    expect(rows).toHaveLength(3);
+    expect(rows.some((r) => r.includes("ANA DUARTE"))).toBe(false);
+    // The completed one without a comprobante stays visible, marked as not charged.
+    const pedro = screen.getAllByTestId("dashboard-appointment-row").find((r) => r.textContent?.includes("PEDRO"));
+    expect(pedro?.querySelector('[data-testid="dashboard-appointment-uncharged-tag"]')?.textContent).toContain("not charged");
+    // The title counts what is on view; the fold counts the charged ones.
+    expect(screen.getByTestId("dashboard-appointments-count").textContent).toBe("3");
+    expect(screen.getByTestId("dashboard-appointments-charged-count").textContent).toBe("1");
+  });
+
+  it("the «Charged» fold opens to show the charged turnos with their mark", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByTestId("dashboard-appointments-charged-toggle"));
+    const list = await screen.findByTestId("dashboard-appointments-charged-list");
+    expect(list.textContent).toContain("ANA DUARTE");
+    expect(list.querySelector('[data-testid="dashboard-appointment-charged-tag"]')?.textContent).toContain("Charged");
+  });
+
+  it("the search opens the fold by itself when the match is a charged turno", async () => {
+    renderPage();
+    await screen.findAllByTestId("dashboard-appointment-row");
+    fireEvent.change(screen.getByLabelText(/filter list/i), { target: { value: "ana duarte" } });
+    const list = await screen.findByTestId("dashboard-appointments-charged-list");
+    expect(list.textContent).toContain("ANA DUARTE");
+  });
+
+  it("with everything charged, shows «nothing left to attend or charge» and the fold", async () => {
+    listAppointmentsMock.mockResolvedValue([appt(1, 8, "ANA DUARTE", "COMPLETED", 501)]);
+    renderPage();
+    expect(await screen.findByTestId("dashboard-appointments-all-done")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-appointments-charged-count").textContent).toBe("1");
+  });
+});
+
+describe("DashboardPage loads in one go", () => {
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    femmeJson.mockReset();
+    femmeJson.mockResolvedValue({
+      appointmentsToday: { total: 3, pending: 3, confirmed: 0, inProgress: 0, completed: 0 },
+      revenueDay: { invoiced: "0", collected: "41000" },
+      revenueWeek: { invoiced: "0", collected: "0" },
+      clientsThisMonth: 0,
+      fiscalAlerts: [],
+      inactiveClients: [],
+      inactiveClientsThresholdDays: 60,
+    });
+  });
+
+  it("keeps the whole page hidden behind one loading state until the agenda has answered", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    listAppointmentsMock.mockReset();
+    listAppointmentsMock.mockImplementation(() => gate.then(() => []));
+
+    renderPage();
+    expect(await screen.findByTestId("dashboard-loading")).toBeTruthy();
+    // The summary request answered long ago, but its numbers (e.g. «0 turnos hoy» while the agenda
+    // is still loading) must not be on screen yet.
+    await waitFor(() => expect(femmeJson).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.getByTestId("dashboard-loading")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-summary").closest("[hidden]")).not.toBeNull();
+
+    release();
+    await waitFor(() => expect(screen.queryByTestId("dashboard-loading")).toBeNull());
+    expect(screen.getByTestId("dashboard-summary").closest("[hidden]")).toBeNull();
+  });
+
+  it("never mounts the summary with placeholder zeros: it exists only once the numbers arrived", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    femmeJson.mockImplementation(() =>
+      gate.then(() => ({
+        appointmentsToday: { total: 3, pending: 3, confirmed: 0, inProgress: 0, completed: 0 },
+        revenueDay: { invoiced: "0", collected: "890000" },
+        revenueWeek: { invoiced: "0", collected: "0" },
+        clientsThisMonth: 0,
+        fiscalAlerts: [],
+        inactiveClients: [],
+        inactiveClientsThresholdDays: 60,
+      })),
+    );
+    renderPage();
+    await screen.findByTestId("dashboard-loading");
+    await new Promise((r) => setTimeout(r, 30));
+    // Still waiting for /api/dashboard: no «Gs. 0 collected» (hidden or not) can be queried yet.
+    expect(screen.queryByTestId("dashboard-summary-collected")).toBeNull();
+
+    release();
+    // The first thing a query can ever find is already the real figure.
+    expect((await screen.findByTestId("dashboard-summary-collected")).textContent).toMatch(/890/);
   });
 });

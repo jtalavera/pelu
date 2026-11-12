@@ -18,6 +18,22 @@ public class JwtService {
   public static final String CLAIM_ROLE = "role";
   public static final String CLAIM_PROFESSIONAL_ID = "pid";
 
+  /**
+   * Issue #310: present (and {@code true}) only on a token the Platform Admin obtained by
+   * impersonating a tenant — a tenant-bound {@code ADMIN} token whose subject is still the Platform
+   * Admin's own user, so every action taken with it is attributed to them, never to a tenant user.
+   */
+  public static final String CLAIM_IMPERSONATION = "imp";
+
+  /** HU-66: shared device that issued a PIN session (absent on every other token). */
+  public static final String CLAIM_PIN_DEVICE = "pin";
+
+  /** HU-66: PIN version the PIN session was issued for. */
+  public static final String CLAIM_PIN_VERSION = "pv";
+
+  /** HU-66: PIN sessions are short-lived; the frontend refreshes them while in use. */
+  public static final long PIN_SESSION_TTL_SECONDS = 15 * 60;
+
   private final FemmeJwtProperties properties;
   private final SecretKey key;
 
@@ -48,6 +64,21 @@ public class JwtService {
       UserRole role,
       Long professionalId,
       Instant issuedAt) {
+    return createAccessToken(userId, tenantId, email, role, professionalId, issuedAt, false);
+  }
+
+  /**
+   * @param impersonation issue #310 — marks a Platform Admin's impersonation token (see {@link
+   *     #CLAIM_IMPERSONATION}); the claim is omitted entirely for a regular session.
+   */
+  public String createAccessToken(
+      long userId,
+      Long tenantId,
+      String email,
+      UserRole role,
+      Long professionalId,
+      Instant issuedAt,
+      boolean impersonation) {
     Instant exp = issuedAt.plusSeconds(properties.getAccessTokenTtlSeconds());
     var builder =
         Jwts.builder()
@@ -62,7 +93,27 @@ public class JwtService {
     if (professionalId != null) {
       builder.claim(CLAIM_PROFESSIONAL_ID, professionalId);
     }
+    if (impersonation) {
+      builder.claim(CLAIM_IMPERSONATION, true);
+    }
     return builder.signWith(key).compact();
+  }
+
+  /** HU-66: token for a professional who entered her PIN on a shared device (calendar only). */
+  public String createPinSessionToken(FemmeUserPrincipal pinPrincipal, Instant issuedAt) {
+    Instant exp = issuedAt.plusSeconds(PIN_SESSION_TTL_SECONDS);
+    return Jwts.builder()
+        .subject(String.valueOf(pinPrincipal.getUserId()))
+        .claim("email", pinPrincipal.getUsername())
+        .claim(CLAIM_ROLE, pinPrincipal.getRole().name())
+        .claim(CLAIM_TENANT_ID, pinPrincipal.getTenantId())
+        .claim(CLAIM_PROFESSIONAL_ID, pinPrincipal.getProfessionalId())
+        .claim(CLAIM_PIN_DEVICE, pinPrincipal.getPinDeviceId())
+        .claim(CLAIM_PIN_VERSION, pinPrincipal.getPinVersion())
+        .issuedAt(Date.from(issuedAt))
+        .expiration(Date.from(exp))
+        .signWith(key)
+        .compact();
   }
 
   public Optional<FemmeUserPrincipal> parseAndValidate(String token) {
@@ -88,7 +139,23 @@ public class JwtService {
       }
       Number pidClaim = claims.get(CLAIM_PROFESSIONAL_ID, Number.class);
       Long professionalId = pidClaim != null ? pidClaim.longValue() : null;
-      return Optional.of(new FemmeUserPrincipal(userId, tenantId, email, role, professionalId));
+      boolean impersonation = Boolean.TRUE.equals(claims.get(CLAIM_IMPERSONATION, Boolean.class));
+      Number pinDevice = claims.get(CLAIM_PIN_DEVICE, Number.class);
+      Number pinVersion = claims.get(CLAIM_PIN_VERSION, Number.class);
+      if (pinDevice != null) {
+        // HU-66: a PIN session is always a tenant-bound PROFESSIONAL session.
+        if (tenantId == null || professionalId == null || role != UserRole.PROFESSIONAL) {
+          return Optional.empty();
+        }
+        return Optional.of(
+            FemmeUserPrincipal.pinSession(
+                tenantId,
+                professionalId,
+                pinDevice.longValue(),
+                pinVersion == null ? 0 : pinVersion.intValue()));
+      }
+      return Optional.of(
+          new FemmeUserPrincipal(userId, tenantId, email, role, professionalId, impersonation));
     } catch (RuntimeException ex) {
       return Optional.empty();
     }

@@ -12,7 +12,8 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { openFichaDialog } from "../fixtures/fichas";
+import { ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 
 test.describe.configure({ mode: "serial" });
 
@@ -43,7 +44,7 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 10));
     await expect(page.getByRole("button", { name: client.fullName })).toHaveCount(0);
@@ -62,9 +63,10 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
     await page.locator("#detail-phone").fill(phone);
     await page.getByRole("button", { name: "Save", exact: true }).click();
 
-    const alert = page.getByRole("alert").filter({ hasText: "Client updated successfully." });
-    await expect(alert).toBeVisible();
-    await expect(alert).toHaveClass(/emerald/);
+    // Redesign: the result is a success toast on the client list.
+    const alert = page.getByTestId("clients-toast");
+    await expect(alert).toContainText("Client updated successfully.");
+    await expect(alert).toHaveClass(/success/);
   });
 
   test("AC3-4 · tabla de timbrados: activo primero, columnas visibles y acciones según estado", async ({
@@ -89,26 +91,24 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
     await loginAsDemo(page);
     await page.goto("/app/settings/fiscal-stamp");
 
-    await expect(page.getByRole("columnheader", { name: "Stamp no." })).toBeVisible({
-      timeout: 20_000,
-    });
-    await expect(page.getByRole("columnheader", { name: "Validity start" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Validity end" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "No. from" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "No. to" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Starting invoice no." })).toBeVisible();
-
-    const firstRow = page.locator("tbody tr").first();
-    await expect(firstRow.getByText(active!.stampNumber, { exact: true })).toBeVisible();
+    // Redesign: stamps are rows ("Stamp N · status" + "validity · next number") with a ⋯ menu.
+    const firstRow = page.locator('[data-testid^="fiscal-stamp-row-"]').first();
+    await expect(firstRow).toBeVisible({ timeout: 20_000 });
+    await expect(firstRow.getByText(active!.stampNumber)).toBeVisible();
     await expect(firstRow.getByText("Active", { exact: true })).toBeVisible();
 
     const inactiveRow = page.getByTestId(`fiscal-stamp-row-${inactive.id}`);
-    await expect(inactiveRow.getByRole("button", { name: "Activate", exact: true })).toBeEnabled();
-    await expect(inactiveRow.getByRole("button", { name: "Deactivate" })).toBeDisabled();
+    await expect(inactiveRow).toContainText("Inactive");
+    await inactiveRow.getByRole("button", { name: /actions/i }).click();
+    await expect(page.getByRole("menuitem", { name: "Activate", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Deactivate" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
     const activeRow = page.getByTestId(`fiscal-stamp-row-${active!.id}`);
-    await expect(activeRow.getByRole("button", { name: "Activate", exact: true })).toBeDisabled();
-    await expect(activeRow.getByRole("button", { name: "Deactivate" })).toBeEnabled();
+    await activeRow.getByRole("button", { name: /actions/i }).click();
+    await expect(page.getByRole("menuitem", { name: "Deactivate" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Activate", exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
   });
 
   test("AC5 · Borrar solo aparece y funciona para timbrados sin facturas asociadas", async ({
@@ -168,18 +168,23 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
 
     const usedRow = page.getByTestId(`fiscal-stamp-row-${usedStamp.id}`);
     await expect(usedRow).toBeVisible({ timeout: 30_000 });
-    await expect(usedRow.getByRole("button", { name: "Delete" })).toHaveCount(0);
+    await usedRow.getByRole("button", { name: /actions/i }).click();
+    await expect(page.getByRole("menuitem", { name: "Delete" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
     const freeRow = page.getByTestId(`fiscal-stamp-row-${freeStamp.id}`);
     await expect(freeRow).toBeVisible();
-    await freeRow.getByRole("button", { name: "Delete" }).click();
+    // Centre the row so its menu opens fully inside the viewport.
+    await freeRow.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await freeRow.getByRole("button", { name: /actions/i }).click();
+    await page.getByRole("menuitem", { name: "Delete" }).dispatchEvent("click");
     await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
 
     await expect(page.getByTestId(`fiscal-stamp-row-${freeStamp.id}`)).toHaveCount(0);
     await expect(page.getByText("Stamp deleted successfully.")).toBeVisible();
   });
 
-  test("AC6 · Cancelar aparece junto a Anular ficha y cancela la anulación sin anular la ficha", async ({
+  test("AC6 · al anular aparece Cancelar junto a Confirmar y cancela la anulación sin anular la ficha", async ({
     page,
     request,
   }) => {
@@ -205,31 +210,32 @@ test.describe("Issue #143 · Ajustes en pantalla de Clientes y timbrado", () => 
     );
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
-    await page.getByRole("tab", { name: "History", exact: true }).click();
-    await page.locator("#service-record-history-text-filter").fill(client.fullName);
-    await page
-      .locator('tbody tr[role="button"]')
-      .filter({ hasText: client.fullName })
-      .click();
+    const dialog = await openFichaDialog(page, client.fullName);
 
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    // «Anular ficha» lives in the «⋯» menu now.
+    await dialog.getByTestId("service-record-more").click();
+    await expect(page.getByTestId("service-record-void-open")).toBeVisible();
+    await page.getByTestId("service-record-void-open").click();
 
-    const voidBtn = dialog.getByRole("button", { name: "Void record" });
-    await expect(voidBtn).toBeVisible();
-    await voidBtn.click();
-
-    // Cancelar now shows up in the same action row, right next to Anular ficha (which stays
-    // visible but disabled while the void-reason form is open).
-    const cancelBtn = dialog.getByRole("button", { name: "Cancel", exact: true });
+    // Redesign: the reason form opens in place of "Void record", with Cancel right next to
+    // "Confirm void".
+    const form = dialog.getByTestId("service-record-void-form");
+    await expect(form).toBeVisible();
+    const cancelBtn = form.getByRole("button", { name: "Cancel", exact: true });
+    const confirmBtn = dialog.getByTestId("service-record-void-confirm");
     await expect(cancelBtn).toBeVisible();
-    await expect(voidBtn).toBeVisible();
-    await expect(voidBtn).toBeDisabled();
+    await expect(confirmBtn).toBeVisible();
+    const cb = (await cancelBtn.boundingBox())!;
+    const ob = (await confirmBtn.boundingBox())!;
+    expect(Math.abs(cb.y - ob.y)).toBeLessThan(5);
+    expect(cb.x).toBeLessThan(ob.x);
 
     await cancelBtn.click();
-    await expect(dialog.getByText("Void service record")).toHaveCount(0);
-    await expect(voidBtn).toBeEnabled();
+    await expect(form).toHaveCount(0);
+    // «Anular ficha» is back in the «⋯» menu.
+    await dialog.getByTestId("service-record-more").click();
+    await expect(page.getByTestId("service-record-void-open")).toBeVisible();
+    await page.keyboard.press("Escape");
 
     const refreshed = await request.get(`${API_BASE}/api/service-records/${record.id}`, {
       headers: { Authorization: `Bearer ${token}` },

@@ -1,0 +1,23 @@
+/*
+ * Skins por tipo de negocio (manual de marca, "Variación en Interfaces"): un logo, un acento por
+ * tipo de salón. Solo cambian el color del peine y del punto de la "i" y los detalles de acento;
+ * el resto de la interfaz conserva la paleta principal (teal, tinta, lino).
+ *
+ * Se usa un selector de atributo genérico (no `html[...]`) para que el mismo bloque sirva en
+ * <html> (skin del tenant) y en un contenedor de previsualización (página Skin de plataforma).
+ * Los acentos son pasteles claros, por eso el texto encima siempre es tinta noche.
+ */
+[data-skin="durazno"] {
+  --fb-accent: 243 198 174; /* #F3C6AE */
+  --fb-accent-ink: 10 31 51;
+}
+
+[data-skin="celeste"] {
+  --fb-accent: 201 217 230; /* #C9D9E6 */
+  --fb-accent-ink: 10 31 51;
+}
+
+[data-skin="rosa"] {
+  --fb-accent: 241 175 194; /* #F1AFC2 */
+  --fb-accent-ink: 10 31 51;
+}

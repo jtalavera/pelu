@@ -1,7 +1,9 @@
 package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
+import com.cursorpoc.backend.service.ClientBirthdayService;
 import com.cursorpoc.backend.service.DashboardService;
+import com.cursorpoc.backend.web.dto.ClientBirthdaysResponse;
 import com.cursorpoc.backend.web.dto.DashboardResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
 import org.slf4j.Logger;
@@ -21,19 +23,47 @@ public class DashboardController {
   private static final Logger log = LoggerFactory.getLogger(DashboardController.class);
 
   private final DashboardService dashboardService;
+  private final ClientBirthdayService clientBirthdayService;
 
-  public DashboardController(DashboardService dashboardService) {
+  public DashboardController(
+      DashboardService dashboardService, ClientBirthdayService clientBirthdayService) {
     this.dashboardService = dashboardService;
+    this.clientBirthdayService = clientBirthdayService;
   }
 
+  /** HU-69: active clients with a birthday today or in the next days. */
+  @GetMapping("/birthdays")
+  public ClientBirthdaysResponse birthdays(@AuthenticationPrincipal FemmeUserPrincipal principal) {
+    if (principal == null) {
+      log.error("GET /api/dashboard/birthdays tenantId=unknown status=401");
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info("GET /api/dashboard/birthdays tenantId={}", principal.getTenantId());
+    ClientBirthdaysResponse response = clientBirthdayService.birthdays(principal.getTenantId());
+    log.info("GET /api/dashboard/birthdays tenantId={} status=200", principal.getTenantId());
+    return response;
+  }
+
+  /**
+   * @param days optional period of the revenue trend and its sibling charts (7, 30 or 90; default
+   *     30)
+   */
   @GetMapping
-  public DashboardResponse get(@AuthenticationPrincipal FemmeUserPrincipal principal) {
+  public DashboardResponse get(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @RequestParam(name = "days", required = false) Integer days) {
     if (principal == null) {
       log.error("GET /api/dashboard tenantId=unknown status=401");
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-    log.info("GET /api/dashboard tenantId={}", principal.getTenantId());
-    DashboardResponse response = dashboardService.build(principal.getTenantId());
+    int period = days == null ? DashboardService.REVENUE_TREND_DAYS : days;
+    log.info("GET /api/dashboard tenantId={} days={}", principal.getTenantId(), period);
+    if (!DashboardService.isAllowedPeriod(period)) {
+      log.error(
+          "GET /api/dashboard tenantId={} days={} status=400", principal.getTenantId(), period);
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_DASHBOARD_PERIOD");
+    }
+    DashboardResponse response = dashboardService.build(principal.getTenantId(), period);
     log.info("GET /api/dashboard tenantId={} status=200", principal.getTenantId());
     return response;
   }

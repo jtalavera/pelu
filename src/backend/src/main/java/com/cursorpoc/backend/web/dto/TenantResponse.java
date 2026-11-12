@@ -7,5 +7,6 @@ public record TenantResponse(
     Long tierId,
     String tierName,
     String status,
+    String skin,
     TenantTierChangeResponse lastTierChange,
     TenantStatusChangeResponse lastStatusChange) {}

@@ -2,6 +2,7 @@ import { expect, type Page } from "@playwright/test";
 
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../invoice";
 import { peluOk } from "./api";
+import { fillPaymentAmount, goToBillingHome, showPaymentAmounts } from "../billing";
 
 export type InvoiceLineInput = { serviceId: number; name: string; quantity: number; unitPrice?: number };
 
@@ -35,18 +36,18 @@ export async function issueInvoiceApi(
 /** Opens "New Invoice" with an occasional client and fills the given lines (no submit). */
 export async function fillNewInvoiceUi(page: Page, lines: InvoiceLineInput[]): Promise<void> {
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
   await page.getByLabel("Search or select client").click();
   await page.getByRole("button", { name: "Occasional client" }).click();
   await page.getByLabel("Client name / business name").fill("Cliente Stock E2E");
   for (let i = 0; i < lines.length; i++) {
-    if (i > 0) await page.getByRole("button", { name: "Add item" }).click();
     await pickServiceLine(page, lines[i].name, i);
     await page.locator(`#line-qty-${i}`).fill(String(lines[i].quantity));
   }
   const total = lines.reduce((sum, l) => sum + l.quantity * (l.unitPrice ?? 50000), 0);
-  await page.locator("#pay-amount-0").fill(String(total));
+  await fillPaymentAmount(page, String(total));
+  await showPaymentAmounts(page);
   await expect(page.locator("#pay-amount-0")).toHaveValue(total.toLocaleString("es-PY"));
 }
 

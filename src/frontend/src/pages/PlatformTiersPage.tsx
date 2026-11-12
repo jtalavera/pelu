@@ -498,7 +498,7 @@ export default function PlatformTiersPage() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="ghost" onClick={closeModal} className="min-h-11">
+            <Button type="button" variant="secondary" onClick={closeModal} className="min-h-11">
               {t("femme.platform.tiers.cancel")}
             </Button>
             <Button type="button" onClick={submitCreate} disabled={saving} className="min-h-11">
@@ -563,7 +563,7 @@ export default function PlatformTiersPage() {
           {/* HU-46 AC-1: from this tier's detail (the edit modal), the Platform Admin sees every
               feature flag with its global value, sets this tier's value, and sees the effective
               value at the tier level (global AND tier — HU-47's conjunctive resolution). */}
-          <div className="border-t border-[var(--color-stone-md)] pt-4 dark:border-slate-700">
+          <div className="border-t border-[var(--color-stone-md)] pt-4">
             <Text className="mb-1 font-medium text-[var(--color-ink)]">
               {t("femme.platform.tiers.flags.title")}
             </Text>
@@ -594,7 +594,7 @@ export default function PlatformTiersPage() {
                     <li
                       key={row.flagKey}
                       data-testid={`tier-flag-row-${row.flagKey}`}
-                      className="flex items-start justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-stone-md)] p-3 dark:border-slate-700"
+                      className="flex items-start justify-between gap-3 rounded-[var(--radius-lg)] border border-[var(--color-stone-md)] p-3"
                     >
                       <div className="min-w-0">
                         <div className="font-mono text-xs font-medium text-[var(--color-ink)]">
@@ -676,7 +676,7 @@ export default function PlatformTiersPage() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="ghost" onClick={closeEditModal} className="min-h-11">
+            <Button type="button" variant="secondary" onClick={closeEditModal} className="min-h-11">
               {t("femme.platform.tiers.cancel")}
             </Button>
             <Button type="button" onClick={submitEdit} disabled={editSaving} className="min-h-11">

@@ -10,6 +10,7 @@ import {
   tomorrowLocalIso,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openSummaryMore } from "../fixtures/ui";
 
 /**
  * Issue #222 · "Dashboard: gráfico de turnos por día de semana" — bar chart of appointment counts
@@ -142,31 +143,23 @@ test.describe("Issue #222 · Dashboard appointments by day of week chart", () =>
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
 
-    const chart = page.getByTestId("dashboard-appointments-by-day-of-week");
+    // Redesign ("Resumen"): seven columns (Monday first) with the count on top, inside the folded
+    // detail block.
+    await openSummaryMore(page);
+    const chart = page.getByTestId("summary-weekday-bars");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Appointments by day of week", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("summary-more-empty")).toHaveCount(0);
 
-    // Not the empty state, given the appointments seeded above.
-    await expect(page.getByTestId("dashboard-appointments-by-day-of-week-empty")).toHaveCount(0);
-
-    // recharts renders a real <svg> once ResponsiveContainer measures a non-zero size.
-    await expect(chart.locator("svg").first()).toBeVisible({ timeout: 20_000 });
-
-    // All 7 short day-of-week labels are always rendered (Monday first, zero-filled days included).
-    const tickLabels = chart.locator(
-      ".recharts-xAxis-tick-labels .recharts-cartesian-axis-tick-label, .recharts-xAxis .recharts-cartesian-axis-tick-value",
-    );
-    await expect(tickLabels.first()).toBeVisible({ timeout: 20_000 });
-    const tickTexts = await tickLabels.allTextContents();
+    // All 7 short day-of-week labels are always rendered (zero-filled days included).
+    const labels = await chart.locator("div.grid > span").allTextContents();
     for (const short of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
-      expect(tickTexts, `expected an axis tick for "${short}"`).toContain(short);
+      expect(labels, `expected a label for "${short}"`).toContain(short);
     }
 
-    // The three specific days we backdated to are among the rendered ticks (sanity check that the
-    // chart's label source (femme.calendar.days.*) matches the day-key mapping this test computed
-    // independently).
+    // The three specific days we backdated to are among the labels (sanity check that the chart's
+    // label source matches the day-key mapping this test computed independently).
     for (const daysAgo of daysAgoList) {
-      expect(tickTexts).toContain(expectedDayLabel(daysAgo));
+      expect(labels).toContain(expectedDayLabel(daysAgo));
     }
   });
 
@@ -233,9 +226,9 @@ test.describe("Issue #222 · Dashboard appointments by day of week chart", () =>
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
 
-    const chart = page.getByTestId("dashboard-appointments-by-day-of-week");
+    await openSummaryMore(page);
+    const chart = page.getByTestId("summary-weekday-bars");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(chart.locator("svg").first()).toBeVisible({ timeout: 20_000 });
 
     const box = await chart.boundingBox();
     expect(box).toBeTruthy();

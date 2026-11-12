@@ -25,19 +25,11 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import org.springframework.stereotype.Service;
 
 /** HU-COM-08: CSV exports and the printable settlement voucher (PDF). */
 @Service
 public class CommissionExportService {
-
-  private static final Map<String, String> BASE_LABELS =
-      Map.of("NET_OF_TAX", "Sin IVA", "TAX_INCLUDED", "Con IVA");
-  private static final Map<String, String> KIND_LABELS =
-      Map.of("SERVICE", "Servicios", "PRODUCT", "Productos");
-  private static final Map<String, String> STATUS_LABELS =
-      Map.of("DRAFT", "Borrador", "APPROVED", "Aprobada", "PAID", "Pagada", "VOIDED", "Anulada");
 
   private final BusinessProfileRepository businessProfileRepository;
   private final CommissionConfigService configService;
@@ -48,12 +40,13 @@ public class CommissionExportService {
     this.configService = configService;
   }
 
-  public byte[] entriesCsv(List<EntryView> entries) {
+  /** Column headers and the type / reason / base / status values are in {@code lang}. */
+  public byte[] entriesCsv(List<EntryView> entries, String lang) {
+    CommissionExportLabels l = CommissionExportLabels.of(lang);
     ZoneId zone = configService.zone();
     DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(zone);
-    StringBuilder sb = new StringBuilder("﻿");
-    sb.append(
-        "entry_id,accrual_at,professional,source_type,reason,invoice_number,item,item_kind,base_type,base_amount,percent,commission,settlement_id,settlement_status\n");
+    StringBuilder sb = new StringBuilder("\uFEFF");
+    header(sb, l.entriesHeader());
     for (EntryView e : entries) {
       sb.append(e.id())
           .append(',')
@@ -61,17 +54,17 @@ public class CommissionExportService {
           .append(',')
           .append(csv(e.professionalName()))
           .append(',')
-          .append(e.sourceType())
+          .append(csv(l.sourceType(e.sourceType())))
           .append(',')
-          .append(csv(e.reasonCode()))
+          .append(csv(l.reason(e.reasonCode())))
           .append(',')
           .append(csv(e.invoiceNumber()))
           .append(',')
           .append(csv(e.itemName()))
           .append(',')
-          .append(csv(e.itemKind()))
+          .append(csv(l.kind(e.itemKind())))
           .append(',')
-          .append(csv(e.baseType()))
+          .append(csv(l.base(e.baseType())))
           .append(',')
           .append(num(e.baseAmount()))
           .append(',')
@@ -81,16 +74,17 @@ public class CommissionExportService {
           .append(',')
           .append(e.settlementId() == null ? "" : e.settlementId())
           .append(',')
-          .append(e.settlementStatus() == null ? "UNSETTLED" : e.settlementStatus())
+          .append(csv(l.status(e.settlementStatus())))
           .append('\n');
     }
     return sb.toString().getBytes(StandardCharsets.UTF_8);
   }
 
-  public byte[] settlementsCsv(List<SettlementView> settlements) {
-    StringBuilder sb = new StringBuilder("﻿");
-    sb.append(
-        "settlement_id,professional,period_from,period_to,status,total,payment_method,payment_reference\n");
+  /** Column headers and the status values are in {@code lang}. */
+  public byte[] settlementsCsv(List<SettlementView> settlements, String lang) {
+    CommissionExportLabels l = CommissionExportLabels.of(lang);
+    StringBuilder sb = new StringBuilder("\uFEFF");
+    header(sb, l.settlementsHeader());
     for (SettlementView s : settlements) {
       sb.append(s.id())
           .append(',')
@@ -100,7 +94,7 @@ public class CommissionExportService {
           .append(',')
           .append(s.periodTo())
           .append(',')
-          .append(s.status())
+          .append(csv(l.status(s.status())))
           .append(',')
           .append(num(s.totalAmount()))
           .append(',')
@@ -112,7 +106,13 @@ public class CommissionExportService {
     return sb.toString().getBytes(StandardCharsets.UTF_8);
   }
 
-  public byte[] settlementPdf(long tenantId, SettlementDetail detail) {
+  private static void header(StringBuilder sb, List<String> columns) {
+    sb.append(String.join(",", columns.stream().map(CommissionExportService::csv).toList()))
+        .append('\n');
+  }
+
+  public byte[] settlementPdf(long tenantId, SettlementDetail detail, String lang) {
+    CommissionExportLabels l = CommissionExportLabels.of(lang);
     ZoneId zone = configService.zone();
     DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     DateTimeFormatter dateTimeFmt = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").withZone(zone);
@@ -129,30 +129,33 @@ public class CommissionExportService {
       Font title = new Font(Font.HELVETICA, 14, Font.BOLD);
       Font bold = new Font(Font.HELVETICA, 9, Font.BOLD);
       Font body = new Font(Font.HELVETICA, 9);
-      document.add(new Paragraph("Liquidación de comisiones #" + s.id(), title));
+      document.add(new Paragraph(l.title(s.id()), title));
       document.add(new Paragraph(business, body));
-      document.add(new Paragraph("Profesional: " + nullToEmpty(s.professionalName()), body));
+      document.add(
+          new Paragraph(l.professional() + ": " + nullToEmpty(s.professionalName()), body));
       document.add(
           new Paragraph(
-              "Periodo: " + dateFmt.format(s.periodFrom()) + " – " + dateFmt.format(s.periodTo()),
+              l.period()
+                  + ": "
+                  + dateFmt.format(s.periodFrom())
+                  + " – "
+                  + dateFmt.format(s.periodTo()),
               body));
-      document.add(
-          new Paragraph("Estado: " + STATUS_LABELS.getOrDefault(s.status(), s.status()), body));
+      document.add(new Paragraph(l.statusLabel() + ": " + l.status(s.status()), body));
       String bases =
           detail.entries().stream()
               .map(EntryView::baseType)
               .filter(b -> b != null)
               .distinct()
-              .map(b -> BASE_LABELS.getOrDefault(b, b))
+              .map(l::base)
               .reduce((a, b) -> a + ", " + b)
               .orElse("-");
-      document.add(new Paragraph("Base de cálculo: " + bases, body));
+      document.add(new Paragraph(l.calculationBase() + ": " + bases, body));
       document.add(new Paragraph(" "));
 
       PdfPTable table = new PdfPTable(new float[] {14, 12, 26, 10, 10, 14, 6, 14});
       table.setWidthPercentage(100);
-      for (String h :
-          List.of("Fecha", "Comprobante", "Ítem", "Tipo", "Base", "Monto base", "%", "Comisión")) {
+      for (String h : l.pdfTableHeader()) {
         cell(table, h, bold, Element.ALIGN_LEFT);
       }
       for (EntryView e : detail.entries()) {
@@ -160,19 +163,12 @@ public class CommissionExportService {
         cell(table, nullToEmpty(e.invoiceNumber()), body, Element.ALIGN_LEFT);
         cell(
             table,
-            nullToEmpty(e.itemName()) + ("REVERSAL".equals(e.sourceType()) ? " (reversión)" : ""),
+            nullToEmpty(e.itemName())
+                + ("REVERSAL".equals(e.sourceType()) ? l.reversalSuffix() : ""),
             body,
             Element.ALIGN_LEFT);
-        cell(
-            table,
-            KIND_LABELS.getOrDefault(nullToEmpty(e.itemKind()), ""),
-            body,
-            Element.ALIGN_LEFT);
-        cell(
-            table,
-            BASE_LABELS.getOrDefault(nullToEmpty(e.baseType()), ""),
-            body,
-            Element.ALIGN_LEFT);
+        cell(table, l.kind(e.itemKind()), body, Element.ALIGN_LEFT);
+        cell(table, l.base(e.baseType()), body, Element.ALIGN_LEFT);
         cell(table, money(e.baseAmount()), body, Element.ALIGN_RIGHT);
         cell(table, num(e.percentApplied()), body, Element.ALIGN_RIGHT);
         cell(table, money(e.commissionAmount()), body, Element.ALIGN_RIGHT);
@@ -182,26 +178,23 @@ public class CommissionExportService {
       for (Subtotal st : detail.byKind()) {
         document.add(
             new Paragraph(
-                "Subtotal "
-                    + KIND_LABELS.getOrDefault(st.key(), st.key())
-                    + ": "
-                    + money(st.amount()),
-                body));
+                l.subtotal() + " " + l.kindPlural(st.key()) + ": " + money(st.amount()), body));
       }
       for (EntryView a : detail.adjustments()) {
         document.add(
             new Paragraph(
-                "Ajuste: "
-                    + nullToEmpty(a.note() != null ? a.note() : a.reasonCode())
+                l.adjustment()
+                    + ": "
+                    + (a.note() != null ? a.note() : l.reason(a.reasonCode()))
                     + " "
                     + money(a.commissionAmount()),
                 body));
       }
-      document.add(new Paragraph("Total: " + money(s.totalAmount()), bold));
+      document.add(new Paragraph(l.total() + ": " + money(s.totalAmount()), bold));
       if (s.paidAt() != null) {
         document.add(
             new Paragraph(
-                "Pagada el "
+                l.paidOn()
                     + dateTimeFmt.format(s.paidAt())
                     + " ("
                     + nullToEmpty(s.paymentMethod())
@@ -239,7 +232,7 @@ public class CommissionExportService {
     return s == null ? "" : s;
   }
 
-  private static String csv(String s) {
+  static String csv(String s) {
     if (s == null) {
       return "";
     }

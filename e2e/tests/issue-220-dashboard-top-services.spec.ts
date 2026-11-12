@@ -8,6 +8,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
+import { openSummaryMore } from "../fixtures/ui";
 
 /**
  * Issue #220 · "Dashboard: gráfico de servicios más vendidos" — horizontal bar chart of the top
@@ -105,56 +106,27 @@ test.describe("Issue #220 · Dashboard top services chart", () => {
     // its own screen, reached via the "Dashboards" nav item.
     await page.goto("/app/dashboards");
 
-    const chart = page.getByTestId("dashboard-top-services");
+    // Redesign ("Resumen"): "Top services" is a ranked list inside the folded detail block.
+    await openSummaryMore(page);
+    const chart = page.getByTestId("summary-top-services");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText("Most invoiced services", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("summary-more-empty")).toHaveCount(0);
 
-    // Not the empty state, given the invoices seeded above.
-    await expect(page.getByTestId("dashboard-top-services-empty")).toHaveCount(0);
-
-    // recharts renders a real <svg> once ResponsiveContainer measures a non-zero size.
-    await expect(chart.locator("svg").first()).toBeVisible({ timeout: 20_000 });
-
-    // X-axis ticks are money labels — must use the dot-thousands / no-decimals Gs. format.
-    await expect(chart.getByText(/^Gs\. \d{1,3}(\.\d{3})*$/).first()).toBeVisible();
-
-    // All three seeded services show up as Y-axis category tick labels. Recharts splits a long
-    // category label across multiple <tspan> lines, dropping the whitespace between words in the
-    // flattened DOM text (e.g. "E2E Svc 123" renders as textContent "E2E Svc123") — so compare
-    // each tick's full textContent, whitespace-stripped, by exact equality (not a substring/regex
-    // guess) against the same whitespace-stripped expected name.
-    const normalize = (s: string) => s.replace(/\s+/g, "");
-    const tickLabels = chart.locator(
-      ".recharts-yAxis-tick-labels .recharts-cartesian-axis-tick-label",
-    );
-    await expect(tickLabels.first()).toBeVisible({ timeout: 20_000 });
-    const tickTexts = await tickLabels.allTextContents();
-    const normalizedTexts = tickTexts.map(normalize);
-
-    const idxA = normalizedTexts.indexOf(normalize(serviceA.serviceFullName));
-    const idxB = normalizedTexts.indexOf(normalize(serviceB.serviceFullName));
-    const idxC = normalizedTexts.indexOf(normalize(serviceC.serviceFullName));
-    expect(idxA, `expected a tick label for "${serviceA.serviceFullName}"`).toBeGreaterThanOrEqual(
-      0,
-    );
-    expect(idxB, `expected a tick label for "${serviceB.serviceFullName}"`).toBeGreaterThanOrEqual(
-      0,
-    );
-    expect(idxC, `expected a tick label for "${serviceC.serviceFullName}"`).toBeGreaterThanOrEqual(
-      0,
-    );
-
-    // ...ordered top-to-bottom by revenue descending (A=2.9M > B=1.9M > C=0.9M).
-    const [boxA, boxB, boxC] = await Promise.all([
-      tickLabels.nth(idxA).boundingBox(),
-      tickLabels.nth(idxB).boundingBox(),
-      tickLabels.nth(idxC).boundingBox(),
-    ]);
-    expect(boxA).toBeTruthy();
-    expect(boxB).toBeTruthy();
-    expect(boxC).toBeTruthy();
-    expect(boxA!.y).toBeLessThan(boxB!.y);
-    expect(boxB!.y).toBeLessThan(boxC!.y);
+    // Every seeded service is listed with its revenue in the dot-thousands / no-decimals Gs. format,
+    // ordered by revenue descending (A=2.9M > B=1.9M > C=0.9M).
+    const items = chart.getByRole("listitem");
+    const texts = (await items.allTextContents()).map((t) => t.replace(/\s+/g, " "));
+    const idxA = texts.findIndex((t) => t.includes(serviceA.serviceFullName));
+    const idxB = texts.findIndex((t) => t.includes(serviceB.serviceFullName));
+    const idxC = texts.findIndex((t) => t.includes(serviceC.serviceFullName));
+    expect(idxA, `expected "${serviceA.serviceFullName}" in the ranking`).toBeGreaterThanOrEqual(0);
+    expect(idxB, `expected "${serviceB.serviceFullName}" in the ranking`).toBeGreaterThanOrEqual(0);
+    expect(idxC, `expected "${serviceC.serviceFullName}" in the ranking`).toBeGreaterThanOrEqual(0);
+    expect(idxA).toBeLessThan(idxB);
+    expect(idxB).toBeLessThan(idxC);
+    expect(texts[idxA]).toContain("Gs. 2.900.000");
+    expect(texts[idxB]).toContain("Gs. 1.900.000");
+    expect(texts[idxC]).toContain("Gs. 900.000");
   });
 
   // Note: this asserts the chart *card itself* fits the 400px viewport, not whole-document
@@ -176,9 +148,9 @@ test.describe("Issue #220 · Dashboard top services chart", () => {
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
 
-    const chart = page.getByTestId("dashboard-top-services");
+    await openSummaryMore(page);
+    const chart = page.getByTestId("summary-top-services");
     await expect(chart).toBeVisible({ timeout: 20_000 });
-    await expect(chart.locator("svg").first()).toBeVisible({ timeout: 20_000 });
 
     const box = await chart.boundingBox();
     expect(box).toBeTruthy();

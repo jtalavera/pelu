@@ -12,21 +12,21 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory, openMoreOptions, showPaymentAmounts } from "../fixtures/billing";
 import { pickServiceLine } from "../fixtures/invoice";
 
 // Issue #181 "Cambios en factura electrónica Parte 2 - CORRECCIÓN 2":
 //  1. The helper comments under the comprobante-form fields (issue date, email, first payment
 //     "Monto", tax-exempt note) must share the "look and feel" of the muted text shown under the
 //     client search when a client is selected — i.e. `<Text variant="muted">` → text-sm /
-//     text-slate-500. Two of them also get new copy.
+//     text-ink-3. Two of them also get new copy.
 //  2. Optimise the first Historial report download (a startup warm-up + a header-only projection
 //     query). The observable, non-flaky part: the report still downloads correctly.
 
 async function openNewInvoiceForm(page: Page) {
   await page.goto("/app/billing");
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 }
 
@@ -63,26 +63,28 @@ test.describe("Issue #181 · form hints + report", () => {
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("40000");
 
-    // Issue-date legend: new copy + muted styling.
+    // Issue-date legend (shown when the date is changed): new copy + muted styling.
+    await page.getByTestId("billing-issue-date-open").click();
     const legend = page.getByText(
       "The document may be dated up to 30 days in the past or 5 days in the future relative to its submission to SIFEN.",
     );
     await expect(legend).toBeVisible();
-    await expect(legend).toHaveClass(/text-slate-500/);
+    await expect(legend).toHaveClass(/text-ink-3/);
     await expect(legend).toHaveClass(/text-sm/);
 
     // Email hint: muted styling.
     const emailHint = page.locator("#billing-client-email-hint");
     await expect(emailHint).toBeVisible();
-    await expect(emailHint).toHaveClass(/text-slate-500/);
+    await expect(emailHint).toHaveClass(/text-ink-3/);
     await expect(emailHint).toHaveClass(/text-sm/);
 
     // First payment "Monto" hint: new copy + muted styling.
+    await showPaymentAmounts(page);
     const payHint = page.locator("#pay-amount-0-hint");
     await expect(payHint).toHaveText(
       "This field is auto-filled with the total, but you can edit it for partial payments",
     );
-    await expect(payHint).toHaveClass(/text-slate-500/);
+    await expect(payHint).toHaveClass(/text-ink-3/);
     await expect(payHint).toHaveClass(/text-sm/);
 
     // Tax-exempt note (a diplomatic receiver): muted styling.
@@ -90,7 +92,7 @@ test.describe("Issue #181 · form hints + report", () => {
     await page.locator("#client-identity-document-number").fill("DIP-181");
     const taxNote = page.getByTestId("billing-tax-exempt-note");
     await expect(taxNote).toBeVisible();
-    await expect(taxNote).toHaveClass(/text-slate-500/);
+    await expect(taxNote).toHaveClass(/text-ink-3/);
     await expect(taxNote).toHaveClass(/text-sm/);
   });
 
@@ -136,7 +138,7 @@ test.describe("Issue #181 · form hints + report", () => {
     // And the "Descargar reporte" dropdown still triggers a browser download.
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "History" }).click();
+    await goToInvoiceHistory(page);
     await page.getByTestId("invoice-history-report-button").click();
     const [dl] = await Promise.all([
       page.waitForEvent("download"),

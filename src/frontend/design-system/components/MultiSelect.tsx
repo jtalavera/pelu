@@ -110,6 +110,12 @@ export function MultiSelect<T extends string | number>({
           setQuery("");
           setOpen(true);
         }}
+        // Already focused (e.g. closed with Escape): a click must reopen it too.
+        onClick={() => {
+          if (disabled || open) return;
+          setQuery("");
+          setOpen(true);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             e.preventDefault();
@@ -126,7 +132,7 @@ export function MultiSelect<T extends string | number>({
         aria-describedby={describedBy}
         className={cn(
           invalid &&
-            "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/20 dark:border-red-500 dark:focus-visible:ring-red-500/30",
+            "border-danger focus-visible:border-danger focus-visible:ring-danger/20",
         )}
       />
       <FloatingDropdown anchorRef={containerRef} open={showDropdown} ref={panelRef}>
@@ -135,10 +141,10 @@ export function MultiSelect<T extends string | number>({
           role="listbox"
           aria-multiselectable="true"
           aria-label={label}
-          className="w-full min-w-[12rem] rounded-md border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto dark:border-slate-700 dark:bg-slate-900"
+          className="w-full min-w-[12rem] rounded-xl border border-line bg-surface shadow-lg max-h-72 overflow-y-auto"
         >
           {filtered.length === 0 ? (
-            <li className="px-3 py-2 text-sm text-slate-500 dark:text-slate-400" role="alert">
+            <li className="px-3 py-2 text-sm text-ink-3" role="alert">
               {noResultsText}
             </li>
           ) : (

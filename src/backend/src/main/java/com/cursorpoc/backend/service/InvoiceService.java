@@ -1,15 +1,19 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeTimeProperties;
+import com.cursorpoc.backend.domain.Appointment;
 import com.cursorpoc.backend.domain.CashSession;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.FiscalStamp;
 import com.cursorpoc.backend.domain.Invoice;
 import com.cursorpoc.backend.domain.InvoiceLine;
 import com.cursorpoc.backend.domain.InvoicePaymentAllocation;
+import com.cursorpoc.backend.domain.InvoiceTip;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ServiceRecord;
+import com.cursorpoc.backend.domain.ServiceRecordTip;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.AppointmentStatus;
 import com.cursorpoc.backend.domain.enums.CardBrand;
 import com.cursorpoc.backend.domain.enums.ClientIdentityDocumentType;
 import com.cursorpoc.backend.domain.enums.ClientTaxpayerType;
@@ -18,6 +22,7 @@ import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.domain.enums.PaymentMethod;
 import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.domain.enums.SifenSubmissionStatus;
+import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
@@ -36,6 +41,7 @@ import com.cursorpoc.backend.web.dto.InvoiceListItemResponse;
 import com.cursorpoc.backend.web.dto.InvoicePaymentAllocationRequest;
 import com.cursorpoc.backend.web.dto.InvoicePaymentAllocationResponse;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
+import com.cursorpoc.backend.web.dto.InvoiceTipRequest;
 import com.cursorpoc.backend.web.dto.InvoiceVoidRequest;
 import com.cursorpoc.backend.web.dto.PagedInvoicesResponse;
 import java.math.BigDecimal;
@@ -47,7 +53,12 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.hibernate.Hibernate;
@@ -96,8 +107,8 @@ public class InvoiceService implements ApplicationEventPublisherAware {
    */
   private static final BigDecimal CLIENT_IDENTIFICATION_THRESHOLD = new BigDecimal("7000000");
 
-  /** Maximum inclusive calendar months that date filters may span (6 months = ~180 days). */
-  public static final int MAX_INVOICE_LIST_MONTHS = 6;
+  /** Maximum inclusive calendar months that date filters may span (12 months = one year). */
+  public static final int MAX_INVOICE_LIST_MONTHS = 12;
 
   /**
    * Issue #174 AC-04: SIFEN technical limits for the emission date of a DE — it may be backdated up
@@ -134,6 +145,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
   private final SalonServiceRepository salonServiceRepository;
   private final BusinessProfileRepository businessProfileRepository;
   private final ServiceRecordRepository serviceRecordRepository;
+  private final AppointmentRepository appointmentRepository;
   private final FemmeTimeProperties timeProperties;
   private final SifenInvoiceHeaderService sifenInvoiceHeaderService;
   private final SifenNumberVoidingService sifenNumberVoidingService;
@@ -149,6 +161,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       SalonServiceRepository salonServiceRepository,
       BusinessProfileRepository businessProfileRepository,
       ServiceRecordRepository serviceRecordRepository,
+      AppointmentRepository appointmentRepository,
       FemmeTimeProperties timeProperties,
       SifenInvoiceHeaderService sifenInvoiceHeaderService,
       SifenNumberVoidingService sifenNumberVoidingService,
@@ -162,6 +175,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     this.salonServiceRepository = salonServiceRepository;
     this.businessProfileRepository = businessProfileRepository;
     this.serviceRecordRepository = serviceRecordRepository;
+    this.appointmentRepository = appointmentRepository;
     this.timeProperties = timeProperties;
     this.sifenInvoiceHeaderService = sifenInvoiceHeaderService;
     this.sifenNumberVoidingService = sifenNumberVoidingService;
@@ -262,6 +276,30 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       invoice.setServiceRecord(serviceRecord);
     }
 
+    // 4c. The turnos this invoice charges: all the ones its ficha belongs to (a ficha may serve
+    // several turnos), or, for a turno with no ficha (e.g. an occasional client), the one the user
+    // charged from. The earliest is linked to the invoice; the Agenda finds the others through the
+    // ficha, so it stops offering "Cobrar" on all of them. All are completed with the invoice.
+    List<Appointment> chargedTurnos = new ArrayList<>();
+    if (serviceRecord != null && !serviceRecord.getAppointments().isEmpty()) {
+      chargedTurnos.addAll(serviceRecord.getAppointments());
+    } else if (request.appointmentId() != null) {
+      Appointment requested =
+          appointmentRepository
+              .findByIdAndTenant_Id(request.appointmentId(), tenantId)
+              .orElseThrow(
+                  () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "APPOINTMENT_NOT_FOUND"));
+      chargedTurnos.add(requested);
+    }
+    for (Appointment turno : chargedTurnos) {
+      if (invoiceRepository.existsByAppointment_IdAndStatus(turno.getId(), InvoiceStatus.ISSUED)) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "APPOINTMENT_ALREADY_INVOICED");
+      }
+    }
+    Appointment chargedTurno =
+        chargedTurnos.stream().min(Comparator.comparing(Appointment::getStartAt)).orElse(null);
+    invoice.setAppointment(chargedTurno);
+
     BigDecimal tipsAmount =
         request.tipsAmount() != null
             ? request.tipsAmount().setScale(2, RoundingMode.HALF_UP)
@@ -271,10 +309,15 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     // 5. Lines · 6. Discount · 6b. Gs. 7M identification guard · 7/8. Payments — all shared with
     // issue #175's correction flow.
     BigDecimal subtotal = rebuildLines(tenantId, invoice, request.lines(), taxExemptReceiver);
+    // 5b. Per-professional tips from the comprobante's "Propinas" section (needs the lines'
+    // professionals, so it runs after rebuildLines).
+    if (request.tips() != null) {
+      applyTips(invoice, serviceRecord, request.tips());
+    }
     BigDecimal total =
         applyGlobalDiscount(invoice, request.discountType(), request.discountValue(), subtotal);
     requireClientIdentificationForThreshold(invoice, total);
-    rebuildPayments(invoice, request.payments(), total);
+    rebuildPayments(invoice, request.payments(), total, false);
 
     // 9. Save and increment stamp
     invoiceRepository.save(invoice);
@@ -286,6 +329,13 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     if (serviceRecord != null) {
       serviceRecord.setStatus(ServiceRecordStatus.CLOSED);
       serviceRecord.setClosedAt(Instant.now());
+    }
+    // The charged turnos are completed together with their invoice, whatever step they were on.
+    for (Appointment turno : chargedTurnos) {
+      if (turno.getStatus() != AppointmentStatus.CANCELLED
+          && turno.getStatus() != AppointmentStatus.NO_SHOW) {
+        turno.setStatus(AppointmentStatus.COMPLETED);
+      }
     }
 
     // 11. Stock (HU-63): product lines leave stock — an outbox event in this same transaction,
@@ -332,6 +382,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     sifenNumberVoidingService.requireVoidingStillPending(invoiceId);
 
     // Wipe the rejected content and re-derive it, on the same Invoice row.
+    List<String> paymentsBefore = paymentSignature(invoice);
     invoice.getLines().clear();
     invoice.getPaymentAllocations().clear();
     invoice.setClient(null);
@@ -349,7 +400,15 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     BigDecimal total =
         applyGlobalDiscount(invoice, request.discountType(), request.discountValue(), subtotal);
     requireClientIdentificationForThreshold(invoice, total);
-    rebuildPayments(invoice, request.payments(), total);
+    // The correction form doesn't edit tips, and invoices issued before issue #384 were paid for
+    // the total only, so a correction may keep either shape of payment sum.
+    rebuildPayments(invoice, request.payments(), total, true);
+    // A closed register's cash is frozen: the payments of its invoices can no longer change (the
+    // transaction rolls back, so nothing of the correction is kept).
+    if (invoice.getCashSession().getClosedAt() != null
+        && !paymentsBefore.equals(paymentSignature(invoice))) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "CASH_SESSION_CLOSED_CANNOT_CORRECT");
+    }
 
     // The number is reused, not abandoned — call off its pending inutilización and clear the
     // rejected SIFEN result so the resend runs through the normal pipeline.
@@ -362,6 +421,73 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     Hibernate.initialize(invoice.getLines());
     Hibernate.initialize(invoice.getPaymentAllocations());
     return toDetailDto(invoice);
+  }
+
+  /**
+   * Stores the tips entered per professional on the comprobante form. Tips never touch the fiscal
+   * totals; {@code invoice.tipsAmount} becomes their sum. Each professional must have served one of
+   * the invoice lines ({@code INVOICE_TIP_PROFESSIONAL_NOT_IN_LINES}). For an invoice generated
+   * from a ficha the ficha's own tips are replaced by these (the ficha closes with this invoice),
+   * so a tip is never counted twice; otherwise they are kept as {@link InvoiceTip} rows.
+   */
+  private void applyTips(
+      Invoice invoice, ServiceRecord serviceRecord, List<InvoiceTipRequest> requestTips) {
+    Map<Long, Professional> lineProfessionals = new LinkedHashMap<>();
+    for (InvoiceLine line : invoice.getLines()) {
+      if (line.getProfessional() != null) {
+        lineProfessionals.put(line.getProfessional().getId(), line.getProfessional());
+      }
+    }
+    Map<Long, BigDecimal> amounts = new LinkedHashMap<>();
+    for (InvoiceTipRequest tr : requestTips) {
+      if (tr == null || tr.professionalId() == null || tr.amount() == null) {
+        continue;
+      }
+      if (tr.amount().signum() < 0) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_TIP_AMOUNT_INVALID");
+      }
+      if (tr.amount().signum() == 0) {
+        continue;
+      }
+      if (!lineProfessionals.containsKey(tr.professionalId())) {
+        throw new ResponseStatusException(
+            HttpStatus.BAD_REQUEST, "INVOICE_TIP_PROFESSIONAL_NOT_IN_LINES");
+      }
+      amounts.merge(
+          tr.professionalId(), tr.amount().setScale(2, RoundingMode.HALF_UP), BigDecimal::add);
+    }
+
+    if (serviceRecord != null) {
+      // Reuse existing rows (unique service_record_id + professional_id) instead of delete+insert.
+      Map<Long, ServiceRecordTip> existing = new HashMap<>();
+      serviceRecord.getTips().forEach(t -> existing.put(t.getProfessional().getId(), t));
+      amounts.forEach(
+          (professionalId, amount) -> {
+            ServiceRecordTip tip = existing.get(professionalId);
+            if (tip == null) {
+              tip = new ServiceRecordTip();
+              tip.setServiceRecord(serviceRecord);
+              tip.setProfessional(lineProfessionals.get(professionalId));
+              serviceRecord.getTips().add(tip);
+            }
+            tip.setAmount(amount);
+          });
+      serviceRecord.getTips().removeIf(t -> !amounts.containsKey(t.getProfessional().getId()));
+    } else {
+      invoice.getTips().clear();
+      amounts.forEach(
+          (professionalId, amount) -> {
+            InvoiceTip tip = new InvoiceTip();
+            tip.setInvoice(invoice);
+            tip.setProfessional(lineProfessionals.get(professionalId));
+            tip.setAmount(amount);
+            invoice.getTips().add(tip);
+          });
+    }
+    invoice.setTipsAmount(
+        amounts.values().stream()
+            .reduce(BigDecimal.ZERO, BigDecimal::add)
+            .setScale(2, RoundingMode.HALF_UP));
   }
 
   // ── Shared building blocks (issueInvoice + correctAndResendInvoice) ──────────────────────────
@@ -413,6 +539,14 @@ public class InvoiceService implements ApplicationEventPublisherAware {
               .findByIdAndTenant_Id(request.clientId(), tenantId)
               .orElseThrow(
                   () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
+      if (client.isGeneric()) {
+        // The generic "cliente ocasional" (owner of an occasional turno's ficha) is not a real
+        // recipient: it is billed like any occasional client, with the receptor typed on the
+        // invoice.
+        client = null;
+      }
+    }
+    if (client != null) {
       invoice.setClient(client);
       // clientDisplayName is full name; clientRucOverride can override profile RUC.
       // Issue #96: a blank display name stays blank (PDF prints "Sin nombre") rather than
@@ -653,7 +787,10 @@ public class InvoiceService implements ApplicationEventPublisherAware {
 
   /** Steps 7 + 8 of {@code issueInvoice}: rebuilds payment allocations and validates the sum. */
   private static void rebuildPayments(
-      Invoice invoice, List<InvoicePaymentAllocationRequest> paymentRequests, BigDecimal total) {
+      Invoice invoice,
+      List<InvoicePaymentAllocationRequest> paymentRequests,
+      BigDecimal total,
+      boolean allowPaymentsWithoutTips) {
     if (paymentRequests == null || paymentRequests.isEmpty()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PAYMENTS_REQUIRED");
     }
@@ -694,9 +831,77 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       invoice.getPaymentAllocations().add(allocation);
       paymentsSum = paymentsSum.add(pr.amount());
     }
-    // Issue #139: tips are collected/stored separately and never factor into this reconciliation.
-    if (paymentsSum.setScale(2, RoundingMode.HALF_UP).compareTo(total) != 0) {
+    // Issue #384: the payments cover the invoiced total plus the tips (which stay out of the fiscal
+    // total; they are only collected together with it).
+    BigDecimal tips = invoice.getTipsAmount() != null ? invoice.getTipsAmount() : BigDecimal.ZERO;
+    BigDecimal paid = paymentsSum.setScale(2, RoundingMode.HALF_UP);
+    boolean coversTotalAndTips = paid.compareTo(total.add(tips)) == 0;
+    boolean coversTotalOnly = allowPaymentsWithoutTips && paid.compareTo(total) == 0;
+    if (!coversTotalAndTips && !coversTotalOnly) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PAYMENT_SUM_MISMATCH");
+    }
+  }
+
+  /** Invoice-list filter value for "needs attention" (an issued invoice SIFEN rejected). */
+  static final String ATTENTION_FILTER = "ATTENTION";
+
+  /** Invoice-list filter value for "approved" (issued, SIFEN approved or never sent to SIFEN). */
+  static final String APPROVED_FILTER = "APPROVED";
+
+  /** Invoice-list filter value for "in progress" (issued, SIFEN has not answered yet). */
+  static final String PROCESSING_FILTER = "PROCESSING";
+
+  /**
+   * What a list/report filter value stands for: the invoice status, and — when {@code sifenFilter}
+   * is on — the SIFEN statuses accepted ({@code includeNoSifen}: also invoices never sent to
+   * SIFEN). {@code sifenStatuses} is never empty, so it is always safe to bind to an {@code IN}.
+   */
+  record StatusFilter(
+      InvoiceStatus status,
+      boolean sifenFilter,
+      List<SifenSubmissionStatus> sifenStatuses,
+      boolean includeNoSifen) {
+
+    static StatusFilter none() {
+      return new StatusFilter(null, false, List.of(SifenSubmissionStatus.REJECTED), false);
+    }
+
+    static StatusFilter ofStatus(InvoiceStatus status) {
+      return new StatusFilter(status, false, List.of(SifenSubmissionStatus.REJECTED), false);
+    }
+
+    static StatusFilter issuedWith(boolean includeNoSifen, SifenSubmissionStatus... sifen) {
+      return new StatusFilter(InvoiceStatus.ISSUED, true, List.of(sifen), includeNoSifen);
+    }
+  }
+
+  /**
+   * Resolves the {@code status} query parameter of the invoice list and report. The plain {@code
+   * ISSUED} / {@code VOIDED} filter by the invoice's own status; the rest mirror the states the
+   * screens show for an issued invoice: {@code APPROVED} (SIFEN approved, or never sent to SIFEN),
+   * {@code PROCESSING} (queued or waiting for SIFEN's answer) and {@code ATTENTION} (SIFEN rejected
+   * it — the one state that needs the user to act). Blank or unknown values mean no filter.
+   */
+  static StatusFilter resolveStatusFilter(String statusStr) {
+    if (statusStr == null || statusStr.isBlank()) {
+      return StatusFilter.none();
+    }
+    String normalized = statusStr.trim().toUpperCase();
+    switch (normalized) {
+      case ATTENTION_FILTER:
+        return StatusFilter.issuedWith(false, SifenSubmissionStatus.REJECTED);
+      case APPROVED_FILTER:
+        return StatusFilter.issuedWith(
+            true, SifenSubmissionStatus.APPROVED, SifenSubmissionStatus.APPROVED_WITH_OBSERVATION);
+      case PROCESSING_FILTER:
+        return StatusFilter.issuedWith(
+            false, SifenSubmissionStatus.QUEUED, SifenSubmissionStatus.PENDING_VERIFICATION);
+      default:
+        try {
+          return StatusFilter.ofStatus(InvoiceStatus.valueOf(normalized));
+        } catch (IllegalArgumentException e) {
+          return StatusFilter.none(); // ignore bad status filter
+        }
     }
   }
 
@@ -711,20 +916,23 @@ public class InvoiceService implements ApplicationEventPublisherAware {
       int page,
       int size) {
     Instant[] fromTo = resolveInvoiceListRange(fromDate, toDate, clientId);
-    InvoiceStatus status = null;
-    if (statusStr != null && !statusStr.isBlank()) {
-      try {
-        status = InvoiceStatus.valueOf(statusStr.toUpperCase());
-      } catch (IllegalArgumentException e) {
-        // ignore bad status filter
-      }
-    }
+    StatusFilter statusFilter = resolveStatusFilter(statusStr);
     String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
     Integer qInvoiceNumber = parseInvoiceNumberQuery(qTrimmed);
     Pageable pageable = PageRequest.of(page, Math.max(1, Math.min(size, 200)));
     Page<Invoice> invoicePage =
         invoiceRepository.findByTenantWithFiltersPaged(
-            tenantId, fromTo[0], fromTo[1], clientId, status, qTrimmed, qInvoiceNumber, pageable);
+            tenantId,
+            fromTo[0],
+            fromTo[1],
+            clientId,
+            statusFilter.status(),
+            statusFilter.sifenFilter(),
+            statusFilter.sifenStatuses(),
+            statusFilter.includeNoSifen(),
+            qTrimmed,
+            qInvoiceNumber,
+            pageable);
     BigDecimal issuedTotal =
         invoiceRepository.sumIssuedTotalWithFilters(
             tenantId, fromTo[0], fromTo[1], clientId, qTrimmed, qInvoiceNumber);
@@ -748,14 +956,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
   public List<InvoiceReportRow> listInvoicesForReport(
       long tenantId, Instant fromDate, Instant toDate, Long clientId, String statusStr, String q) {
     Instant[] fromTo = resolveInvoiceListRange(fromDate, toDate, clientId);
-    InvoiceStatus status = null;
-    if (statusStr != null && !statusStr.isBlank()) {
-      try {
-        status = InvoiceStatus.valueOf(statusStr.toUpperCase());
-      } catch (IllegalArgumentException e) {
-        // ignore bad status filter
-      }
-    }
+    StatusFilter statusFilter = resolveStatusFilter(statusStr);
     String qTrimmed = (q != null && !q.isBlank()) ? q.trim() : null;
     Integer qInvoiceNumber = parseInvoiceNumberQuery(qTrimmed);
     return invoiceRepository.findReportRows(
@@ -763,7 +964,10 @@ public class InvoiceService implements ApplicationEventPublisherAware {
         fromTo[0],
         fromTo[1],
         clientId,
-        status,
+        statusFilter.status(),
+        statusFilter.sifenFilter(),
+        statusFilter.sifenStatuses(),
+        statusFilter.includeNoSifen(),
         qTrimmed,
         qInvoiceNumber,
         PageRequest.of(0, 5000));
@@ -773,19 +977,18 @@ public class InvoiceService implements ApplicationEventPublisherAware {
    * Resolves the effective date range for invoice list queries.
    *
    * <ul>
-   *   <li>Both dates null → default to last {@value MAX_INVOICE_LIST_MONTHS} months.
+   *   <li>Both dates null → default to the last {@value MAX_INVOICE_LIST_MONTHS} months.
    *   <li>Only one of from/to → 400 INVOICE_LIST_RANGE_INCOMPLETE.
    *   <li>from after to → 400 INVOICE_LIST_INVALID_RANGE.
-   *   <li>from older than 6 months ago → 400 INVOICE_LIST_RANGE_TOO_OLD.
+   *   <li>from older than one year → 400 INVOICE_LIST_RANGE_TOO_OLD.
    * </ul>
    */
   static Instant[] resolveInvoiceListRange(Instant from, Instant to, Long clientId) {
     ZoneId zone = ZoneId.systemDefault();
     if (from == null && to == null) {
       LocalDate today = LocalDate.now(zone);
-      Instant start = today.minusMonths(MAX_INVOICE_LIST_MONTHS).atStartOfDay(zone).toInstant();
       Instant end = today.atTime(LocalTime.of(23, 59, 59, 999_000_000)).atZone(zone).toInstant();
-      return new Instant[] {start, end};
+      return new Instant[] {SearchRangeLimits.floorInstant(zone), end};
     }
     if (from == null || to == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_LIST_RANGE_INCOMPLETE");
@@ -793,13 +996,10 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     if (from.isAfter(to)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_LIST_INVALID_RANGE");
     }
-    // Reject from-dates older than 6 months
-    Instant sixMonthsAgo =
-        LocalDate.now(zone).minusMonths(MAX_INVOICE_LIST_MONTHS).atStartOfDay(zone).toInstant();
-    if (from.isBefore(sixMonthsAgo)) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVOICE_LIST_RANGE_TOO_OLD");
-    }
-    return new Instant[] {from, to};
+    // Nothing older than one year is returned (one day of timezone tolerance on «from»).
+    return new Instant[] {
+      SearchRangeLimits.resolveFrom(from, zone, "INVOICE_LIST_RANGE_TOO_OLD"), to
+    };
   }
 
   @Transactional(readOnly = true)
@@ -840,6 +1040,14 @@ public class InvoiceService implements ApplicationEventPublisherAware {
     Hibernate.initialize(invoice.getLines());
     Hibernate.initialize(invoice.getPaymentAllocations());
     return toDetailDto(invoice);
+  }
+
+  /** Method + amount of every payment, order-independent: detects a change of the payments. */
+  private static List<String> paymentSignature(Invoice invoice) {
+    return invoice.getPaymentAllocations().stream()
+        .map(p -> p.getMethod() + ":" + p.getAmount().setScale(2, RoundingMode.HALF_UP))
+        .sorted()
+        .toList();
   }
 
   private InvoiceListItemResponse toListItemDto(Invoice i) {
@@ -907,7 +1115,7 @@ public class InvoiceService implements ApplicationEventPublisherAware {
                         l.getTaxRate(),
                         l.getTaxAmount(),
                         l.getProfessional() != null ? l.getProfessional().getId() : null,
-                        l.getProfessional() != null ? l.getProfessional().getFullName() : null))
+                        l.getProfessional() != null ? l.getProfessional().getDisplayName() : null))
             .collect(Collectors.toList());
 
     List<InvoicePaymentAllocationResponse> payments =

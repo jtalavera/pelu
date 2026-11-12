@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { apiPostJson, loginAsDemoApi } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { professionalFormDialog, fillTimeComboboxField } from "../fixtures/ui";
+import { openProfessionalMoreOptions, openProfessionalSchedule, toggleRowSwitch } from "../fixtures/catalog";
 
 test.describe("HU-05 · Crear y gestionar profesionales", () => {
   test("HU-05 · unicidad email: segundo profesional con mismo mail muestra error", async ({
@@ -27,13 +28,13 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/professionals");
-    const row = page.locator("tr").filter({ hasText: n2 }).first();
+    const row = page.locator('[data-testid^="prof-row-"]').filter({ hasText: n2 }).first();
     await expect(row).toBeVisible({ timeout: 20_000 });
-    await row.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
-    await page.getByRole("menuitem", { name: "Edit details and photo" }).click();
+    await row.click();
     const dlg = professionalFormDialog(page);
+    await openProfessionalMoreOptions(page);
     await dlg.getByLabel("Email").fill(email);
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await dlg.getByTestId("prof-save").click();
     await expect(
       dlg.getByText("Another professional in your business already uses this email address.", {
         exact: true,
@@ -48,13 +49,11 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await openProfessionalSchedule(page);
     await dlg.getByTestId("prof-day-mon-active").check();
     await fillTimeComboboxField(dlg.locator("#prof-1-start"), "09:00");
     await fillTimeComboboxField(dlg.locator("#prof-1-end"), "17:00");
-    await dlg
-      .getByRole("button", { name: "Save schedule" })
-      .evaluate((el: HTMLElement) => (el as HTMLButtonElement).click());
+    await dlg.getByTestId("prof-save").click();
     // Issue #163 AC2: a new-professional save shows a success message in the page header,
     // same style as saving a Ficha de servicio.
     await expect(page.getByText("Professional saved successfully.", { exact: true })).toBeVisible();
@@ -68,7 +67,7 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
   test("HU-05 · 4 listado muestra estado activo", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/professionals");
-    await expect(page.getByText("Active", { exact: true }).first()).toBeVisible();
+    await expect(page.locator('[data-testid^="prof-switch-"]').first()).toBeVisible();
   });
 
   test("HU-05 · 3 desactivar y reactivar profesional", async ({ page }) => {
@@ -78,30 +77,26 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await openProfessionalSchedule(page);
     await dlg.getByTestId("prof-day-mon-active").check();
     await fillTimeComboboxField(dlg.locator("#prof-1-start"), "09:00");
     await fillTimeComboboxField(dlg.locator("#prof-1-end"), "17:00");
-    await dlg
-      .getByRole("button", { name: "Save schedule" })
-      .evaluate((el: HTMLElement) => (el as HTMLButtonElement).click());
+    await dlg.getByTestId("prof-save").click();
 
-    const row = page.locator("tr").filter({ hasText: name }).first();
+    const row = page.locator('[data-testid^="prof-row-"]').filter({ hasText: name }).first();
     await expect(row).toBeVisible({ timeout: 20_000 });
 
-    await row.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
-    await page.getByRole("menuitem", { name: "Deactivate" }).click();
+    await toggleRowSwitch(row);
     await page.getByRole("dialog", { name: "Deactivate professional" }).getByRole("button", { name: "Deactivate" }).click();
-    await expect(row.getByText("Inactive", { exact: true })).toBeVisible();
+    await expect(row).toContainText("Inactive");
     // Issue #163 AC3: deactivating from the table shows a success message in the page header.
     await expect(
       page.getByText("Professional deactivated successfully.", { exact: true }),
     ).toBeVisible();
 
-    await row.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
-    await page.getByRole("menuitem", { name: "Activate" }).click();
+    await toggleRowSwitch(row);
     await page.getByRole("dialog", { name: "Activate professional" }).getByRole("button", { name: "Activate" }).click();
-    await expect(row.getByText("Active", { exact: true })).toBeVisible();
+    await expect(row).not.toContainText("Inactive");
     await expect(
       page.getByText("Professional activated successfully.", { exact: true }),
     ).toBeVisible();
@@ -116,13 +111,11 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
+    await openProfessionalSchedule(page);
     await dlg.getByTestId("prof-day-mon-active").check();
     await fillTimeComboboxField(dlg.locator("#prof-1-start"), "09:00");
     await fillTimeComboboxField(dlg.locator("#prof-1-end"), "17:00");
-    await dlg
-      .getByRole("button", { name: "Save schedule" })
-      .evaluate((el: HTMLElement) => (el as HTMLButtonElement).click());
+    await dlg.getByTestId("prof-save").click();
 
     const alert = page.getByText("Professional saved successfully.", { exact: true });
     await expect(alert).toBeVisible();
@@ -138,7 +131,7 @@ test.describe("HU-05 · Crear y gestionar profesionales", () => {
     // The message box must leave a gap before the table header — not touch it directly.
     const gap = await page.evaluate(() => {
       const alertEl = document.querySelector('[role="alert"]');
-      const table = document.querySelector("table");
+      const table = document.querySelector('[data-testid="catalog-professionals-list"]');
       if (!alertEl || !table) return null;
       return table.getBoundingClientRect().top - alertEl.getBoundingClientRect().bottom;
     });

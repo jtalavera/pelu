@@ -45,11 +45,6 @@ function renderPage() {
   );
 }
 
-/** The ThemeProvider renders two trees; pick the first matching element. */
-function getFirst(role: string, name: RegExp | string) {
-  return screen.getAllByRole(role, { name })[0];
-}
-
 describe("ProfessionalsPage", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("en");
@@ -62,32 +57,25 @@ describe("ProfessionalsPage", () => {
     cleanup();
   });
 
-  it("loads professionals and shows actions", async () => {
+  it("loads professionals and shows the new button", async () => {
     listProfessionalsPaged.mockResolvedValue(makePageResponse([PROFESSIONAL]));
     renderPage();
-    expect(await screen.findAllByRole("heading", { name: /professionals/i })).toBeTruthy();
     expect(await screen.findByText(/ana gomez/i)).toBeTruthy();
     expect(screen.getAllByRole("button", { name: /new professional/i }).length).toBeGreaterThan(0);
   });
 
-  it("shows Activate inside the kebab menu for inactive professionals and calls activate API on confirm", async () => {
+  it("turns a professional on with the row switch and calls activate API on confirm", async () => {
     listProfessionalsPaged
       .mockResolvedValueOnce(makePageResponse([INACTIVE_PROFESSIONAL]))
       .mockResolvedValueOnce(makePageResponse([{ ...INACTIVE_PROFESSIONAL, active: true }]));
     femmePostJson.mockResolvedValue({ ...INACTIVE_PROFESSIONAL, active: true });
     renderPage();
 
-    const triggers = await screen.findAllByTestId(
-      `professionals-row-${INACTIVE_PROFESSIONAL.id}-trigger`,
-    );
-    await userEvent.click(triggers[0]);
+    const toggles = await screen.findAllByTestId(`prof-switch-${INACTIVE_PROFESSIONAL.id}`);
+    expect((toggles[0] as HTMLInputElement).checked).toBe(false);
+    await userEvent.click(toggles[0]);
 
-    const activateMenuItem = await screen.findByRole("menuitem", {
-      name: /^activate$/i,
-    });
-    await userEvent.click(activateMenuItem);
-
-    const dialog = screen.getByRole("dialog");
+    const dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: /^activate$/i }));
 
     await waitFor(() => {
@@ -98,41 +86,40 @@ describe("ProfessionalsPage", () => {
     }, { timeout: 2000 });
   });
 
-  it("shows Details tab first and Schedule tab is disabled for new professional", async () => {
+  it("new professional form is one view: name, phone and a Monday-to-Saturday 9-18 schedule by default", async () => {
     listProfessionalsPaged.mockResolvedValue(makePageResponse([]));
     renderPage();
-    await screen.findAllByRole("heading", { name: /professionals/i });
+    await userEvent.click(await screen.findByRole("button", { name: /new professional/i }));
 
-    await userEvent.click(getFirst("button", /new professional/i));
-
-    // Details tab should be visible
-    const detailsTab = await screen.findAllByRole("tab", { name: /details/i });
-    expect(detailsTab[0]).toBeTruthy();
-
-    // Schedule tab should be disabled
-    const scheduleTabs = screen.getAllByRole("tab", { name: /schedule/i });
-    expect((scheduleTabs[0] as HTMLButtonElement).disabled).toBe(true);
+    expect(await screen.findByLabelText(/full name/i)).toBeTruthy();
+    expect(screen.getByLabelText(/phone/i)).toBeTruthy();
+    expect(screen.queryByRole("tab")).toBeNull();
+    expect(screen.getByTestId("prof-schedule-summary").textContent).toMatch(
+      /Monday to Saturday.*09:00 to 18:00/,
+    );
+    // Email, PIN, system access and photo live under "More options".
+    expect(screen.queryByLabelText(/^email/i)).toBeNull();
+    expect(document.getElementById("prof-pin")).toBeNull();
   });
 
-  it("validates full name is required on Details tab", async () => {
+  it("validates full name is required", async () => {
     listProfessionalsPaged.mockResolvedValue(makePageResponse([]));
     renderPage();
-    await screen.findAllByRole("heading", { name: /professionals/i });
 
-    await userEvent.click(getFirst("button", /new professional/i));
-    await userEvent.click(getFirst("button", /save and set schedule/i));
+    await userEvent.click(await screen.findByRole("button", { name: /new professional/i }));
+    await userEvent.click(await screen.findByTestId("prof-save"));
 
     expect(
       await screen.findByText(/enter the professional.*full name|enter a full name/i),
     ).toBeTruthy();
   });
 
-  it("Details tab uses a file input for photo with image accept (HU-20)", async () => {
+  it("photo file input (HU-20) is under More options and accepts images", async () => {
     listProfessionalsPaged.mockResolvedValue(makePageResponse([]));
     renderPage();
-    await screen.findAllByRole("heading", { name: /professionals/i });
 
-    await userEvent.click(getFirst("button", /new professional/i));
+    await userEvent.click(await screen.findByRole("button", { name: /new professional/i }));
+    await userEvent.click(await screen.findByTestId("prof-more-options-toggle"));
 
     const fileInput = document.getElementById("prof-photo-file") as HTMLInputElement | null;
     expect(fileInput?.type).toBe("file");
@@ -140,22 +127,27 @@ describe("ProfessionalsPage", () => {
     expect(fileInput?.accept ?? "").toMatch(/image\/png/);
   });
 
-  it("unlocks Schedule tab after saving details", async () => {
+  it("creates the professional and saves the default schedule in one step", async () => {
     listProfessionalsPaged.mockResolvedValue(makePageResponse([]));
     femmePostJson.mockResolvedValue(PROFESSIONAL);
     femmePutJson.mockResolvedValue(PROFESSIONAL);
     renderPage();
-    await screen.findAllByRole("heading", { name: /professionals/i });
 
-    await userEvent.click(getFirst("button", /new professional/i));
-    const nameInputs = screen.getAllByLabelText(/full name/i);
-    await userEvent.type(nameInputs[0], "Ana Gomez");
-    await userEvent.click(getFirst("button", /save and set schedule/i));
+    await userEvent.click(await screen.findByRole("button", { name: /new professional/i }));
+    await userEvent.type(await screen.findByLabelText(/full name/i), "Ana Gomez");
+    await userEvent.click(screen.getByTestId("prof-save"));
 
-    // After saving, the schedule tab should become enabled
     await waitFor(() => {
-      const tabs = screen.getAllByRole("tab", { name: /schedule/i });
-      expect((tabs[0] as HTMLButtonElement).disabled).toBe(false);
+      expect(femmePostJson).toHaveBeenCalledWith(
+        "/api/professionals",
+        expect.objectContaining({ fullName: "Ana Gomez" }),
+      );
+    });
+    await waitFor(() => {
+      expect(femmePutJson).toHaveBeenCalledWith(
+        "/api/professionals/1/schedules",
+        [1, 2, 3, 4, 5, 6].map((dayOfWeek) => ({ dayOfWeek, startTime: "09:00", endTime: "18:00" })),
+      );
     });
   });
 });

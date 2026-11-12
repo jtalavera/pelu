@@ -23,9 +23,9 @@ export function Tooltip({ className, label, children, ...props }: TooltipProps) 
         id={tipId}
         role="tooltip"
         className={cn(
-          "pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity",
+          "pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity",
           "peer-hover:opacity-100 peer-focus-visible:opacity-100",
-          "dark:bg-slate-700",
+          "",
         )}
       >
         {label}

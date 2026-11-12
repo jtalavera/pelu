@@ -9,7 +9,9 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { goToCatalog } from "../fixtures/catalog";
+import { openNewFichaDialog, pickFichaClient, pickLineService } from "../fixtures/fichas";
+import { ensureCashSessionOpen, goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
 import { bookingAppointmentDialog, professionalFormDialog } from "../fixtures/ui";
 
 type ClientDto = { id: number; fullName: string };
@@ -24,18 +26,18 @@ test.describe("Issue #155 · Cambios varios", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);
-    await page.goto("/app/services");
+    await goToCatalog(page, "services");
     await page.locator("#services-list-filter").fill(seed.serviceFullName);
     const card = page.getByTestId(`svc-row-${seed.serviceId}`);
     await expect(card).toBeVisible({ timeout: 20_000 });
     await card.click();
     const dlg = page.getByRole("dialog", { name: "Edit service" });
     await dlg.getByRole("button", { name: "Save" }).click();
-    // Issue #157: the success message shows inside the edit form itself, which stays open.
-    await expect(dlg).toBeVisible();
+    // Catalog redesign: saving closes the form and a passing notice confirms it on the list.
     await expect(
-      dlg.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
+      page.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
     ).toBeVisible({ timeout: 10_000 });
+    await expect(dlg).toHaveCount(0);
   });
 
   test("AC1 · guardar una profesional existente muestra mensaje de éxito", async ({
@@ -52,19 +54,18 @@ test.describe("Issue #155 · Cambios varios", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app/professionals");
+    await goToCatalog(page, "professionals");
     await page.locator("#professionals-inline-search").fill(prof.fullName);
-    const row = page.locator("tr").filter({ hasText: prof.fullName }).first();
+    const row = page.locator('[data-testid^="prof-row-"]').filter({ hasText: prof.fullName }).first();
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.click();
     const dlg = professionalFormDialog(page);
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
-    await dlg.getByRole("button", { name: "Save schedule" }).click();
-    // Issue #157: the success message shows inside the edit form itself, which stays open.
-    await expect(dlg).toBeVisible();
+    await dlg.getByTestId("prof-save").click();
+    // Catalog redesign: saving closes the form and a passing notice confirms it on the list.
     await expect(
-      dlg.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
+      page.getByRole("alert").filter({ hasText: "Changes saved successfully." }),
     ).toBeVisible({ timeout: 10_000 });
+    await expect(dlg).toHaveCount(0);
   });
 
   // AC2 (the client-detail "×" close button) was reverted by issue #157 — see
@@ -94,7 +95,7 @@ test.describe("Issue #155 · Cambios varios", () => {
     expect(created.fullName).toBe(lower.toUpperCase());
   });
 
-  test("AC4 · el mensaje de éxito de la ficha desaparece al cambiar de pestaña y volver a Nueva ficha", async ({
+  test("AC4 · el aviso de éxito de la ficha es pasajero: no queda tras abrir otra vez el formulario", async ({
     page,
     request,
   }) => {
@@ -103,23 +104,18 @@ test.describe("Issue #155 · Cambios varios", () => {
     const seed = await seedCategoryServiceProfessional(request, token);
 
     await loginAsDemo(page);
-    await page.goto("/app/service-records");
-    await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 12));
-    await page.getByRole("button", { name: client.fullName }).click();
-    await page.getByRole("button", { name: "Add service" }).click();
-    await page.locator("#service-record-line-svc-0").fill(seed.serviceFullName.slice(0, 12));
-    await page.getByRole("button", { name: seed.serviceFullName, exact: false }).click();
-    await page.getByTestId("service-record-submit").click();
+    const dlg = await openNewFichaDialog(page);
+    await pickFichaClient(page, dlg, client.fullName);
+    await pickLineService(page, 0, seed.serviceFullName);
+    await dlg.getByTestId("service-record-submit").click();
 
-    const successAlert = page.getByText("Service record created successfully.", {
-      exact: false,
-    });
-    await expect(successAlert).toBeVisible({ timeout: 15_000 });
+    const toast = page.getByTestId("service-records-toast");
+    await expect(toast).toContainText("Record saved.", { timeout: 15_000 });
 
-    await page.getByRole("tab", { name: "History" }).click();
-    await expect(successAlert).not.toBeVisible();
-    await page.getByRole("tab", { name: "New record" }).click();
-    await expect(successAlert).not.toBeVisible();
+    // The toast clears itself (4 s) and a freshly opened form never carries a stale message.
+    await expect(toast).toHaveCount(0, { timeout: 10_000 });
+    await page.getByTestId("service-records-new").click();
+    await expect(page.getByText("Record saved.")).toHaveCount(0);
   });
 
   test("AC5 · el formulario de turno solo muestra clientes activos", async ({
@@ -143,7 +139,7 @@ test.describe("Issue #155 · Cambios varios", () => {
     await apiPostJson(request, token, `/api/clients/${inactive.id}/deactivate`, {});
 
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: "New appointment" }).first().click();
     const dlg = bookingAppointmentDialog(page);
     const cb = dlg.getByRole("combobox", { name: "Client", exact: true });
@@ -158,7 +154,7 @@ test.describe("Issue #155 · Cambios varios", () => {
     ).toHaveCount(0);
   });
 
-  test("AC6 · click en un turno del Panel principal abre su detalle en el Calendario", async ({
+  test("AC6 · click en un turno del Panel principal abre su detalle (en el mismo Inicio)", async ({
     page,
     request,
   }) => {
@@ -186,39 +182,43 @@ test.describe("Issue #155 · Cambios varios", () => {
     const row = page.getByRole("button", { name: new RegExp(client.fullName) });
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.click();
-    await expect(page).toHaveURL(/\/app\/calendar/);
+    // Since the Inicio redesign the detail opens right there, without going to the Calendar.
     await expect(page.getByRole("dialog", { name: "Appointment detail" })).toBeVisible({
       timeout: 15_000,
     });
+    await expect(page).toHaveURL(/\/app\/?$/);
   });
 
-  test("AC7 · checkbox Comprobante sin nominar deshabilita y restaura los campos de identificación", async ({
+  // Redesign: the "Unnamed invoice" checkbox is gone — an invoice with no client is "No name" by
+  // default and shows no identification fields; identifying a client shows them.
+  test("AC7 · 'Sin nombre' por defecto oculta los campos de identificación y al identificar un cliente se habilitan", async ({
     page,
   }) => {
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
 
     const nameInput = page.locator("#client-display-name");
     const typeSelect = page.locator("#client-identity-document-type");
     const numberInput = page.locator("#client-identity-document-number");
-    const checkbox = page.getByLabel("Unnamed invoice (no client identified)");
 
-    await expect(typeSelect).toHaveValue("RUC");
-    await expect(nameInput).toBeEnabled();
-    await expect(typeSelect).toBeEnabled();
+    await expect(page.getByTestId("billing-client-default")).toBeVisible();
+    await expect(nameInput).toHaveCount(0);
+    await expect(typeSelect).toHaveCount(0);
+    await expect(numberInput).toHaveCount(0);
 
-    await checkbox.check();
-    await expect(typeSelect).toHaveValue("INNOMINADO");
-    await expect(nameInput).toBeDisabled();
-    await expect(typeSelect).toBeDisabled();
-    await expect(numberInput).toBeDisabled();
-
-    await checkbox.uncheck();
+    const search = page.getByLabel("Search or select client");
+    await search.click();
+    await page.getByRole("button", { name: "Occasional client" }).click();
     await expect(typeSelect).toHaveValue("RUC");
     await expect(nameInput).toBeEnabled();
     await expect(typeSelect).toBeEnabled();
     await expect(numberInput).toBeEnabled();
+
+    // Clearing the search goes back to "No name" and hides the fields again.
+    await search.fill("");
+    await expect(page.getByTestId("billing-client-default")).toBeVisible();
+    await expect(nameInput).toHaveCount(0);
   });
 });

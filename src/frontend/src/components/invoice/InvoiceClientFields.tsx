@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Checkbox, Heading, Input, Label, Select, Text } from "@design-system";
+import { Checkbox, Input, Label, Select, Text } from "@design-system";
 import { ClientSearchField, type ClientSelection } from "../ClientSearchField";
 import { FieldValidationError } from "../FieldValidationError";
 import { IDENTITY_DOCUMENT_TYPE_OPTIONS } from "./invoiceFormShared";
@@ -89,10 +89,10 @@ export function InvoiceClientFields({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <Heading as="h3" className="text-base">
+    <div className="flex flex-col gap-3">
+      <h3 className="font-heading text-xs font-extrabold uppercase tracking-wider text-primary">
         {t("femme.billing.invoice.clientSection")}
-      </Heading>
+      </h3>
       <ClientSearchField
         id="billing-client-search"
         value={value.selection}
@@ -124,7 +124,7 @@ export function InvoiceClientFields({
           </Text>
         )}
       </div>
-      <div className="flex flex-col gap-4 border-t border-[rgb(var(--color-border))] pt-4">
+      <div className="flex flex-col gap-3 border-t border-line pt-3">
         <label
           htmlFor="client-unnamed-invoice"
           className="flex cursor-pointer items-center gap-2 text-sm font-medium"

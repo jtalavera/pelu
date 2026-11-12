@@ -11,6 +11,7 @@ import {
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
 import { setControlledInputValue } from "../fixtures/ui";
+import { goToBillingHome, goToCashHistory, openCashPanel } from "../fixtures/billing";
 
 test.describe.configure({ mode: "serial" });
 
@@ -97,7 +98,7 @@ async function seedProfessionalWithClosedTip(
         discountValue: null,
       },
     ],
-    payments: [{ method: "CASH", amount: 45_000 }],
+    payments: [{ method: "CASH", amount: 45_000 + tipAmount }],
     serviceRecordId: record.id,
     tipsAmount: tipAmount,
   });
@@ -122,10 +123,14 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 15_000 });
+    // Redesign: the live summary and the movements live in the cash register panel.
+    await openCashPanel(page);
 
-    // AC3: zero cash sales, zero movements -> live expected cash starts at 0.
+    // AC3: zero cash sales, zero movements -> live expected cash starts at 0. (The movements are one
+    // tap away inside the panel; the section stays open while the movement form is used.)
+    await page.getByTestId("cash-section-movements").click();
     await expect(page.getByText("No cash movements recorded yet.")).toBeVisible({
       timeout: 15_000,
     });
@@ -152,9 +157,9 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     // AC4: the movement appears live and expected cash increases by its amount (0 -> 20.000).
     await expect(page.getByText(ingresoReason)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Manual cash in")).toBeVisible();
-    await expect(page.getByText("Expected cash (live)")).toBeVisible();
+    await expect(page.getByText("Expected cash in the register")).toBeVisible();
     const expectedCash = page.getByTestId("cash-summary-expected-cash");
-    await expect(expectedCash).toHaveText("20.000", { timeout: 15_000 });
+    await expect(expectedCash).toHaveText("Gs. 20.000", { timeout: 15_000 });
 
     const egresoReason = `E2E egreso ${Date.now()}`;
     await page.getByRole("button", { name: "Cash out", exact: true }).click();
@@ -173,7 +178,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     // AC5: a cash-out movement decreases the live expected cash (20.000 -> 15.000).
     await expect(page.getByText(egresoReason)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Manual cash out")).toBeVisible();
-    await expect(expectedCash).toHaveText("15.000", { timeout: 15_000 });
+    await expect(expectedCash).toHaveText("Gs. 15.000", { timeout: 15_000 });
   });
 
   test("AC6+AC7 · el formulario de movimiento valida monto y motivo", async ({ page, request }) => {
@@ -184,8 +189,9 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await expect(page.getByText(/^Cash register is open$/)).toBeVisible({ timeout: 15_000 });
+    await openCashPanel(page);
     await page.getByRole("button", { name: "Register movement", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Register a cash movement" })).toBeVisible();
 
@@ -210,7 +216,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await expect(page.getByText(/^Cash register is closed$/)).toBeVisible({ timeout: 15_000 });
 
     // AC8: there's no way to open the manual-movement form when there is no open session.
@@ -227,7 +233,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     expect(body.error).toBe("CASH_SESSION_NOT_OPEN");
   });
 
-  test("AC10+AC11 · un retiro de propina afecta la caja solo si hay una abierta", async ({
+  test("AC10+AC11 · un retiro de propina se registra en la caja abierta; sin caja abierta, en la última cerrada como posterior al cierre", async ({
     request,
   }) => {
     const token = await loginAsDemoApi(request);
@@ -262,12 +268,13 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     const detailJsonAfterFirst = (await detailAfterFirst.json()) as {
       expectedCashAmount: number | string;
     };
-    // seedProfessionalWithClosedTip also issues a 45.000 CASH invoice (to close the ficha the tip
-    // lives on) against this same open session, so expected cash = 45.000 (sales) - 3.000 (retiro).
-    expect(Number(detailJsonAfterFirst.expectedCashAmount)).toBe(42_000);
+    // seedProfessionalWithClosedTip also issues a CASH invoice (to close the ficha the tip lives on)
+    // against this same open session: 45.000 invoiced + the 8.000 tip it is paid together with
+    // (issue #384), so expected cash = 53.000 (sales) - 3.000 (retiro).
+    expect(Number(detailJsonAfterFirst.expectedCashAmount)).toBe(50_000);
 
-    // AC11: closing the session, then withdrawing again, must NOT add another movement to it —
-    // Propinas itself keeps working unaffected (its own 2xx response is enough evidence of that).
+    // AC11: closing the session, then withdrawing again, records the withdrawal on that last closed
+    // register flagged "after close": it is listed, but never changes its closing figures.
     await closeCurrentSessionIfOpenApi(request, token);
     const secondWithdrawRes = await request.post(`${API_BASE}/api/propinas/withdrawals`, {
       headers: authHeaders(token),
@@ -279,8 +286,19 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
       `${API_BASE}/api/cash-sessions/${session.id}/movements`,
       { headers: { Authorization: `Bearer ${token}` } },
     );
-    const movementsAfterCloseJson = (await movementsAfterClose.json()) as unknown[];
-    expect(movementsAfterCloseJson.length).toBe(movements.length);
+    const movementsAfterCloseJson = (await movementsAfterClose.json()) as Array<{
+      type: string;
+      afterClose: boolean;
+    }>;
+    expect(movementsAfterCloseJson.length).toBe(movements.length + 1);
+    expect(movementsAfterCloseJson.filter((m) => m.afterClose)).toHaveLength(1);
+    const detailAfterClose = (await (
+      await request.get(`${API_BASE}/api/cash-sessions/${session.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).json()) as { expectedCashAmount: number | string };
+    // The closed register's expected cash is frozen: the after-close withdrawal does not change it.
+    expect(Number(detailAfterClose.expectedCashAmount)).toBe(50_000);
   });
 
   test("AC12+AC13 · el efectivo esperado al cerrar suma ventas y movimientos manuales y resta retiros de propina", async ({
@@ -322,10 +340,11 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
       data: { professionalId: professional.id, amount: 2_000 },
     });
 
-    // (50.000 + 45.000) ventas + 10.000 ingreso - 3.000 egreso - 2.000 retiro = 100.000
+    // (50.000 + 45.000 + 6.000 propina cobrada junto con la factura, issue #384) ventas
+    // + 10.000 ingreso - 3.000 egreso - 2.000 retiro = 106.000
     const closeRes = await request.post(`${API_BASE}/api/cash-sessions/close`, {
       headers: authHeaders(token),
-      data: { countedCashAmount: 100_000 },
+      data: { countedCashAmount: 106_000 },
     });
     expect(closeRes.ok(), await closeRes.text()).toBeTruthy();
     const closeJson = (await closeRes.json()) as {
@@ -335,7 +354,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
       movements: unknown[];
     };
     expect(closeJson.id).toBe(session.id);
-    expect(Number(closeJson.expectedCashAmount)).toBe(100_000);
+    expect(Number(closeJson.expectedCashAmount)).toBe(106_000);
     expect(Number(closeJson.cashDifference)).toBe(0);
     // Two manual movements (ingreso + egreso) plus the auto-linked tip-withdrawal cash-out.
     expect(closeJson.movements.length).toBe(3);
@@ -359,13 +378,13 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
 
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("button", { name: "Cash Sessions Log", exact: true }).click();
+    await goToCashHistory(page);
 
     // AC1: the just-closed session is the most recent row (sorted newest-opened-first).
-    const table = page.locator("table").filter({ hasText: "Opened at" });
-    const firstRow = table.locator("tbody tr").first();
+    const firstRow = page.locator('[data-testid^="cash-history-row-"]').first();
     await expect(firstRow).toBeVisible({ timeout: 15_000 });
-    await expect(firstRow.getByText("7.000")).toBeVisible();
+    // Expected cash = 12.000 opening + 7.000 manual cash in.
+    await expect(firstRow.getByText("19.000").first()).toBeVisible();
 
     // AC2: opening it shows the full breakdown, including the manual movement.
     await firstRow.click();
@@ -374,7 +393,7 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
     await expect(dialog.getByText(reason)).toBeVisible();
     await expect(dialog.getByText("Manual cash in")).toBeVisible();
     await expect(dialog.getByText("Expected cash (system)")).toBeVisible();
-    await expect(dialog.getByText("19.000")).toBeVisible();
+    await expect(dialog.getByText("19.000").first()).toBeVisible();
   });
 
   test("AC14 · la paginación del historial de cajas ofrece 10/25/50 filas por página", async ({
@@ -382,8 +401,8 @@ test.describe("Issue #259 · Historial de Cajas y Movimientos Manuales", () => {
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("button", { name: "Cash Sessions Log", exact: true }).click();
-    await expect(page.getByText("Cash register history")).toBeVisible({ timeout: 15_000 });
+    await goToCashHistory(page);
+    await expect(page.getByTestId("cash-history-list")).toBeVisible({ timeout: 15_000 });
 
     const pageSizeSelect = page.getByTestId("cash-history-pagination").getByLabel("Rows per page:");
     await expect(pageSizeSelect.locator("option")).toHaveCount(3);

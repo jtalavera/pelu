@@ -10,15 +10,16 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, goToInvoiceHistory, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine } from "../fixtures/invoice";
 import { bookingAppointmentDialog, professionalFormDialog } from "../fixtures/ui";
+import { openProfessionalSchedule } from "../fixtures/catalog";
 
 test.describe("HU-26 · Fixes varios UX general", () => {
   // Req 1: Calendar time picker shows 06:00–20:00
   test("HU-26 · 1 combobox de hora en nuevo turno muestra rango 06:00–20:00", async ({ page }) => {
     await loginAsDemo(page);
-    await page.goto("/app/calendar");
+    await page.goto("/app/calendar?view=week");
     await page.getByRole("button", { name: /New appointment/ }).first().click();
     const dlg = bookingAppointmentDialog(page);
     await expect(dlg).toBeVisible();
@@ -45,14 +46,16 @@ test.describe("HU-26 · Fixes varios UX general", () => {
     await page.getByRole("button", { name: "+ New professional" }).click();
     const dlg = professionalFormDialog(page);
     await dlg.getByLabel("Full name").fill(name);
-    await dlg.getByRole("button", { name: "Save and set schedule" }).click();
-    await dlg.getByTestId("prof-day-mon-active").check();
-    await expect(dlg.locator("#prof-1-start")).toHaveValue("09:00");
-    await expect(dlg.locator("#prof-1-end")).toHaveValue("19:00");
+    await openProfessionalSchedule(page);
+    // A new professional already works Monday to Saturday (09:00–18:00); marking Sunday uses the
+    // generic defaults.
+    await dlg.getByTestId("prof-day-sun-active").check();
+    await expect(dlg.locator("#prof-7-start")).toHaveValue("09:00");
+    await expect(dlg.locator("#prof-7-end")).toHaveValue("19:00");
   });
 
-  // Req 4–5: Services 3-dot menu replaces inline deactivate button
-  test("HU-26 · 4–5 fila de servicio tiene menú de 3 puntos con Editar detalle y Desactivar", async ({
+  // Req 4–5 (catalog redesign): the services list has a row switch instead of the 3-dot menu
+  test("HU-26 · 4–5 fila de servicio tiene interruptor de estado y se edita tocando la fila", async ({
     page,
     request,
   }) => {
@@ -68,21 +71,15 @@ test.describe("HU-26 · Fixes varios UX general", () => {
     const row = page.getByTestId(`svc-row-${seed.serviceId}`);
     await expect(row).toBeVisible({ timeout: 15_000 });
     // Service price in list must use dot separator with Gs. prefix, no decimals (seeded price = 50.000)
-    await expect(row.getByText("Gs. 50.000", { exact: true })).toBeVisible();
+    await expect(row).toContainText("Gs. 50.000");
 
-    // No standalone deactivate/activate button directly visible in the row actions area
-    await expect(
-      page.getByTestId(`svc-deactivate-${seed.serviceId}`),
-    ).not.toBeAttached();
+    // No standalone deactivate button, no 3-dot menu: the row switch is the control.
+    await expect(page.getByTestId(`svc-deactivate-${seed.serviceId}`)).not.toBeAttached();
+    await expect(page.getByTestId(`services-row-${seed.serviceId}-trigger`)).toHaveCount(0);
+    await expect(page.getByTestId(`svc-switch-${seed.serviceId}`)).toBeChecked();
 
-    // KebabMenu trigger must be present
-    const trigger = page.getByTestId(`services-row-${seed.serviceId}-trigger`);
-    await expect(trigger).toBeVisible();
-    await trigger.click();
-
-    // Menu items
-    await expect(page.getByRole("menuitem", { name: /^(Edit details|Editar detalle)$/ })).toBeVisible();
-    await expect(page.getByRole("menuitem", { name: /^(Deactivate|Desactivar)$/ })).toBeVisible();
+    await row.click();
+    await expect(page.getByRole("dialog", { name: "Edit service" })).toBeVisible();
   });
 
   // Req 8: Force refresh button in invoice history tab
@@ -91,8 +88,10 @@ test.describe("HU-26 · Fixes varios UX general", () => {
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/billing");
-    await page.getByRole("tab", { name: /^(History|Historial)$/ }).click();
-    await expect(page.getByRole("button", { name: /^(Refresh|Actualizar)$/ })).toBeVisible();
+    await goToInvoiceHistory(page);
+    // Redesign: the forced refresh lives in the history's "⋯" menu.
+    await page.getByTestId("invoice-history-report-button").click();
+    await expect(page.getByRole("menuitem", { name: /^(Refresh|Actualizar)$/ })).toBeVisible();
   });
 
   // Req 9: Page scrolls to top after saving an invoice
@@ -116,14 +115,15 @@ test.describe("HU-26 · Fixes varios UX general", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").fill(client.fullName.slice(0, 8));
     await page.getByRole("button", { name: client.fullName }).click();
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("5000");
     await expect(page.locator("#line-price-0")).toHaveValue("5.000");
-    await page.locator("#pay-amount-0").fill("5000");
+    await fillPaymentAmount(page, "5000");
+    await showPaymentAmounts(page);
     await expect(page.locator("#pay-amount-0")).toHaveValue("5.000");
 
     // Scroll down so the page is not at top before issuing the invoice

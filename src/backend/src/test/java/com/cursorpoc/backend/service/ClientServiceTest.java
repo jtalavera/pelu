@@ -8,11 +8,15 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Client;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.ServiceRecordStatus;
 import com.cursorpoc.backend.repository.ClientRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.ClientRequest;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
@@ -21,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -33,6 +38,8 @@ class ClientServiceTest {
 
   @Mock private ClientRepository clientRepository;
   @Mock private TenantRepository tenantRepository;
+  @Mock private ServiceRecordRepository serviceRecordRepository;
+  @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   @InjectMocks private ClientService clientService;
 
@@ -61,10 +68,6 @@ class ClientServiceTest {
 
   @Test
   void create_withNameOnly_succeeds() {
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response = clientService.create(1L, new ClientRequest("Ana García", null, null, null));
 
     assertThat(response.fullName()).isEqualTo("ANA GARCÍA");
@@ -77,10 +80,6 @@ class ClientServiceTest {
 
   @Test
   void create_trimsFullName() {
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response = clientService.create(1L, new ClientRequest("  Ana  ", null, null, null));
 
     assertThat(response.fullName()).isEqualTo("ANA");
@@ -88,10 +87,6 @@ class ClientServiceTest {
 
   @Test
   void create_withValidRuc_succeeds() {
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response =
         clientService.create(1L, new ClientRequest("Ana García", null, null, "80000005-6"));
 
@@ -136,10 +131,6 @@ class ClientServiceTest {
   /** SIFEN D205/iTiContRec: a client explicitly marked Persona Jurídica persists that value. */
   @Test
   void create_withRucAndPersonaJuridica_persistsTaxpayerType() {
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response =
         clientService.create(
             1L,
@@ -264,39 +255,28 @@ class ClientServiceTest {
   }
 
   @Test
-  void create_duplicatePhone_throwsConflict() {
+  void create_samePhoneAsAnotherClient_isAllowed() {
     Client existing = buildClient(2L, "Other", "0981000001", null, null);
     lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(existing));
 
-    assertThatThrownBy(
-            () -> clientService.create(1L, new ClientRequest("New", "0981000001", null, null)))
-        .isInstanceOf(ResponseStatusException.class)
-        .satisfies(
-            ex ->
-                assertThat(((ResponseStatusException) ex).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT));
+    var response = clientService.create(1L, new ClientRequest("New", "0981000001", null, null));
+
+    // The phone is not unique: several clients may share one number (a family, a shared line).
+    assertThat(response.phone()).isEqualTo("0981000001");
   }
 
   @Test
-  void create_duplicatePhone_differentFormatting_throwsConflict() {
+  void create_samePhoneWrittenDifferently_isAllowed() {
     Client existing = buildClient(2L, "Other", "0981000001", null, null);
     lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(existing));
 
-    assertThatThrownBy(
-            () -> clientService.create(1L, new ClientRequest("New", "(0981) 000-001", null, null)))
-        .isInstanceOf(ResponseStatusException.class)
-        .satisfies(
-            ex ->
-                assertThat(((ResponseStatusException) ex).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT));
+    var response = clientService.create(1L, new ClientRequest("New", "(0981) 000-001", null, null));
+
+    assertThat(response.phone()).isEqualTo("(0981) 000-001");
   }
 
   @Test
   void create_sameEmailAsAnotherClient_succeeds() {
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response = clientService.create(1L, new ClientRequest("New", null, "a@b.com", null));
 
     assertThat(response.email()).isEqualTo("a@b.com");
@@ -308,9 +288,6 @@ class ClientServiceTest {
     Client c = buildClient(5L, "Ana", null, "old@b.com", null);
     lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
     lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(c));
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
 
     var response =
         clientService.update(1L, 5L, new ClientRequest("Ana", null, "taken@b.com", null));
@@ -319,28 +296,19 @@ class ClientServiceTest {
   }
 
   @Test
-  void create_duplicateRuc_throwsConflict() {
+  void create_sameRucAsAnotherClient_isAllowed() {
     Client existing = buildClient(2L, "Other", null, null, "80000005-6");
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(1L, "80000005-6"))
-        .thenReturn(Optional.of(existing));
+    lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(existing));
 
-    assertThatThrownBy(
-            () -> clientService.create(1L, new ClientRequest("New", null, null, "80000005-6")))
-        .isInstanceOf(ResponseStatusException.class)
-        .satisfies(
-            ex ->
-                assertThat(((ResponseStatusException) ex).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT));
+    var response = clientService.create(1L, new ClientRequest("New", null, null, "80000005-6"));
+
+    // The RUC is not unique: several clients may invoice with the same one (e.g. a parent's).
+    assertThat(response.ruc()).isEqualTo("80000005-6");
   }
 
   @Test
   void create_emptyPhoneAndEmail_treatedAsNull_noUniquenessCheck() {
     // blank strings → null → uniqueness not checked
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     var response = clientService.create(1L, new ClientRequest("Maria", "  ", " ", " "));
     assertThat(response.phone()).isNull();
     assertThat(response.email()).isNull();
@@ -439,9 +407,6 @@ class ClientServiceTest {
     Client c = buildClient(5L, "Old Name", "0981000000", null, null);
     lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
     lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(c));
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
 
     var response =
         clientService.update(1L, 5L, new ClientRequest("New Name", "0981999999", null, null));
@@ -453,29 +418,21 @@ class ClientServiceTest {
   void update_samePhone_doesNotThrowDuplicate() {
     Client c = buildClient(5L, "Ana", "0981000001", null, null);
     lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
-    lenient()
-        .when(clientRepository.findByTenantIdAndRuc(any(), any()))
-        .thenReturn(Optional.empty());
-
     // same phone → no conflict
     var response = clientService.update(1L, 5L, new ClientRequest("Ana", "0981000001", null, null));
     assertThat(response.phone()).isEqualTo("0981000001");
   }
 
   @Test
-  void update_duplicatePhone_throwsConflict() {
+  void update_toAPhoneOfAnotherClient_isAllowed() {
     Client c = buildClient(5L, "Ana", "0981000001", null, null);
     Client other = buildClient(6L, "Other", "0981999999", null, null);
     lenient().when(clientRepository.findByIdAndTenant_Id(5L, 1L)).thenReturn(Optional.of(c));
     lenient().when(clientRepository.findByTenant_Id(1L)).thenReturn(List.of(c, other));
 
-    assertThatThrownBy(
-            () -> clientService.update(1L, 5L, new ClientRequest("Ana", "0981999999", null, null)))
-        .isInstanceOf(ResponseStatusException.class)
-        .satisfies(
-            ex ->
-                assertThat(((ResponseStatusException) ex).getStatusCode())
-                    .isEqualTo(HttpStatus.CONFLICT));
+    var response = clientService.update(1L, 5L, new ClientRequest("Ana", "0981999999", null, null));
+
+    assertThat(response.phone()).isEqualTo("0981999999");
   }
 
   @Test
@@ -560,5 +517,101 @@ class ClientServiceTest {
     c.setActive(true);
     c.setVisitCount(0);
     return c;
+  }
+
+  private static ClientRequest withExtras(
+      Integer day, Integer month, Integer year, String channel, String other) {
+    return new ClientRequest(
+        "Ana", null, null, null, null, null, null, null, null, null, null, null, day, month, year,
+        channel, other);
+  }
+
+  @Test
+  void create_storesBirthdayAndAcquisitionChannel() {
+    var response = clientService.create(1L, withExtras(29, 2, null, "OTRO", "  Feria  "));
+    assertThat(response.birthdayDay()).isEqualTo(29);
+    assertThat(response.birthdayMonth()).isEqualTo(2);
+    assertThat(response.birthdayYear()).isNull();
+    assertThat(response.acquisitionChannel()).isEqualTo("OTRO");
+    assertThat(response.acquisitionChannelOther()).isEqualTo("Feria");
+  }
+
+  @Test
+  void create_dropsTheDetailUnlessChannelIsOtro() {
+    var response = clientService.create(1L, withExtras(null, null, null, "INSTAGRAM", "ignored"));
+    assertThat(response.acquisitionChannelOther()).isNull();
+  }
+
+  @Test
+  void create_rejectsInvalidBirthdayAndChannel() {
+    assertThatThrownBy(() -> clientService.create(1L, withExtras(31, 4, null, null, null)))
+        .hasMessageContaining("INVALID_BIRTHDAY");
+    assertThatThrownBy(() -> clientService.create(1L, withExtras(15, null, null, null, null)))
+        .hasMessageContaining("INVALID_BIRTHDAY");
+    assertThatThrownBy(() -> clientService.create(1L, withExtras(1, 1, 3000, null, null)))
+        .hasMessageContaining("INVALID_BIRTHDAY");
+    assertThatThrownBy(() -> clientService.create(1L, withExtras(null, null, null, "TV", null)))
+        .hasMessageContaining("INVALID_ACQUISITION_CHANNEL");
+    assertThatThrownBy(
+            () -> clientService.create(1L, withExtras(null, null, null, "OTRO", "x".repeat(101))))
+        .hasMessageContaining("ACQUISITION_CHANNEL_OTHER_TOO_LONG");
+  }
+
+  @Test
+  void visitsAreCountedFromClosedServiceRecords() {
+    Client c = new Client();
+    c.setId(7L);
+    c.setFullName("ANA");
+    c.setActive(true);
+    c.setVisitCount(0); // legacy column, never maintained
+    when(clientRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(c));
+    Instant last = Instant.parse("2026-10-20T15:00:00Z");
+    when(serviceRecordRepository.countByClientIds(1L, ServiceRecordStatus.CLOSED, List.of(7L)))
+        .thenReturn(List.<Object[]>of(new Object[] {7L, 3L, last}));
+
+    var res = clientService.getById(1L, 7L);
+    assertThat(res.visitCount()).isEqualTo(3);
+    assertThat(res.lastVisitAt()).isEqualTo("2026-10-20T15:00:00Z");
+  }
+
+  @Test
+  void searchCountsVisitsForEveryClientInOneQuery() {
+    Client a = new Client();
+    a.setId(1L);
+    a.setFullName("ANA");
+    Client b = new Client();
+    b.setId(2L);
+    b.setFullName("BEA");
+    when(clientRepository.findByTenantFilteredPaged(
+            eq(1L), any(), any(), any(), any(), any(Pageable.class)))
+        .thenReturn(new PageImpl<>(List.of(a, b)));
+    when(serviceRecordRepository.countByClientIds(
+            eq(1L), eq(ServiceRecordStatus.CLOSED), eq(List.of(1L, 2L))))
+        .thenReturn(
+            List.<Object[]>of(new Object[] {1L, 5L, Instant.parse("2026-10-01T12:00:00Z")}));
+
+    var rows = clientService.search(1L, null, null, null, null);
+
+    assertThat(rows).extracting(r -> r.visitCount()).containsExactly(5, 0);
+    assertThat(rows.get(1).lastVisitAt()).isNull();
+  }
+
+  @Test
+  void newThisMonthFiltersByCreationSinceTheFirstOfTheMonth() {
+    when(clientRepository.findByTenantFilteredPaged(
+            eq(1L), any(), any(), any(), any(), any(Pageable.class)))
+        .thenReturn(new PageImpl<>(List.of()));
+
+    clientService.search(1L, null, null, null, true);
+    clientService.search(1L, null, null, null, null);
+
+    var captor = org.mockito.ArgumentCaptor.forClass(Instant.class);
+    org.mockito.Mockito.verify(clientRepository, org.mockito.Mockito.times(2))
+        .findByTenantFilteredPaged(
+            eq(1L), any(), any(), any(), captor.capture(), any(Pageable.class));
+    var zone = java.time.ZoneId.of("America/Asuncion");
+    Instant firstOfMonth =
+        java.time.LocalDate.now(zone).withDayOfMonth(1).atStartOfDay(zone).toInstant();
+    assertThat(captor.getAllValues()).containsExactly(firstOfMonth, null);
   }
 }

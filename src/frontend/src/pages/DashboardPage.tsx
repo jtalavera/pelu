@@ -1,19 +1,24 @@
+import { TodayEmptyState } from "../components/TodayEmptyState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Button, Spinner, Text } from "@design-system";
+import { Alert, Button, Card, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
-import { listAppointments, type Appointment } from "../api/appointments";
-import { listServiceRecordsPaged, type ServiceRecordListItem } from "../api/serviceRecords";
+import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
+import { SectionTitle } from "../components/SectionTitle";
 import { ServiceRecordDetailModal } from "../components/ServiceRecordDetailModal";
-import { cardStyle } from "../components/charts/chartTheme";
+import { listAppointments, type Appointment } from "../api/appointments";
+import { AppointmentDetailModal } from "../components/AppointmentDetailModal";
+import { AppointmentFormModal } from "../components/AppointmentFormModal";
+import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
+import { TodayServiceRecords } from "../components/TodayServiceRecords";
+import { NewServiceRecordModal } from "../components/NewServiceRecordModal";
+import { BirthdaysCard } from "../components/BirthdaysCard";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
-import { StatusBadge } from "../components/StatusBadge";
 import { getDateLocale } from "../i18n/dateLocale";
-import { formatGuaraniesGs, formatAmountDecimal } from "../lib/formatMoney";
-import { formatParaguayDateTime } from "../lib/paraguayDateTime";
+import { formatGuaraniesGs } from "../lib/formatMoney";
 import { filterByListQuery } from "../util/matchesListQuery";
 import { useTour } from "../tour/useTour";
 import { dashboardSteps } from "../tour/steps/dashboard";
@@ -84,11 +89,6 @@ type DashboardResponse = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtCount(n: number, numberLocale: string): string {
-  if (!Number.isFinite(n)) return "—";
-  return new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 }).format(n);
-}
-
 function toLocalDateStr(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -101,40 +101,16 @@ function fmtTime(iso: string, locale: string): string {
   });
 }
 
-const AVATAR_PALETTE = [
-  { bg: "var(--color-rose-md)",  color: "var(--color-rose-dk)"  },
-  { bg: "var(--color-mauve-md)", color: "var(--color-mauve-dk)" },
-  { bg: "var(--color-stone-md)", color: "var(--color-ink-2)"    },
-];
-
-function hashStr(s: string): number {
-  let h = 0;
-  for (const c of s) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
-  return h;
-}
-
-function avatarColor(name: string) {
-  return AVATAR_PALETTE[hashStr(name) % AVATAR_PALETTE.length];
-}
-
-function getInitials(name: string): string {
-  const p = name.trim().split(/\s+/);
-  return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : name.slice(0, 2).toUpperCase();
-}
-
-function buildCalGrid(year: number, month: number): { day: number; current: boolean }[] {
-  const first = new Date(year, month, 1);
-  const last  = new Date(year, month + 1, 0);
-  const cells: { day: number; current: boolean }[] = [];
-  const prevLast = new Date(year, month, 0).getDate();
-  for (let i = first.getDay() - 1; i >= 0; i--) cells.push({ day: prevLast - i, current: false });
-  for (let d = 1; d <= last.getDate(); d++) cells.push({ day: d, current: true });
-  const rem = cells.length % 7;
-  if (rem > 0) for (let d = 1; d <= 7 - rem; d++) cells.push({ day: d, current: false });
-  return cells;
-}
-
 const POLL_MS = 60_000;
+
+type MoreKey = "occupancy" | "birthdays" | "inactive";
+
+const APPT_STATUS_TEXT: Record<string, string> = {
+  PENDING: "text-warning",
+  CONFIRMED: "text-success",
+  IN_PROGRESS: "text-primary",
+  COMPLETED: "text-primary",
+};
 
 // ─── Shared card style ────────────────────────────────────────────────────────
 // `cardStyle` itself now lives in `components/charts/chartTheme.ts` (single source of truth,
@@ -155,111 +131,11 @@ const inactiveClientsTdStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function MetricCard({
-  iconBg,
-  icon,
-  value,
-  label,
-  delta,
-  deltaPositive = false,
-}: {
-  iconBg: string;
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-  delta?: string;
-  deltaPositive?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        background: "var(--color-white)",
-        borderRadius: "var(--radius-lg)",
-        border: "var(--border-default)",
-        padding: 14,
-      }}
-    >
-      <div
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: "var(--radius-md)",
-          background: iconBg,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: 10,
-        }}
-      >
-        {icon}
-      </div>
-      <div style={{ fontSize: 20, fontWeight: 500, color: "var(--color-ink)", lineHeight: 1 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 3 }}>{label}</div>
-      {delta && (
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 3,
-            padding: "2px 7px",
-            borderRadius: "var(--radius-pill)",
-            fontSize: 10,
-            fontWeight: 500,
-            marginTop: 6,
-            background: deltaPositive ? "var(--color-success-lt)" : "var(--color-stone)",
-            color: deltaPositive ? "var(--color-success)" : "var(--color-ink-3)",
-          }}
-        >
-          {delta}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── SVG Icons ────────────────────────────────────────────────────────────────
-
-const MoneyIcon = ({ c }: { c: string }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="12" y1="1" x2="12" y2="23" />
-    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-  </svg>
-);
-
-const CalIcon = ({ c }: { c: string }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="4" width="18" height="18" rx="2" />
-    <line x1="16" y1="2" x2="16" y2="6" />
-    <line x1="8" y1="2" x2="8" y2="6" />
-    <line x1="3" y1="10" x2="21" y2="10" />
-  </svg>
-);
-
-const TrendIcon = ({ c }: { c: string }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-    <polyline points="17 6 23 6 23 12" />
-  </svg>
-);
-
-const UsersIcon = ({ c }: { c: string }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { t, i18n } = useTranslation();
-  const { me } = useMe();
+  const { me, loading: meLoading } = useMe();
   const navigate = useNavigate();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
   const tourRole =
@@ -268,18 +144,33 @@ export default function DashboardPage() {
       : me?.role === "PROFESSIONAL"
         ? "PROFESSIONAL"
         : "ADMIN";
-  useTour("dashboard", dashboardSteps, tourRole, guidedTourEnabled);
 
   const [data, setData]               = useState<DashboardResponse | null>(null);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
   const [todayAppts, setTodayAppts]   = useState<Appointment[]>([]);
-  const [todayServiceRecords, setTodayServiceRecords] = useState<ServiceRecordListItem[]>([]);
-  const [selectedServiceRecordId, setSelectedServiceRecordId] = useState<number | null>(null);
-  const [calMonth, setCalMonth]       = useState(() => new Date());
   const [alertDismissed, setAlertDismissed] = useState(false);
+  const [openMore, setOpenMore] = useState<MoreKey | null>(null);
+  const [birthdaysCount, setBirthdaysCount] = useState<number | null>(0);
+  const [openRecordId, setOpenRecordId] = useState<number | null>(null);
+  const [newApptOpen, setNewApptOpen] = useState(false);
+  const [detailAppt, setDetailAppt] = useState<Appointment | null>(null);
+  const [viewInvoiceId, setViewInvoiceId] = useState<number | null>(null);
+  const [fichasKey, setFichasKey] = useState(0);
+  const [newRecordOpen, setNewRecordOpen] = useState(false);
   const [now, setNow]                 = useState(() => new Date());
   const [apptListQuery, setApptListQuery] = useState("");
+  const [chargedOpen, setChargedOpen] = useState(false);
+  // First-load gates. Every block of the page (summary, agenda, fichas, birthdays, the user's name)
+  // is fetched on its own and in parallel; the page is shown once, when all of them have answered,
+  // instead of the blocks popping in one after the other ("0 turnos hoy" first, the agenda later).
+  const [apptsLoaded, setApptsLoaded] = useState(false);
+  const [fichasLoaded, setFichasLoaded] = useState(false);
+  const [birthdaysLoaded, setBirthdaysLoaded] = useState(false);
+  const failed = !loading && (error !== null || data === null);
+  const ready = !failed && !loading && !meLoading && apptsLoaded && fichasLoaded && birthdaysLoaded;
+  // The guided tour points at elements of the page: start it only once they are on screen.
+  useTour("dashboard", dashboardSteps, tourRole, guidedTourEnabled && ready);
 
   const todayStr = useMemo(() => toLocalDateStr(now), [now]);
 
@@ -318,48 +209,24 @@ export default function DashboardPage() {
   }, []);
 
   // ── Today's appointments (for list + occupancy) ───────────────────────────
-  useEffect(() => {
+  const refreshAppointments = useCallback(() => {
     listAppointments(todayRangeIso.from, todayRangeIso.to)
-      .then(setTodayAppts)
-      .catch(() => setTodayAppts([]));
+      .then((list) => {
+        setTodayAppts(list);
+        setFichasKey((k) => k + 1);
+      })
+      .catch(() => setTodayAppts([]))
+      .finally(() => setApptsLoaded(true));
   }, [todayRangeIso.from, todayRangeIso.to]);
-
-  // ── Today's fichas de servicio (any status), newest first ─────────────────
-  const loadTodayServiceRecords = useCallback(() => {
-    listServiceRecordsPaged({ from: todayRangeIso.from, to: todayRangeIso.to, size: 100 })
-      .then((page) => setTodayServiceRecords(Array.isArray(page?.content) ? page.content : []))
-      .catch(() => setTodayServiceRecords([]));
-  }, [todayRangeIso.from, todayRangeIso.to]);
-
+  // Keep the open detail dialog in sync with the refreshed list (ficha created / assigned, polling).
   useEffect(() => {
-    loadTodayServiceRecords();
-    const id = window.setInterval(loadTodayServiceRecords, POLL_MS);
+    setDetailAppt((prev) => (prev ? (todayAppts.find((a) => a.id === prev.id) ?? prev) : prev));
+  }, [todayAppts]);
+  useEffect(() => {
+    refreshAppointments();
+    const id = window.setInterval(refreshAppointments, POLL_MS);
     return () => window.clearInterval(id);
-  }, [loadTodayServiceRecords]);
-
-  // Grouped by status (Open, Closed, Voided), newest first within each group, shown in a grid
-  // capped at 12 with a "Más" button that reveals more of the already-fetched records in place.
-  const SERVICE_RECORD_STATUS_RANK: Record<string, number> = { OPEN: 0, CLOSED: 1, VOIDED: 2 };
-  const DASHBOARD_SERVICE_RECORDS_CAP = 12;
-  const [visibleServiceRecordCount, setVisibleServiceRecordCount] = useState(
-    DASHBOARD_SERVICE_RECORDS_CAP,
-  );
-  useEffect(() => {
-    setVisibleServiceRecordCount(DASHBOARD_SERVICE_RECORDS_CAP);
-  }, [todayRangeIso.from]);
-  const sortedTodayServiceRecords = useMemo(() => {
-    return [...todayServiceRecords].sort((a, b) => {
-      const rankDiff =
-        (SERVICE_RECORD_STATUS_RANK[a.status] ?? 99) - (SERVICE_RECORD_STATUS_RANK[b.status] ?? 99);
-      if (rankDiff !== 0) return rankDiff;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-  }, [todayServiceRecords]);
-  const visibleTodayServiceRecords = sortedTodayServiceRecords.slice(
-    0,
-    visibleServiceRecordCount,
-  );
-  const hasMoreTodayServiceRecords = sortedTodayServiceRecords.length > visibleServiceRecordCount;
+  }, [refreshAppointments]);
 
   // ── Occupancy by professional ─────────────────────────────────────────────
   const occupancy = useMemo(() => {
@@ -390,31 +257,85 @@ export default function DashboardPage() {
     [todayAppts, apptListQuery],
   );
 
-  // ── Calendar helpers ──────────────────────────────────────────────────────
-  const calYear     = calMonth.getFullYear();
-  const calMonthIdx = calMonth.getMonth();
-  const calCells    = useMemo(() => buildCalGrid(calYear, calMonthIdx), [calYear, calMonthIdx]);
-  const todayDay    = now.getDate();
-  const todayMonth  = now.getMonth();
-  const todayYear   = now.getFullYear();
-
   const locale = getDateLocale(i18n);
-  const numberLocale = locale.startsWith("es") ? "es-PY" : "en-US";
 
-  const monthLabel = new Intl.DateTimeFormat(locale, {
-    month: "long",
-    year: "numeric",
-  }).format(calMonth);
+  // «Cobrado» = completed with an issued comprobante. Those wait folded; everything else (still to
+  // attend, or completed but not charged yet) stays on view.
+  const isChargedAppt = (a: Appointment) => a.status === "COMPLETED" && a.invoiceId != null;
+  const pendingAppts = visibleTodayAppts.filter((a) => !isChargedAppt(a));
+  const chargedAppts = visibleTodayAppts.filter(isChargedAppt);
+  const searchingAppts = apptListQuery.trim() !== "";
+  const chargedShown = chargedOpen || (searchingAppts && chargedAppts.length > 0);
 
-  const DOW = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) =>
-        new Intl.DateTimeFormat(locale, { weekday: "narrow" }).format(
-          new Date(2024, 0, 7 + i),
-        ),
-      ),
-    [locale],
-  );
+  function renderApptRow(appt: Appointment, charged: boolean) {
+    const goToApptDetail = () => setDetailAppt(appt);
+    return (
+      <li
+        key={appt.id}
+        data-testid="dashboard-appointment-row"
+        className={`grid grid-cols-[44px_minmax(0,1fr)] items-center gap-x-2.5 gap-y-0.5 border-t border-line px-1 py-3 first:border-t-0 sm:grid-cols-[52px_minmax(0,1fr)_auto] sm:gap-x-3 sm:px-3 ${charged ? "opacity-80" : ""}`}
+      >
+        <span className="col-start-1 row-span-2 row-start-1 font-heading text-[17px] font-extrabold tabular-nums text-ink">
+          {fmtTime(appt.startAt, locale)}
+        </span>
+        <button
+          type="button"
+          aria-label={t("femme.dashboard.openAppointmentDetail", {
+            client: appt.clientName ?? t("femme.calendar.detail.occasionalClient"),
+          })}
+          onClick={goToApptDetail}
+          className="col-start-2 row-start-1 min-w-0 self-end break-words text-left font-semibold text-ink"
+        >
+          {appt.clientName ?? t("femme.calendar.detail.occasionalClient")}
+          {appt.status === "IN_PROGRESS" && (
+            <span className="ml-1.5 whitespace-nowrap text-[11px] font-extrabold uppercase tracking-wider text-primary">
+              · {t("femme.dashboard.home.nowTag")}
+            </span>
+          )}
+          {appt.status === "COMPLETED" ? (
+            <span
+              data-testid={charged ? "dashboard-appointment-charged-tag" : "dashboard-appointment-uncharged-tag"}
+              className={`ml-1.5 whitespace-nowrap rounded-full px-2 py-px text-[11px] font-extrabold ${
+                charged ? "bg-success-lt text-success" : "bg-warning-lt text-warning"
+              }`}
+            >
+              {charged
+                ? `✓ ${t("femme.calendar.badge.charged")}`
+                : `✓ ${t("femme.calendar.badge.completed")} · ${t("femme.dashboard.home.unchargedTag")}`}
+            </span>
+          ) : null}
+        </button>
+        <div className="col-start-2 row-start-2 min-w-0 self-start break-words text-sm text-ink-3">
+          <span className={`font-semibold ${APPT_STATUS_TEXT[appt.status] ?? "text-ink-3"}`}>
+            {t(`femme.status.${appt.status}`, { defaultValue: appt.status })}
+          </span>{" "}
+          · {appt.serviceName} · {appt.professionalName}
+        </div>
+        <div className="col-start-2 row-start-3 mt-2 sm:col-start-3 sm:row-span-2 sm:row-start-1 sm:mt-0">
+          {!appt.serviceRecordId && appt.invoiceId != null ? (
+            // Charged with no ficha (e.g. occasional client): the comprobante is the only link.
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="min-h-11 w-full whitespace-nowrap px-3"
+              data-testid="dashboard-appointment-invoice"
+              onClick={() => setViewInvoiceId(appt.invoiceId ?? null)}
+            >
+              {t("femme.calendar.action.viewInvoice")}
+            </Button>
+          ) : null}
+          <AppointmentFichaAction
+            appt={appt}
+            testIdPrefix="dashboard-appointment-ficha"
+            className="w-full whitespace-nowrap px-3"
+            onOpenRecord={setOpenRecordId}
+            onChanged={refreshAppointments}
+          />
+        </div>
+      </li>
+    );
+  }
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   const hour = now.getHours();
@@ -438,10 +359,128 @@ export default function DashboardPage() {
     ? (data?.fiscalAlerts.find((a) => a.severity !== "blocking") ?? null)
     : null;
 
-  // ── Loading / error states ────────────────────────────────────────────────
-  if (loading) {
-    return (
+  // The blocks below are always mounted (hidden until `ready`) so that all of their requests start
+  // together; until the summary arrives they read neutral defaults that are never seen.
+  const a = data?.appointmentsToday ?? { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 };
+  const inactiveClients = Array.isArray(data?.inactiveClients) ? data.inactiveClients : [];
+  // Defensive fallback only for a stale frontend build talking to a newer/older backend
+  // (see auto-reload-on-stale-build) — the real value always comes from the server response,
+  // never hardcoded as the source of truth.
+  const inactiveClientsThresholdDays = data?.inactiveClientsThresholdDays ?? 60;
+
+  const occupancyOpenKey = openMore;
+  const moreSections: Array<{ key: MoreKey; label: string; count: number | null; body: React.ReactNode }> = [
+    {
+      key: "occupancy",
+      label: t("femme.dashboard.home.moreOccupancy"),
+      count: null,
+      body: (
+        <div data-tour="dashboard-occupancy" className="flex flex-col py-1">
+          {occupancy.length === 0 ? (
+            <div className="py-2 text-sm text-ink-3">{t("femme.dashboard.noAppts")}</div>
+          ) : (
+            occupancy.map((prof) => (
+              <div key={prof.id} className="flex min-h-11 items-center gap-3 border-t border-line first:border-t-0">
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{prof.name}</span>
+                <span className="text-xs text-ink-3">
+                  {prof.count} {t("femme.dashboard.occupancyUnit")}
+                </span>
+                <span className="h-2 w-24 shrink-0 rounded bg-line">
+                  <span
+                    className="block h-full rounded bg-primary"
+                    style={{ width: `${(prof.count / maxOccupancy) * 100}%` }}
+                  />
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "birthdays",
+      label: t("femme.dashboard.home.moreBirthdays"),
+      count: birthdaysCount,
+      body: null, // rendered below (always mounted so the count is known while collapsed)
+    },
+    {
+      key: "inactive",
+      label: t("femme.dashboard.home.moreInactive"),
+      count: inactiveClients.length,
+      body: (
+        <div data-testid="dashboard-inactive-clients">
+          <div className="pb-1 text-xs text-ink-3">
+            {t("femme.dashboard.inactiveClientsSubtitle", { days: inactiveClientsThresholdDays })}
+          </div>
+          {inactiveClients.length === 0 ? (
+            <div className="py-2 text-sm text-ink-3">{t("femme.dashboard.inactiveClientsEmpty")}</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th style={inactiveClientsThStyle}>{t("femme.dashboard.inactiveClientsColClient")}</th>
+                    <th style={inactiveClientsThStyle}>{t("femme.dashboard.inactiveClientsColPhone")}</th>
+                    <th style={inactiveClientsThStyle}>{t("femme.dashboard.inactiveClientsColInactivity")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inactiveClients.map((c) => {
+                    const goToClientDetail = () => navigate(`/app/clients/${c.clientId}`);
+                    return (
+                      <tr
+                        key={c.clientId}
+                        data-testid="dashboard-inactive-client-row"
+                        role="button"
+                        tabIndex={0}
+                        onClick={goToClientDetail}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            goToClientDetail();
+                          }
+                        }}
+                        style={{ cursor: "pointer", borderBottom: "0.5px solid var(--color-stone)" }}
+                      >
+                        <td style={inactiveClientsTdStyle}>{c.fullName}</td>
+                        <td style={inactiveClientsTdStyle}>{c.phone ?? "—"}</td>
+                        <td style={inactiveClientsTdStyle}>
+                          {t("femme.dashboard.inactiveClientsDaysValue", { days: c.daysSinceLastVisit })}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {inactiveClients.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              data-testid="dashboard-inactive-clients-view-all"
+              onClick={() => navigate("/app/inactive-clients")}
+            >
+              {t("femme.dashboard.inactiveClientsViewAll")}
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <>
+    {failed ? (
+      <Alert variant="destructive" title={t("femme.dashboard.error")}>
+        {error}
+      </Alert>
+    ) : null}
+    {!ready && !failed ? (
       <div
+        data-testid="dashboard-loading"
         style={{
           display: "flex",
           minHeight: "40vh",
@@ -453,174 +492,95 @@ export default function DashboardPage() {
         <Spinner size="lg" />
         <Text>{t("femme.dashboard.loading")}</Text>
       </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <Alert variant="destructive" title={t("femme.dashboard.error")}>
-        {error}
-      </Alert>
-    );
-  }
-
-  const a = data.appointmentsToday;
-  const inactiveClients = Array.isArray(data.inactiveClients) ? data.inactiveClients : [];
-  // Defensive fallback only for a stale frontend build talking to a newer/older backend
-  // (see auto-reload-on-stale-build) — the real value always comes from the server response,
-  // never hardcoded as the source of truth.
-  const inactiveClientsThresholdDays = data.inactiveClientsThresholdDays ?? 60;
-
-  return (
-    <div>
+    ) : null}
+    <div hidden={!ready}>
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       {/* ── 1. PAGE HEADER ── */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          marginBottom: 20,
-        }}
-      >
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div data-tour="dashboard-greeting">
-          <div style={{ fontSize: 16, fontWeight: 500, color: "var(--color-ink)" }}>
+          <h1 className="font-heading text-2xl font-extrabold text-ink">
             {t(`femme.dashboard.${greetingKey}`)}
             {userName ? `, ${userName}` : ""}
-          </div>
-          <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
+          </h1>
+          <div className="text-sm text-ink-3">
             {dateLabel} · {timeLabel}
           </div>
         </div>
-
-        <button
-          data-tour="dashboard-new-appointment"
-          type="button"
-          onClick={() => navigate("/app/calendar")}
-          style={{
-            background: "var(--color-rose)",
-            color: "var(--color-on-primary)",
-            border: "none",
-            borderRadius: "var(--radius-md)",
-            padding: "8px 16px",
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-          }}
-        >
-          {t("femme.dashboard.newAppointment")}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            data-tour="dashboard-new-appointment"
+            type="button"
+            variant="secondary"
+            className="min-h-11"
+            onClick={() => setNewApptOpen(true)}
+          >
+            {t("femme.dashboard.newAppointment")}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-11"
+            data-testid="dashboard-new-service-record"
+            onClick={() => setNewRecordOpen(true)}
+          >
+            {t("femme.dashboard.newServiceRecord")}
+          </Button>
+        </div>
       </div>
 
-      {/* ── 2. FISCAL ALERT ── */}
+      {/* ── 2. FISCAL ALERT (one line) ── */}
       {fiscalAlert && (
         <div
-          style={{
-            background: "var(--color-warning-lt)",
-            borderRadius: "var(--radius-md)",
-            padding: "10px 14px",
-            marginBottom: 16,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
+          role="status"
+          className="flex items-center gap-2 rounded-card bg-warning-lt py-1 pl-4 pr-1 text-sm font-semibold text-warning"
         >
-          <div
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "var(--color-warning)",
-              flexShrink: 0,
-            }}
-          />
-          <span style={{ flex: 1, fontSize: 12, color: "var(--color-warning)" }}>
-            {t(`femme.dashboard.alerts.${fiscalAlert.messageKey}`, {
-              defaultValue: fiscalAlert.message,
-            })}
+          <span className="min-w-0 flex-1">
+            {t(`femme.dashboard.alerts.${fiscalAlert.messageKey}`, { defaultValue: fiscalAlert.message })}
           </span>
           <button
             type="button"
             aria-label={t("femme.dashboard.fiscalAlertDismiss")}
             onClick={() => setAlertDismissed(true)}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "var(--color-warning)",
-              fontSize: 18,
-              lineHeight: 1,
-              padding: "0 2px",
-            }}
+            className="min-h-11 min-w-11 text-lg leading-none"
           >
             ×
           </button>
         </div>
       )}
 
-      {/* ── 3. METRICS ── */}
-      <div
-        data-tour="dashboard-metrics"
-        className="mb-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
-      >
-        <MetricCard
-          iconBg="var(--color-rose-lt)"
-          icon={<MoneyIcon c="var(--color-rose)" />}
-          value={formatGuaraniesGs(data.revenueDay.collected)}
-          label={t("femme.dashboard.metricRevenueDay")}
-          delta={`${t("femme.dashboard.invoiced")}: ${formatGuaraniesGs(data.revenueDay.invoiced)}`}
-        />
-        <MetricCard
-          iconBg="var(--color-mauve-lt)"
-          icon={<CalIcon c="var(--color-mauve)" />}
-          value={String(a.total)}
-          label={t("femme.dashboard.metricApptToday")}
-          delta={
-            a.pending > 0 ? `${a.pending} ${t("femme.dashboard.metricPending")}` : undefined
-          }
-        />
-        <MetricCard
-          iconBg="var(--color-success-lt)"
-          icon={<TrendIcon c="var(--color-success)" />}
-          value={formatGuaraniesGs(data.revenueWeek.collected)}
-          label={t("femme.dashboard.metricRevenueWeek")}
-          delta={`${t("femme.dashboard.invoiced")}: ${formatGuaraniesGs(data.revenueWeek.invoiced)}`}
-        />
-        <MetricCard
-          iconBg="var(--color-stone-md)"
-          icon={<UsersIcon c="var(--color-ink-3)" />}
-          value={fmtCount(data.clientsThisMonth, numberLocale)}
-          label={t("femme.dashboard.metricClientsMonth")}
-        />
+      {/* ── 3. ONE-LINE SUMMARY ── (only once the numbers are there: never a placeholder «0») */}
+      {data ? (
+      <div data-tour="dashboard-metrics" data-testid="dashboard-summary" className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+        <span className="font-heading text-xl font-extrabold tabular-nums text-ink" data-testid="dashboard-summary-appointments">
+          {t("femme.dashboard.home.summaryAppointments", { count: a.total })}
+        </span>
+        <span aria-hidden className="text-line">|</span>
+        <span className="font-heading text-xl font-extrabold tabular-nums text-ink" data-testid="dashboard-summary-collected">
+          {t("femme.dashboard.home.summaryCollected", { amount: formatGuaraniesGs(data?.revenueDay.collected ?? 0) })}
+        </span>
       </div>
+      ) : null}
 
-      {/* ── 4. TWO-COLUMN GRID (stack on narrow viewports) ── */}
-      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
-        {/* LEFT: Today's appointments */}
-        <div data-tour="dashboard-appt-list" style={{ ...cardStyle, minWidth: 0 }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 12,
-            }}
+      {/* ── 4. TODAY'S APPOINTMENTS ── */}
+      <section data-tour="dashboard-appt-list" className="flex flex-col gap-2.5">
+      <SectionTitle
+        title={t("femme.dashboard.todayAppointments")}
+        badge={pendingAppts.length > 0 ? pendingAppts.length : undefined}
+        badgeTestId="dashboard-appointments-count"
+        action={
+          <Link
+            data-tour="dashboard-view-agenda"
+            to="/app/calendar"
+            className="inline-flex min-h-11 items-center text-sm font-bold text-primary"
           >
-            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
-              {t("femme.dashboard.todayAppointments")}
-            </span>
-            <Link
-              data-tour="dashboard-view-agenda"
-              to="/app/calendar"
-              style={{ fontSize: 11, color: "var(--color-rose)", textDecoration: "none" }}
-            >
-              {t("femme.dashboard.viewAgenda")}
-            </Link>
-          </div>
-
-          <div data-tour="dashboard-appt-filter" style={{ marginBottom: 10 }}>
+            {t("femme.dashboard.viewAgenda")}
+          </Link>
+        }
+      />
+      <Card className="p-0">
+        {todayAppts.length > 0 && <div className="h-3" aria-hidden="true" />}
+        {todayAppts.length > 0 && (
+          <div data-tour="dashboard-appt-filter" className="px-4 pb-2 sm:px-5">
             <ListSearchField
               id="dashboard-appt-filter"
               value={apptListQuery}
@@ -629,528 +589,187 @@ export default function DashboardPage() {
               placeholder={t("femme.listFilter.placeholder")}
             />
           </div>
+        )}
 
-          {todayAppts.length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
-              {t("femme.dashboard.noAppts")}
-            </div>
-          ) : visibleTodayAppts.length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
-              {t("femme.listFilter.noMatches")}
-            </div>
-          ) : (
-            visibleTodayAppts.map((appt, idx) => {
-              const ac = avatarColor(appt.professionalName);
-              const isLast = idx === visibleTodayAppts.length - 1;
-              const goToApptDetail = () =>
-                navigate("/app/calendar", {
-                  state: {
-                    selectedDate: toLocalDateStr(new Date(appt.startAt)),
-                    openAppointmentId: appt.id,
-                  },
-                });
-              return (
+        {todayAppts.length === 0 ? (
+          <TodayEmptyState
+            message={t("femme.dashboard.noAppts")}
+            actionLabel={t("femme.dashboard.newAppointment")}
+            onAction={() => setNewApptOpen(true)}
+            testId="dashboard-appointments-empty"
+            actionTestId="dashboard-appointments-create-first"
+          />
+        ) : visibleTodayAppts.length === 0 ? (
+          <div className="px-5 pb-5 pt-2 text-sm text-ink-3">{t("femme.listFilter.noMatches")}</div>
+        ) : (
+          <div className="px-2 pb-2 sm:px-3">
+            {pendingAppts.length > 0 ? (
+              <>
                 <div
-                  key={appt.id}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={t("femme.dashboard.openAppointmentDetail", {
-                    client: appt.clientName ?? t("femme.calendar.detail.occasionalClient"),
-                  })}
-                  onClick={goToApptDetail}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      goToApptDetail();
-                    }
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "8px 0",
-                    borderBottom: isLast ? "none" : "0.5px solid var(--color-stone)",
-                    cursor: "pointer",
-                  }}
+                  data-testid="dashboard-appointments-group"
+                  className="px-1 pb-1 pt-1 text-[11.5px] font-extrabold uppercase tracking-wider text-ink-3 sm:px-3"
                 >
+                  {t("femme.dashboard.home.pendingGroup")}
+                </div>
+                <ul className="flex flex-col" data-testid="dashboard-appointments">
+                  {pendingAppts.map((appt) => renderApptRow(appt, false))}
+                </ul>
+              </>
+            ) : searchingAppts ? null : (
+              <p className="px-1 py-2 text-sm text-ink-3 sm:px-3" data-testid="dashboard-appointments-all-done">
+                {t("femme.dashboard.home.allAttended")}
+              </p>
+            )}
+
+            {chargedAppts.length > 0 ? (
+              <div className="border-t border-line" data-testid="dashboard-appointments-charged">
+                <button
+                  type="button"
+                  data-testid="dashboard-appointments-charged-toggle"
+                  aria-expanded={chargedShown}
+                  onClick={() => setChargedOpen((v) => !v)}
+                  className="flex min-h-12 w-full items-center gap-2.5 px-1 text-left text-sm font-bold text-ink sm:px-3"
+                >
+                  <span>{t("femme.dashboard.home.chargedTitle")}</span>
                   <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 500,
-                      color: "var(--color-ink)",
-                      minWidth: 34,
-                      flexShrink: 0,
-                    }}
+                    data-testid="dashboard-appointments-charged-count"
+                    className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-primary-lt px-2 text-xs font-extrabold tabular-nums text-primary"
                   >
-                    {fmtTime(appt.startAt, locale)}
+                    {chargedAppts.length}
                   </span>
-                  <div
-                    style={{
-                      width: 26,
-                      height: 26,
-                      borderRadius: "var(--radius-pill)",
-                      background: ac.bg,
-                      color: ac.color,
-                      fontSize: 9,
-                      fontWeight: 500,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
+                  <span className="text-xs font-semibold text-ink-3">
+                    {t("femme.dashboard.home.chargedHint")}
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={`ml-auto text-ink-3 transition-transform ${chargedShown ? "rotate-180" : ""}`}
                   >
-                    {getInitials(appt.professionalName)}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 500,
-                        color: "var(--color-ink)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {appt.clientName ?? t("femme.calendar.detail.occasionalClient")}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 10,
-                        color: "var(--color-ink-3)",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {appt.serviceName} · {appt.professionalName}
-                    </div>
-                  </div>
-                  <StatusBadge status={appt.status} />
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* RIGHT column */}
-        <div className="flex min-w-0 flex-col gap-4">
-          {/* Mini calendar */}
-          <div data-tour="dashboard-mini-cal" style={cardStyle}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 10,
-              }}
-            >
-              <button
-                type="button"
-                aria-label={t("femme.calendar.prev")}
-                onClick={() =>
-                  setCalMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))
-                }
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--color-ink-2)",
-                  fontSize: 16,
-                  lineHeight: 1,
-                  padding: "2px 6px",
-                }}
-              >
-                ‹
-              </button>
-              <span style={{ fontSize: 12, fontWeight: 500, color: "var(--color-ink)" }}>
-                {monthLabel}
-              </span>
-              <button
-                type="button"
-                aria-label={t("femme.calendar.next")}
-                onClick={() =>
-                  setCalMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
-                }
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--color-ink-2)",
-                  fontSize: 16,
-                  lineHeight: 1,
-                  padding: "2px 6px",
-                }}
-              >
-                ›
-              </button>
-            </div>
-
-            {/* Day-of-week headers */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(7, 1fr)",
-                gap: 1,
-                marginBottom: 4,
-              }}
-            >
-              {DOW.map((d, i) => (
-                <div
-                  key={i}
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 500,
-                    color: "var(--color-ink-3)",
-                    textAlign: "center",
-                    padding: "2px 0",
-                  }}
-                >
-                  {d}
-                </div>
-              ))}
-            </div>
-
-            {/* Day cells */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1 }}>
-              {calCells.map((cell, i) => {
-                const isToday =
-                  cell.current &&
-                  cell.day === todayDay &&
-                  calMonthIdx === todayMonth &&
-                  calYear === todayYear;
-
-                return (
-                  <div
-                    key={i}
-                    role={cell.current ? "button" : undefined}
-                    tabIndex={cell.current ? 0 : undefined}
-                    onClick={
-                      cell.current
-                        ? () => {
-                            const d = new Date(calYear, calMonthIdx, cell.day);
-                            navigate("/app/calendar", {
-                              state: { selectedDate: toLocalDateStr(d) },
-                            });
-                          }
-                        : undefined
-                    }
-                    onKeyDown={
-                      cell.current
-                        ? (e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              const d = new Date(calYear, calMonthIdx, cell.day);
-                              navigate("/app/calendar", {
-                                state: { selectedDate: toLocalDateStr(d) },
-                              });
-                            }
-                          }
-                        : undefined
-                    }
-                    style={{
-                      fontSize: 10,
-                      textAlign: "center",
-                      padding: "4px 2px",
-                      borderRadius: 5,
-                      cursor: cell.current ? "pointer" : "default",
-                      fontWeight: isToday ? 500 : 400,
-                      background: isToday ? "var(--color-rose)" : "transparent",
-                      color: isToday
-                        ? "var(--color-on-primary)"
-                        : cell.current
-                          ? "var(--color-ink-2)"
-                          : "var(--color-stone-md)",
-                    }}
-                  >
-                    {cell.day}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Occupancy */}
-          <div data-tour="dashboard-occupancy" style={cardStyle}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 500,
-                color: "var(--color-ink)",
-                marginBottom: 12,
-              }}
-            >
-              {t("femme.dashboard.occupancyTitle")}
-            </div>
-
-            {occupancy.length === 0 ? (
-              <div style={{ fontSize: 12, color: "var(--color-ink-3)" }}>
-                {t("femme.dashboard.noAppts")}
+                    ⌄
+                  </span>
+                </button>
+                {chargedShown ? (
+                  <ul className="flex flex-col" data-testid="dashboard-appointments-charged-list">
+                    {chargedAppts.map((appt) => renderApptRow(appt, true))}
+                  </ul>
+                ) : null}
               </div>
-            ) : (
-              occupancy.map((prof) => {
-                const ac = avatarColor(prof.name);
-                return (
-                  <div
-                    key={prof.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      marginBottom: 8,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: "var(--radius-pill)",
-                        background: ac.bg,
-                        color: ac.color,
-                        fontSize: 8,
-                        fontWeight: 500,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {getInitials(prof.name)}
-                    </div>
-                    <div
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        fontSize: 11,
-                        fontWeight: 500,
-                        color: "var(--color-ink)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {prof.name}
-                    </div>
-                    <div
-                      style={{ fontSize: 10, color: "var(--color-ink-3)", flexShrink: 0 }}
-                    >
-                      {prof.count} {t("femme.dashboard.occupancyUnit")}
-                    </div>
-                    <div
-                      style={{
-                        width: 60,
-                        height: 3,
-                        background: "var(--color-stone-md)",
-                        borderRadius: 2,
-                        flexShrink: 0,
-                      }}
-                    >
-                      <div
-                        style={{
-                          height: "100%",
-                          background: "var(--color-rose)",
-                          borderRadius: 2,
-                          width: `${(prof.count / maxOccupancy) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </div>
+            ) : null}
 
-      {/* ── 5. TODAY'S SERVICE RECORDS ── */}
-      <div style={{ ...cardStyle, marginTop: 16 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12,
-          }}
-        >
-          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
-            {t("femme.serviceRecords.dashboard.title")}
-          </span>
-          <Link
-            to="/app/service-records"
-            state={{ activeTab: "history" }}
-            style={{ fontSize: 11, color: "var(--color-rose)", textDecoration: "none" }}
-          >
-            {t("femme.serviceRecords.dashboard.viewHistory")}
-          </Link>
-        </div>
-
-        {todayServiceRecords.length === 0 ? (
-          <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
-            {t("femme.serviceRecords.dashboard.empty")}
-          </div>
-        ) : (
-          <div
-            data-testid="dashboard-service-records-grid"
-            className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6"
-          >
-            {visibleTodayServiceRecords.map((r) => (
-              <button
-                key={r.id}
-                type="button"
-                data-testid="dashboard-service-record-card"
-                onClick={() => setSelectedServiceRecordId(r.id)}
-                style={{
-                  textAlign: "left",
-                  background: "var(--color-stone)",
-                  border: "var(--border-default)",
-                  borderRadius: "var(--radius-md)",
-                  padding: 10,
-                  cursor: "pointer",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 500,
-                    color: "var(--color-ink)",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    marginBottom: 4,
-                  }}
-                >
-                  {r.clientFullName}
-                </div>
-                <div style={{ fontSize: 10, color: "var(--color-ink-3)", marginBottom: 6 }}>
-                  {formatParaguayDateTime(r.createdAt, locale)} · {formatAmountDecimal(r.totalAmount)}
-                </div>
-                <StatusBadge status={r.status} />
-              </button>
-            ))}
-            {hasMoreTodayServiceRecords && (
+            <div className="mt-1 px-1 sm:px-3">
               <button
                 type="button"
-                data-testid="dashboard-service-records-more"
-                onClick={() =>
-                  setVisibleServiceRecordCount((c) => c + DASHBOARD_SERVICE_RECORDS_CAP)
-                }
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "var(--color-stone)",
-                  border: "var(--border-default)",
-                  borderRadius: "var(--radius-md)",
-                  padding: 10,
-                  cursor: "pointer",
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: "var(--color-rose)",
-                }}
+                data-testid="dashboard-appointments-add-row"
+                onClick={() => setNewApptOpen(true)}
+                className="flex min-h-11 w-full items-center gap-2 text-sm font-bold text-primary"
               >
-                {t("femme.serviceRecords.dashboard.showMore")}
+                <span aria-hidden="true" className="text-lg leading-none">
+                  +
+                </span>
+                {t("femme.dashboard.home.addAppointmentRow")}
               </button>
-            )}
+            </div>
           </div>
         )}
-      </div>
+      </Card>
+      </section>
 
-      {/* ── 6. INACTIVE CLIENTS ── */}
-      <div data-testid="dashboard-inactive-clients" style={{ ...cardStyle, marginTop: 16 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 12,
+      {/* ── 5. FICHAS DE HOY: eye-catching cards, the open ones first ── */}
+      <TodayServiceRecords
+        refreshKey={fichasKey}
+        onNewRecord={() => setNewRecordOpen(true)}
+        onLoaded={() => setFichasLoaded(true)}
+      />
+      <NewServiceRecordModal
+        open={newRecordOpen}
+        onClose={() => setNewRecordOpen(false)}
+        onSaved={() => setFichasKey((k) => k + 1)}
+      />
+      <AppointmentDetailModal
+        appointment={detailAppt}
+        onClose={() => setDetailAppt(null)}
+        onChanged={(updated) => {
+          if (updated) setDetailAppt(updated);
+          refreshAppointments();
+        }}
+      />
+      <AppointmentFormModal
+        open={newApptOpen}
+        onClose={() => setNewApptOpen(false)}
+        onSaved={() => refreshAppointments()}
+      />
+      {viewInvoiceId !== null ? (
+        <InvoiceDetailModal
+          invoiceId={viewInvoiceId}
+          onClose={() => setViewInvoiceId(null)}
+          onVoided={() => {
+            setViewInvoiceId(null);
+            refreshAppointments();
           }}
-        >
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-ink)" }}>
-              {t("femme.dashboard.inactiveClientsTitle")}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--color-ink-3)", marginTop: 2 }}>
-              {t("femme.dashboard.inactiveClientsSubtitle", { days: inactiveClientsThresholdDays })}
-            </div>
-          </div>
-          {inactiveClients.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              data-testid="dashboard-inactive-clients-view-all"
-              onClick={() => navigate("/app/inactive-clients")}
-            >
-              {t("femme.dashboard.inactiveClientsViewAll")}
-            </Button>
-          )}
-        </div>
-        <div style={{ marginBottom: 12 }} />
-
-        {inactiveClients.length === 0 ? (
-          <div style={{ fontSize: 12, color: "var(--color-ink-3)", padding: "12px 0" }}>
-            {t("femme.dashboard.inactiveClientsEmpty")}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th style={inactiveClientsThStyle}>
-                    {t("femme.dashboard.inactiveClientsColClient")}
-                  </th>
-                  <th style={inactiveClientsThStyle}>
-                    {t("femme.dashboard.inactiveClientsColPhone")}
-                  </th>
-                  <th style={inactiveClientsThStyle}>
-                    {t("femme.dashboard.inactiveClientsColInactivity")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {inactiveClients.map((c) => {
-                  const goToClientDetail = () => navigate(`/app/clients/${c.clientId}`);
-                  return (
-                    <tr
-                      key={c.clientId}
-                      data-testid="dashboard-inactive-client-row"
-                      role="button"
-                      tabIndex={0}
-                      onClick={goToClientDetail}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          goToClientDetail();
-                        }
-                      }}
-                      style={{
-                        cursor: "pointer",
-                        borderBottom: "0.5px solid var(--color-stone)",
-                      }}
-                    >
-                      <td style={inactiveClientsTdStyle}>{c.fullName}</td>
-                      <td style={inactiveClientsTdStyle}>{c.phone ?? "—"}</td>
-                      <td style={inactiveClientsTdStyle}>
-                        {t("femme.dashboard.inactiveClientsDaysValue", {
-                          days: c.daysSinceLastVisit,
-                        })}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {selectedServiceRecordId !== null && (
-        <ServiceRecordDetailModal
-          serviceRecordId={selectedServiceRecordId}
-          onClose={() => setSelectedServiceRecordId(null)}
-          onChanged={loadTodayServiceRecords}
         />
-      )}
+      ) : null}
+      {openRecordId !== null ? (
+        <ServiceRecordDetailModal
+          serviceRecordId={openRecordId}
+          onClose={() => setOpenRecordId(null)}
+          onChanged={() => {
+            setFichasKey((k) => k + 1);
+            refreshAppointments();
+          }}
+        />
+      ) : null}
+
+      {/* ── 6. MORE FOR TODAY (collapsed) ── */}
+      <Card className="p-0" data-testid="dashboard-more">
+        <h2 className="px-4 pb-1 pt-4 font-heading text-[15px] font-extrabold text-ink-2 sm:px-5">
+          {t("femme.dashboard.home.moreTitle")}
+        </h2>
+        {moreSections.map((sec) => {
+          const open = occupancyOpenKey === sec.key;
+          return (
+            <div key={sec.key} className="border-t border-line first:border-t-0">
+              <button
+                type="button"
+                data-testid={`dashboard-more-${sec.key}`}
+                aria-expanded={open}
+                onClick={() => setOpenMore(open ? null : sec.key)}
+                className="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left sm:px-5"
+              >
+                <span className="font-semibold text-ink">{sec.label}</span>
+                <span className="flex items-center gap-2.5 text-ink-3">
+                  {sec.count !== null && (
+                    <span
+                      className={`inline-flex h-[26px] min-w-[26px] items-center justify-center rounded-full px-2 text-[13px] font-extrabold ${
+                        sec.count > 0 ? "bg-primary-lt text-primary" : "bg-line text-ink-3"
+                      }`}
+                    >
+                      {sec.count}
+                    </span>
+                  )}
+                  <span aria-hidden className={`transition-transform ${open ? "rotate-180" : ""}`}>
+                    ⌄
+                  </span>
+                </span>
+              </button>
+              {sec.key === "birthdays" ? (
+                <div hidden={!open} className="px-4 pb-3 sm:px-5">
+                  <BirthdaysCard
+                    embedded
+                    onLoaded={(count) => {
+                      setBirthdaysCount(count);
+                      setBirthdaysLoaded(true);
+                    }}
+                  />
+                </div>
+              ) : (
+                open && <div className="px-4 pb-3 sm:px-5">{sec.body}</div>
+              )}
+            </div>
+          );
+        })}
+      </Card>
+
     </div>
+    </div>
+    </>
   );
 }

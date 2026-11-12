@@ -30,9 +30,10 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { choosePaymentMethod, ensureCashSessionOpen, fillPaymentAmount, goToBillingHome, showPaymentAmounts } from "../fixtures/billing";
 import { clickIssueInvoiceAndExpectSuccess, pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 import { professionalFormDialog } from "../fixtures/ui";
+import { closeCategoriesDialog, openCategoriesDialog, openItemMoreOptions, openProfessionalSchedule } from "../fixtures/catalog";
 
 test.describe.configure({ mode: "serial" });
 
@@ -77,18 +78,19 @@ test("Issue #46 · nuevo servicio: IVA 10% seleccionado por defecto", async ({ p
   await loginAsDemo(page);
   await page.goto("/app/services");
   // Create a category so the service form can open
-  await page.getByRole("button", { name: "Categories", exact: true }).click();
+  await openCategoriesDialog(page);
   const catName = `IVACat ${Date.now()}`;
   await page.getByRole("button", { name: "+ New category" }).click();
-  await page.getByRole("dialog").getByLabel("Name").fill(catName);
-  await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
-  await page.getByRole("button", { name: "Services", exact: true }).click();
+  await page.getByRole("dialog", { name: "New category" }).getByLabel("Name").fill(catName);
+  await page.getByRole("dialog", { name: "New category" }).getByRole("button", { name: "Save" }).click();
+  await closeCategoriesDialog(page);
 
   await page.getByRole("button", { name: "+ New service" }).click();
   const dialog = page.getByRole("dialog", { name: "New service" });
   await expect(dialog).toBeVisible();
 
-  // The "Tipo de impuesto" / "Tax type" select should default to IVA 10%
+  // The "Tipo de impuesto" / "Tax type" select (under "More options") should default to IVA 10%
+  await openItemMoreOptions(page);
   const taxSelect = dialog.getByLabel(/tax type|tipo de impuesto/i);
   await expect(taxSelect).toBeVisible();
   const selectedOption = await taxSelect.inputValue();
@@ -107,10 +109,10 @@ test("Issue #49 · paleta de categorías tiene más colores y el swatch refleja 
 }) => {
   await loginAsDemo(page);
   await page.goto("/app/services");
-  await page.getByRole("button", { name: "Categories", exact: true }).click();
+  await openCategoriesDialog(page);
 
   await page.getByRole("button", { name: "+ New category" }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "New category" });
   await expect(dialog).toBeVisible();
 
   // At least 8 color swatches must exist (we added many new vivid colors)
@@ -132,12 +134,12 @@ test("Issue #49 · paleta de categorías tiene más colores y el swatch refleja 
   const row = page.locator(`[data-testid^="cat-row-"]`).filter({ hasText: catName });
   await expect(row).toBeVisible();
 
-  // The outer tile (.cat-ic) background should NOT be the stone gray (#F5F2EF)
+  // The outer tile (.cat-ic) background should NOT be the page background (lino, #F6F4EF)
   const tileColor = await row.locator(".cat-ic").evaluate((el) => {
     return window.getComputedStyle(el).backgroundColor;
   });
-  // Stone defaults to rgb(245, 242, 239) — coral should be different
-  expect(tileColor).not.toBe("rgb(245, 242, 239)");
+  // The page background (lino) is rgb(246, 244, 239) — coral (durazno tint) should be different
+  expect(tileColor).not.toBe("rgb(246, 244, 239)");
 });
 
 test("Issue #49 · servicio hereda el color de su categoría en la tabla", async ({
@@ -175,8 +177,8 @@ test("Issue #49 · servicio hereda el color de su categoría en la tabla", async
   const iconBg = await card.locator(".cat-ic").evaluate((el) => {
     return window.getComputedStyle(el).backgroundColor;
   });
-  // Stone-lt defaults to rgb(245, 242, 239) — teal-lt (#CCFBF1) = rgb(204, 251, 241)
-  expect(iconBg).not.toBe("rgb(245, 242, 239)");
+  // The page background (lino) is rgb(246, 244, 239) — teal-lt (#E1F0F1) = rgb(225, 240, 241)
+  expect(iconBg).not.toBe("rgb(246, 244, 239)");
 });
 
 // ─── Issue #37 ────────────────────────────────────────────────────────────────
@@ -192,7 +194,7 @@ test("Issue #37 · warning RUC faltante en Nuevo comprobante (sin RUC)", async (
 
   await loginAsDemo(page);
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // The warning text must be visible on the new-invoice tab
@@ -211,7 +213,7 @@ test("Issue #37 · sin warning RUC cuando el salon tiene RUC configurado", async
 
   await loginAsDemo(page);
   await page.goto("/app/billing");
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   await expect(
@@ -234,7 +236,7 @@ test("Issue #47 · factura a otra persona: editar nombre/RUC no modifica el perf
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Select the client
@@ -248,7 +250,7 @@ test("Issue #47 · factura a otra persona: editar nombre/RUC no modifica el perf
 
   await pickServiceLine(page, seed.serviceFullName, 0);
   await page.locator("#line-price-0").fill("50000");
-  await page.locator("#pay-amount-0").fill("50000");
+  await fillPaymentAmount(page, "50000");
 
   await clickIssueInvoiceAndExpectSuccess(page);
 
@@ -280,7 +282,7 @@ test("Issue #43 · RUC del salon se almacena en el comprobante al emitir", async
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   await page.getByLabel("Search or select client").fill(clientName43.slice(0, 8));
@@ -288,7 +290,7 @@ test("Issue #43 · RUC del salon se almacena en el comprobante al emitir", async
 
   await pickServiceLine(page, seed.serviceFullName, 0);
   await page.locator("#line-price-0").fill("50000");
-  await page.locator("#pay-amount-0").fill("50000");
+  await fillPaymentAmount(page, "50000");
 
   // Wait for the invoice to be issued and capture the response
   await ensurePaymentMethodChosen(page);
@@ -321,12 +323,12 @@ test("Issue #52 · asignar colores nuevos (teal, sky, indigo…) a categoría no
 }) => {
   await loginAsDemo(page);
   await page.goto("/app/services");
-  await page.getByRole("button", { name: "Categories", exact: true }).click();
+  await openCategoriesDialog(page);
 
   // Create a category first with default color
   const catName = `TealCat52 ${Date.now()}`;
   await page.getByRole("button", { name: "+ New category" }).click();
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: "New category" });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Name").fill(catName);
   // Pick a color that was previously rejected by the backend (teal)
@@ -337,12 +339,12 @@ test("Issue #52 · asignar colores nuevos (teal, sky, indigo…) a categoría no
   await expect(dialog).not.toBeVisible({ timeout: 10_000 });
 
   // The new category should appear in the list
-  await expect(page.getByText(catName)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("catalog-categories-dialog").getByText(catName)).toBeVisible({ timeout: 10_000 });
 
   // Now edit it and pick another previously-rejected color (sky)
   // The category row itself has aria-label "Edit category <name>"
   await page.getByRole("button", { name: `Edit category ${catName}` }).click();
-  const editDialog = page.getByRole("dialog");
+  const editDialog = page.getByRole("dialog", { name: "Edit category" });
   await expect(editDialog).toBeVisible();
   await editDialog.getByRole("button", { name: /sky/i }).click();
   await editDialog.getByRole("button", { name: "Save" }).click();
@@ -356,7 +358,7 @@ test("Issue #52 · asignar colores nuevos (teal, sky, indigo…) a categoría no
   await expect(editDialog).not.toBeVisible();
 
   // Category should still appear in the list
-  await expect(page.getByText(catName)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("catalog-categories-dialog").getByText(catName)).toBeVisible({ timeout: 10_000 });
 });
 
 // ─── Issue #42 ────────────────────────────────────────────────────────────────
@@ -445,10 +447,10 @@ test("Issue #48 · botón Ver comprobante en Historial del cliente abre el popup
 
   await loginAsDemo(page);
   await page.goto(`/app/clients/${client.id}`);
-  await page.getByRole("tab", { name: "History" }).click();
+  await page.getByRole("tab", { name: "Invoices" }).click();
 
-  // The comprobantes section should show the "View" (femme.billing.history.viewDetail) button
-  const verBtn = page.getByRole("button", { name: /view/i }).first();
+  // The comprobantes list shows each invoice as a row that opens its detail (no separate "View" button).
+  const verBtn = page.getByTestId("client-invoice-item").first();
   await expect(verBtn).toBeVisible({ timeout: 15_000 });
   await verBtn.click();
 
@@ -546,19 +548,12 @@ test("Issue #40 · guardar horario con cero días seleccionados no lanza error",
   await loginAsDemo(page);
   await page.goto("/app/professionals");
 
-  // Open "Edit schedule" via kebab menu
-  await expect(page.getByTestId(`professionals-row-${created.id}-trigger`)).toBeVisible({
-    timeout: 20_000,
-  });
-  await page.getByTestId(`professionals-row-${created.id}-trigger`).click();
-  await page.getByRole("menuitem", { name: "Edit schedule" }).click();
+  // Open the professional (tap the row): the schedule is part of the one form.
+  await expect(page.getByTestId(`prof-row-${created.id}`)).toBeVisible({ timeout: 20_000 });
+  await page.getByTestId(`prof-row-${created.id}`).click();
 
   const dlg = professionalFormDialog(page);
-  await expect(dlg.getByRole("tab", { name: "Schedule" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-    { timeout: 10_000 },
-  );
+  await openProfessionalSchedule(page);
 
   // Ensure no day is checked
   const monCheckbox = dlg.getByTestId("prof-day-mon-active");
@@ -580,13 +575,14 @@ test("Issue #40 · guardar horario con cero días seleccionados no lanza error",
       r.url().includes(`/api/professionals/${created.id}/schedules`) &&
       r.request().method() === "PUT",
   );
-  await dlg.getByRole("button", { name: /save schedule/i }).click();
+  await dlg.getByTestId("prof-save").click();
   const resp = await scheduleResp;
   expect(resp.ok(), await resp.text()).toBeTruthy();
 
-  // On edit, the dialog stays open and shows an inline success message instead of
-  // closing (issue-157) — no error alert appears.
-  await expect(dlg.getByText("Changes saved successfully.")).toBeVisible({ timeout: 10_000 });
+  // Catalog redesign: on edit the form closes and a notice confirms it on the list — no error.
+  await expect(page.getByRole("alert").filter({ hasText: "Changes saved successfully." })).toBeVisible({
+    timeout: 10_000,
+  });
 });
 
 // ─── Issue #51 ────────────────────────────────────────────────────────────────
@@ -600,7 +596,7 @@ test("Issue #51 · dropdown de clientes en formulario de factura flota sobre el 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Trigger the client search dropdown
@@ -637,7 +633,7 @@ test("Issue #51 · dropdown de clientes en formulario de turno flota sobre el fo
   await seedCategoryServiceProfessional(request, token);
 
   await loginAsDemo(page);
-  await page.goto("/app/calendar");
+  await page.goto("/app/calendar?view=week");
   await page.getByRole("button", { name: "New appointment" }).first().click();
 
   const dlg = page.getByRole("dialog");
@@ -731,7 +727,7 @@ test("Issue #58 · ServiceSearchField en factura flota sobre el formulario (port
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // The Service combobox is only partially in the viewport at this scroll position — scroll it
@@ -775,7 +771,7 @@ test("Issue #58 · TimeCombobox en formulario de turno flota sobre el formulario
   await seedCategoryServiceProfessional(request, token);
 
   await loginAsDemo(page);
-  await page.goto("/app/calendar");
+  await page.goto("/app/calendar?view=week");
   await page.getByRole("button", { name: "New appointment" }).first().click();
 
   const dlg = page.getByRole("dialog");
@@ -815,7 +811,7 @@ test("Issue #58 · LocalizedDateInput en formulario de turno flota sobre el form
   await seedCategoryServiceProfessional(request, token);
 
   await loginAsDemo(page);
-  await page.goto("/app/calendar");
+  await page.goto("/app/calendar?view=week");
   await page.getByRole("button", { name: "New appointment" }).first().click();
 
   const dlg = page.getByRole("dialog");
@@ -869,10 +865,11 @@ test("Issue #63 · al ingresar un servicio al comprobante, el monto Efectivo se 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // The CASH amount field starts empty
+  await showPaymentAmounts(page);
   const amountField = page.locator("#pay-amount-0");
   await expect(amountField).toBeVisible({ timeout: 10_000 });
   await expect(amountField).toHaveValue("");
@@ -896,7 +893,7 @@ test("Issue #63 · cambiar método de pago de Efectivo a Transferencia no borra 
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   // Fill in a service so the CASH amount auto-populates
@@ -904,11 +901,13 @@ test("Issue #63 · cambiar método de pago de Efectivo a Transferencia no borra 
   await page.locator("#line-price-0").fill("50000");
   await page.locator("#line-price-0").press("Tab");
 
+  await showPaymentAmounts(page);
+
   const amountField = page.locator("#pay-amount-0");
   await expect(amountField).toHaveValue("50.000");
 
   // Change the payment method from CASH to TRANSFER
-  await page.locator("#pay-method-0").selectOption("TRANSFER");
+  await choosePaymentMethod(page, "TRANSFER");
 
   // The amount must remain unchanged
   await expect(amountField).toHaveValue("50.000");
@@ -927,7 +926,7 @@ test("Issue #66 · botón Emitir se habilita al completar cliente e ítem (sin i
 
   await loginAsDemo(page);
   await ensureCashSessionOpen(page);
-  await page.getByRole("tab", { name: "Cash Register" }).click();
+  await goToBillingHome(page);
   await page.getByRole("button", { name: "New Invoice" }).click();
 
   const issueBtn = page.getByRole("button", { name: "Issue invoice" });
@@ -941,8 +940,9 @@ test("Issue #66 · botón Emitir se habilita al completar cliente e ítem (sin i
   // Select service — the amount auto-fills; the payment method starts empty (issue #284), so the
   // button stays disabled until it is chosen, and then enables.
   await pickServiceLine(page, seed.serviceFullName, 0);
+  await showPaymentAmounts(page);
   await expect(page.locator("#pay-amount-0")).not.toHaveValue("", { timeout: 5_000 });
   await expect(issueBtn).toBeDisabled();
-  await page.locator("#pay-method-0").selectOption("CASH");
+  await choosePaymentMethod(page, "CASH");
   await expect(issueBtn).toBeEnabled({ timeout: 5_000 });
 });

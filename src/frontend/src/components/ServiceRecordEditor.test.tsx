@@ -1,0 +1,436 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, waitFor, within } from "../test/renderWithTour";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { I18nextProvider } from "react-i18next";
+import { ThemeProvider } from "@design-system";
+import i18n from "../i18n";
+import { ServiceRecordEditor } from "./ServiceRecordEditor";
+import type { ServiceRecordDetail } from "../api/serviceRecords";
+
+const femmeJson = vi.fn();
+const femmePostJson = vi.fn();
+const femmePutJson = vi.fn();
+
+vi.mock("../api/femmeClient", () => ({
+  femmeJson: (...args: unknown[]) => femmeJson(...args),
+  femmePostJson: (...args: unknown[]) => femmePostJson(...args),
+  femmePutJson: (...args: unknown[]) => femmePutJson(...args),
+}));
+
+const openRecord: ServiceRecordDetail = {
+  id: 7,
+  clientId: 1,
+  clientFullName: "Marta Benítez",
+  clientRuc: null,
+  status: "OPEN",
+  totalAmount: "310000",
+  tipsTotal: "0",
+  voidReason: null,
+  createdAt: "2026-10-26T13:30:00Z",
+  closedAt: null,
+  invoiceId: null,
+  invoiceNumberFormatted: null,
+  lines: [
+    {
+      id: 1,
+      serviceId: 11,
+      description: "Coloración",
+      unitPrice: "250000",
+      quantity: 1,
+      lineTotal: "250000",
+      professionalId: 3,
+      professionalName: "Laura",
+    },
+    {
+      id: 2,
+      serviceId: 12,
+      description: "Brushing",
+      unitPrice: "60000",
+      quantity: 1,
+      lineTotal: "60000",
+      professionalId: 4,
+      professionalName: "Ana",
+    },
+  ],
+  tips: [],
+};
+
+function renderEditor(
+  initial: ServiceRecordDetail | null,
+  props: Partial<React.ComponentProps<typeof ServiceRecordEditor>> = {},
+) {
+  const onClose = vi.fn();
+  const utils = render(
+    <MemoryRouter initialEntries={["/app/service-records"]}>
+      <Routes>
+        <Route
+          path="/app/service-records"
+          element={
+            <I18nextProvider i18n={i18n}>
+              <ThemeProvider>
+                <ServiceRecordEditor
+                  initial={initial}
+                  allowClientCreateNew={false}
+                  onClose={onClose}
+                  {...props}
+                />
+              </ThemeProvider>
+            </I18nextProvider>
+          }
+        />
+        <Route path="/app/billing" element={<div>Billing page</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  return { ...utils, onClose };
+}
+
+describe("ServiceRecordEditor", () => {
+  beforeEach(() => {
+    void i18n.changeLanguage("en");
+    femmeJson.mockReset();
+    femmePostJson.mockReset();
+    femmePutJson.mockReset();
+    femmeJson.mockImplementation((url: unknown) => {
+      const s = String(url);
+      if (s === "/api/professionals/options") {
+        return Promise.resolve([
+          { id: 3, fullName: "Laura", active: true },
+          { id: 4, fullName: "Ana", active: true },
+        ]);
+      }
+      if (s.startsWith("/api/clients/")) return Promise.resolve({ email: "marta@example.com" });
+      return Promise.resolve([]);
+    });
+  });
+
+  afterEach(() => cleanup());
+
+  it("a new record starts with one service line, quantity 1, and no remove link", async () => {
+    renderEditor(null);
+    expect(screen.getAllByTestId("service-record-line")).toHaveLength(1);
+    expect((screen.getByLabelText(/quantity/i) as HTMLInputElement).value).toBe("1");
+    expect(screen.queryByTestId("service-record-line-remove")).toBeNull();
+    expect(screen.getByRole("heading", { name: /^client$/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^services$/i })).toBeTruthy();
+    // Save needs a client first.
+    expect((screen.getByTestId("service-record-submit") as HTMLButtonElement).disabled).toBe(true);
+    // Open record actions don't exist for a new record.
+    expect(screen.queryByTestId("service-record-generate-invoice")).toBeNull();
+    expect(screen.queryByTestId("service-record-actions-toggle")).toBeNull();
+  });
+
+  it("adds another service line and offers Remove once there are two", async () => {
+    renderEditor(null);
+    await userEvent.click(screen.getByTestId("service-record-add-line"));
+    expect(screen.getAllByTestId("service-record-line")).toHaveLength(2);
+    expect(screen.getAllByTestId("service-record-line-remove")).toHaveLength(2);
+    await userEvent.click(screen.getAllByTestId("service-record-line-remove")[0]);
+    expect(screen.getAllByTestId("service-record-line")).toHaveLength(1);
+  });
+
+  it("quantity is on every line and recalculates the subtotal and the total", async () => {
+    renderEditor(openRecord);
+    const total = screen.getByTestId("service-record-total");
+    expect(total.textContent).toMatch(/310\.000/);
+    // Several services start collapsed (summary rows); open the second one to edit it.
+    await userEvent.click(screen.getAllByTestId("service-record-line-toggle")[1]);
+    const qty = screen.getByLabelText(/quantity/i) as HTMLInputElement;
+    await userEvent.clear(qty);
+    await userEvent.type(qty, "2");
+    expect(screen.getAllByTestId("service-record-line-subtotal")[1].textContent).toMatch(/120\.000/);
+    expect(total.textContent).toMatch(/370\.000/);
+  });
+
+  it("tips are no longer a fixed section: they open from the «⋯» menu, one field per professional", async () => {
+    renderEditor(openRecord);
+    expect(screen.queryByLabelText(/tip · /i)).toBeNull();
+    expect(screen.queryByTestId("service-record-tips")).toBeNull();
+    await userEvent.click(screen.getByTestId("service-record-more"));
+    await userEvent.click(await screen.findByTestId("service-record-tips-toggle"));
+    expect(screen.getByLabelText(/tip · Laura/i)).toBeTruthy();
+    expect(screen.getByLabelText(/tip · Ana/i)).toBeTruthy();
+  });
+
+  it("Save updates the record and hands it to the host (no inline success message)", async () => {
+    const saved = { ...openRecord, totalAmount: "370000" };
+    femmePutJson.mockResolvedValue(saved);
+    const onSaved = vi.fn();
+    renderEditor(openRecord, { onSaved });
+    await userEvent.click(screen.getAllByTestId("service-record-line-toggle")[1]);
+    const qty = screen.getByLabelText(/quantity/i);
+    await userEvent.clear(qty);
+    await userEvent.type(qty, "2");
+    await userEvent.click(screen.getByTestId("service-record-submit"));
+    await waitFor(() => expect(femmePutJson).toHaveBeenCalled());
+    const [url, payload] = femmePutJson.mock.calls[0];
+    expect(url).toBe("/api/service-records/7");
+    expect(payload.lines[1]).toMatchObject({ serviceId: 12, quantity: 2, professionalId: 4 });
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(saved, "updated"));
+    expect(screen.queryByText(/changes saved/i)).toBeNull();
+  });
+
+  it("Charge saves pending edits and opens Facturación with the record prefilled", async () => {
+    femmePutJson.mockResolvedValue(openRecord);
+    renderEditor(openRecord);
+    await userEvent.click(screen.getByTestId("service-record-generate-invoice"));
+    await waitFor(() => expect(femmePutJson).toHaveBeenCalled());
+    expect(await screen.findByText("Billing page")).toBeTruthy();
+  });
+
+  it("Void is an option of the «⋯» menu, opens the reason form in place and needs a reason", async () => {
+    const voided = { ...openRecord, status: "VOIDED" as const, voidReason: "Left early" };
+    femmePostJson.mockResolvedValue(voided);
+    const onVoided = vi.fn();
+    renderEditor(openRecord, { onVoided });
+    expect(screen.queryByTestId("service-record-void-open")).toBeNull();
+    expect(screen.queryByTestId("service-record-void-form")).toBeNull();
+    await userEvent.click(screen.getByTestId("service-record-more"));
+    await userEvent.click(await screen.findByTestId("service-record-void-open"));
+    expect(screen.getByTestId("service-record-void-form")).toBeTruthy();
+    await userEvent.click(screen.getByTestId("service-record-void-confirm"));
+    expect(await screen.findByText(/enter a reason/i)).toBeTruthy();
+    expect(femmePostJson).not.toHaveBeenCalled();
+    await userEvent.type(screen.getByLabelText(/reason/i), "Left early");
+    await userEvent.click(screen.getByTestId("service-record-void-confirm"));
+    await waitFor(() => expect(femmePostJson).toHaveBeenCalledWith("/api/service-records/7/void", { voidReason: "Left early" }));
+    await waitFor(() => expect(onVoided).toHaveBeenCalledWith(voided));
+  });
+
+  it("an existing record shows the client and date on one line (no client search)", async () => {
+    renderEditor(openRecord);
+    expect(screen.queryByLabelText(/search or select client/i)).toBeNull();
+    const row = screen.getByLabelText(/^client$/i);
+    expect(row.textContent).toMatch(/Marta Benítez/);
+  });
+
+  it("each service is a numbered summary row (name, professional, subtotal) that opens to edit and remove", async () => {
+    renderEditor(openRecord);
+    const rows = screen.getAllByTestId("service-record-line");
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      const toggle = within(row).getByTestId("service-record-line-toggle");
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(within(row).queryByLabelText(/quantity/i)).toBeNull();
+      expect(within(row).getByTestId("service-record-line-subtotal")).toBeTruthy();
+    }
+    expect(within(rows[0]).getByTestId("service-record-line-toggle").textContent).toMatch(/Laura/);
+    // Open, then close again with the same control.
+    await userEvent.click(within(rows[0]).getByTestId("service-record-line-toggle"));
+    expect(within(rows[0]).getByLabelText(/quantity/i)).toBeTruthy();
+    expect(within(rows[0]).getByLabelText(/unit price/i)).toBeTruthy();
+    expect(within(rows[0]).getByTestId("service-record-line-remove")).toBeTruthy();
+    await userEvent.click(within(rows[0]).getByTestId("service-record-line-toggle"));
+    expect(within(rows[0]).queryByLabelText(/quantity/i)).toBeNull();
+  });
+
+  it("a service without a chosen item stays open until the user closes it", async () => {
+    renderEditor(null);
+    await userEvent.click(screen.getByTestId("service-record-add-line"));
+    const rows = screen.getAllByTestId("service-record-line");
+    for (const row of rows) {
+      const toggle = within(row).getByTestId("service-record-line-toggle");
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    }
+    await userEvent.click(within(rows[1]).getByTestId("service-record-line-toggle"));
+    expect(within(rows[1]).getByTestId("service-record-line-toggle").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("tips are a list: one professional per line (avatar, full name, amount), total in the header", async () => {
+    renderEditor(openRecord);
+    await userEvent.click(screen.getByTestId("service-record-more"));
+    await userEvent.click(await screen.findByTestId("service-record-tips-toggle"));
+    const tips = screen.getByTestId("service-record-tips");
+    // One line under the other: no two-column grid any more.
+    expect(tips.className).toMatch(/flex-col/);
+    expect(tips.className).not.toMatch(/grid-cols-2/);
+    const inputs = within(tips).getAllByRole("textbox");
+    expect(inputs).toHaveLength(2);
+    // Full professional names are on the lines (not truncated labels).
+    expect(within(tips).getByText("Laura")).toBeTruthy();
+    expect(within(tips).getByText("Ana")).toBeTruthy();
+    // The header shows the total once there are tips.
+    expect(screen.queryByTestId("service-record-tips-total")).toBeNull();
+    await userEvent.type(inputs[0], "5000");
+    expect(screen.getByTestId("service-record-tips-total").textContent).toContain("5.000");
+  });
+
+  it("adding a service is a plain text link; there are no frequent-service chips any more", async () => {
+    renderEditor(openRecord);
+    const add = screen.getByTestId("service-record-add-line");
+    expect(add.className).not.toMatch(/border-dashed/);
+    expect(add.textContent).toMatch(/add service/i);
+    expect(screen.queryByTestId("service-record-frequent")).toBeNull();
+    expect(screen.queryByTestId("service-record-frequent-chip")).toBeNull();
+    const lines = screen.getAllByTestId("service-record-line");
+    await userEvent.click(add);
+    expect(screen.getAllByTestId("service-record-line")).toHaveLength(lines.length + 1);
+    // Nothing asked the server for frequent services.
+    expect(femmeJson.mock.calls.some((c) => String(c[0]).includes("frequent-services"))).toBe(false);
+  });
+
+  it("a paid record is read-only and shows its linked invoice", async () => {
+    const closed: ServiceRecordDetail = {
+      ...openRecord,
+      status: "CLOSED",
+      invoiceNumberFormatted: "001-001-0000124",
+      tips: [{ professionalId: 3, professionalName: "Laura", amount: "20000" }],
+    };
+    renderEditor(closed);
+    const ro = screen.getByTestId("service-record-readonly");
+    expect(within(ro).getByText(/001-001-0000124/)).toBeTruthy();
+    expect(within(ro).getByText(/Coloración/)).toBeTruthy();
+    expect(screen.queryByTestId("service-record-submit")).toBeNull();
+    expect(screen.queryByTestId("service-record-generate-invoice")).toBeNull();
+    expect(screen.getByTestId("service-record-close")).toBeTruthy();
+  });
+
+  describe("turno y comprobante en una sola línea discreta", () => {
+    const withTurno = { appointmentId: 9, appointmentStartAt: "2026-11-05T17:00:00Z" };
+
+    it("a paid ficha with a turno shows both on ONE small line, each with its «Ver» link", async () => {
+      const onViewInvoice = vi.fn();
+      renderEditor(
+        {
+          ...openRecord,
+          ...withTurno,
+          status: "CLOSED",
+          invoiceId: 77,
+          invoiceNumberFormatted: "0001145",
+        },
+        { onViewInvoice },
+      );
+      const line = screen.getByTestId("service-record-meta");
+      expect(line.textContent).toContain("0001145");
+      expect(within(line).getByTestId("service-record-appointment")).toBeTruthy();
+      expect(within(line).getByTestId("service-record-invoice-line")).toBeTruthy();
+      // Small, grey text: no box, no big button.
+      expect(line.className).toContain("text-xs");
+      expect(within(line).getByTestId("service-record-view-appointment").textContent).toBe("View");
+      await userEvent.click(within(line).getByTestId("service-record-view-invoice"));
+      expect(onViewInvoice).toHaveBeenCalledWith(77);
+    });
+
+    it("an open ficha shows its turno as grey text under the client (the way to open it is in «⋯»)", async () => {
+      const { unmount } = renderEditor({ ...openRecord, ...withTurno });
+      const client = screen.getByLabelText(/^client$/i);
+      expect(within(client).getByTestId("service-record-appointment")).toBeTruthy();
+      expect(screen.queryByTestId("service-record-meta")).toBeNull();
+      await userEvent.click(screen.getByTestId("service-record-more"));
+      expect(await screen.findByTestId("service-record-view-appointment")).toBeTruthy();
+      unmount();
+      renderEditor(openRecord);
+      expect(screen.queryByTestId("service-record-appointment")).toBeNull();
+      await userEvent.click(screen.getByTestId("service-record-more"));
+      expect(screen.queryByTestId("service-record-view-appointment")).toBeNull();
+    });
+
+    it("a ficha with several turnos lists all their times and offers each one in «⋯»", async () => {
+      renderEditor({
+        ...openRecord,
+        ...withTurno,
+        appointments: [
+          { id: 9, startAt: "2026-11-05T17:00:00Z" },
+          { id: 10, startAt: "2026-11-05T19:00:00Z" },
+        ],
+      });
+      const client = screen.getByLabelText(/^client$/i);
+      expect(within(client).getByTestId("service-record-appointment").textContent).toMatch(
+        /^Appointments .+ · .+$/,
+      );
+      await userEvent.click(screen.getByTestId("service-record-more"));
+      expect(await screen.findByTestId("service-record-view-appointment")).toBeTruthy();
+      expect(screen.getByTestId("service-record-view-appointment-10")).toBeTruthy();
+    });
+
+    it("a paid ficha without a turno shows only its comprobante", () => {
+      renderEditor({ ...openRecord, status: "CLOSED", invoiceId: 77, invoiceNumberFormatted: "0001144" });
+      const line = screen.getByTestId("service-record-meta");
+      expect(within(line).queryByTestId("service-record-appointment")).toBeNull();
+      expect(line.textContent).toContain("0001144");
+    });
+  });
+
+  it("a voided record shows its reason and is read-only", async () => {
+    renderEditor({ ...openRecord, status: "VOIDED", voidReason: "Left early" });
+    expect(screen.getByText(/Left early/)).toBeTruthy();
+    expect(screen.queryByTestId("service-record-submit")).toBeNull();
+  });
+
+  describe("professional mode (no money, tips, void or charge)", () => {
+    const proRecord: ServiceRecordDetail = {
+      ...openRecord,
+      totalAmount: null,
+      tipsTotal: null,
+      clientRuc: null,
+      lines: openRecord.lines.map((l) => ({ ...l, unitPrice: null, lineTotal: null })),
+      tips: [],
+    };
+
+    it("hides prices, totals, tips, void and charge, and saves services without prices or tips", async () => {
+      femmePutJson.mockResolvedValue(proRecord);
+      renderEditor(proRecord, { professionalMode: true });
+      await screen.findByText("Marta Benítez");
+
+      expect(screen.queryByTestId("service-record-total")).toBeNull();
+      expect(screen.queryByTestId("service-record-tips-toggle")).toBeNull();
+      expect(screen.queryByTestId("service-record-void-open")).toBeNull();
+      expect(screen.queryByTestId("service-record-generate-invoice")).toBeNull();
+      expect(screen.queryAllByTestId("service-record-line-subtotal")).toHaveLength(0);
+      // She never picks the professional: no professional field on any line.
+      expect(screen.queryByLabelText(/^Professional \d/)).toBeNull();
+
+      await userEvent.click(screen.getByTestId("service-record-submit"));
+      await waitFor(() => expect(femmePutJson).toHaveBeenCalled());
+      const body = femmePutJson.mock.calls[0][1] as {
+        lines: Array<{ unitPrice: number | null; quantity: number }>;
+        tips: unknown[];
+      };
+      expect(body.lines.every((l) => l.unitPrice === null)).toBe(true);
+      expect(body.tips).toEqual([]);
+    });
+
+    it("is a simple list: − / + per service (below 1 removes it) and a big button to add one", async () => {
+      renderEditor(proRecord, { professionalMode: true });
+      await screen.findByText("Marta Benítez");
+      expect(screen.getAllByTestId("service-record-line")).toHaveLength(2);
+
+      await userEvent.click(screen.getByRole("button", { name: "One more Brushing" }));
+      expect(screen.getAllByTestId("service-record-line-qty").map((e) => e.textContent)).toEqual(["1", "2"]);
+      await userEvent.click(screen.getByRole("button", { name: "One less Brushing" }));
+      await userEvent.click(screen.getByRole("button", { name: "One less Brushing" }));
+      expect(screen.getAllByTestId("service-record-line")).toHaveLength(1);
+      expect(screen.queryByText("Brushing")).toBeNull();
+    });
+
+    it("opens a full-screen picker without prices; picking returns to the ficha with the service added", async () => {
+      femmeJson.mockImplementation((url: unknown) => {
+        const s = String(url);
+        if (s.startsWith("/api/services")) {
+          return Promise.resolve([
+            { id: 21, categoryId: 1, categoryName: "Hair", categoryAccentKey: "a", name: "Corte", priceMinor: "90000", durationMinutes: 30, active: true },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+      femmePutJson.mockResolvedValue(proRecord);
+      renderEditor(proRecord, { professionalMode: true });
+      await screen.findByText("Marta Benítez");
+
+      await userEvent.click(screen.getByTestId("service-record-add-line"));
+      const option = await screen.findByTestId("service-picker-option");
+      expect(option.textContent).toContain("Corte");
+      expect(option.textContent).not.toMatch(/90|Gs/);
+      await userEvent.click(option);
+
+      expect(screen.queryByTestId("service-picker")).toBeNull();
+      expect(screen.getAllByTestId("service-record-line")).toHaveLength(3);
+
+      await userEvent.click(screen.getByTestId("service-record-submit"));
+      await waitFor(() => expect(femmePutJson).toHaveBeenCalled());
+      const body = femmePutJson.mock.calls[0][1] as { lines: Array<{ serviceId: number; quantity: number }> };
+      expect(body.lines.find((l) => l.serviceId === 21)?.quantity).toBe(1);
+    });
+  });
+});

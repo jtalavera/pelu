@@ -70,6 +70,34 @@ class JwtServiceTest {
     assertThat(principal.getTenantId()).isEqualTo(7L);
   }
 
+  @Test
+  void impersonationToken_carriesImpClaim_andParsesAsTenantAdminImpersonation() {
+    // Issue #310: root (user 1) impersonating tenant 7 as its ADMIN.
+    String token =
+        jwtService.createAccessToken(
+            1L, 7L, "platform-admin@pelu", UserRole.ADMIN, null, Instant.now(), true);
+
+    assertThat(decodePayload(token)).containsEntry(JwtService.CLAIM_IMPERSONATION, true);
+
+    FemmeUserPrincipal principal = jwtService.parseAndValidate(token).orElseThrow();
+    assertThat(principal.isImpersonation()).isTrue();
+    assertThat(principal.getTenantId()).isEqualTo(7L);
+    assertThat(principal.getRole()).isEqualTo(UserRole.ADMIN);
+    assertThat(principal.isPlatformAdmin()).isFalse();
+    assertThat(principal.getUserId()).isEqualTo(1L);
+    assertThat(principal.getUsername()).isEqualTo("platform-admin@pelu");
+  }
+
+  @Test
+  void regularToken_hasNoImpClaim_andIsNotAnImpersonation() {
+    String token =
+        jwtService.createAccessToken(
+            2L, 7L, "admin@tenant.test", UserRole.ADMIN, null, Instant.now());
+
+    assertThat(decodePayload(token)).doesNotContainKey(JwtService.CLAIM_IMPERSONATION);
+    assertThat(jwtService.parseAndValidate(token).orElseThrow().isImpersonation()).isFalse();
+  }
+
   /** Decodes the JWT payload segment (no signature verification) just to inspect raw claim keys. */
   private static Map<String, Object> decodePayload(String signedJwt) {
     String[] parts = signedJwt.split("\\.");

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { loginAsDemoApi, seedCategoryServiceProfessional } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, fillPaymentAmount, goToBillingHome } from "../fixtures/billing";
 import { pickServiceLine, ensurePaymentMethodChosen } from "../fixtures/invoice";
 
 test.describe("Issue #101 · Nombre del cliente no obligatorio sin RUC", () => {
@@ -11,7 +11,7 @@ test.describe("Issue #101 · Nombre del cliente no obligatorio sin RUC", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -20,7 +20,7 @@ test.describe("Issue #101 · Nombre del cliente no obligatorio sin RUC", () => {
     await page.locator("#client-identity-document-number").fill("80000005-6");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
     await ensurePaymentMethodChosen(page);
     await page.getByRole("button", { name: "Issue invoice" }).click();
 
@@ -40,7 +40,7 @@ test.describe("Issue #101 · Nombre del cliente no obligatorio sin RUC", () => {
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await page.getByLabel("Search or select client").click();
     await page.getByRole("button", { name: "Occasional client" }).click();
@@ -50,7 +50,7 @@ test.describe("Issue #101 · Nombre del cliente no obligatorio sin RUC", () => {
     await expect(page.locator("#client-identity-document-number")).toHaveValue("");
     await pickServiceLine(page, seed.serviceFullName, 0);
     await page.locator("#line-price-0").fill("9000");
-    await page.locator("#pay-amount-0").fill("9000");
+    await fillPaymentAmount(page, "9000");
 
     await ensurePaymentMethodChosen(page);
     const [res] = await Promise.all([

@@ -29,7 +29,7 @@ export function PageSizeSelect({
     <div className={cn("flex items-center gap-2", className)}>
       <label
         htmlFor={id}
-        className="whitespace-nowrap text-sm text-slate-600 dark:text-slate-400"
+        className="whitespace-nowrap text-sm text-ink-2"
       >
         {label}
       </label>
@@ -38,10 +38,10 @@ export function PageSizeSelect({
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         className={cn(
-          "rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 shadow-sm",
-          "focus-visible:border-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/20",
-          "dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100",
-          "dark:focus-visible:border-indigo-400 dark:focus-visible:ring-indigo-400/25",
+          "rounded-md border border-line bg-surface px-2 py-1 text-sm text-ink shadow-sm",
+          "focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20",
+          "",
+          "",
         )}
       >
         {pageSizes.map((s) => (

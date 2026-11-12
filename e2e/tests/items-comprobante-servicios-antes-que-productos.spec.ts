@@ -5,7 +5,7 @@ import {
   loginAsDemoApi,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { ensureCashSessionOpen } from "../fixtures/billing";
+import { ensureCashSessionOpen, goToBillingHome } from "../fixtures/billing";
 
 test.describe("Nuevo comprobante · orden de la lista de ítems (servicios antes que productos)", () => {
   test("la lista desplegable muestra primero todos los servicios y luego todos los productos", async ({
@@ -47,7 +47,7 @@ test.describe("Nuevo comprobante · orden de la lista de ítems (servicios antes
 
     await loginAsDemo(page);
     await ensureCashSessionOpen(page);
-    await page.getByRole("tab", { name: "Cash Register" }).click();
+    await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
     await expect(page.getByRole("heading", { name: "Issue Invoice" })).toBeVisible();
 

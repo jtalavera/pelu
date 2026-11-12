@@ -370,7 +370,7 @@ public class ServiceCatalogService implements ApplicationEventPublisherAware {
         c.getKind() != null ? c.getKind().name() : ServiceKind.SERVICE.name());
   }
 
-  private static ServiceResponse toServiceResponse(SalonService s) {
+  static ServiceResponse toServiceResponse(SalonService s) {
     Tax tax = s.getTax();
     return new ServiceResponse(
         s.getId(),

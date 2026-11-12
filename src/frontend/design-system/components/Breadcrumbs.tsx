@@ -9,7 +9,7 @@ export type BreadcrumbsProps = Omit<HTMLAttributes<HTMLElement>, "children"> & {
 export function Breadcrumbs({ className, children, ...props }: BreadcrumbsProps) {
   return (
     <nav aria-label="Breadcrumb" className={cn(className)} {...props}>
-      <ol className="flex flex-wrap items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
+      <ol className="flex flex-wrap items-center gap-1 text-sm text-ink-3">
         {children}
       </ol>
     </nav>
@@ -32,7 +32,7 @@ export function BreadcrumbItem({
     href && !current ? (
       <a
         href={href}
-        className="font-medium text-slate-700 underline-offset-4 hover:text-indigo-600 hover:underline dark:text-slate-200 dark:hover:text-indigo-400"
+        className="font-medium text-ink-2 underline-offset-4 hover:text-primary hover:underline"
       >
         {children}
       </a>
@@ -40,7 +40,7 @@ export function BreadcrumbItem({
       <span
         className={cn(
           "font-medium",
-          current && "text-slate-900 dark:text-slate-100",
+          current && "text-ink",
         )}
         aria-current={current ? "page" : undefined}
       >
@@ -52,7 +52,7 @@ export function BreadcrumbItem({
     <li className={cn("flex items-center gap-1", className)} {...props}>
       {content}
       {!current ? (
-        <IconChevronRight className="mx-0.5 text-slate-400 dark:text-slate-500" />
+        <IconChevronRight className="mx-0.5 text-ink-3" />
       ) : null}
     </li>
   );

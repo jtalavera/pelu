@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { loginAsDemo } from "../fixtures/auth";
+import { closeCategoriesDialog, openCategoriesDialog, toggleRowSwitch } from "../fixtures/catalog";
 
 test.describe("HU-04 · Crear y gestionar servicios", () => {
 
@@ -7,7 +8,7 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
   test("HU-04 · 1 CRUD categoría: crear y listar", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/services");
-    await page.getByRole("button", { name: "Categories", exact: true }).click();
+    await openCategoriesDialog(page);
     const name = `E2E Cat ${Date.now()}`;
     await page.getByRole("button", { name: "+ New category" }).click();
     await page.getByRole("dialog", { name: "New category" }).getByLabel("Name").fill(name);
@@ -18,12 +19,12 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
   test("HU-04 · 2 alta de servicio con categoría", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/services");
-    await page.getByRole("button", { name: "Categories", exact: true }).click();
+    await openCategoriesDialog(page);
     const cat = `SvcCat ${Date.now()}`;
     await page.getByRole("button", { name: "+ New category" }).click();
     await page.getByRole("dialog", { name: "New category" }).getByLabel("Name").fill(cat);
     await page.getByRole("dialog", { name: "New category" }).getByRole("button", { name: "Save" }).click();
-    await page.getByRole("button", { name: "Services", exact: true }).click();
+    await closeCategoriesDialog(page);
     const svcName = `E2E Service ${Date.now()}`;
     await page.getByRole("button", { name: "+ New service" }).click();
     const svcDialog = page.getByRole("dialog", { name: "New service" });
@@ -42,9 +43,9 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await page.waitForTimeout(600);
     await expect(page.getByText(svcName, { exact: true }).first()).toBeVisible();
     const svcRow = page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: svcName });
-    await expect(svcRow.getByText("Gs. 50.000", { exact: true })).toBeVisible();
-    // Issue #163 AC7: the services table has its own Status column, same as Professionals.
-    await expect(svcRow.getByText("Active", { exact: true })).toBeVisible();
+    await expect(svcRow).toContainText("Gs. 50.000");
+    // Issue #163 AC7 (catalog redesign): the status is the row switch, on for an active service.
+    await expect(svcRow.locator('[data-testid^="svc-switch-"]')).toBeChecked();
   });
 
   test("Issue #163/#165 · AC8/AC9 desactivar y reactivar servicio: sin tachado ni fondo apagado, badge de estado, mensaje de éxito", async ({
@@ -52,12 +53,12 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/services");
-    await page.getByRole("button", { name: "Categories", exact: true }).click();
+    await openCategoriesDialog(page);
     const cat = `DeactCat ${Date.now()}`;
     await page.getByRole("button", { name: "+ New category" }).click();
     await page.getByRole("dialog", { name: "New category" }).getByLabel("Name").fill(cat);
     await page.getByRole("dialog", { name: "New category" }).getByRole("button", { name: "Save" }).click();
-    await page.getByRole("button", { name: "Services", exact: true }).click();
+    await closeCategoriesDialog(page);
     const svcName = `E2E Deact Svc ${Date.now()}`;
     await page.getByRole("button", { name: "+ New service" }).click();
     const svcDialog = page.getByRole("dialog", { name: "New service" });
@@ -72,41 +73,36 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await page.waitForTimeout(600);
     const svcRow = page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: svcName });
     await expect(svcRow).toBeVisible();
-    const activeBackground = await svcRow.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const svcSwitch = svcRow.locator('[data-testid^="svc-switch-"]');
+    await expect(svcSwitch).toBeChecked();
 
-    await svcRow.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
-    await page.getByRole("menuitem", { name: "Deactivate" }).click();
+    // Catalog redesign: the row switch turns the service off (after confirming) and back on.
+    await toggleRowSwitch(svcRow);
     await page.getByRole("dialog", { name: "Deactivate service" }).getByRole("button", { name: "Deactivate" }).click();
-    await expect(svcRow.getByText("Inactive", { exact: true })).toBeVisible();
-    // AC8: status changes via badge, the service name is never struck through.
-    await expect(svcRow).not.toHaveClass(/card-inactive/);
+    await expect(svcSwitch).not.toBeChecked();
+    await expect(svcRow).toContainText("Inactive");
+    // AC8: the service name is never struck through.
     const nameDecoration = await svcRow
       .getByText(svcName, { exact: true })
       .evaluate((el) => getComputedStyle(el).textDecorationLine);
     expect(nameDecoration).toBe("none");
-    // Issue #165 AC2: the row must NOT get a dimmed/grayed-out background either — only
-    // the Status badge should signal inactive, same as the Clients table.
-    await expect(svcRow).not.toHaveClass(/row-inactive/);
-    const inactiveBackground = await svcRow.evaluate((el) => getComputedStyle(el).backgroundColor);
-    expect(inactiveBackground).toBe(activeBackground);
-    // AC9: deactivating from the table shows a success message in the table header.
+    // AC9: deactivating from the list shows a success message.
     await expect(page.getByText("Service deactivated successfully.", { exact: true })).toBeVisible();
 
-    await svcRow.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
-    await page.getByRole("menuitem", { name: "Activate" }).click();
-    await expect(svcRow.getByText("Active", { exact: true })).toBeVisible();
+    await toggleRowSwitch(svcRow);
+    await expect(svcSwitch).toBeChecked();
     await expect(page.getByText("Service activated successfully.", { exact: true })).toBeVisible();
   });
 
   test("HU-04 · 3+6 edición de servicio vía pop-up al hacer click en la fila", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/services");
-    await page.getByRole("button", { name: "Categories", exact: true }).click();
+    await openCategoriesDialog(page);
     const cat = `EditCat ${Date.now()}`;
     await page.getByRole("button", { name: "+ New category" }).click();
     await page.getByRole("dialog", { name: "New category" }).getByLabel("Name").fill(cat);
     await page.getByRole("dialog", { name: "New category" }).getByRole("button", { name: "Save" }).click();
-    await page.getByRole("button", { name: "Services", exact: true }).click();
+    await closeCategoriesDialog(page);
     const original = `ToEdit ${Date.now()}`;
     await page.getByRole("button", { name: "+ New service" }).click();
     const newDlg = page.getByRole("dialog", { name: "New service" });
@@ -132,7 +128,7 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
   test("HU-04 · 7 edición de categoría vía pop-up al hacer click en la fila", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/services");
-    await page.getByRole("button", { name: "Categories", exact: true }).click();
+    await openCategoriesDialog(page);
     const original = `CatRow ${Date.now()}`;
     await page.getByRole("button", { name: "+ New category" }).click();
     await page
@@ -160,32 +156,16 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     await page.getByPlaceholder("Search by name or category…").clear();
   });
 
-  test("Issue #68 · filtros de categoría aparecen antes que los de estado, y el botón 'Todos' dice 'All statuses'", async ({
-    page,
-  }) => {
+  test("Catálogo · filtros de categoría como chips y sin filtros de estado", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/services");
 
     const filtersContainer = page.locator('[data-tour="services-filters"]');
     await expect(filtersContainer).toBeVisible();
-
-    // The status "all" filter must read "All statuses", not just "All"
-    await expect(
-      filtersContainer.getByRole("button", { name: "All statuses", exact: true }),
-    ).toBeVisible();
-
-    // Category filter buttons must render before the status filter group in DOM order
-    const catBeforeStatus = await filtersContainer.evaluate((container) => {
-      const catBtn = Array.from(container.querySelectorAll("button")).find(
-        (b) => b.textContent?.trim() === "All categories",
-      );
-      const statusGroup = container.querySelector('[role="group"]');
-      if (!catBtn || !statusGroup) return false;
-      return (
-        (catBtn.compareDocumentPosition(statusGroup) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
-      );
-    });
-    expect(catBeforeStatus).toBe(true);
+    await expect(filtersContainer.getByRole("button", { name: "All categories", exact: true })).toBeVisible();
+    // The status filters (All statuses / Active only / Inactive only) were replaced by the row switch.
+    await expect(page.getByRole("button", { name: "All statuses", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Inactive only", exact: true })).toHaveCount(0);
   });
 
   test("Issue #165 · AC1 el mensaje de éxito usa el tamaño de letra del buscador y no toca la tabla", async ({
@@ -216,7 +196,7 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     // The message box must leave a gap before the table header — not touch it directly.
     const gap = await page.evaluate(() => {
       const alertEl = document.querySelector('[role="alert"]');
-      const table = document.querySelector("table");
+      const table = document.querySelector('[data-testid="catalog-items-list"]');
       if (!alertEl || !table) return null;
       return table.getBoundingClientRect().top - alertEl.getBoundingClientRect().bottom;
     });
@@ -243,10 +223,9 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
     const svcRow = page.locator(`[data-testid^="svc-row-"]`).filter({ hasText: svcName });
     await expect(svcRow).toBeVisible();
 
-    await svcRow.getByRole("button", { name: /^(Actions|Acciones)$/ }).click();
-    await page.getByRole("menuitem", { name: "Deactivate" }).click();
+    await toggleRowSwitch(svcRow);
     await page.getByRole("dialog", { name: "Deactivate service" }).getByRole("button", { name: "Deactivate" }).click();
-    await expect(svcRow.getByText("Inactive", { exact: true })).toBeVisible();
+    await expect(svcRow).toContainText("Inactive");
     // The full-page loading spinner text must never reappear after this in-place update —
     // the search box (unmounted while the spinner is shown) must stay mounted throughout.
     await expect(page.getByPlaceholder(/search by name/i)).toBeVisible();
@@ -258,7 +237,7 @@ test.describe("HU-04 · Crear y gestionar servicios", () => {
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/services");
-    const table = page.locator("table").first();
+    const table = page.getByTestId("catalog-items-list");
     await expect(table).toBeVisible();
     const firstRow = page.locator('[data-testid^="svc-row-"]').first();
     await expect(firstRow).toBeVisible();

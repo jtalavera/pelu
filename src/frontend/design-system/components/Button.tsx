@@ -3,28 +3,28 @@ import { cn } from "../lib/cn";
 
 const variants = {
   primary:
-    "bg-indigo-600 text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-indigo-400 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:outline-indigo-400 dark:disabled:bg-indigo-800",
+    "bg-primary text-primary-fg hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
   secondary:
-    "bg-white text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-600 dark:hover:bg-slate-700",
+    "bg-primary-lt text-primary-dk hover:bg-primary-md/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
   outline:
-    "border border-slate-300 bg-transparent text-slate-900 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800",
+    "border border-primary-md bg-transparent text-ink hover:bg-primary-lt focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
   ghost:
-    "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
+    "text-ink-2 hover:bg-primary-lt hover:text-ink",
   /** Same visual weight as ghost; use when naming matches design-system “tertiary” */
   tertiary:
-    "text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800",
+    "text-ink-2 hover:bg-primary-lt hover:text-ink",
   danger:
-    "bg-red-600 text-white shadow-sm hover:bg-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 dark:bg-red-700 dark:hover:bg-red-600 dark:focus-visible:outline-red-500",
+    "bg-danger text-white hover:bg-danger/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-danger",
   success:
-    "bg-green-600 text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 disabled:bg-green-400 dark:bg-green-600 dark:hover:bg-green-500 dark:focus-visible:outline-green-500 dark:disabled:bg-green-900",
+    "bg-success text-white hover:bg-success/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-success",
 } as const;
 
 const sizes = {
-  sm: "min-h-[44px] rounded-md px-2.5 text-xs sm:h-8 sm:min-h-0",
-  md: "min-h-[44px] rounded-md px-3.5 text-sm sm:h-9 sm:min-h-0",
-  lg: "min-h-[44px] rounded-md px-4 text-sm sm:h-10 sm:min-h-0",
+  sm: "min-h-[44px] rounded-full px-3.5 text-xs sm:h-8 sm:min-h-0",
+  md: "min-h-[44px] rounded-full px-5 text-sm sm:h-9 sm:min-h-0",
+  lg: "min-h-[44px] rounded-full px-6 text-sm sm:h-10 sm:min-h-0",
   icon:
-    "min-h-[44px] min-w-[44px] rounded-md p-0 sm:h-9 sm:min-h-0 sm:min-w-0 sm:w-9",
+    "min-h-[44px] min-w-[44px] rounded-full p-0 sm:h-9 sm:min-h-0 sm:min-w-0 sm:w-9",
 } as const;
 
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -51,7 +51,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       type={props.type ?? "button"}
       disabled={disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center gap-2 font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
+        "inline-flex items-center justify-center gap-2 font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50",
         variants[variant],
         sizes[size],
         className,

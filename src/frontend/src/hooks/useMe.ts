@@ -26,6 +26,15 @@ export type Me = {
   professionalId: number | null;
   /** Profile data from linked Professional; null for admin without linked Professional. */
   profile: MeProfile | null;
+  /**
+   * Issue #310: true when the Platform Admin is impersonating this tenant's administrator (role is
+   * then ADMIN and email the Platform Admin's own).
+   */
+  impersonation?: boolean;
+  /** HU-66: a professional session opened with her PIN on a shared device (calendar only). */
+  pinSession?: boolean;
+  /** The tenant's accent skin (DURAZNO, CELESTE, ROSA); null for the tenant-less PLATFORM_ADMIN. */
+  skin?: string | null;
 };
 
 export function useMe(): { me: Me | null; loading: boolean } {

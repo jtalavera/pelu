@@ -13,6 +13,7 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { PLATFORM_ADMIN_EMAIL, loginAsDemo, loginAsPlatformAdmin } from "../fixtures/auth";
+import { openBusinessSection, setControlledInputValue } from "../fixtures/ui";
 
 // See sifen-hu-18-cargar-certificado.spec.ts for the "sifen-hu-<n>-<slug>" naming rationale.
 //
@@ -288,7 +289,11 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     await loginAsDemo(page);
     await page.goto("/app/settings/business");
 
-    await expect(page.getByText("SIFEN tax data")).toBeVisible();
+    // The shared demo profile may carry an invalid phone left by other specs: fix it first.
+    await openBusinessSection(page, "contact");
+    await setControlledInputValue(page.getByLabel("Phone"), "0981123456");
+    await openBusinessSection(page, "sifen");
+    await expect(page.getByTestId("business-section-sifen-toggle")).toBeVisible();
     await page.getByRole("radio", { name: "Legal entity" }).click();
     await page.getByLabel("Economic activity code").fill("96020");
     await page
@@ -303,6 +308,7 @@ test.describe("SIFEN HU-22 · Activar o desactivar la facturación electrónica 
     await expect(page.getByText("Your business details were saved.")).toBeVisible();
 
     await page.reload();
+    await openBusinessSection(page, "sifen");
     await expect(page.getByRole("radio", { name: "Legal entity" })).toBeChecked();
     await expect(page.getByLabel("Economic activity code")).toHaveValue("96020");
     await expect(page.getByLabel("Department and city")).toHaveValue(

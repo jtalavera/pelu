@@ -18,10 +18,10 @@ describe("StockAvailabilityHint", () => {
     expect(screen.queryByTestId("hint-warning")).toBeNull();
   });
 
-  it("shows an amber, non-blocking warning when the request exceeds it", () => {
+  it("shows a warning-colored, non-blocking warning when the request exceeds it", () => {
     render(<StockAvailabilityHint item={item} requested={5} testId="hint" />);
     const warning = screen.getByTestId("hint-warning");
-    expect(warning.className).toContain("amber");
+    expect(warning.className).toContain("warning");
     expect(warning.textContent).toMatch(/3/);
   });
 

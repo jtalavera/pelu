@@ -1,16 +1,17 @@
+import { withDisplayNames } from "../../lib/professionalDisplay";
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@design-system";
 import { femmeJson } from "../../api/femmeClient";
 
-export type ProfessionalOption = { id: number; fullName: string; active: boolean };
+export type ProfessionalOption = { id: number; fullName: string; displayName?: string | null; active: boolean };
 
 /** Tenant professionals (active and inactive) for filters and selectors. */
 export function useProfessionals(): ProfessionalOption[] {
   const [list, setList] = useState<ProfessionalOption[]>([]);
   useEffect(() => {
-    femmeJson<ProfessionalOption[]>("/api/professionals")
-      .then((l) => setList(Array.isArray(l) ? l : []))
+    femmeJson<ProfessionalOption[]>("/api/professionals/options")
+      .then((l) => setList(Array.isArray(l) ? withDisplayNames(l) : []))
       .catch(() => setList([]));
   }, []);
   return list;
@@ -33,15 +34,7 @@ export function parsePercentInput(raw: string): string | null {
   return s;
 }
 
-export function todayYmd(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-export function firstOfMonthYmd(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
+export { todayYmd, oneMonthAgoYmd } from "../../lib/dateRange";
 
 export function SettlementStatusBadge({ status }: { status: string | null }) {
   const { t } = useTranslation();

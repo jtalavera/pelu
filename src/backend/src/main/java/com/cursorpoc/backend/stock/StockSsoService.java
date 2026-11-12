@@ -34,7 +34,8 @@ public class StockSsoService {
   public record SsoToken(String token, long expiresInSeconds) {}
 
   public SsoToken issue(FemmeUserPrincipal principal) {
-    if (principal.getRole() != UserRole.ADMIN && principal.getRole() != UserRole.PROFESSIONAL) {
+    // Issue #38 follow-up: professionals don't use Stock for now — ADMIN only.
+    if (principal.getRole() != UserRole.ADMIN) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "FORBIDDEN");
     }
     if (!outbox.stockEnabled(principal.getTenantId())) {
