@@ -142,7 +142,7 @@ test("AC1-3 · «Comprobante emitido»: la solapa llega plegada y resaltada; las
   // «+ Another professional»: Bea, paid by debit card (the brand is mandatory).
   await page.getByTestId("invoice-tips-add-other").click();
   const extra = rows.nth(1);
-  await extra.getByLabel("Professional").selectOption({ label: w.bea.name });
+  await extra.locator('select[id$="-prof"]').selectOption({ label: w.bea.name });
   await extra.getByLabel(/Tip amount/).fill("5000");
   await extra.getByLabel(/How was it paid/).selectOption("DEBIT_CARD");
   await page.getByTestId("invoice-tips-submit").click();
