@@ -264,13 +264,8 @@ export function NewInvoiceFlow({
         })), emptyLine()]
       : [emptyLine()],
   );
-  // "More options" opens by itself when a ficha prefill brings tips or professionals with it.
-  const [moreOpen, setMoreOpen] = useState(
-    () =>
-      !!initialPrefillServiceRecord &&
-      (initialPrefillServiceRecord.lines.some((l) => l.professionalId != null) ||
-        (initialPrefillServiceRecord.tips ?? []).some((tp) => Number(tp.amount) > 0)),
-  );
+  // "More options" now only holds the global discount; it opens by itself when that discount has an error.
+  const [moreOpen, setMoreOpen] = useState(false);
   const [splitPayments, setSplitPayments] = useState(false);
   // Loaded once an item is picked (or right away with the commissions module, as before).
   const needsLineProfessionals = commissionsEnabled || lines.some((l) => l.pickedService != null);
@@ -455,9 +450,6 @@ export function NewInvoiceFlow({
       });
       return next;
     });
-    if (record.lines.some((l) => l.professionalId != null) || record.tips.length > 0) {
-      setMoreOpen(true);
-    }
     setRecordImported(true);
   }
 
@@ -1643,14 +1635,6 @@ export function NewInvoiceFlow({
                     <div className="flex items-start justify-between gap-2">
                       <span className="min-w-0 break-words font-semibold text-ink">
                         {line.pickedService.name}
-                        {line.professionalId ? (
-                          <span
-                            className="ml-1.5 text-sm font-semibold text-ink-3"
-                            data-testid={`billing-line-professional-name-${idx}`}
-                          >
-                            · {tipProfessionalName(line.professionalId)}
-                          </span>
-                        ) : null}
                       </span>
                       <Button
                         type="button"
@@ -1662,7 +1646,7 @@ export function NewInvoiceFlow({
                         ×
                       </Button>
                     </div>
-                    <div className="grid grid-cols-[5rem_minmax(0,1fr)_auto] items-start gap-3">
+                    <div className="grid grid-cols-[5rem_minmax(0,1fr)_auto] items-start gap-3 sm:grid-cols-[5rem_9rem_minmax(0,1fr)_auto]">
                       <div>
                         <Label htmlFor={`line-qty-${idx}`}>{t("femme.billing.invoice.lineQuantity")}</Label>
                         <Input
@@ -1689,6 +1673,29 @@ export function NewInvoiceFlow({
                         <FieldValidationError id={`line-price-err-${idx}`}>
                           {lineErrors[idx]?.unitPrice}
                         </FieldValidationError>
+                      </div>
+                      {/* Who served the item: always visible (no folded options). */}
+                      <div className="col-span-3 col-start-1 row-start-2 flex min-w-0 flex-col gap-1 sm:col-span-1 sm:col-start-3 sm:row-start-1">
+                        <span aria-hidden="true" className="text-sm font-semibold text-ink-2">
+                          {t("femme.billing.invoice.lineProfessional")}
+                        </span>
+                        <SearchableSelect<number>
+                          id={`line-professional-${idx}`}
+                          label={t("femme.billing.invoice.lineProfessional")}
+                          labelSrOnly
+                          value={line.professionalId === "" ? "" : Number(line.professionalId)}
+                          onChange={(v) =>
+                            setLines((prev) =>
+                              prev.map((l, i) =>
+                                i === idx ? { ...l, professionalId: v === "" ? "" : String(v) } : l,
+                              ),
+                            )
+                          }
+                          options={lineProfessionals.map((p) => ({ value: p.id, label: p.fullName }))}
+                          emptyOption={{ value: "", label: t("femme.billing.invoice.lineProfessionalNone") }}
+                          filterPlaceholder={t("femme.billing.invoice.lineProfessionalPlaceholder")}
+                          noResultsText={t("femme.billing.invoice.lineProfessionalNoResults")}
+                        />
                       </div>
                       <span
                         className="pt-8 text-right font-bold tabular-nums text-ink"
@@ -1718,7 +1725,7 @@ export function NewInvoiceFlow({
                         {t("femme.billing.invoice.lineNoCommission")}
                       </p>
                     ) : null}
-                    {/* Per-service "More options": who served it and the item's own discount. */}
+                    {/* Per-service folded section: only the item's own discount. */}
                     {(() => {
                       const open = !!line.optionsOpen || !!lineErrors[idx]?.discountValue;
                       return (
@@ -1735,39 +1742,11 @@ export function NewInvoiceFlow({
                             }
                             className="inline-flex min-h-11 items-center gap-1.5 self-start rounded-md px-1 text-sm font-bold text-primary"
                           >
-                            {t("femme.billing.invoice.moreOptions")}
+                            {t("femme.billing.invoice.lineDiscountOpen")}
                             <span aria-hidden="true">{open ? "⌃" : "⌄"}</span>
-                            <span className="font-normal text-ink-3">
-                              {t("femme.billing.invoice.lineMoreHint")}
-                            </span>
                           </button>
                           {open ? (
-                            <div
-                              id={`billing-line-more-body-${idx}`}
-                              className="grid grid-cols-1 gap-3 pb-2 sm:grid-cols-2 sm:items-end"
-                            >
-                              <div className="flex flex-col gap-1">
-                                <span aria-hidden="true" className="text-sm font-semibold text-ink-2">
-                                  {t("femme.billing.invoice.lineProfessional")}
-                                </span>
-                                <SearchableSelect<number>
-                                  id={`line-professional-${idx}`}
-                                  label={t("femme.billing.invoice.lineProfessional")}
-                                  labelSrOnly
-                                  value={line.professionalId === "" ? "" : Number(line.professionalId)}
-                                  onChange={(v) =>
-                                    setLines((prev) =>
-                                      prev.map((l, i) =>
-                                        i === idx ? { ...l, professionalId: v === "" ? "" : String(v) } : l,
-                                      ),
-                                    )
-                                  }
-                                  options={lineProfessionals.map((p) => ({ value: p.id, label: p.fullName }))}
-                                  emptyOption={{ value: "", label: t("femme.billing.invoice.lineProfessionalNone") }}
-                                  filterPlaceholder={t("femme.billing.invoice.lineProfessionalPlaceholder")}
-                                  noResultsText={t("femme.billing.invoice.lineProfessionalNoResults")}
-                                />
-                              </div>
+                            <div id={`billing-line-more-body-${idx}`} className="pb-2">
                               <div className="flex flex-col gap-1">
                                 <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold text-ink-2">
                                   <Checkbox
@@ -1837,6 +1816,48 @@ export function NewInvoiceFlow({
                 ),
               )}
             </div>
+          </Card>
+
+          {/* Tips — right after the services; one per professional who served a line, never added to the total. */}
+          <Card className="flex flex-col gap-3 p-4 sm:p-6" data-testid="billing-tips-section">
+            <div className="flex flex-col gap-0.5">
+              <Heading as="h2" className="text-lg">
+                {t("femme.billing.invoice.tipsSection")}
+              </Heading>
+              <Text variant="muted" className="text-sm">
+                {t("femme.billing.invoice.tipsHint")}
+              </Text>
+            </div>
+            {tipProfessionalIds.length === 0 ? (
+              <Text variant="muted" className="text-sm" data-testid="billing-tips-empty">
+                {t("femme.billing.invoice.tipsEmpty")}
+              </Text>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {tipProfessionalIds.map((id) => (
+                  <div key={id} className="flex flex-wrap items-center gap-3">
+                    <Label htmlFor={`billing-tip-${id}`} className="min-w-0 flex-1 basis-40 text-sm font-medium">
+                      {tipProfessionalName(id)}
+                    </Label>
+                    <Input
+                      id={`billing-tip-${id}`}
+                      inputMode="numeric"
+                      value={tips[id] ?? ""}
+                      onChange={(e) => setTips((prev) => ({ ...prev, [id]: maskMoneyInput(e.target.value) }))}
+                      placeholder="0"
+                      aria-label={`${t("femme.billing.invoice.tipsAmountLabel")} — ${tipProfessionalName(id)}`}
+                      className="w-36 text-right"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+            {tipsTotal > 0 && (
+              <div className="flex justify-between border-t border-line pt-2 text-sm font-semibold text-danger">
+                <span>{t("femme.billing.invoice.tipsTotal")}</span>
+                <span data-testid="billing-tips-total">{formatAmountDecimal(tipsTotal.toFixed(2))}</span>
+              </div>
+            )}
           </Card>
 
           {/* Step 3 — how does the client pay */}
@@ -2049,43 +2070,6 @@ export function NewInvoiceFlow({
                     </div>
                   )}
                 </div>
-              </section>
-
-              {/* Tips — one per professional who served a service line; never added to the total. */}
-              <section className="flex flex-col gap-2" data-testid="billing-tips-section">
-                <Heading as="h3" className="text-base">
-                  {t("femme.billing.invoice.tipsSection")}
-                </Heading>
-                {tipProfessionalIds.length === 0 ? (
-                  <Text variant="muted" className="text-sm" data-testid="billing-tips-empty">
-                    {t("femme.billing.invoice.tipsEmpty")}
-                  </Text>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {tipProfessionalIds.map((id) => (
-                      <div key={id} className="flex flex-wrap items-center gap-3">
-                        <Label htmlFor={`billing-tip-${id}`} className="min-w-[160px] text-sm font-medium">
-                          {tipProfessionalName(id)}
-                        </Label>
-                        <Input
-                          id={`billing-tip-${id}`}
-                          inputMode="numeric"
-                          value={tips[id] ?? ""}
-                          onChange={(e) => setTips((prev) => ({ ...prev, [id]: maskMoneyInput(e.target.value) }))}
-                          placeholder="0"
-                          aria-label={`${t("femme.billing.invoice.tipsAmountLabel")} — ${tipProfessionalName(id)}`}
-                          className="w-32"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {tipsTotal > 0 && (
-                  <div className="flex justify-between text-sm font-semibold text-danger">
-                    <span>{t("femme.billing.invoice.tipsTotal")}</span>
-                    <span data-testid="billing-tips-total">{formatAmountDecimal(tipsTotal.toFixed(2))}</span>
-                  </div>
-                )}
               </section>
             </div>
           </details>

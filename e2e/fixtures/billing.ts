@@ -97,7 +97,7 @@ export async function addPaymentMethodRow(page: Page) {
   await add.click();
 }
 
-/** Opens the "More options" section of the new-invoice screen (discount, tips, date…). */
+/** Opens the "More options" section of the new-invoice screen (the global discount; tips and professionals are always visible). */
 export async function openMoreOptions(page: Page) {
   const more = page.getByTestId("billing-more-options");
   if ((await more.getAttribute("open")) === null) await more.locator("summary").click();
@@ -187,14 +187,16 @@ export async function openInvoiceMainTab(page: Page) {
   await expect(page.getByTestId("invoice-detail-view")).toBeVisible();
 }
 
-/** Opens the per-service «More options» (professional, item discount) of a line of the new invoice. */
+/** Opens the per-service «Item discount» section of a line of the new invoice (the professional is always visible). */
 export async function openLineMoreOptions(page: Page, idx: number) {
   const toggle = page.getByTestId(`billing-line-more-${idx}`);
+  // The page header and the bottom total bar are sticky: centre the toggle so neither covers it.
+  await toggle.evaluate((el) => el.scrollIntoView({ block: "center" }));
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-  await expect(page.locator(`#line-professional-${idx}`)).toBeVisible();
+  await expect(page.locator(`#line-disc-toggle-${idx}`)).toBeVisible();
 }
 
-/** Picks the professional of an invoice line by typing in the searchable combobox (needs the line's «Más opciones» open). */
+/** Picks the professional of an invoice line by typing in the searchable combobox (always visible on the line). */
 export async function pickInvoiceLineProfessional(page: Page, idx: number, fullName: string) {
   const input = page.locator(`#line-professional-${idx}`);
   await input.click();
