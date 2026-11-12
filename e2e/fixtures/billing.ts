@@ -190,6 +190,8 @@ export async function openInvoiceMainTab(page: Page) {
 /** Opens the per-service «Item discount» section of a line of the new invoice (the professional is always visible). */
 export async function openLineMoreOptions(page: Page, idx: number) {
   const toggle = page.getByTestId(`billing-line-more-${idx}`);
+  // The page header and the bottom total bar are sticky: centre the toggle so neither covers it.
+  await toggle.evaluate((el) => el.scrollIntoView({ block: "center" }));
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
   await expect(page.locator(`#line-disc-toggle-${idx}`)).toBeVisible();
 }
