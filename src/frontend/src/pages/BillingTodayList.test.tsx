@@ -157,6 +157,44 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
     });
   });
 
+  describe("layout: same table as the Propinas movements", () => {
+    it("shows a table with the Propinas look (uppercase header, borderless ⋮ in the last column) from a tablet up", async () => {
+      await renderHome();
+      const table = screen.getByTestId("billing-today-table");
+      const headers = within(table)
+        .getAllByRole("columnheader")
+        .map((h) => h.textContent);
+      expect(headers).toEqual(["Issued", "Number", "Client", "Status", "Total", ""]);
+      expect(table.querySelector("thead tr")!.className).toContain("uppercase");
+      // One row per invoice, with the row's data in its own cells.
+      const row = screen.getByTestId("billing-today-row-1");
+      expect(within(row).getAllByRole("cell")).toHaveLength(6);
+      expect(within(row).getByTestId("billing-today-menu-1-trigger").className).toContain("border-transparent");
+    });
+
+    it("keeps the two-line cards on a phone, like Propinas", async () => {
+      const original = window.matchMedia;
+      window.matchMedia = ((query: string) => ({
+        matches: query.includes("max-width: 639px"),
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })) as unknown as typeof window.matchMedia;
+      try {
+        await renderHome();
+        expect(screen.queryByTestId("billing-today-table")).toBeNull();
+        expect(screen.getByTestId("billing-today-row-1")).toBeTruthy();
+        expect(screen.getByTestId("billing-today-menu-1-trigger")).toBeTruthy();
+      } finally {
+        window.matchMedia = original;
+      }
+    });
+  });
+
   describe("refresh", () => {
     it("shows when the list was last updated", async () => {
       await renderHome();

@@ -1549,6 +1549,7 @@
         "viewHistory": "View full history",
         "refreshing": "Refreshing…",
         "updatedAt": "Updated at {{time}}",
+        "colIssuedAt": "Issued",
         "rowMenu": {
           "email": "Send by email",
           "emailHint": "Check the email before sending",

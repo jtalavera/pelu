@@ -544,4 +544,40 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await expect(page.getByTestId(`billing-today-menu-${inv.id}-trigger`)).toBeEnabled();
     await page.unroute(`**/api/invoices/${inv.id}/sifen/kude`);
   });
+
+  test("AC10 · la lista es una tabla con el mismo estilo que Movimientos de Propinas", async ({ page, request }) => {
+    test.setTimeout(60_000);
+    const inv = await createInvoice(request, token, seed, "E2E HU72 tabla", "APPROVED");
+    await openToday(page);
+    await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
+
+    const table = page.getByTestId("billing-today-table");
+    await expect(table).toBeVisible();
+    await expect(table.getByRole("columnheader")).toHaveText(["Issued", "Number", "Client", "Status", "Total", ""]);
+    // Same header look as the Propinas table: small uppercase labels over a hairline.
+    await expect(table.locator("thead tr")).toHaveCSS("text-transform", "uppercase");
+    // The row keeps its data in columns: issue date/time, number, client, state and total.
+    const row = todayRow(page, inv.id);
+    await expect(row.getByRole("cell")).toHaveCount(6);
+    await expect(row.getByTestId(`billing-today-issued-at-${inv.id}`)).toContainText(/\d{2}\/\d{2}\/\d{4}/);
+    await expect(row).toContainText(inv.invoiceNumberFormatted);
+    await expect(row).toContainText("E2E HU72 tabla", { ignoreCase: true });
+    await expect(row).toContainText("Approved");
+    // Clicking the row opens the detail; the ⋮ does not.
+    await page.getByTestId(`billing-today-menu-${inv.id}-trigger`).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await row.click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+  });
+
+  test("AC10 · en el celular la lista se muestra como tarjetas, igual que Propinas", async ({ page, request }) => {
+    test.setTimeout(60_000);
+    const inv = await createInvoice(request, token, seed, "E2E HU72 tarjeta", "APPROVED");
+    await page.setViewportSize({ width: 375, height: 800 });
+    await openToday(page);
+    await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("billing-today-table")).toHaveCount(0);
+    await expect(page.getByTestId(`billing-today-menu-${inv.id}-trigger`)).toBeVisible();
+  });
 });

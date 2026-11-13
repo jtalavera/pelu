@@ -1549,6 +1549,7 @@
         "viewHistory": "Ver historial completo",
         "refreshing": "Actualizando…",
         "updatedAt": "Actualizado a las {{time}}",
+        "colIssuedAt": "Emisión",
         "rowMenu": {
           "email": "Enviar por correo",
           "emailHint": "Revisá el correo antes de enviar",

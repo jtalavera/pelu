@@ -37,6 +37,7 @@ import { InvoiceCorrectionForm } from "../../components/InvoiceCorrectionForm";
 import { InvoiceDetailModal, type InvoiceDetail } from "../../components/InvoiceDetailModal";
 import { InvoiceStatePill, deriveInvoiceState } from "../../components/InvoiceStatePill";
 import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../../hooks/useSifenStatusLiveRefresh";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { isKudeShareable, sendKudeByWhatsapp } from "../../lib/invoiceKudeShare";
@@ -219,6 +220,8 @@ export function BillingHome({
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   const [correctionInvoiceId, setCorrectionInvoiceId] = useState<number | null>(null);
   const dateLocale = useDateLocale();
+  // Same breakpoint as the Propinas movements: cards on a phone, a table from there up.
+  const isPhone = useMediaQuery("(max-width: 639px)");
   // Manual «Actualizar»: the list stays on screen while it re-reads (no spinner swap).
   const [todayRefreshing, setTodayRefreshing] = useState(false);
   // When the list was last read from the server (any reload: first load, manual, live or on closing a detail).
@@ -286,6 +289,25 @@ export function BillingHome({
     } finally {
       setKudeBusyId(null);
     }
+  }
+
+  /** «Corregir y reenviar» for a comprobante that needs attention (shared by the table and the phone list). */
+  function correctResendButton(inv: InvoiceListItem): ReactNode {
+    if (deriveInvoiceState(inv) !== "attention" || inv.status !== "ISSUED") return null;
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        data-testid={`today-row-correct-resend-${inv.id}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setCorrectionInvoiceId(inv.id);
+        }}
+      >
+        {t("femme.billing.history.detail.sifen.correctResendButton")}
+      </Button>
+    );
   }
 
   /** An option label with its optional second line (why it is not available, what it does). */
@@ -525,6 +547,7 @@ export function BillingHome({
                         {t("femme.billing.session.todayTotalExcludesRejected")}
                       </Text>
                     )}
+                    {isPhone ? (
                     <ul className="divide-y divide-line">
                       {todayInvoices.map((inv) => (
                         <li key={inv.id}>
@@ -552,20 +575,7 @@ export function BillingHome({
                               <span className="text-right font-bold tabular-nums text-ink">
                                 {formatGuaraniesGs(inv.total)}
                               </span>
-                              {deriveInvoiceState(inv) === "attention" && inv.status === "ISSUED" && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  data-testid={`today-row-correct-resend-${inv.id}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setCorrectionInvoiceId(inv.id);
-                                  }}
-                                >
-                                  {t("femme.billing.history.detail.sifen.correctResendButton")}
-                                </Button>
-                              )}
+                              {correctResendButton(inv)}
                             </span>
                             {/* «Más acciones»: the row itself opens the detail, so clicks on the menu (and on
                                 its portalled panel, which bubbles through React) must not reach the row. */}
@@ -593,6 +603,79 @@ export function BillingHome({
                         </li>
                       ))}
                     </ul>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table
+                          className="w-full min-w-[40rem] border-collapse text-sm"
+                          data-testid="billing-today-table"
+                        >
+                          <thead>
+                            <tr className="border-b border-line text-left text-[11px] font-extrabold uppercase tracking-wider text-ink-3">
+                              <th className="px-2 py-2">{t("femme.billing.home.colIssuedAt")}</th>
+                              <th className="px-2 py-2">{t("femme.billing.history.colNumber")}</th>
+                              <th className="px-2 py-2">{t("femme.billing.history.colClient")}</th>
+                              <th className="px-2 py-2">{t("femme.billing.history.colStatus")}</th>
+                              <th className="px-2 py-2 text-right">{t("femme.billing.history.colTotal")}</th>
+                              <th className="w-11 px-1 py-2" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {todayInvoices.map((inv) => (
+                              <tr
+                                key={inv.id}
+                                tabIndex={0}
+                                data-testid={`billing-today-row-${inv.id}`}
+                                aria-label={t("femme.billing.history.openDetail", {
+                                  invoiceNumber: inv.invoiceNumberFormatted,
+                                })}
+                                onClick={() => setSelectedInvoiceId(inv.id)}
+                                onKeyDown={(e) => {
+                                  if (e.target !== e.currentTarget) return;
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    setSelectedInvoiceId(inv.id);
+                                  }
+                                }}
+                                className="min-h-11 cursor-pointer border-t border-line first:border-t-0 hover:bg-primary-lt"
+                              >
+                                <td
+                                  data-testid={`billing-today-issued-at-${inv.id}`}
+                                  className="whitespace-nowrap px-2 py-1.5 tabular-nums text-ink"
+                                >
+                                  {formatParaguayDateTime(inv.issuedAt, dateLocale)}
+                                </td>
+                                <td className="whitespace-nowrap px-2 py-1.5 font-mono text-xs text-ink">
+                                  {inv.invoiceNumberFormatted}
+                                </td>
+                                <td className="px-2 py-1.5 text-ink">
+                                  <span className="block max-w-[16rem] truncate font-semibold">
+                                    {inv.clientDisplayName || t("femme.billing.invoice.noName")}
+                                  </span>
+                                </td>
+                                <td className="px-2 py-1.5">
+                                  <span className="flex flex-wrap items-center gap-2">
+                                    <InvoiceStatePill invoice={inv} />
+                                    {correctResendButton(inv)}
+                                  </span>
+                                </td>
+                                <td className="whitespace-nowrap px-2 py-1.5 text-right font-heading font-bold tabular-nums text-ink">
+                                  {formatGuaraniesGs(inv.total)}
+                                </td>
+                                {/* The row opens the detail: clicks on the menu (and on its portalled panel,
+                                    which bubbles through React) must not reach the row. */}
+                                <td className="px-1 text-right" onClick={(e) => e.stopPropagation()}>
+                                  <KebabMenu
+                                    id={`billing-today-menu-${inv.id}`}
+                                    triggerAriaLabel={t("femme.billing.history.detail.moreActions")}
+                                    items={rowMenuItems(inv)}
+                                  />
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                     <div
                       className="flex flex-wrap items-center justify-between gap-3 px-2 pb-4 pt-4"
                       data-testid="billing-today-pagination"

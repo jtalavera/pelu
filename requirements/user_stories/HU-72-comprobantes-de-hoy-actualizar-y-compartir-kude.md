@@ -46,6 +46,8 @@ El estado que se muestra en la lista y en el detalle sale de la misma regla (est
 
 9. **Avisos con × para cerrar** — Los avisos que aparecen arriba de la lista (envío por correo, WhatsApp y descarga del KuDE, de éxito o de error) tienen una × para cerrarlos. Se quedan hasta que se cierran o hasta la próxima acción.
 
+10. **Tabla igual a la de Propinas** — Desde tablet hacia arriba, la lista se muestra como una tabla con el mismo estilo que Movimientos de Propinas (encabezado en mayúsculas pequeñas, filas de 44 px, ⋮ sin borde en la última columna) y columnas Emisión, Número, Cliente, Estado, Total y acciones. Hacer clic en la fila abre el detalle. En el celular (menos de 640 px) se mantienen las tarjetas de dos líneas, igual que Propinas.
+
 ---
 
 ## Notas
