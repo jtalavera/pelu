@@ -577,7 +577,7 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await page.setViewportSize({ width: 375, height: 800 });
     await openToday(page);
     await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("billing-today-table")).toHaveCount(0);
+    await expect(page.locator("table[data-testid=billing-today-table]")).toHaveCount(0);
     await expect(page.getByTestId(`billing-today-menu-${inv.id}-trigger`)).toBeVisible();
   });
 });

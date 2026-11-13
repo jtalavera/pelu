@@ -1,10 +1,5 @@
 {
   "designSystem": {
-    "dataTable": {
-      "dragReorderColumn": "Drag to reorder column",
-      "columns": "Columns",
-      "visibleColumns": "Visible columns"
-    },
     "modal": {
       "closeDialog": "Close dialog",
       "close": "Close"
@@ -1851,6 +1846,7 @@
         "colNumber": "Number",
         "colDate": "Invoice date",
         "colSifenSentAt": "Sent to SIFEN",
+        "colPaymentMethod": "Payment",
         "colClient": "Client",
         "colTotal": "Total",
         "colStatus": "Status",
@@ -4097,7 +4093,7 @@
       "sam": "Sam Taylor"
     },
     "table": {
-      "hint": "Sort by clicking headers, drag the grip to reorder columns, and use the columns control to show or hide fields (Name stays visible).",
+      "hint": "A single table for the whole product: small uppercase header, 44 px rows, the ⋮ menu in the last column and cards on a phone.",
       "columns": {
         "name": "Name",
         "team": "Team",

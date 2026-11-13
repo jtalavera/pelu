@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Card, Heading, Spinner, Text } from "@design-system";
+import { Alert, Card, DataTable, Heading, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { translateApiError } from "../api/parseApiErrorMessage";
 import { useDateLocale } from "../i18n/dateLocale";
@@ -49,8 +49,6 @@ function formatDate(iso: string, locale: string): string {
   }
 }
 
-const thClass = "py-2 pr-2 font-medium";
-const tdClass = "py-2 pr-2 align-top";
 
 /** HU-67: loads `GET /api/clients/{id}/summary` once for the stats strip and the lists. */
 export function useClientSummary(clientId: number): {
@@ -161,28 +159,17 @@ export function ClientSummaryLists({ summary, error }: SummaryState) {
         {summary.lastServices.length === 0 ? (
           <Text variant="muted">{t("femme.clients.summary.noServices")}</Text>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[320px] text-left text-sm">
-              <thead>
-                <tr className="border-b text-xs text-[var(--color-ink-2)]">
-                  <th className={thClass}>{t("femme.clients.summary.colDate")}</th>
-                  <th className={thClass}>{t("femme.clients.summary.colService")}</th>
-                  <th className={thClass}>{t("femme.clients.summary.colProfessional")}</th>
-                  <th className={thClass}>{t("femme.clients.summary.colPrice")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.lastServices.map((s, i) => (
-                  <tr key={i} className="border-b border-[var(--color-border)]/60">
-                    <td className={tdClass}>{formatDate(s.performedAt, dateLocale)}</td>
-                    <td className={tdClass}>{s.serviceName}</td>
-                    <td className={tdClass}>{s.professionalName ?? "—"}</td>
-                    <td className={tdClass}>{formatAmountDecimal(s.price)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<ClientSummary["lastServices"][number]>
+            minWidthClassName="min-w-[320px]"
+            rows={summary.lastServices}
+            getRowId={(_, i) => i}
+            columns={[
+              { id: "date", header: t("femme.clients.summary.colDate"), cell: (s) => formatDate(s.performedAt, dateLocale) },
+              { id: "service", header: t("femme.clients.summary.colService"), wrap: true, cell: (s) => s.serviceName },
+              { id: "professional", header: t("femme.clients.summary.colProfessional"), cell: (s) => s.professionalName ?? "—" },
+              { id: "price", header: t("femme.clients.summary.colPrice"), align: "right", cell: (s) => formatAmountDecimal(s.price) },
+            ]}
+          />
         )}
       </Card>
 
@@ -193,28 +180,17 @@ export function ClientSummaryLists({ summary, error }: SummaryState) {
         {summary.lastProducts.length === 0 ? (
           <Text variant="muted">{t("femme.clients.summary.noProducts")}</Text>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[320px] text-left text-sm">
-              <thead>
-                <tr className="border-b text-xs text-[var(--color-ink-2)]">
-                  <th className={thClass}>{t("femme.clients.summary.colDate")}</th>
-                  <th className={thClass}>{t("femme.clients.summary.colProduct")}</th>
-                  <th className={thClass}>{t("femme.clients.summary.colQuantity")}</th>
-                  <th className={thClass}>{t("femme.clients.summary.colUnitPrice")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.lastProducts.map((p, i) => (
-                  <tr key={i} className="border-b border-[var(--color-border)]/60">
-                    <td className={tdClass}>{formatDate(p.purchasedAt, dateLocale)}</td>
-                    <td className={tdClass}>{p.productName}</td>
-                    <td className={tdClass}>{p.quantity}</td>
-                    <td className={tdClass}>{formatAmountDecimal(p.unitPrice)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<ClientSummary["lastProducts"][number]>
+            minWidthClassName="min-w-[320px]"
+            rows={summary.lastProducts}
+            getRowId={(_, i) => i}
+            columns={[
+              { id: "date", header: t("femme.clients.summary.colDate"), cell: (p) => formatDate(p.purchasedAt, dateLocale) },
+              { id: "product", header: t("femme.clients.summary.colProduct"), wrap: true, cell: (p) => p.productName },
+              { id: "quantity", header: t("femme.clients.summary.colQuantity"), align: "right", cell: (p) => p.quantity },
+              { id: "unitPrice", header: t("femme.clients.summary.colUnitPrice"), align: "right", cell: (p) => formatAmountDecimal(p.unitPrice) },
+            ]}
+          />
         )}
       </Card>
     </div>

@@ -186,7 +186,7 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
       })) as unknown as typeof window.matchMedia;
       try {
         await renderHome();
-        expect(screen.queryByTestId("billing-today-table")).toBeNull();
+        expect(document.querySelector("table")).toBeNull();
         expect(screen.getByTestId("billing-today-row-1")).toBeTruthy();
         expect(screen.getByTestId("billing-today-menu-1-trigger")).toBeTruthy();
       } finally {

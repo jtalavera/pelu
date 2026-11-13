@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
+  DataTable,
   Input,
   KebabMenu,
   Label,
@@ -34,7 +35,6 @@ import { getCurrentSession, listCashSessionsPaged } from "../api/cashSessions";
 import { FieldValidationError } from "../components/FieldValidationError";
 import { VoidLateTipDialog, type VoidLateTipTarget } from "../components/invoice/VoidLateTipDialog";
 import { useMe } from "../hooks/useMe";
-import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatGuaraniesGs } from "../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../lib/moneyInputMask";
@@ -162,7 +162,6 @@ export default function PropinasPage() {
   const [balQuery, setBalQuery] = useState("");
   const { me, loading: meLoading } = useMe();
   // On a phone the movements are a list of two-line rows instead of a four-column table.
-  const isPhone = useMediaQuery("(max-width: 639px)");
   const isAdmin = me?.role === "ADMIN";
   const [manualDialog, setManualDialog] = useState<ManualDialog | null>(null);
   const [manualAmount, setManualAmount] = useState("");
@@ -1041,119 +1040,119 @@ export default function PropinasPage() {
           </Text>
         ) : (
           <>
-            {isPhone ? (
-              <ul className="flex flex-col" data-testid="propinas-movements-cards">
-                {pagedMovements.map((m) => {
-                  const { manual, voided, conceptLabel, conceptDetail } = describeMovement(m);
-                  return (
-                    <li
-                      key={m.key}
-                      data-testid="propinas-movement"
-                      data-kind={m.kind}
-                      data-manual={manual ? "true" : undefined}
-                      data-voided={voided ? "true" : undefined}
-                      title={conceptDetail || undefined}
-                      className="flex items-center gap-2 border-t border-line py-3 first:border-t-0"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
+            <DataTable<Movement>
+              testId="propinas-table"
+              mobileTestId="propinas-movements-cards"
+              minWidthClassName="min-w-[26rem]"
+              rows={pagedMovements}
+              getRowId={(m) => m.key}
+              rowTestId={() => "propinas-movement"}
+              rowAttributes={(m) => {
+                const { manual, voided, conceptDetail } = describeMovement(m);
+                return {
+                  "data-kind": m.kind,
+                  "data-manual": manual ? "true" : undefined,
+                  "data-voided": voided ? "true" : undefined,
+                  title: conceptDetail || undefined,
+                };
+              }}
+              rowTone={(m) => (describeMovement(m).voided ? "muted" : undefined)}
+              columns={[
+                {
+                  id: "date",
+                  header: t("femme.propinas.colDate"),
+                  cell: (m) => (
+                    <span className="font-heading font-extrabold">
+                      {fmtDay(m.at)}
+                      <span className="ml-1.5 text-xs font-normal text-ink-3">{fmtTime(m.at)}</span>
+                    </span>
+                  ),
+                },
+                {
+                  id: "concept",
+                  header: t("femme.propinas.colConcept"),
+                  cell: (m) => {
+                    const { voided, conceptLabel } = describeMovement(m);
+                    return (
+                      <span className="flex items-center gap-2">
+                        <span
+                          className={`max-w-[16rem] truncate font-semibold ${voided ? "text-ink-3 line-through" : ""}`}
+                          data-testid="propinas-movement-concept"
+                        >
+                          {conceptLabel}
+                        </span>
+                        {voided ? (
                           <span
-                            className={`truncate font-semibold ${voided ? "text-ink-3 line-through" : "text-ink"}`}
-                            data-testid="propinas-movement-concept"
+                            className="rounded-full bg-danger-lt px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-danger"
+                            data-testid="propinas-voided-tag"
                           >
-                            {conceptLabel}
+                            {t("femme.propinas.manual.voidedTag")}
                           </span>
-                          {voided ? (
-                            <span
-                              className="shrink-0 rounded-full bg-danger-lt px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-danger"
-                              data-testid="propinas-voided-tag"
-                            >
-                              {t("femme.propinas.manual.voidedTag")}
-                            </span>
-                          ) : null}
-                        </div>
-                        <div className="truncate text-xs text-ink-3">
-                          {fmtDay(m.at)} · {fmtTime(m.at)} · {m.professional}
-                        </div>
-                      </div>
+                        ) : null}
+                      </span>
+                    );
+                  },
+                },
+                { id: "professional", header: t("femme.propinas.colProfessional"), cell: (m) => m.professional },
+                {
+                  id: "amount",
+                  header: t("femme.propinas.colAmount"),
+                  align: "right",
+                  cell: (m) => {
+                    const { voided } = describeMovement(m);
+                    return (
                       <b
                         data-testid="propinas-movement-amount"
-                        className={`shrink-0 whitespace-nowrap font-heading text-sm ${
+                        className={`font-heading font-bold ${
                           m.kind === "withdrawal" ? "text-ink-2" : voided ? "text-ink-3 line-through" : "text-ink"
                         }`}
                       >
                         {m.kind === "withdrawal" ? "− " : ""}
                         {formatGuaraniesGs(m.amount)}
                       </b>
-                      {isAdmin ? <div className="w-11 shrink-0 text-right">{renderRowMenu(m)}</div> : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[26rem] border-collapse text-sm" data-testid="propinas-table">
-                <thead>
-                  <tr className="border-b border-line text-left text-[11px] font-extrabold uppercase tracking-wider text-ink-3">
-                    <th className="px-2 py-2">{t("femme.propinas.colDate")}</th>
-                    <th className="px-2 py-2">{t("femme.propinas.colConcept")}</th>
-                    <th className="px-2 py-2">{t("femme.propinas.colProfessional")}</th>
-                    <th className="px-2 py-2 text-right">{t("femme.propinas.colAmount")}</th>
-                    {isAdmin ? <th className="w-11 px-1 py-2" /> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {pagedMovements.map((m) => {
-                    const { manual, voided, conceptLabel, conceptDetail } = describeMovement(m);
-                    return (
-                    <tr
-                      key={m.key}
-                      data-testid="propinas-movement"
-                      data-kind={m.kind}
-                      data-manual={manual ? "true" : undefined}
-                      data-voided={voided ? "true" : undefined}
-                      className={`h-11 border-t border-line first:border-t-0 ${voided ? "text-ink-3" : ""}`}
-                    >
-                      <td className="whitespace-nowrap px-2 font-heading font-extrabold text-ink">
-                        {fmtDay(m.at)}
-                        <span className="ml-1.5 text-xs font-normal text-ink-3">{fmtTime(m.at)}</span>
-                      </td>
-                      <td className="px-2 text-ink" title={conceptDetail || undefined}>
-                        <span className="flex items-center gap-2">
-                          <span
-                            className={`max-w-[16rem] truncate font-semibold ${voided ? "text-ink-3 line-through" : ""}`}
-                            data-testid="propinas-movement-concept"
-                          >
-                            {conceptLabel}
-                          </span>
-                          {voided ? (
-                            <span
-                              className="rounded-full bg-danger-lt px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-danger"
-                              data-testid="propinas-voided-tag"
-                            >
-                              {t("femme.propinas.manual.voidedTag")}
-                            </span>
-                          ) : null}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-2 text-ink">{m.professional}</td>
-                      <td
-                        data-testid="propinas-movement-amount"
-                        className={`whitespace-nowrap px-2 text-right font-heading font-bold ${
-                          m.kind === "withdrawal" ? "text-ink-2" : voided ? "text-ink-3 line-through" : "text-ink"
-                        }`}
-                      >
-                        {m.kind === "withdrawal" ? "− " : ""}
-                        {formatGuaraniesGs(m.amount)}
-                      </td>
-                      {isAdmin ? <td className="px-1 text-right">{renderRowMenu(m)}</td> : null}
-                    </tr>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            )}
+                  },
+                },
+              ]}
+              rowActions={isAdmin ? (m) => renderRowMenu(m) : undefined}
+              mobileCard={(m) => {
+                const { voided, conceptLabel } = describeMovement(m);
+                return (
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`truncate font-semibold ${voided ? "text-ink-3 line-through" : "text-ink"}`}
+                          data-testid="propinas-movement-concept"
+                        >
+                          {conceptLabel}
+                        </span>
+                        {voided ? (
+                          <span
+                            className="shrink-0 rounded-full bg-danger-lt px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-danger"
+                            data-testid="propinas-voided-tag"
+                          >
+                            {t("femme.propinas.manual.voidedTag")}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="truncate text-xs text-ink-3">
+                        {fmtDay(m.at)} · {fmtTime(m.at)} · {m.professional}
+                      </div>
+                    </div>
+                    <b
+                      data-testid="propinas-movement-amount"
+                      className={`shrink-0 whitespace-nowrap font-heading text-sm ${
+                        m.kind === "withdrawal" ? "text-ink-2" : voided ? "text-ink-3 line-through" : "text-ink"
+                      }`}
+                    >
+                      {m.kind === "withdrawal" ? "− " : ""}
+                      {formatGuaraniesGs(m.amount)}
+                    </b>
+                  </div>
+                );
+              }}
+            />
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
               <PageSizeSelect
                 value={movPageSize}

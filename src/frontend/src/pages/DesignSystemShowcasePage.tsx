@@ -104,29 +104,16 @@ export default function DesignSystemShowcasePage() {
       {
         id: "name",
         header: t("app.table.columns.name"),
-        alwaysVisible: true,
-        sortable: true,
-        sortFn: (a, b) => a.name.localeCompare(b.name),
         cell: (r) => <span className="font-medium">{r.name}</span>,
       },
       {
         id: "role",
         header: t("app.table.columns.team"),
-        sortable: true,
-        sortFn: (a, b) =>
-          t(`app.table.roles.${a.roleKey}`).localeCompare(
-            t(`app.table.roles.${b.roleKey}`),
-          ),
         cell: (r) => t(`app.table.roles.${r.roleKey}`),
       },
       {
         id: "status",
         header: t("app.table.columns.status"),
-        sortable: true,
-        sortFn: (a, b) =>
-          t(`app.table.status.${a.statusKey}`).localeCompare(
-            t(`app.table.status.${b.statusKey}`),
-          ),
         cell: (r) => (
           <Badge
             variant={
@@ -144,12 +131,9 @@ export default function DesignSystemShowcasePage() {
       {
         id: "updated",
         header: t("app.table.columns.lastUpdate"),
-        sortable: true,
-        sortFn: (a, b) => a.updated.localeCompare(b.updated),
         cell: (r) => (
           <span className="text-ink-3">{r.updated}</span>
         ),
-        defaultHidden: true,
       },
     ],
     [t],
@@ -555,8 +539,9 @@ export default function DesignSystemShowcasePage() {
           <Text variant="muted">{t("app.table.hint")}</Text>
           <DataTable<TableRow>
             columns={tableColumns}
-            data={tableData}
+            rows={tableData}
             getRowId={(row) => row.id}
+            testId="design-system-data-table"
           />
         </section>
 

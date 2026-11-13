@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import {
   Alert,
   Button,
+  DataTable,
   Input,
   Label,
   Modal,
@@ -292,14 +293,6 @@ export default function PlatformTenantsPage() {
     void loadTenantUsers(tenant.id);
   }
 
-  const onRowKeyOpenEdit =
-    (tenant: PlatformTenant) => (e: KeyboardEvent<HTMLTableRowElement>) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        openEdit(tenant);
-      }
-    };
-
   function closeEditModal() {
     setEditModalOpen(false);
     setEditingTenant(null);
@@ -541,25 +534,6 @@ export default function PlatformTenantsPage() {
     );
   }
 
-  const thStyle: React.CSSProperties = {
-    padding: "9px 12px",
-    fontSize: 10,
-    fontWeight: 500,
-    color: "var(--color-ink-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    textAlign: "left",
-    background: "var(--color-stone)",
-    whiteSpace: "nowrap",
-  };
-  const tdStyle: React.CSSProperties = {
-    padding: "10px 12px",
-    fontSize: 12,
-    color: "var(--color-ink)",
-    verticalAlign: "middle",
-    borderBottom: "0.5px solid var(--color-stone)",
-  };
-
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -637,62 +611,42 @@ export default function PlatformTenantsPage() {
         className="overflow-hidden rounded-[var(--radius-xl)]"
         style={{ background: "var(--color-white)", border: "var(--border-default)" }}
       >
-        <div className="overflow-x-auto">
-          <table style={{ tableLayout: "fixed", width: "100%", borderCollapse: "collapse" }}>
-            <colgroup>
-              <col style={{ width: "34%" }} />
-              <col style={{ width: "26%" }} />
-              <col style={{ width: "20%" }} />
-              <col style={{ width: "20%" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={thStyle}>{t("femme.platform.tenants.colName")}</th>
-                <th style={thStyle}>{t("femme.platform.tenants.colDomain")}</th>
-                <th style={thStyle}>{t("femme.platform.tenants.colTier")}</th>
-                <th style={thStyle}>{t("femme.platform.tenants.colStatus")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {totalElements === 0 ? (
-                <tr>
-                  <td
-                    colSpan={4}
-                    style={{ padding: "24px 12px", textAlign: "center", fontSize: 12, color: "var(--color-ink-3)" }}
-                  >
-                    {searchQuery
-                      ? t("femme.platform.tenants.emptySearchBody", { query: searchQuery })
-                      : t("femme.platform.tenants.emptyBody")}
-                  </td>
-                </tr>
-              ) : (
-                content.map((tenant) => (
-                  <tr
-                    key={tenant.id}
-                    data-testid={`platform-tenant-row-${tenant.id}`}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={t("femme.platform.tenants.openEdit", { name: tenant.name })}
-                    onClick={() => openEdit(tenant)}
-                    onKeyDown={onRowKeyOpenEdit(tenant)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <td style={{ ...tdStyle, fontWeight: 500 }}>{tenant.name}</td>
-                    <td style={{ ...tdStyle, color: tenant.domain ? "var(--color-ink)" : "var(--color-ink-3)" }}>
-                      {tenant.domain ?? "—"}
-                    </td>
-                    <td style={{ ...tdStyle, color: tenant.tierName ? "var(--color-ink)" : "var(--color-ink-3)" }}>
-                      {tenant.tierName ?? "—"}
-                    </td>
-                    <td style={tdStyle}>
-                      <StatusBadge status={tenant.status} />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<PlatformTenant>
+          className="px-2"
+          minWidthClassName="min-w-[40rem]"
+          rows={content}
+          getRowId={(tenant) => tenant.id}
+          rowTestId={(tenant) => `platform-tenant-row-${tenant.id}`}
+          onRowClick={openEdit}
+          rowLabel={(tenant) => t("femme.platform.tenants.openEdit", { name: tenant.name })}
+          emptyLabel={
+            searchQuery
+              ? t("femme.platform.tenants.emptySearchBody", { query: searchQuery })
+              : t("femme.platform.tenants.emptyBody")
+          }
+          columns={[
+            {
+              id: "name",
+              header: t("femme.platform.tenants.colName"),
+              cell: (tenant) => <span className="font-semibold">{tenant.name}</span>,
+            },
+            {
+              id: "domain",
+              header: t("femme.platform.tenants.colDomain"),
+              cell: (tenant) => <span className={tenant.domain ? "" : "text-ink-3"}>{tenant.domain ?? "—"}</span>,
+            },
+            {
+              id: "tier",
+              header: t("femme.platform.tenants.colTier"),
+              cell: (tenant) => <span className={tenant.tierName ? "" : "text-ink-3"}>{tenant.tierName ?? "—"}</span>,
+            },
+            {
+              id: "status",
+              header: t("femme.platform.tenants.colStatus"),
+              cell: (tenant) => <StatusBadge status={tenant.status} />,
+            },
+          ]}
+        />
 
         <div
           className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"

@@ -1,10 +1,5 @@
 {
   "designSystem": {
-    "dataTable": {
-      "dragReorderColumn": "Arrastrar para reordenar columna",
-      "columns": "Columnas",
-      "visibleColumns": "Columnas visibles"
-    },
     "modal": {
       "closeDialog": "Cerrar diálogo",
       "close": "Cerrar"
@@ -1851,6 +1846,7 @@
         "colNumber": "Número",
         "colDate": "Fecha factura",
         "colSifenSentAt": "Enviado a SIFEN",
+        "colPaymentMethod": "Forma de pago",
         "colClient": "Cliente",
         "colTotal": "Total",
         "colStatus": "Estado",
@@ -4097,7 +4093,7 @@
       "sam": "Sam Taylor"
     },
     "table": {
-      "hint": "Ordena haciendo clic en los encabezados, arrastra el asa para reordenar columnas y usa el control de columnas para mostrar u ocultar campos (Nombre permanece visible).",
+      "hint": "Una sola tabla para todo el producto: encabezado en mayúsculas pequeñas, filas de 44 px, menú ⋮ en la última columna y tarjetas en el celular.",
       "columns": {
         "name": "Nombre",
         "team": "Equipo",
