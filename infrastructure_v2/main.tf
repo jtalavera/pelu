@@ -251,6 +251,28 @@ resource "azurerm_communication_service" "main" {
   depends_on = [azurerm_resource_provider_registration.communication]
 }
 
+# Email delivery diagnostics: ACS accepts a send (HTTP 202) before the message is delivered, so the
+# backend log alone can't tell delivered / bounced / suppressed / spam-filtered apart. These land in
+# Log Analytics as ACSEmailSendMailOperational (accepted), ACSEmailStatusUpdateOperational
+# (Delivered / Bounced / Suppressed / FilteredSpam...) and ACSEmailUserEngagementOperational.
+resource "azurerm_monitor_diagnostic_setting" "acs_email" {
+  name                       = "acs-email-diag"
+  target_resource_id         = azurerm_communication_service.main.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_log {
+    category = "EmailSendMailOperational"
+  }
+
+  enabled_log {
+    category = "EmailStatusUpdateOperational"
+  }
+
+  enabled_log {
+    category = "EmailUserEngagementOperational"
+  }
+}
+
 resource "azurerm_communication_service_email_domain_association" "main" {
   communication_service_id = azurerm_communication_service.main.id
   email_service_domain_id  = azurerm_email_communication_service_domain.main.id
