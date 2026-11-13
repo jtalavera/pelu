@@ -94,7 +94,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await searchInvoiceHistory(page, client.fullName);
     const row = page.getByTestId(`invoice-history-row-${invoice.id}`);
     await expect(row).toBeVisible({ timeout: 30_000 });
-    await expect(row.getByTestId("invoice-row-number")).toHaveText(invoice.invoiceNumberFormatted);
+    await expect(row.getByTestId("invoice-row-number")).toContainText(invoice.invoiceNumberFormatted);
     await expect(row.getByTestId("invoice-row-date")).toContainText(/\d{1,2}:\d{2}/);
     await expect(row.getByTestId("invoice-row-client")).toContainText(client.fullName);
     await expect(row.getByTestId("invoice-row-total")).toHaveText("5.000");

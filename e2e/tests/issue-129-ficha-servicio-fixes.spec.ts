@@ -205,6 +205,6 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     expect(lastBox!.y).toBeGreaterThan(firstBox!.y);
 
     await expect(page.getByTestId("dashboard-service-records-more")).toHaveCount(0);
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
   });
 });

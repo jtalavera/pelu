@@ -359,7 +359,7 @@ test.describe("Turno y ficha de servicio", () => {
     await page.goto("/app/hoy");
     await page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName }).locator("button").first().click();
     // The turno opens in place on Inicio (no navigation to the Agenda).
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
     await page.getByTestId("calendar-next-step").click();
     await expect(page).toHaveURL(/\/app\/billing/);
     await expect(page.locator("#billing-client-search")).toHaveValue(new RegExp(clientName, "i"));
@@ -553,7 +553,7 @@ test.describe("Turno y ficha de servicio", () => {
     await page.getByTestId("service-record-view-invoice").click();
     // The comprobante opens on top of the ficha: no trip to Facturación.
     await expect(page.getByTestId("invoice-detail-view")).toBeVisible({ timeout: 20_000 });
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
     // Closing it leaves the ficha open underneath.
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("invoice-detail-view")).toHaveCount(0);
@@ -583,7 +583,7 @@ test.describe("Turno y ficha de servicio", () => {
     const chargedRow = await revealAppointmentRow(page, (rows) => rows.filter({ hasText: clientName }));
     await chargedRow.locator("button").first().click({ timeout: 20_000 });
     // The turno opens in place on Inicio (no navigation to the Agenda).
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
     // Charged: no «Cobrar» nor next step; the comprobante is a footer button next to «Ficha».
     const invoiceBtn = page.getByTestId("appointment-view-invoice");
     await expect(invoiceBtn).toBeVisible();
@@ -593,7 +593,7 @@ test.describe("Turno y ficha de servicio", () => {
     await invoiceBtn.click();
     // «Ver comprobante» opens the comprobante on top of the turno: no trip to Facturación.
     await expect(page.getByTestId("invoice-detail-view")).toBeVisible({ timeout: 20_000 });
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
     // Closing it leaves the turno's detail open underneath.
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("invoice-detail-view")).toHaveCount(0);
@@ -637,10 +637,10 @@ test.describe("Turno y ficha de servicio", () => {
     await expect(row.getByTestId("dashboard-appointment-charge")).toHaveCount(0);
     await row.getByTestId("dashboard-appointment-invoice").click();
     await expect(page.getByTestId("invoice-detail-view")).toBeVisible({ timeout: 20_000 });
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("invoice-detail-view")).toHaveCount(0);
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
   });
 
   test("detalle del turno: «Cerrar» a la izquierda y ficha y comprobante en el pie (web); dentro de «Más acciones» (celular)", async ({
@@ -714,7 +714,7 @@ test.describe("Turno y ficha de servicio", () => {
       .first()
       .click({ timeout: 20_000 });
     // The turno opens in place on Inicio (no navigation to the Agenda).
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
     await expect(page.getByTestId("calendar-next-step")).toHaveText("Charge");
   });
 
