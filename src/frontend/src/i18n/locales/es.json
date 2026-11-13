@@ -1548,9 +1548,20 @@
         "updatedAt": "Actualizado a las {{time}}",
         "rowMenu": {
           "email": "Enviar por correo",
-          "emailHint": "Al correo del cliente",
+          "emailHint": "Revisá el correo antes de enviar",
           "viewDetail": "Ver detalle",
           "kudeUnavailable": "No disponible: sin KuDE aprobado"
+        },
+        "closeNotice": "Cerrar aviso",
+        "emailDialog": {
+          "title": "Enviar KuDE por correo",
+          "invoiceLine": "Comprobante {{number}} · {{date}}",
+          "loading": "Buscando el correo del cliente…",
+          "hintOnFile": "Es el correo cargado en el cliente. Podés cambiarlo solo para este envío: no modifica al cliente.",
+          "hintNone": "Este cliente no tiene correo cargado: escribilo para este envío.",
+          "invalid": "Ingresá un correo válido. Ejemplo: cliente@ejemplo.com",
+          "send": "Enviar",
+          "sending": "Enviando…"
         },
         "viewHistoryShort": "Ver historial",
         "closedTitle": "La caja está cerrada"

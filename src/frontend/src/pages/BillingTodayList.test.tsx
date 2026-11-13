@@ -88,6 +88,7 @@ const detailOfApproved = {
   invoiceNumberFormatted: "001-001-0000123",
   clientDisplayName: "María Gómez",
   clientPhone: "0981123456",
+  clientEmail: "maria@example.com",
   total: "370000",
 };
 
@@ -238,7 +239,7 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
       const detail = screen.getByTestId("billing-today-menu-detail-1") as HTMLButtonElement;
       expect(whatsapp.textContent).toMatch(/Send by WhatsApp/);
       expect(email.textContent).toMatch(/Send by email/);
-      expect(email.textContent).toMatch(/To the client's email/);
+      expect(email.textContent).toMatch(/Check the email before sending/);
       expect(download.textContent).toMatch(/Download KuDE/);
       expect(detail.textContent).toMatch(/View details/);
       for (const b of [whatsapp, email, download, detail]) expect(b.disabled).toBe(false);
@@ -283,14 +284,11 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
       expect(screen.queryByTestId("detail-stub")).toBeNull();
     });
 
-    it("«Enviar por correo» sends it to the client's email on file and confirms", async () => {
+    it("the row's menu button is the vertical «⋮»", async () => {
       await renderHome();
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
-      fireEvent.click(await screen.findByTestId("billing-today-menu-email-1"));
-
-      await waitFor(() => expect(sendSifenKudeByEmail).toHaveBeenCalledWith(1, ""));
-      const notice = await screen.findByTestId("billing-today-notice");
-      expect(notice.textContent).toMatch(/KuDE sent by email/i);
+      const trigger = screen.getByTestId("billing-today-menu-1");
+      expect(trigger.querySelector('svg[data-icon="dots-vertical"]')).not.toBeNull();
+      expect(trigger.textContent).not.toMatch(/⋯/);
     });
 
     it("«Enviar por WhatsApp» reads the invoice (for the client's phone) and hands it to the WhatsApp flow", async () => {
@@ -336,6 +334,157 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
       const notice = await screen.findByTestId("billing-today-notice");
       expect(notice.textContent).toMatch(/unexpected error/i);
       expect((screen.getByTestId("billing-today-menu-1") as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
+  describe("«Enviar por correo» opens a dialog to check or change the address", () => {
+    function stubDetail(extra: Record<string, unknown>) {
+      const base = femmeJson.getMockImplementation()!;
+      femmeJson.mockImplementation((url: string) =>
+        url === "/api/invoices/1" ? Promise.resolve({ ...detailOfApproved, ...extra }) : base(url),
+      );
+    }
+
+    async function openEmailDialog() {
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-email-1"));
+      return screen.findByTestId("kude-email-dialog");
+    }
+
+    it("shows the invoice and the client's email on file, and does not send until the user confirms", async () => {
+      const dialog = await openEmailDialog();
+      const input = (await within(dialog).findByTestId("kude-email-input")) as HTMLInputElement;
+      expect(input.value).toBe("maria@example.com");
+      expect(dialog.textContent).toMatch(/María Gómez/);
+      expect(dialog.textContent).toMatch(/Invoice 001-001-0000123/);
+      expect(dialog.textContent).toMatch(/Gs\. 370\.000/);
+      expect(within(dialog).getByTestId("kude-email-hint").textContent).toMatch(/email on file for the client/);
+      expect(sendSifenKudeByEmail).not.toHaveBeenCalled();
+      // The menu is closed and the detail did not open behind it.
+      expect(screen.queryByTestId("billing-today-menu-panel-1")).toBeNull();
+      expect(screen.queryByTestId("detail-stub")).toBeNull();
+    });
+
+    it("prefers the recipient email saved on the invoice over the client's", async () => {
+      stubDetail({ recipientEmail: "factura@example.com" });
+      const dialog = await openEmailDialog();
+      expect(((await within(dialog).findByTestId("kude-email-input")) as HTMLInputElement).value).toBe(
+        "factura@example.com",
+      );
+    });
+
+    it("sends to the address as edited, closes the dialog and confirms with a notice", async () => {
+      const dialog = await openEmailDialog();
+      const input = (await within(dialog).findByTestId("kude-email-input")) as HTMLInputElement;
+      fireEvent.change(input, { target: { value: "  otra@example.com " } });
+      fireEvent.click(within(dialog).getByTestId("kude-email-send"));
+
+      await waitFor(() => expect(sendSifenKudeByEmail).toHaveBeenCalledWith(1, "otra@example.com"));
+      await waitFor(() => expect(screen.queryByTestId("kude-email-dialog")).toBeNull());
+      expect((await screen.findByTestId("billing-today-notice")).textContent).toMatch(/KuDE sent by email/i);
+    });
+
+    it("sends the address on file as is when the user does not change it", async () => {
+      const dialog = await openEmailDialog();
+      await within(dialog).findByDisplayValue("maria@example.com");
+      fireEvent.click(within(dialog).getByTestId("kude-email-send"));
+      await waitFor(() => expect(sendSifenKudeByEmail).toHaveBeenCalledWith(1, "maria@example.com"));
+    });
+
+    it("starts empty when the client has no email and asks for a valid one, with an example", async () => {
+      stubDetail({ clientEmail: null, recipientEmail: null });
+      const dialog = await openEmailDialog();
+      const input = (await within(dialog).findByTestId("kude-email-input")) as HTMLInputElement;
+      expect(input.value).toBe("");
+      expect(within(dialog).getByTestId("kude-email-hint").textContent).toMatch(/no email on file/i);
+
+      fireEvent.click(within(dialog).getByTestId("kude-email-send"));
+      const error = await within(dialog).findByText("Enter a valid email. Example: client@example.com");
+      expect(error.getAttribute("role")).toBe("alert");
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+      expect(sendSifenKudeByEmail).not.toHaveBeenCalled();
+
+      fireEvent.change(input, { target: { value: "no-es-un-correo" } });
+      fireEvent.click(within(dialog).getByTestId("kude-email-send"));
+      expect(await within(dialog).findByText(/Enter a valid email/)).toBeTruthy();
+      expect(sendSifenKudeByEmail).not.toHaveBeenCalled();
+    });
+
+    it("lets the user type the address when the invoice cannot be read", async () => {
+      const base = femmeJson.getMockImplementation()!;
+      femmeJson.mockImplementation((url: string) =>
+        url === "/api/invoices/1" ? Promise.reject(new Error("boom")) : base(url),
+      );
+      const dialog = await openEmailDialog();
+      const input = (await within(dialog).findByTestId("kude-email-input")) as HTMLInputElement;
+      expect(input.value).toBe("");
+      fireEvent.change(input, { target: { value: "a@b.co" } });
+      fireEvent.click(within(dialog).getByTestId("kude-email-send"));
+      await waitFor(() => expect(sendSifenKudeByEmail).toHaveBeenCalledWith(1, "a@b.co"));
+    });
+
+    it("keeps the dialog open with the translated error when the send fails, and allows retrying", async () => {
+      sendSifenKudeByEmail.mockRejectedValueOnce(new Error("boom"));
+      const dialog = await openEmailDialog();
+      await within(dialog).findByDisplayValue("maria@example.com");
+      fireEvent.click(within(dialog).getByTestId("kude-email-send"));
+
+      expect((await within(dialog).findByTestId("kude-email-error")).textContent).toMatch(/unexpected error/i);
+      expect(screen.getByTestId("kude-email-dialog")).toBeTruthy();
+      expect(screen.queryByTestId("billing-today-notice")).toBeNull();
+
+      fireEvent.click(within(dialog).getByTestId("kude-email-send"));
+      await waitFor(() => expect(sendSifenKudeByEmail).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(screen.queryByTestId("kude-email-dialog")).toBeNull());
+    });
+
+    it("«Cancel» closes it without sending", async () => {
+      const dialog = await openEmailDialog();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+      expect(screen.queryByTestId("kude-email-dialog")).toBeNull();
+      expect(sendSifenKudeByEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("the notices above the list can be closed with a «×»", () => {
+    it("closes a success notice", async () => {
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-email-1"));
+      const dialog = await screen.findByTestId("kude-email-dialog");
+      await within(dialog).findByDisplayValue("maria@example.com");
+      fireEvent.click(within(dialog).getByTestId("kude-email-send"));
+
+      const notice = await screen.findByTestId("billing-today-notice");
+      const close = within(notice.parentElement as HTMLElement).getByRole("button", { name: "Close notice" });
+      expect(close).toBe(screen.getByTestId("billing-today-notice-close"));
+      fireEvent.click(close);
+      expect(screen.queryByTestId("billing-today-notice")).toBeNull();
+    });
+
+    it("closes an error notice too (here, from a failed download)", async () => {
+      downloadSifenKude.mockRejectedValue(new Error("boom"));
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+      expect((await screen.findByTestId("billing-today-notice")).textContent).toMatch(/unexpected error/i);
+
+      fireEvent.click(screen.getByTestId("billing-today-notice-close"));
+      expect(screen.queryByTestId("billing-today-notice")).toBeNull();
+    });
+
+    it("starting a new action clears the previous notice by itself", async () => {
+      downloadSifenKude.mockRejectedValueOnce(new Error("boom")).mockResolvedValue(undefined);
+      await renderHome();
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+      await screen.findByTestId("billing-today-notice");
+
+      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+      await waitFor(() => expect(downloadSifenKude).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(screen.queryByTestId("billing-today-notice")).toBeNull());
     });
   });
 });

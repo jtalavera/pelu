@@ -236,6 +236,9 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
 
     const trigger = page.getByTestId(`billing-today-menu-${inv.id}`);
     await expect(trigger).toHaveAccessibleName("More actions");
+    // Three VERTICAL dots (⋮), not the horizontal «⋯».
+    await expect(trigger.locator('svg[data-icon="dots-vertical"] circle')).toHaveCount(3);
+    await expect(trigger).not.toContainText("⋯");
     const box = await trigger.boundingBox();
     expect(box!.width).toBeGreaterThanOrEqual(44);
     expect(box!.height).toBeGreaterThanOrEqual(44);
@@ -245,7 +248,7 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await expect(menu).toBeVisible();
     await expect(page.getByTestId(`billing-today-menu-whatsapp-${inv.id}`)).toHaveText(/Send by WhatsApp/);
     await expect(page.getByTestId(`billing-today-menu-email-${inv.id}`)).toHaveText(/Send by email/);
-    await expect(page.getByTestId(`billing-today-menu-email-${inv.id}`)).toHaveText(/To the client's email/);
+    await expect(page.getByTestId(`billing-today-menu-email-${inv.id}`)).toHaveText(/Check the email before sending/);
     await expect(page.getByTestId(`billing-today-menu-download-${inv.id}`)).toHaveText(/Download KuDE \(PDF\)/);
     await expect(page.getByTestId(`billing-today-menu-detail-${inv.id}`)).toHaveText(/View details/);
     // Opening the menu did not open the row's detail.
@@ -308,7 +311,7 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await expect(page.getByTestId(`billing-today-menu-${inv.id}`)).toBeEnabled();
   });
 
-  test("AC7 · «Enviar por correo» lo manda al correo cargado del cliente y confirma", async ({
+  test("AC8 · «Enviar por correo» abre un diálogo con el correo del cliente precargado y no envía hasta confirmar", async ({
     page,
     request,
   }) => {
@@ -319,19 +322,163 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await openToday(page);
     await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
 
+    let sent = 0;
+    await page.route(`**/api/invoices/${inv.id}/sifen/kude/email`, (route) => {
+      sent += 1;
+      return route.continue();
+    });
     await page.getByTestId(`billing-today-menu-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-email-${inv.id}`).click();
+
+    const dialog = page.getByTestId("kude-email-dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(inv.fullName, { ignoreCase: true });
+    await expect(dialog).toContainText(`Invoice ${inv.invoiceNumberFormatted}`);
+    await expect(dialog).toContainText("Gs. 45.000");
+    await expect(page.getByTestId("kude-email-input")).toHaveValue("cliente-hu72@example.com");
+    await expect(page.getByTestId("kude-email-hint")).toContainText("email on file for the client");
+    // The menu closed and the row's detail did not open behind the dialog.
+    await expect(page.getByTestId(`billing-today-menu-panel-${inv.id}`)).toHaveCount(0);
+    expect(sent).toBe(0);
+
+    // «Cancel» closes it without sending anything.
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(sent).toBe(0);
+    await page.unroute(`**/api/invoices/${inv.id}/sifen/kude/email`);
+  });
+
+  test("AC8 · el correo se puede cambiar solo para ese envío: se manda al editado y el cliente no cambia", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const inv = await createInvoice(request, token, seed, "E2E HU72 correo edit", "APPROVED", {
+      email: "cliente-hu72@example.com",
+    });
+    await openToday(page);
+    await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
+
+    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-email-${inv.id}`).click();
+    await page.getByTestId("kude-email-input").fill("otro-correo@example.com");
     const [emailResponse] = await Promise.all([
       page.waitForResponse(
         (r) => r.url().includes(`/api/invoices/${inv.id}/sifen/kude/email`) && r.request().method() === "POST",
       ),
-      page.getByTestId(`billing-today-menu-email-${inv.id}`).click(),
+      page.getByTestId("kude-email-send").click(),
     ]);
-    // The success response is 204 No Content.
+    // The success response is 204 No Content, sent to the address as edited.
     expect(emailResponse.status()).toBe(204);
-    // No address typed: the backend uses the client's own.
-    expect(emailResponse.request().postDataJSON()).toEqual({ email: null });
+    expect(emailResponse.request().postDataJSON()).toEqual({ email: "otro-correo@example.com" });
+    await expect(page.getByTestId("kude-email-dialog")).toHaveCount(0);
     await expect(page.getByTestId("billing-today-notice")).toContainText("KuDE sent by email.");
-    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // The client keeps its own email.
+    const detail = await apiGetJson<{ clientEmail?: string | null }>(request, token, `/api/invoices/${inv.id}`);
+    expect(detail.clientEmail).toBe("cliente-hu72@example.com");
+  });
+
+  test("AC8 · sin correo cargado el campo queda vacío y se pide uno válido, con ejemplo", async ({ page, request }) => {
+    test.setTimeout(60_000);
+    const inv = await createInvoice(request, token, seed, "E2E HU72 sin correo", "APPROVED");
+    await openToday(page);
+    await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
+
+    let sent = 0;
+    await page.route(`**/api/invoices/${inv.id}/sifen/kude/email`, (route) => {
+      sent += 1;
+      return route.continue();
+    });
+    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-email-${inv.id}`).click();
+    const input = page.getByTestId("kude-email-input");
+    await expect(input).toHaveValue("");
+    await expect(page.getByTestId("kude-email-hint")).toContainText("no email on file");
+
+    await page.getByTestId("kude-email-send").click();
+    const error = page.getByRole("alert").filter({ hasText: "Enter a valid email. Example: client@example.com" });
+    await expect(error).toBeVisible();
+    await expect(input).toHaveAttribute("aria-invalid", "true");
+    await input.fill("sin-arroba");
+    await page.getByTestId("kude-email-send").click();
+    await expect(error).toBeVisible();
+    expect(sent).toBe(0);
+
+    // With a valid address it goes out and the dialog closes.
+    await input.fill("nuevo@example.com");
+    const [emailResponse] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.url().includes(`/api/invoices/${inv.id}/sifen/kude/email`) && r.request().method() === "POST",
+      ),
+      page.getByTestId("kude-email-send").click(),
+    ]);
+    expect(emailResponse.status()).toBe(204);
+    expect(emailResponse.request().postDataJSON()).toEqual({ email: "nuevo@example.com" });
+    await expect(page.getByTestId("kude-email-dialog")).toHaveCount(0);
+    await page.unroute(`**/api/invoices/${inv.id}/sifen/kude/email`);
+  });
+
+  test("AC8 · si el envío falla el error se ve dentro del diálogo, que sigue abierto para reintentar", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const inv = await createInvoice(request, token, seed, "E2E HU72 correo falla", "APPROVED", {
+      email: "cliente-hu72@example.com",
+    });
+    await openToday(page);
+    await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
+
+    await page.route(`**/api/invoices/${inv.id}/sifen/kude/email`, (route) =>
+      route.fulfill({ status: 500, contentType: "application/json", body: '{"error":"EMAIL_FAILED"}' }),
+    );
+    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-email-${inv.id}`).click();
+    await page.getByTestId("kude-email-send").click();
+
+    await expect(page.getByTestId("kude-email-error")).toBeVisible();
+    await expect(page.getByTestId("kude-email-dialog")).toBeVisible();
+    await expect(page.getByTestId("billing-today-notice")).toHaveCount(0);
+
+    // Retrying works once the server answers.
+    await page.unroute(`**/api/invoices/${inv.id}/sifen/kude/email`);
+    await page.getByTestId("kude-email-send").click();
+    await expect(page.getByTestId("kude-email-dialog")).toHaveCount(0);
+    await expect(page.getByTestId("billing-today-notice")).toContainText("KuDE sent by email.");
+  });
+
+  test("AC9 · los avisos de la lista (éxito y error) se cierran con la ×", async ({ page, request }) => {
+    test.setTimeout(90_000);
+    const inv = await createInvoice(request, token, seed, "E2E HU72 avisos", "APPROVED", {
+      email: "cliente-hu72@example.com",
+    });
+    await openToday(page);
+    await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
+
+    // Success notice (email sent).
+    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-email-${inv.id}`).click();
+    await page.getByTestId("kude-email-send").click();
+    const notice = page.getByTestId("billing-today-notice");
+    await expect(notice).toContainText("KuDE sent by email.");
+    const close = page.getByRole("button", { name: "Close notice" });
+    const box = await close.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    await close.click();
+    await expect(notice).toHaveCount(0);
+
+    // Error notice (download failed) can be closed too.
+    await page.route(`**/api/invoices/${inv.id}/sifen/kude`, (route) =>
+      route.fulfill({ status: 500, contentType: "application/json", body: '{"error":"KUDE_FAILED"}' }),
+    );
+    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-download-${inv.id}`).click();
+    await expect(notice).toBeVisible();
+    await page.getByTestId("billing-today-notice-close").click();
+    await expect(notice).toHaveCount(0);
+    await page.unroute(`**/api/invoices/${inv.id}/sifen/kude`);
   });
 
   test("AC7 · «Enviar por WhatsApp» abre el chat del contacto del cliente con el KuDE descargado", async ({

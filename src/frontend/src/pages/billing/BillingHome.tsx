@@ -14,7 +14,7 @@ import {
   Text,
   Toast,
 } from "@design-system";
-import { listInvoicesPaged, type PagedInvoicesResponse } from "../../api/invoices";
+import { listInvoicesPaged, type InvoiceListItem, type PagedInvoicesResponse } from "../../api/invoices";
 import {
   closeSession as closeSessionApi,
   createMovement as createMovementApi,
@@ -24,12 +24,14 @@ import {
   type CashSession,
   type CashSessionDetail,
 } from "../../api/cashSessions";
-import { downloadSifenKude, sendSifenKudeByEmail } from "../../api/downloadSifenKude";
+import { downloadSifenKude } from "../../api/downloadSifenKude";
 import { femmeJson } from "../../api/femmeClient";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 import { ActionIcon } from "../../components/actionIcons";
+import { DismissibleAlert } from "../../components/DismissibleAlert";
 import { FieldValidationError } from "../../components/FieldValidationError";
+import { SendKudeEmailDialog } from "../../components/invoice/SendKudeEmailDialog";
 import { InvoiceCorrectionForm } from "../../components/InvoiceCorrectionForm";
 import { InvoiceDetailModal, type InvoiceDetail } from "../../components/InvoiceDetailModal";
 import { InvoiceStatePill, deriveInvoiceState } from "../../components/InvoiceStatePill";
@@ -224,6 +226,8 @@ export function BillingHome({
   // «Más acciones» of a row: which row's menu is open, which row is preparing a KuDE, and the outcome.
   const [rowMenuOpenId, setRowMenuOpenId] = useState<number | null>(null);
   const [kudeBusyId, setKudeBusyId] = useState<number | null>(null);
+  // «Enviar por correo»: the row whose KuDE is being sent (the dialog lets the user check the address).
+  const [emailTarget, setEmailTarget] = useState<InvoiceListItem | null>(null);
   const [todayNotice, setTodayNotice] = useState<{ kind: "error" | "success"; text: string } | null>(
     null,
   );
@@ -260,20 +264,16 @@ export function BillingHome({
     if (!ok) setTodayNotice({ kind: "error", text: t("femme.apiErrors.GENERIC") });
   }
 
-  /** Row menu: KuDE hand-off straight from the list (the detail dialog offers the same actions). */
-  async function runKudeAction(inv: { id: number }, action: "whatsapp" | "email" | "download") {
+  /**
+   * Row menu: KuDE hand-off straight from the list (the detail dialog offers the same actions).
+   * «Enviar por correo» is not here: it opens a dialog so the address can be checked first.
+   */
+  async function runKudeAction(inv: { id: number }, action: "whatsapp" | "download") {
     setTodayNotice(null);
     setKudeBusyId(inv.id);
     try {
       if (action === "download") {
         await downloadSifenKude(inv.id);
-      } else if (action === "email") {
-        // Blank address: the backend sends it to the client's own email on file.
-        await sendSifenKudeByEmail(inv.id, "");
-        setTodayNotice({
-          kind: "success",
-          text: t("femme.billing.history.detail.sifen.kudeEmailSuccess"),
-        });
       } else {
         // The list row carries no phone: read the detail so the chat opens against the client's contact.
         const detail = await femmeJson<InvoiceDetail>(`/api/invoices/${inv.id}`);
@@ -289,11 +289,7 @@ export function BillingHome({
     }
   }
 
-  function rowMenuItems(inv: {
-    id: number;
-    status: string;
-    sifenSubmissionStatus?: string | null;
-  }): MoreActionsItem[] {
+  function rowMenuItems(inv: InvoiceListItem): MoreActionsItem[] {
     const shareable = isKudeShareable(inv);
     const unavailable = shareable ? undefined : t("femme.billing.home.rowMenu.kudeUnavailable");
     return [
@@ -313,7 +309,10 @@ export function BillingHome({
         disabled: !shareable,
         hint: unavailable ?? t("femme.billing.home.rowMenu.emailHint"),
         testId: `billing-today-menu-email-${inv.id}`,
-        onSelect: () => void runKudeAction(inv, "email"),
+        onSelect: () => {
+          setTodayNotice(null);
+          setEmailTarget(inv);
+        },
       },
       {
         id: "download",
@@ -487,7 +486,7 @@ export function BillingHome({
                   </Text>
                 )}
                 {todayNotice && (
-                  <Alert
+                  <DismissibleAlert
                     variant={todayNotice.kind === "error" ? "destructive" : "success"}
                     title={
                       todayNotice.kind === "error"
@@ -496,9 +495,11 @@ export function BillingHome({
                     }
                     data-testid="billing-today-notice"
                     className="mx-2 mt-3"
+                    closeLabel={t("femme.billing.home.closeNotice")}
+                    onDismiss={() => setTodayNotice(null)}
                   >
                     {todayNotice.kind === "error" ? todayNotice.text : null}
-                  </Alert>
+                  </DismissibleAlert>
                 )}
                 {todayLoading ? (
                   <div className="flex items-center gap-2 p-3">
@@ -566,6 +567,7 @@ export function BillingHome({
                             >
                               <MoreActionsMenu
                                 compact
+                                triggerIcon="vertical"
                                 label={t("femme.billing.history.detail.moreActions")}
                                 open={rowMenuOpenId === inv.id}
                                 onOpenChange={(o) => setRowMenuOpenId(o ? inv.id : null)}
@@ -931,6 +933,18 @@ export function BillingHome({
           }}
         />
       )}
+
+      <SendKudeEmailDialog
+        target={emailTarget}
+        onClose={() => setEmailTarget(null)}
+        onSent={() => {
+          setEmailTarget(null);
+          setTodayNotice({
+            kind: "success",
+            text: t("femme.billing.history.detail.sifen.kudeEmailSuccess"),
+          });
+        }}
+      />
 
       {selectedInvoiceId !== null && (
         <InvoiceDetailModal

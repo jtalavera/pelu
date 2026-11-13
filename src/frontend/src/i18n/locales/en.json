@@ -1548,9 +1548,20 @@
         "updatedAt": "Updated at {{time}}",
         "rowMenu": {
           "email": "Send by email",
-          "emailHint": "To the client's email",
+          "emailHint": "Check the email before sending",
           "viewDetail": "View details",
           "kudeUnavailable": "Not available: no approved KuDE"
+        },
+        "closeNotice": "Close notice",
+        "emailDialog": {
+          "title": "Send KuDE by email",
+          "invoiceLine": "Invoice {{number}} · {{date}}",
+          "loading": "Looking up the client's email…",
+          "hintOnFile": "This is the email on file for the client. You can change it for this send only: it does not modify the client.",
+          "hintNone": "This client has no email on file: type one for this send.",
+          "invalid": "Enter a valid email. Example: client@example.com",
+          "send": "Send",
+          "sending": "Sending…"
         },
         "viewHistoryShort": "View history",
         "closedTitle": "The cash register is closed"
