@@ -36,6 +36,7 @@ Se investigaron las pantallas principales de programas de salones (Fresha, Phore
 6. **Fichas de hoy** — Lo que falta cobrar (suma de las fichas abiertas de hoy) y cuántas fichas abiertas son; una barra y su leyenda con cobradas, abiertas y anuladas del día; las tres abiertas que más tiempo llevan, con cliente, servicio, profesional, hace cuánto se abrió, monto y «Cobrar» (de 44 px), que abre Facturación con esa ficha; «y N fichas abiertas más», «N abiertas de días anteriores» y «Ver todas →».
 7. **Factura electrónica** — Cuántos comprobantes se emitieron hoy y, con facturación electrónica activa, «Todas al día» o cuántos requieren atención; sin ella, la tarjeta se llama «Comprobantes» y no muestra estado. «Ver comprobantes →».
 8. **Celular** — Bajo 640 px las tarjetas van una debajo de otra, sin desplazamiento horizontal.
+9. **Todo en el idioma del usuario** — Con la interfaz en español, todo lo que dice el Resumen está en español, incluida la alerta fiscal: el servidor envía un código y un texto de respaldo en inglés, y la pantalla muestra la traducción del código (el texto en inglés solo se usa si llega un código desconocido).
 
 ---
 

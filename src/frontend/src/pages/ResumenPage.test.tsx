@@ -280,4 +280,50 @@ describe("ResumenPage (HU-77)", () => {
     );
     expect(await screen.findByTestId("resumen-error")).toBeTruthy();
   });
+  it("everything the page says is in Spanish when the interface is in Spanish", async () => {
+    setup({ attention: true });
+    await i18n.changeLanguage("es");
+    await renderPage();
+    expect(screen.getByTestId("resumen-title").textContent).toBe("¡Hola, equipo!");
+    expect(screen.getByTestId("resumen-subtitle").textContent).toMatch(/^Así va tu salón hoy · /);
+    expect(screen.getByTestId("resumen-new-appointment").textContent).toBe("+ Nuevo turno");
+    expect(screen.getByTestId("resumen-new-invoice").textContent).toBe("+ Nueva factura");
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(["Turnos de hoy", "Caja del día", "Fichas de hoy", "Factura electrónica"]);
+    expect(screen.getByTestId("resumen-appointments-pending").textContent).toBe("3 pendientes");
+    expect(screen.getByTestId("resumen-appointments-confirmed").textContent).toBe("15 confirmados");
+    expect(screen.getByTestId("resumen-view-agenda").textContent).toBe("Ver agenda →");
+    expect(screen.getByTestId("resumen-view-cash").textContent).toMatch(/^Abierta desde las .* · Ver caja →$/);
+    expect(screen.getByTestId("resumen-fichas-open-count").textContent).toBe("4 fichas abiertas");
+    expect(screen.getByTestId("resumen-fichas-view-all").textContent).toBe("Ver todas →");
+    expect(screen.getByTestId("resumen-fichas-legend").textContent).toMatch(/cobradas.*abiertas.*anulada/);
+    expect(screen.getAllByTestId("resumen-ficha")[0].textContent).toMatch(/hace /);
+    expect(screen.getByTestId("resumen-fichas-more").textContent).toBe("y 1 ficha abierta más");
+    expect(screen.getByTestId("resumen-fichas-older").textContent).toBe("2 abiertas de días anteriores");
+    expect(screen.getByTestId("resumen-invoices-attention").textContent).toBe("1 requiere atención");
+    expect(screen.getByTestId("resumen-view-invoices").textContent).toBe("Ver comprobantes →");
+    // No English left on the page (the data itself — names, services — is the user's).
+    expect(screen.getByTestId("resumen-page").textContent).not.toMatch(
+      /\b(Hello|team|pending|confirmed|Open agenda|Collect|open records?|issued|attention|ago|All up to date)\b/i,
+    );
+  });
+
+  it("every fiscal alert code the server can send has a translation in both languages", () => {
+    // Keep in sync with `DashboardService` (the `messageKey` of each `FiscalAlert`).
+    const codes = [
+      "businessRucMissing",
+      "fiscalNoActiveStamp",
+      "fiscalExpiredOrExhausted",
+      "fiscalExpiringSoon",
+      "fiscalLowRange",
+      "sifenVoidingPending",
+      "sifenVoidingOverdue",
+    ];
+    for (const lng of ["es", "en"]) {
+      for (const code of codes) {
+        expect(i18n.exists(`femme.dashboard.alerts.${code}`, { lng }), `${lng}: ${code}`).toBe(true);
+      }
+    }
+  });
+
 });

@@ -188,3 +188,39 @@ test("AC8 · en el celular las tarjetas van una debajo de otra y no hay desplaza
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test("AC9 · con la interfaz en español todo el Resumen está en español (incluida la alerta fiscal que manda el servidor)", async ({ page }) => {
+  test.setTimeout(60_000);
+  // The server's alert carries a code and an English fallback: the page must show the translation.
+  await page.route("**/api/dashboard", async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    body.fiscalAlerts = [
+      {
+        severity: "warning",
+        messageKey: "sifenVoidingPending",
+        message: "You have document-number voidings pending submission to SIFEN.",
+      },
+    ];
+    await route.fulfill({ response: res, json: body });
+  });
+  await loginAdminUi(page, w);
+  // Switch the language from the interface, like a user would.
+  await page.locator("[data-tour='topbar-lang']").filter({ visible: true }).first().getByRole("button", { name: /^es$/i }).click();
+
+  await expect(page.getByTestId("resumen-title")).toHaveText("¡Hola, equipo!", { timeout: 20_000 });
+  await expect(page.getByTestId("resumen-subtitle")).toContainText("Así va tu salón hoy");
+  await expect(page.getByTestId("resumen-new-appointment")).toHaveText("+ Nuevo turno");
+  await expect(page.getByTestId("resumen-new-invoice")).toHaveText("+ Nueva factura");
+  await expect(page.getByTestId("resumen-page").getByRole("heading", { level: 2 })).toHaveText([
+    "Turnos de hoy",
+    "Caja del día",
+    "Fichas de hoy",
+    /Factura electrónica|Comprobantes/,
+  ]);
+  const alert = page.getByTestId("resumen-fiscal-alert");
+  await expect(alert).toContainText("Tenés inutilizaciones de numeración pendientes de reportar a SIFEN");
+  await expect(alert).not.toContainText("You have document-number");
+  // No English left in the cards (the salon's own names are not translated).
+  await expect(page.getByTestId("resumen-page")).not.toContainText(/\b(Hello|pending|confirmed|Collect|All up to date|Open agenda|See all)\b/);
+});
