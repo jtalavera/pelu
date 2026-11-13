@@ -43,10 +43,10 @@ test.describe("HU-03 · Dashboard principal", () => {
     await expect(page.getByText("No appointments today", { exact: true }).first()).toBeVisible();
   });
 
-  test("HU-03 · 5 la facturación y los clientes del período se ven en Resumen", async ({ page }) => {
+  test("HU-03 · 5 la facturación y los clientes del período se ven en Reportes", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
-    // Resumen: the indicators follow the selected period (30 days by default).
+    // Reportes: the indicators follow the selected period (30 days by default).
     await expect(page.getByTestId("summary-kpi-revenue")).toHaveText(/^Gs\. \d{1,3}(\.\d{3})*$/);
     await expect(page.getByTestId("summary-kpi-clients")).toHaveText(/^\d+$/);
   });
