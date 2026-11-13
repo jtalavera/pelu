@@ -64,7 +64,9 @@ function setup(over: { cash?: boolean; attention?: boolean; fiscalAlert?: boolea
       if (over.failSummary) return Promise.reject(new Error("boom"));
       return Promise.resolve({
         appointmentsToday: { total: 18, pending: 3, confirmed: 15 },
-        fiscalAlerts: over.fiscalAlert ? [{ severity: "warning", messageKey: "x", message: "El certificado vence pronto" }] : [],
+        fiscalAlerts: over.fiscalAlert
+          ? [{ severity: "warning", messageKey: "sifenVoidingPending", message: "You have document-number voidings pending submission to SIFEN." }]
+          : [],
       });
     }
     return Promise.resolve(undefined);
@@ -237,13 +239,32 @@ describe("ResumenPage (HU-77)", () => {
     expect(navigate).toHaveBeenCalledWith("/app/billing", { state: { activeTab: "invoice" } });
   });
 
-  it("keeps showing a fiscal alert (closable) when the server sends one", async () => {
+  it("keeps showing a fiscal alert (closable), translated to the user's language", async () => {
     setup({ fiscalAlert: true });
+    await i18n.changeLanguage("es");
     await renderPage();
     const alert = screen.getByTestId("resumen-fiscal-alert");
-    expect(alert.textContent).toMatch(/El certificado vence pronto/);
+    // The server's English text is only a fallback: the message comes from the locale by its code.
+    expect(alert.textContent).toMatch(/Tenés inutilizaciones de numeración pendientes/);
+    expect(alert.textContent).not.toMatch(/You have document-number/);
     fireEvent.click(within(alert).getByRole("button"));
     expect(screen.queryByTestId("resumen-fiscal-alert")).toBeNull();
+  });
+
+  it("falls back to the server's text for an alert code it does not know", async () => {
+    setup({ fiscalAlert: true });
+    femmeJson.mockImplementation((url: string) =>
+      Promise.resolve(
+        url === "/api/dashboard"
+          ? {
+              appointmentsToday: { total: 0, pending: 0, confirmed: 0 },
+              fiscalAlerts: [{ severity: "warning", messageKey: "unknownCode", message: "Some new alert" }],
+            }
+          : undefined,
+      ),
+    );
+    await renderPage();
+    expect(screen.getByTestId("resumen-fiscal-alert").textContent).toMatch(/Some new alert/);
   });
 
   it("shows an error when the summary cannot be read", async () => {
