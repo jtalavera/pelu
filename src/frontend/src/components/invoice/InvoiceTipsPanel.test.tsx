@@ -151,7 +151,10 @@ describe("InvoiceTipsPanel (HU-73)", () => {
       expect(within(body).getAllByTestId("invoice-tips-row")).toHaveLength(2);
       expect(within(body).getByText("Laura Benítez")).toBeTruthy();
       expect(within(body).getByText("Camila Ortiz")).toBeTruthy();
-      expect(within(body).getByText(/recorded in the open cash register \(opened/i)).toBeTruthy();
+      // One short line instead of the long explanation; nothing to cancel while it is pending.
+      expect(screen.getByTestId("invoice-tips-cash-note").textContent).toBe("Added to the open cash register.");
+      expect(screen.queryByText(/One per professional/i)).toBeNull();
+      expect(screen.queryByTestId("invoice-tips-cancel")).toBeNull();
       expect((screen.getByTestId("invoice-tips-submit") as HTMLButtonElement).disabled).toBe(false);
     });
 
@@ -189,7 +192,8 @@ describe("InvoiceTipsPanel (HU-73)", () => {
         target: { value: "DEBIT_CARD" },
       });
       fireEvent.change(await within(rows[1]).findByLabelText("Card brand"), { target: { value: "VISA" } });
-      expect(screen.getByTestId("invoice-tips-entered-total").textContent).toBe("15.000");
+      // The total typed so far is on the button itself.
+      expect(screen.getByTestId("invoice-tips-submit").textContent).toBe("Register · 15.000");
 
       fireEvent.click(screen.getByTestId("invoice-tips-submit"));
 
@@ -323,10 +327,16 @@ describe("InvoiceTipsPanel (HU-73)", () => {
       expect(within(body).getByText("Collected when the invoice was issued")).toBeTruthy();
       expect(within(body).getByTestId("invoice-tip-1").textContent).toMatch(/Cash/);
       expect(within(body).getByTestId("invoice-tip-2").textContent).toMatch(/Debit card · Visa/);
+      // Short rows: nobody's e-mail on them.
+      expect(within(body).getByTestId("invoice-tip-1").textContent).not.toMatch(/ana@demo.com/);
+      // A voided tip only says «Voided» (no who, no reason).
       const voided = within(body).getByTestId("invoice-tip-3");
       expect(voided.textContent).toMatch(/Voided/);
-      expect(voided.textContent).toMatch(/Voided by admin@demo.com: «Monto mal cargado»/);
-      expect(within(body).getByTestId("invoice-tips-total").textContent).toBe("23.000");
+      expect(voided.textContent).not.toMatch(/admin@demo.com|Monto mal cargado/);
+      // The total lives in the header badge, not in a red line.
+      expect(screen.getByTestId("invoice-tips-badge").textContent).toMatch(/23\.000/);
+      expect(within(body).queryByTestId("invoice-tips-total")).toBeNull();
+      expect(within(body).queryByText(/not billable/i)).toBeNull();
     });
 
     it("offers «Void» only to the administrator, only on live late tips of an open register", async () => {
@@ -405,6 +415,42 @@ describe("InvoiceTipsPanel (HU-73)", () => {
       expect(screen.getByTestId("late-tip-void-dialog")).toBeTruthy();
     });
   });
+
+  describe("simplified look and one-step load", () => {
+    it("shows a tip registered today with its time only", async () => {
+      getInvoiceTips.mockResolvedValue(tips([item({ id: 1, createdAt: new Date().toISOString() })]));
+      renderPanel();
+      const body = await openPanel();
+      expect(within(body).getByTestId("invoice-tip-1").textContent).toMatch(/Cash · \d{1,2}:\d{2}/);
+      expect(within(body).getByTestId("invoice-tip-1").textContent).not.toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
+    });
+
+    it("«Cancel» closes the form without registering anything", async () => {
+      renderPanel();
+      const body = await openPanel();
+      fireEvent.click(within(body).getByTestId("invoice-tips-open-form"));
+      expect(await screen.findByTestId("invoice-tips-form")).toBeTruthy();
+      fireEvent.click(screen.getByTestId("invoice-tips-cancel"));
+      expect(screen.queryByTestId("invoice-tips-form")).toBeNull();
+      expect(addInvoiceTips).not.toHaveBeenCalled();
+    });
+
+    it("uses the tips the screen already read and does not ask for them again", async () => {
+      getInvoiceTips.mockClear();
+      renderPanel({ initialTips: tips([item({ id: 1 })]) });
+      const body = await openPanel();
+      expect(within(body).getByTestId("invoice-tip-1")).toBeTruthy();
+      expect(getInvoiceTips).not.toHaveBeenCalled();
+    });
+
+    it("does not show the tab when the screen's read of the tips failed (null) and does not retry", async () => {
+      getInvoiceTips.mockClear();
+      renderPanel({ initialTips: null });
+      await new Promise((r) => setTimeout(r, 20));
+      expect(screen.queryByTestId("invoice-tips")).toBeNull();
+      expect(getInvoiceTips).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("servedProfessionals", () => {
@@ -423,4 +469,5 @@ describe("servedProfessionals", () => {
       { id: 22, name: "22" },
     ]);
   });
+
 });

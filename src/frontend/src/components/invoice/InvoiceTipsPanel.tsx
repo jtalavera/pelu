@@ -14,7 +14,7 @@ import { useMe } from "../../hooks/useMe";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatAmountDecimal } from "../../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../../lib/moneyInputMask";
-import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
+import { formatParaguayDate, formatParaguayDateTime, formatParaguayTime } from "../../lib/paraguayDateTime";
 import { withDisplayNames } from "../../lib/professionalDisplay";
 import {
   CARD_BRANDS,
@@ -22,6 +22,7 @@ import {
   PAYMENT_METHODS,
   capitalize,
 } from "../../pages/billing/billingShared";
+import { ACTION_BUTTON } from "../actionButtons";
 import { FieldValidationError } from "../FieldValidationError";
 import { VoidLateTipDialog, type VoidLateTipTarget } from "./VoidLateTipDialog";
 
@@ -79,6 +80,7 @@ export function InvoiceTipsPanel({
   invoiceId,
   served,
   highlightPending = false,
+  initialTips,
   onGoToCash,
   onChanged,
 }: {
@@ -87,6 +89,12 @@ export function InvoiceTipsPanel({
   served: { id: number; name: string }[];
   /** Highlights the (collapsed) tab while no tip is registered — only on the just-issued screen. */
   highlightPending?: boolean;
+  /**
+   * Tips already read by the screen that hosts the panel (the invoice detail reads them together with
+   * the invoice, so both appear at once). `null` means that read failed: the tab does not show.
+   * Left out, the panel reads its own tips.
+   */
+  initialTips?: InvoiceTips | null;
   onGoToCash?: () => void;
   /** Called after tips were registered or voided (e.g. to refresh what depends on the cash register). */
   onChanged?: () => void;
@@ -96,7 +104,7 @@ export function InvoiceTipsPanel({
   const { me } = useMe();
   const isAdmin = me?.role === "ADMIN";
 
-  const [tips, setTips] = useState<InvoiceTips | null>(null);
+  const [tips, setTips] = useState<InvoiceTips | null>(initialTips ?? null);
   const [open, setOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [rows, setRows] = useState<FormRow[]>(() =>
@@ -111,6 +119,7 @@ export function InvoiceTipsPanel({
   const [professionals, setProfessionals] = useState<ProfessionalOption[]>([]);
 
   useEffect(() => {
+    if (initialTips !== undefined) return;
     let cancelled = false;
     getInvoiceTips(invoiceId)
       .then((data) => {
@@ -122,7 +131,7 @@ export function InvoiceTipsPanel({
     return () => {
       cancelled = true;
     };
-  }, [invoiceId]);
+  }, [invoiceId, initialTips]);
 
   const loadProfessionals = useCallback(() => {
     if (professionals.length > 0) return;
@@ -159,6 +168,14 @@ export function InvoiceTipsPanel({
     return parts.join(" · ");
   };
 
+  /** «09:14» for a tip registered today, the full date and time for an older one. */
+  const whenLabel = (iso: string | null) => {
+    if (!iso) return "";
+    return formatParaguayDate(iso, dateLocale) === formatParaguayDate(new Date(), dateLocale)
+      ? formatParaguayTime(iso, dateLocale)
+      : formatParaguayDateTime(iso, dateLocale);
+  };
+
   function updateRow(key: string, patch: Partial<FormRow>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
     setRowErrors((prev) => {
@@ -179,6 +196,13 @@ export function InvoiceTipsPanel({
     setNotice(null);
     setFormOpen(true);
     if (rows.length === 0) loadProfessionals();
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setSubmitError(null);
+    setFormError(null);
+    setRowErrors({});
   }
 
   async function submit() {
@@ -291,10 +315,6 @@ export function InvoiceTipsPanel({
             data-testid="invoice-tips-body"
             className="flex flex-col gap-3 border-t border-line p-4"
           >
-            <Text variant="muted" className="text-sm">
-              {t("femme.billing.invoiceTips.hint")}
-            </Text>
-
             {notice ? (
               <Alert variant="success" title={notice} data-testid="invoice-tips-notice" />
             ) : null}
@@ -305,11 +325,11 @@ export function InvoiceTipsPanel({
                   <li
                     key={`${item.source}-${item.id ?? idx}`}
                     data-testid={`invoice-tip-${item.source === "LATE" ? item.id : `issuance-${idx}`}`}
-                    className="flex items-center justify-between gap-3 border-b border-line py-2.5 last:border-b-0"
+                    className="flex min-h-[3.75rem] items-center justify-between gap-2 border-b border-line py-2 last:border-b-0"
                   >
                     <div className={`min-w-0 ${item.voided ? "text-ink-3" : ""}`}>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-bold">{item.professionalName}</span>
+                        <span className="text-[15px] font-bold">{item.professionalName}</span>
                         {item.voided ? (
                           <span className="rounded-full bg-line px-2.5 py-0.5 text-xs font-bold text-ink-2">
                             {t("femme.billing.invoiceTips.voidedTag")}
@@ -319,34 +339,20 @@ export function InvoiceTipsPanel({
                       <div className="text-xs text-ink-3">
                         {item.source === "ISSUANCE"
                           ? t("femme.billing.invoiceTips.atIssuance")
-                          : [
-                              paymentLabel(item),
-                              item.createdAt ? formatParaguayDateTime(item.createdAt, dateLocale) : null,
-                              item.createdByName,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
+                          : [paymentLabel(item), whenLabel(item.createdAt)].filter(Boolean).join(" · ")}
                       </div>
-                      {item.voided ? (
-                        <div className="text-xs text-ink-3">
-                          {t("femme.billing.invoiceTips.voidedBy", {
-                            name: item.voidedByName ?? "",
-                            reason: item.voidReason ?? "",
-                          })}
-                        </div>
-                      ) : null}
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-0.5">
                       <span
-                        className={`text-sm font-bold tabular-nums ${item.voided ? "text-ink-3 line-through" : ""}`}
+                        className={`text-[15px] font-extrabold tabular-nums ${item.voided ? "text-ink-3 line-through" : ""}`}
                       >
                         {formatAmountDecimal(Number(item.amount).toFixed(2))}
                       </span>
                       {isAdmin && item.source === "LATE" && !item.voided && item.cashSessionOpen ? (
                         <Button
                           type="button"
-                          variant="outline"
-                          className="min-h-11 text-danger"
+                          variant="ghost"
+                          className={`${ACTION_BUTTON} px-2 font-bold text-danger`}
                           data-testid={`invoice-tip-void-${item.id}`}
                           onClick={() =>
                             setVoidTarget({
@@ -370,15 +376,6 @@ export function InvoiceTipsPanel({
               </Text>
             ) : null}
 
-            {items.length > 0 ? (
-              <div className="flex justify-between border-t border-line pt-2 text-sm font-semibold text-danger">
-                <span>{t("femme.billing.invoiceTips.total")}</span>
-                <span data-testid="invoice-tips-total" className="tabular-nums">
-                  {formatAmountDecimal(Number(tips.total).toFixed(2))}
-                </span>
-              </div>
-            ) : null}
-
             {noCash ? (
               <Alert
                 variant="warning"
@@ -391,7 +388,7 @@ export function InvoiceTipsPanel({
                     <Button
                       type="button"
                       variant="outline"
-                      className="min-h-11"
+                      className={ACTION_BUTTON}
                       data-testid="invoice-tips-go-cash"
                       onClick={onGoToCash}
                     >
@@ -444,8 +441,8 @@ export function InvoiceTipsPanel({
                           <FieldValidationError id={`${r.key}-prof-err`}>{errs.professional}</FieldValidationError>
                         </div>
                       )}
-                      <div className="flex flex-wrap gap-3">
-                        <div className="w-full sm:w-[150px]">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="min-w-0">
                           <Label htmlFor={`${r.key}-amount`}>{t("femme.billing.invoiceTips.amountLabel")}</Label>
                           <Input
                             id={`${r.key}-amount`}
@@ -461,7 +458,7 @@ export function InvoiceTipsPanel({
                           />
                           <FieldValidationError id={`${r.key}-amount-err`}>{errs.amount}</FieldValidationError>
                         </div>
-                        <div className="min-w-0 flex-1 basis-[200px]">
+                        <div className="min-w-0">
                           <Label htmlFor={`${r.key}-method`}>{t("femme.billing.invoiceTips.methodLabel")}</Label>
                           <Select
                             id={`${r.key}-method`}
@@ -481,7 +478,7 @@ export function InvoiceTipsPanel({
                           </Select>
                         </div>
                         {isCard ? (
-                          <div className="min-w-0 flex-1 basis-[160px]">
+                          <div className="col-span-2 min-w-0">
                             <Label htmlFor={`${r.key}-brand`}>{t("femme.billing.invoice.cardBrandLabel")}</Label>
                             <Select
                               id={`${r.key}-brand`}
@@ -529,30 +526,13 @@ export function InvoiceTipsPanel({
                 <Button
                   type="button"
                   variant="ghost"
-                  className="min-h-11 self-start text-primary"
+                  className={`${ACTION_BUTTON} self-start px-0 font-extrabold text-primary`}
                   disabled={noCash}
                   data-testid="invoice-tips-add-other"
                   onClick={addFreeRow}
                 >
                   {t("femme.billing.invoiceTips.addOther")}
                 </Button>
-
-                {enteredTotal > 0 ? (
-                  <div className="flex justify-between border-t border-line pt-2 text-sm font-semibold text-danger">
-                    <span>{t("femme.billing.invoiceTips.total")}</span>
-                    <span data-testid="invoice-tips-entered-total" className="tabular-nums">
-                      {formatAmountDecimal(enteredTotal.toFixed(2))}
-                    </span>
-                  </div>
-                ) : null}
-
-                {!noCash && tips.openCashSessionOpenedAt ? (
-                  <Text variant="small" className="rounded-xl bg-primary-lt px-3.5 py-2.5 text-primary-dk">
-                    {t("femme.billing.invoiceTips.cashNote", {
-                      date: formatParaguayDateTime(tips.openCashSessionOpenedAt, dateLocale),
-                    })}
-                  </Text>
-                ) : null}
 
                 <FieldValidationError id="invoice-tips-form-error">{formError}</FieldValidationError>
                 {submitError ? (
@@ -561,24 +541,46 @@ export function InvoiceTipsPanel({
                   </Alert>
                 ) : null}
 
-                <Button
-                  type="button"
-                  variant="primary"
-                  className="min-h-11 self-start"
-                  disabled={noCash || submitting}
-                  data-testid="invoice-tips-submit"
-                  onClick={() => void submit()}
-                >
-                  {submitting
-                    ? t("femme.billing.invoiceTips.submitting")
-                    : t("femme.billing.invoiceTips.submit")}
-                </Button>
+                <div className="flex gap-2.5">
+                  {!pending ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className={`${ACTION_BUTTON} flex-1`}
+                      data-testid="invoice-tips-cancel"
+                      onClick={closeForm}
+                    >
+                      {t("femme.billing.invoiceTips.cancel")}
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className={`${ACTION_BUTTON} flex-1`}
+                    disabled={noCash || submitting}
+                    data-testid="invoice-tips-submit"
+                    onClick={() => void submit()}
+                  >
+                    {submitting
+                      ? t("femme.billing.invoiceTips.submitting")
+                      : enteredTotal > 0
+                        ? t("femme.billing.invoiceTips.submitWithTotal", {
+                            amount: formatAmountDecimal(enteredTotal.toFixed(2)),
+                          })
+                        : t("femme.billing.invoiceTips.submit")}
+                  </Button>
+                </div>
+                {!noCash ? (
+                  <Text variant="small" className="text-center text-ink-3" data-testid="invoice-tips-cash-note">
+                    {t("femme.billing.invoiceTips.cashNoteShort")}
+                  </Text>
+                ) : null}
               </div>
             ) : (
               <Button
                 type="button"
-                variant="outline"
-                className="min-h-11 self-start"
+                variant="ghost"
+                className={`${ACTION_BUTTON} self-start px-0 font-extrabold text-primary`}
                 data-testid="invoice-tips-open-form"
                 onClick={openForm}
               >

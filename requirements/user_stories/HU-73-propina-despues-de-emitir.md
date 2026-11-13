@@ -44,7 +44,7 @@ Hasta ahora las propinas solo se cargaban al emitir el comprobante (se cobran ju
 
 8. **Quién puede** — Cualquier usuario que puede emitir comprobantes puede registrar propinas. Solo el administrador de la peluquería ve y puede usar «Anular».
 
-9. **Anulación** — El administrador anula una propina cargada después (desde el detalle del comprobante o desde la pantalla de Propinas) indicando un motivo obligatorio (hasta 200 caracteres). La propina queda en la lista como «Anulada» (con quién y por qué), tachada, y deja de contar en la caja y en el acumulado de la profesional. No se puede deshacer.
+9. **Anulación** — El administrador anula una propina cargada después (desde el detalle del comprobante o desde la pantalla de Propinas) indicando un motivo obligatorio (hasta 200 caracteres). La propina queda en la lista como «Anulada», tachada (en el detalle del comprobante solo la etiqueta, sin quién ni por qué: ver HU-75; el motivo se sigue guardando y se ve en Propinas), y deja de contar en la caja y en el acumulado de la profesional. No se puede deshacer.
 
 10. **Cuándo no se puede anular** — No se puede anular si la profesional ya retiró ese dinero, ni si la caja en la que se cobró ya está cerrada (una caja cerrada no cambia sus cifras).
 
