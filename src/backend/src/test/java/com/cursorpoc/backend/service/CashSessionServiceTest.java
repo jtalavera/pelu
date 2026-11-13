@@ -12,12 +12,18 @@ import static org.mockito.Mockito.when;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.CashMovement;
 import com.cursorpoc.backend.domain.CashSession;
+import com.cursorpoc.backend.domain.Invoice;
+import com.cursorpoc.backend.domain.InvoiceLateTip;
+import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.Tenant;
+import com.cursorpoc.backend.domain.enums.CardBrand;
 import com.cursorpoc.backend.domain.enums.CashMovementType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
+import com.cursorpoc.backend.domain.enums.PaymentMethod;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.CashMovementRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
+import com.cursorpoc.backend.repository.InvoiceLateTipRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.CashMovementCreateRequest;
@@ -49,6 +55,7 @@ class CashSessionServiceTest {
   @Mock private AppUserRepository appUserRepository;
   @Mock private InvoiceRepository invoiceRepository;
   @Mock private CashMovementRepository cashMovementRepository;
+  @Mock private InvoiceLateTipRepository invoiceLateTipRepository;
 
   @InjectMocks private CashSessionService service;
 
@@ -373,6 +380,101 @@ class CashSessionServiceTest {
     assertThat(result.countedCashAmount()).isNull();
     assertThat(result.cashDifference()).isNull();
     assertThat(result.expectedCashAmount()).isEqualByComparingTo("120000.00");
+  }
+
+  // ── HU-73: tips left after the invoice was issued enter the register ─────────────────────────
+
+  @Test
+  void getSessionDetail_lateTipsPaidInCash_addToExpectedCashAndToTheCashBreakdown() {
+    CashSession session = buildSession(7L, new BigDecimal("50000.00"));
+    when(cashSessionRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(session));
+    when(cashSessionRepository.sumPaymentsByMethodForSession(7L))
+        .thenReturn(singleRow("CASH", new BigDecimal("500000.00")));
+    when(cashSessionRepository.sumMovementsByTypeForSession(7L)).thenReturn(List.of());
+    when(invoiceLateTipRepository.sumByMethodForSession(7L, InvoiceStatus.ISSUED))
+        .thenReturn(singleRow("CASH", new BigDecimal("10000.00")));
+
+    CashSessionDetailResponse result = service.getSessionDetail(1L, 7L);
+
+    // 50.000 opening + 500.000 cash sales + 10.000 cash tip
+    assertThat(result.expectedCashAmount()).isEqualByComparingTo("560000.00");
+    assertThat(result.paymentSummary()).hasSize(1);
+    assertThat(result.paymentSummary().get(0).method()).isEqualTo("CASH");
+    assertThat(result.paymentSummary().get(0).total()).isEqualByComparingTo("510000.00");
+  }
+
+  @Test
+  void getSessionDetail_lateTipsNotPaidInCash_joinTheirMethodWithoutTouchingTheExpectedCash() {
+    CashSession session = buildSession(7L, new BigDecimal("50000.00"));
+    when(cashSessionRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(session));
+    when(cashSessionRepository.sumPaymentsByMethodForSession(7L))
+        .thenReturn(singleRow("DEBIT_CARD", new BigDecimal("40000.00")));
+    when(cashSessionRepository.sumMovementsByTypeForSession(7L)).thenReturn(List.of());
+    List<Object[]> lateTips = new ArrayList<>();
+    lateTips.add(new Object[] {"DEBIT_CARD", new BigDecimal("5000.00")});
+    lateTips.add(new Object[] {"TRANSFER", new BigDecimal("7000.00")});
+    when(invoiceLateTipRepository.sumByMethodForSession(7L, InvoiceStatus.ISSUED))
+        .thenReturn(lateTips);
+
+    CashSessionDetailResponse result = service.getSessionDetail(1L, 7L);
+
+    assertThat(result.expectedCashAmount()).isEqualByComparingTo("50000.00");
+    assertThat(result.paymentSummary())
+        .extracting(
+            CashSessionDetailResponse.PaymentMethodSummary::method,
+            m -> m.total().setScale(2).toPlainString())
+        .containsExactlyInAnyOrder(
+            org.assertj.core.groups.Tuple.tuple("DEBIT_CARD", "45000.00"),
+            org.assertj.core.groups.Tuple.tuple("TRANSFER", "7000.00"));
+  }
+
+  @Test
+  void getSessionDetail_listsTheLateTipsOfTheSessionIncludingVoidedOnes() {
+    CashSession session = buildSession(7L, new BigDecimal("50000.00"));
+    when(cashSessionRepository.findByIdAndTenant_Id(7L, 1L)).thenReturn(Optional.of(session));
+    when(cashSessionRepository.sumPaymentsByMethodForSession(7L)).thenReturn(List.of());
+    when(cashSessionRepository.sumMovementsByTypeForSession(7L)).thenReturn(List.of());
+
+    Invoice invoice = new Invoice();
+    invoice.setId(30L);
+    invoice.setInvoiceNumber(126);
+    Professional professional = new Professional();
+    professional.setId(20L);
+    professional.setFullName("Laura Benítez");
+    InvoiceLateTip live = new InvoiceLateTip();
+    live.setId(1L);
+    live.setInvoice(invoice);
+    live.setProfessional(professional);
+    live.setAmount(new BigDecimal("5000.00"));
+    live.setPaymentMethod(PaymentMethod.DEBIT_CARD);
+    live.setCardBrand(CardBrand.VISA);
+    live.setCreatedBy(user);
+    live.setCreatedAt(Instant.now());
+    InvoiceLateTip voided = new InvoiceLateTip();
+    voided.setId(2L);
+    voided.setInvoice(invoice);
+    voided.setProfessional(professional);
+    voided.setAmount(new BigDecimal("1000.00"));
+    voided.setPaymentMethod(PaymentMethod.CASH);
+    voided.setCreatedAt(Instant.now());
+    voided.setVoidedAt(Instant.now());
+    voided.setVoidedBy(user);
+    voided.setVoidReason("Monto mal cargado");
+    when(invoiceLateTipRepository.findByCashSession(7L, 1L)).thenReturn(List.of(live, voided));
+
+    CashSessionDetailResponse result = service.getSessionDetail(1L, 7L);
+
+    assertThat(result.lateTips()).hasSize(2);
+    CashSessionDetailResponse.LateTipSummary first = result.lateTips().get(0);
+    assertThat(first.invoiceNumberFormatted()).isEqualTo("0000126");
+    assertThat(first.paymentMethod()).isEqualTo("DEBIT_CARD");
+    assertThat(first.cardBrand()).isEqualTo("VISA");
+    assertThat(first.createdByEmail()).isEqualTo("admin@demo.com");
+    assertThat(first.voided()).isFalse();
+    CashSessionDetailResponse.LateTipSummary second = result.lateTips().get(1);
+    assertThat(second.voided()).isTrue();
+    assertThat(second.voidReason()).isEqualTo("Monto mal cargado");
+    assertThat(second.voidedByEmail()).isEqualTo("admin@demo.com");
   }
 
   private static List<Object[]> singleRow(String label, BigDecimal amount) {

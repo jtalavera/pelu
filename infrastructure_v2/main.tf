@@ -35,6 +35,10 @@ locals {
     ["https://${azurerm_static_web_app.frontend.default_host_name}"],
     [for d in var.frontend_custom_domains : "https://${d}"]
   ))
+
+  # Single base URL the backend uses to build links in emails (activation, password reset):
+  # var.frontend_primary_domain when set, otherwise the SWA default host.
+  frontend_primary_url = var.frontend_primary_domain != "" ? "https://${var.frontend_primary_domain}" : "https://${azurerm_static_web_app.frontend.default_host_name}"
   # Per-type sender addresses: once var.email_custom_domain is set (and verified — see the
   # "Azure Communication Services — email" section below), each sends from its own mailbox on
   # that domain; until then every one falls back to the single AzureManaged address, unchanged
@@ -245,6 +249,28 @@ resource "azurerm_communication_service" "main" {
   tags                = local.tags
 
   depends_on = [azurerm_resource_provider_registration.communication]
+}
+
+# Email delivery diagnostics: ACS accepts a send (HTTP 202) before the message is delivered, so the
+# backend log alone can't tell delivered / bounced / suppressed / spam-filtered apart. These land in
+# Log Analytics as ACSEmailSendMailOperational (accepted), ACSEmailStatusUpdateOperational
+# (Delivered / Bounced / Suppressed / FilteredSpam...) and ACSEmailUserEngagementOperational.
+resource "azurerm_monitor_diagnostic_setting" "acs_email" {
+  name                       = "acs-email-diag"
+  target_resource_id         = azurerm_communication_service.main.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_log {
+    category = "EmailSendMailOperational"
+  }
+
+  enabled_log {
+    category = "EmailStatusUpdateOperational"
+  }
+
+  enabled_log {
+    category = "EmailUserEngagementOperational"
+  }
 }
 
 resource "azurerm_communication_service_email_domain_association" "main" {
@@ -584,6 +610,11 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "APP_FRONTEND_URL"
         value = local.frontend_allowed_origins
+      }
+
+      env {
+        name  = "APP_FRONTEND_PRIMARY_URL"
+        value = local.frontend_primary_url
       }
 
       env {

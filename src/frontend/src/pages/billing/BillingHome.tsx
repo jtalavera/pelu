@@ -24,16 +24,24 @@ import {
   type CashSession,
   type CashSessionDetail,
 } from "../../api/cashSessions";
+import { downloadSifenKude, sendSifenKudeByEmail } from "../../api/downloadSifenKude";
+import { femmeJson } from "../../api/femmeClient";
 import { translateApiError } from "../../api/parseApiErrorMessage";
+import { ACTION_BUTTON } from "../../components/actionButtons";
+import { ActionIcon } from "../../components/actionIcons";
 import { FieldValidationError } from "../../components/FieldValidationError";
 import { InvoiceCorrectionForm } from "../../components/InvoiceCorrectionForm";
-import { InvoiceDetailModal } from "../../components/InvoiceDetailModal";
+import { InvoiceDetailModal, type InvoiceDetail } from "../../components/InvoiceDetailModal";
 import { InvoiceStatePill, deriveInvoiceState } from "../../components/InvoiceStatePill";
+import { MoreActionsMenu, type MoreActionsItem } from "../../components/MoreActionsMenu";
 import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../../hooks/useSifenStatusLiveRefresh";
+import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
+import { isKudeShareable, sendKudeByWhatsapp } from "../../lib/invoiceKudeShare";
 import { maskMoneyInput, moneyDigitsOnly, parseMaskedMoney } from "../../lib/moneyInputMask";
+import { formatParaguayDateTime, formatParaguayTime } from "../../lib/paraguayDateTime";
 import { CashClosedSummary, CashPanelSummary, cashVerdict } from "./CashPanel";
-import { paymentMethodsLabel, todayRangeIso } from "./billingShared";
+import { todayRangeIso } from "./billingShared";
 
 type PanelView = "summary" | "movement" | "close";
 
@@ -208,25 +216,123 @@ export function BillingHome({
   const [todayPageSize, setTodayPageSize] = useState(10);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   const [correctionInvoiceId, setCorrectionInvoiceId] = useState<number | null>(null);
+  const dateLocale = useDateLocale();
+  // Manual «Actualizar»: the list stays on screen while it re-reads (no spinner swap).
+  const [todayRefreshing, setTodayRefreshing] = useState(false);
+  // When the list was last read from the server (any reload: first load, manual, live or on closing a detail).
+  const [todayUpdatedAt, setTodayUpdatedAt] = useState<Date | null>(null);
+  // «Más acciones» of a row: which row's menu is open, which row is preparing a KuDE, and the outcome.
+  const [rowMenuOpenId, setRowMenuOpenId] = useState<number | null>(null);
+  const [kudeBusyId, setKudeBusyId] = useState<number | null>(null);
+  const [todayNotice, setTodayNotice] = useState<{ kind: "error" | "success"; text: string } | null>(
+    null,
+  );
 
+  /** Re-reads today's invoices. Resolves to whether the server answered (callers decide what a failure means). */
   const loadTodayInvoices = useCallback(
-    async (page: number, size: number, silent = false) => {
+    async (page: number, size: number, silent = false): Promise<boolean> => {
       if (!currentSession) {
         setTodayPage(null);
-        return;
+        return false;
       }
       if (!silent) setTodayLoading(true);
       try {
         const { from, to } = todayRangeIso();
         setTodayPage(await listInvoicesPaged({ from, to, page, size }));
+        setTodayUpdatedAt(new Date());
+        return true;
       } catch {
         if (!silent) setTodayPage(null);
+        return false;
       } finally {
         if (!silent) setTodayLoading(false);
       }
     },
     [currentSession],
   );
+
+  /** «Actualizar»: manual re-read, keeping the current rows visible while it runs. */
+  async function handleRefreshToday() {
+    setTodayNotice(null);
+    setTodayRefreshing(true);
+    const ok = await loadTodayInvoices(todayPageNum, todayPageSize, true);
+    setTodayRefreshing(false);
+    if (!ok) setTodayNotice({ kind: "error", text: t("femme.apiErrors.GENERIC") });
+  }
+
+  /** Row menu: KuDE hand-off straight from the list (the detail dialog offers the same actions). */
+  async function runKudeAction(inv: { id: number }, action: "whatsapp" | "email" | "download") {
+    setTodayNotice(null);
+    setKudeBusyId(inv.id);
+    try {
+      if (action === "download") {
+        await downloadSifenKude(inv.id);
+      } else if (action === "email") {
+        // Blank address: the backend sends it to the client's own email on file.
+        await sendSifenKudeByEmail(inv.id, "");
+        setTodayNotice({
+          kind: "success",
+          text: t("femme.billing.history.detail.sifen.kudeEmailSuccess"),
+        });
+      } else {
+        // The list row carries no phone: read the detail so the chat opens against the client's contact.
+        const detail = await femmeJson<InvoiceDetail>(`/api/invoices/${inv.id}`);
+        await sendKudeByWhatsapp(detail, t);
+      }
+    } catch (err) {
+      setTodayNotice({
+        kind: "error",
+        text: translateApiError(err, t, "femme.apiErrors.GENERIC"),
+      });
+    } finally {
+      setKudeBusyId(null);
+    }
+  }
+
+  function rowMenuItems(inv: {
+    id: number;
+    status: string;
+    sifenSubmissionStatus?: string | null;
+  }): MoreActionsItem[] {
+    const shareable = isKudeShareable(inv);
+    const unavailable = shareable ? undefined : t("femme.billing.home.rowMenu.kudeUnavailable");
+    return [
+      {
+        id: "whatsapp",
+        label: t("femme.billing.history.detail.sifen.kudeWhatsappButton"),
+        icon: <ActionIcon name="whatsapp" />,
+        disabled: !shareable,
+        hint: unavailable,
+        testId: `billing-today-menu-whatsapp-${inv.id}`,
+        onSelect: () => void runKudeAction(inv, "whatsapp"),
+      },
+      {
+        id: "email",
+        label: t("femme.billing.home.rowMenu.email"),
+        icon: <ActionIcon name="mail" />,
+        disabled: !shareable,
+        hint: unavailable ?? t("femme.billing.home.rowMenu.emailHint"),
+        testId: `billing-today-menu-email-${inv.id}`,
+        onSelect: () => void runKudeAction(inv, "email"),
+      },
+      {
+        id: "download",
+        label: t("femme.billing.history.detail.sifen.kudeDownloadButton"),
+        icon: <ActionIcon name="download" />,
+        disabled: !shareable,
+        hint: unavailable,
+        testId: `billing-today-menu-download-${inv.id}`,
+        onSelect: () => void runKudeAction(inv, "download"),
+      },
+      {
+        id: "detail",
+        label: t("femme.billing.home.rowMenu.viewDetail"),
+        icon: <ActionIcon name="file" />,
+        testId: `billing-today-menu-detail-${inv.id}`,
+        onSelect: () => setSelectedInvoiceId(inv.id),
+      },
+    ];
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -312,36 +418,88 @@ export function BillingHome({
           </Card>
 
           <Card className="p-0">
-            <button
-              type="button"
-              id="billing-today-toggle"
-              data-testid="billing-today-toggle"
-              aria-expanded={todayOpen}
-              aria-controls="billing-today-list"
-              onClick={() => setTodayOpen((o) => !o)}
-              className="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left sm:px-6"
-            >
-              <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="font-heading text-base font-extrabold text-ink">
-                  {t("femme.billing.session.todayInvoicesTitle")}
-                </span>
-                <span className="text-sm text-ink-3">{todayTotalElements}</span>
-                {attentionCount > 0 && (
-                  <span
-                    data-testid="billing-attention-count"
-                    className="rounded-full bg-danger-lt px-2.5 py-0.5 text-xs font-semibold text-danger"
-                  >
-                    {t("femme.billing.home.attentionCount", { count: attentionCount })}
+            {/* Header: the fold toggle and «Actualizar» are siblings (a button never nests another). */}
+            <div className="flex items-center gap-2 pr-3 sm:pr-4">
+              <button
+                type="button"
+                id="billing-today-toggle"
+                data-testid="billing-today-toggle"
+                aria-expanded={todayOpen}
+                aria-controls="billing-today-list"
+                onClick={() => setTodayOpen((o) => !o)}
+                className="flex min-h-14 min-w-0 flex-1 items-center justify-between gap-3 px-4 text-left sm:px-6"
+              >
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-heading text-base font-extrabold text-ink">
+                    {t("femme.billing.session.todayInvoicesTitle")}
                   </span>
-                )}
-              </span>
-              <span aria-hidden className={`text-ink-3 transition-transform ${todayOpen ? "rotate-90" : ""}`}>
-                ›
-              </span>
-            </button>
+                  <span className="text-sm text-ink-3">{todayTotalElements}</span>
+                  {attentionCount > 0 && (
+                    <span
+                      data-testid="billing-attention-count"
+                      className="rounded-full bg-danger-lt px-2.5 py-0.5 text-xs font-semibold text-danger"
+                    >
+                      {t("femme.billing.home.attentionCount", { count: attentionCount })}
+                    </span>
+                  )}
+                </span>
+                <span aria-hidden className={`text-ink-3 transition-transform ${todayOpen ? "rotate-90" : ""}`}>
+                  ›
+                </span>
+              </button>
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                data-testid="billing-today-refresh"
+                aria-label={
+                  todayRefreshing
+                    ? t("femme.billing.home.refreshing")
+                    : t("femme.billing.history.refresh")
+                }
+                aria-busy={todayRefreshing}
+                disabled={todayRefreshing}
+                onClick={() => void handleRefreshToday()}
+                className={`${ACTION_BUTTON} w-11 shrink-0 px-0 sm:w-auto sm:px-4`}
+              >
+                <span aria-hidden className={`text-primary ${todayRefreshing ? "animate-spin" : ""}`}>
+                  <ActionIcon name="refresh" />
+                </span>
+                <span className="hidden sm:inline">
+                  {todayRefreshing
+                    ? t("femme.billing.home.refreshing")
+                    : t("femme.billing.history.refresh")}
+                </span>
+              </Button>
+            </div>
 
             {todayOpen && (
               <div id="billing-today-list" className="border-t border-line px-2 pb-3 sm:px-4">
+                {todayUpdatedAt && (
+                  <Text
+                    variant="small"
+                    data-testid="billing-today-updated-at"
+                    className="px-2 pt-3 text-ink-3"
+                  >
+                    {t("femme.billing.home.updatedAt", {
+                      time: formatParaguayTime(todayUpdatedAt, dateLocale),
+                    })}
+                  </Text>
+                )}
+                {todayNotice && (
+                  <Alert
+                    variant={todayNotice.kind === "error" ? "destructive" : "success"}
+                    title={
+                      todayNotice.kind === "error"
+                        ? t("femme.billing.errorTitle")
+                        : todayNotice.text
+                    }
+                    data-testid="billing-today-notice"
+                    className="mx-2 mt-3"
+                  >
+                    {todayNotice.kind === "error" ? todayNotice.text : null}
+                  </Alert>
+                )}
                 {todayLoading ? (
                   <div className="flex items-center gap-2 p-3">
                     <Spinner size="sm" />
@@ -376,7 +534,7 @@ export function BillingHome({
                                 setSelectedInvoiceId(inv.id);
                               }
                             }}
-                            className="grid min-h-14 w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded-md px-2 py-3 text-left hover:bg-primary-lt"
+                            className="grid min-h-14 w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_2.75rem] items-center gap-x-2 gap-y-1 rounded-md py-2 pl-2 pr-0 text-left hover:bg-primary-lt"
                           >
                             <span className="col-start-1 min-w-0 truncate font-semibold text-ink">
                               {inv.clientDisplayName || t("femme.billing.invoice.noName")}
@@ -400,10 +558,32 @@ export function BillingHome({
                                 </Button>
                               )}
                             </span>
+                            {/* «Más acciones»: the row itself opens the detail, so clicks on the menu (and on
+                                its portalled panel, which bubbles through React) must not reach the row. */}
+                            <span
+                              className="col-start-3 row-span-2 row-start-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreActionsMenu
+                                compact
+                                label={t("femme.billing.history.detail.moreActions")}
+                                open={rowMenuOpenId === inv.id}
+                                onOpenChange={(o) => setRowMenuOpenId(o ? inv.id : null)}
+                                triggerTestId={`billing-today-menu-${inv.id}`}
+                                menuTestId={`billing-today-menu-panel-${inv.id}`}
+                                disabled={kudeBusyId === inv.id}
+                                items={rowMenuItems(inv)}
+                              />
+                            </span>
                             <span className="col-start-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
                               <InvoiceStatePill invoice={inv} />
                               <span className="font-mono text-xs">{inv.invoiceNumberFormatted}</span>
-                              <span>{paymentMethodsLabel(inv.paymentMethodsSummary, t)}</span>
+                              <span
+                                data-testid={`billing-today-issued-at-${inv.id}`}
+                                className="tabular-nums"
+                              >
+                                {formatParaguayDateTime(inv.issuedAt, dateLocale)}
+                              </span>
                             </span>
                           </div>
                         </li>
@@ -755,7 +935,12 @@ export function BillingHome({
       {selectedInvoiceId !== null && (
         <InvoiceDetailModal
           invoiceId={selectedInvoiceId}
-          onClose={() => setSelectedInvoiceId(null)}
+          onClose={() => {
+            setSelectedInvoiceId(null);
+            // The detail keeps its own copy and can change the invoice (live SIFEN status, check/cancel,
+            // identify client…): re-read the list silently so the row never shows a stale state.
+            void loadTodayInvoices(todayPageNum, todayPageSize, true);
+          }}
           onVoided={() => {
             setSelectedInvoiceId(null);
             void loadTodayInvoices(todayPageNum, todayPageSize);

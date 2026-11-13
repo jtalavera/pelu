@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.service;
 
+import com.cursorpoc.backend.config.FrontendUrl;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.ProfessionalActivationToken;
@@ -74,7 +75,7 @@ public class ProfessionalAccessService {
       ProfessionalActivationTokenRepository activationTokenRepository,
       AppUserRepository appUserRepository,
       EmailService emailService,
-      @Value("${app.frontend.url}") String frontendUrl,
+      @Value(FrontendUrl.PRIMARY_EXPR) String frontendUrl,
       @Value("${app.femme.professional-access.resend-cooldown-seconds:120}")
           long resendCooldownSeconds) {
     this.professionalRepository = professionalRepository;

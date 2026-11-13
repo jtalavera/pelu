@@ -13,6 +13,7 @@ import com.cursorpoc.backend.repository.CashMovementRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
 import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.FiscalStampRepository;
+import com.cursorpoc.backend.repository.InvoiceLateTipRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.ManualTipRepository;
 import com.cursorpoc.backend.repository.PasswordResetTokenRepository;
@@ -74,6 +75,7 @@ public class SeedResetService {
   private final AppUserTourStateRepository appUserTourStateRepository;
   private final TipWithdrawalRepository tipWithdrawalRepository;
   private final ManualTipRepository manualTipRepository;
+  private final InvoiceLateTipRepository invoiceLateTipRepository;
   private final SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository;
   private final SifenCertificateRepository sifenCertificateRepository;
   private final FemmeDataInitializer femmeDataInitializer;
@@ -102,6 +104,7 @@ public class SeedResetService {
       AppUserTourStateRepository appUserTourStateRepository,
       TipWithdrawalRepository tipWithdrawalRepository,
       ManualTipRepository manualTipRepository,
+      InvoiceLateTipRepository invoiceLateTipRepository,
       SifenNumberVoidingEventRepository sifenNumberVoidingEventRepository,
       SifenCertificateRepository sifenCertificateRepository,
       FemmeDataInitializer femmeDataInitializer) {
@@ -128,6 +131,7 @@ public class SeedResetService {
     this.appUserTourStateRepository = appUserTourStateRepository;
     this.tipWithdrawalRepository = tipWithdrawalRepository;
     this.manualTipRepository = manualTipRepository;
+    this.invoiceLateTipRepository = invoiceLateTipRepository;
     this.sifenNumberVoidingEventRepository = sifenNumberVoidingEventRepository;
     this.sifenCertificateRepository = sifenCertificateRepository;
     this.femmeDataInitializer = femmeDataInitializer;
@@ -155,6 +159,12 @@ public class SeedResetService {
 
     long deletedAppointments = appointmentRepository.deleteByTenant_Id(DEMO_TENANT_ID);
     log.info("Deleted {} appointments", deletedAppointments);
+
+    // Must run before deleting invoices, cash sessions and professionals below: invoice_late_tips
+    // has
+    // FKs to all three.
+    long deletedLateTips = invoiceLateTipRepository.deleteByTenant_Id(DEMO_TENANT_ID);
+    log.info("Deleted {} invoice_late_tips", deletedLateTips);
 
     List<Invoice> invoices = invoiceRepository.findAllByTenant_Id(DEMO_TENANT_ID);
     invoiceRepository.deleteAll(invoices);

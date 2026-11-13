@@ -32,8 +32,11 @@ log_analytics_daily_quota_gb = 0.5
 
 # Custom domains on the pelu Static Web App (registered by Terraform; DNS records are manual at
 # the external DNS provider) and allowed CORS origins on the backend. The apex was created in the
-# Portal, so import it before the first apply (see main.tf).
-frontend_custom_domains = ["flowbit.tech"]
+# Portal, so import it before the first apply (see main.tf). sistema.flowbit.tech is a subdomain:
+# create the CNAME sistema -> the SWA default hostname (terraform output) before applying.
+frontend_custom_domains = ["flowbit.tech", "sistema.flowbit.tech"]
+# Base URL for links in emails (activation, password reset).
+frontend_primary_domain = "sistema.flowbit.tech"
 
 # www.flowbit.tech serves the marketing website SWA (rg-flowbit-website), not pelu. Cut-over
 # order: CNAME www -> white-tree-008be3e10.2.azurestaticapps.net, remove www from the pelu SWA,

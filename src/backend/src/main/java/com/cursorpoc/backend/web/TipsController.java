@@ -1,9 +1,11 @@
 package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
+import com.cursorpoc.backend.service.InvoiceLateTipService;
 import com.cursorpoc.backend.service.TipsReportPdfService;
 import com.cursorpoc.backend.service.TipsService;
 import com.cursorpoc.backend.web.dto.CreateTipWithdrawalResponse;
+import com.cursorpoc.backend.web.dto.InvoiceTipsResponse;
 import com.cursorpoc.backend.web.dto.ManualTipMutationResponse;
 import com.cursorpoc.backend.web.dto.ManualTipRequest;
 import com.cursorpoc.backend.web.dto.PagedTipWithdrawalsResponse;
@@ -11,6 +13,7 @@ import com.cursorpoc.backend.web.dto.ProfessionalTipBalanceResponse;
 import com.cursorpoc.backend.web.dto.TipReportResponse;
 import com.cursorpoc.backend.web.dto.TipWithdrawalRequest;
 import com.cursorpoc.backend.web.dto.UpdateManualTipRequest;
+import com.cursorpoc.backend.web.dto.VoidLateTipRequest;
 import com.cursorpoc.backend.web.dto.VoidManualTipRequest;
 import jakarta.validation.Valid;
 import java.time.Instant;
@@ -43,8 +46,13 @@ public class TipsController {
 
   private final TipsService tipsService;
   private final TipsReportPdfService tipsReportPdfService;
+  private final InvoiceLateTipService invoiceLateTipService;
 
-  public TipsController(TipsService tipsService, TipsReportPdfService tipsReportPdfService) {
+  public TipsController(
+      TipsService tipsService,
+      TipsReportPdfService tipsReportPdfService,
+      InvoiceLateTipService invoiceLateTipService) {
+    this.invoiceLateTipService = invoiceLateTipService;
     this.tipsService = tipsService;
     this.tipsReportPdfService = tipsReportPdfService;
   }
@@ -274,6 +282,35 @@ public class TipsController {
     } catch (ResponseStatusException ex) {
       log.error(
           "POST /api/propinas/manual/{}/void tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode().value());
+      throw ex;
+    }
+  }
+
+  /**
+   * Voids a tip left after the invoice was issued (admin only, with a reason). It stops counting in
+   * the professional's balance and in the cash register it entered; the invoice's tips are returned
+   * updated.
+   */
+  @PostMapping("/late/{id}/void")
+  public InvoiceTipsResponse voidLateTip(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable Long id,
+      @RequestBody VoidLateTipRequest request) {
+    requireAdmin(principal);
+    log.info("POST /api/propinas/late/{}/void tenantId={}", id, principal.getTenantId());
+    try {
+      InvoiceTipsResponse response =
+          invoiceLateTipService.voidTip(
+              principal.getTenantId(), principal.getUserId(), id, request.reason());
+      log.info(
+          "POST /api/propinas/late/{}/void tenantId={} status=200", id, principal.getTenantId());
+      return response;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "POST /api/propinas/late/{}/void tenantId={} status={}",
           id,
           principal.getTenantId(),
           ex.getStatusCode().value());

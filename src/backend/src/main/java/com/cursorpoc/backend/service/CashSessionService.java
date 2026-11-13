@@ -3,12 +3,14 @@ package com.cursorpoc.backend.service;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.CashMovement;
 import com.cursorpoc.backend.domain.CashSession;
+import com.cursorpoc.backend.domain.InvoiceLateTip;
 import com.cursorpoc.backend.domain.Tenant;
 import com.cursorpoc.backend.domain.enums.CashMovementType;
 import com.cursorpoc.backend.domain.enums.InvoiceStatus;
 import com.cursorpoc.backend.repository.AppUserRepository;
 import com.cursorpoc.backend.repository.CashMovementRepository;
 import com.cursorpoc.backend.repository.CashSessionRepository;
+import com.cursorpoc.backend.repository.InvoiceLateTipRepository;
 import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.CashMovementCreateRequest;
@@ -41,18 +43,21 @@ public class CashSessionService {
   private final AppUserRepository appUserRepository;
   private final InvoiceRepository invoiceRepository;
   private final CashMovementRepository cashMovementRepository;
+  private final InvoiceLateTipRepository invoiceLateTipRepository;
 
   public CashSessionService(
       CashSessionRepository cashSessionRepository,
       TenantRepository tenantRepository,
       AppUserRepository appUserRepository,
       InvoiceRepository invoiceRepository,
-      CashMovementRepository cashMovementRepository) {
+      CashMovementRepository cashMovementRepository,
+      InvoiceLateTipRepository invoiceLateTipRepository) {
     this.cashSessionRepository = cashSessionRepository;
     this.tenantRepository = tenantRepository;
     this.appUserRepository = appUserRepository;
     this.invoiceRepository = invoiceRepository;
     this.cashMovementRepository = cashMovementRepository;
+    this.invoiceLateTipRepository = invoiceLateTipRepository;
   }
 
   @Transactional(readOnly = true)
@@ -262,7 +267,27 @@ public class CashSessionService {
         (int) invoiceCount,
         expected.paymentSummary(),
         movements,
-        session.getClosedAt() == null);
+        session.getClosedAt() == null,
+        invoiceLateTipRepository.findByCashSession(sessionId, session.getTenant().getId()).stream()
+            .map(CashSessionService::toLateTipDto)
+            .toList());
+  }
+
+  private static CashSessionDetailResponse.LateTipSummary toLateTipDto(InvoiceLateTip t) {
+    AppUser createdBy = t.getCreatedBy();
+    AppUser voidedBy = t.getVoidedBy();
+    return new CashSessionDetailResponse.LateTipSummary(
+        t.getId(),
+        t.getProfessional().getDisplayName(),
+        String.format("%07d", t.getInvoice().getInvoiceNumber()),
+        t.getAmount(),
+        t.getPaymentMethod().name(),
+        t.getCardBrand() != null ? t.getCardBrand().name() : null,
+        t.getCreatedAt(),
+        createdBy != null ? createdBy.getEmail() : null,
+        t.isVoided(),
+        t.getVoidReason(),
+        voidedBy != null ? voidedBy.getEmail() : null);
   }
 
   /**
@@ -280,6 +305,31 @@ public class CashSessionService {
       String method = String.valueOf(row[0]);
       BigDecimal amount = (BigDecimal) row[1];
       paymentSummary.add(new CashSessionDetailResponse.PaymentMethodSummary(method, amount));
+      if ("CASH".equals(method)) {
+        expectedCash = expectedCash.add(amount);
+      }
+    }
+
+    // HU-73: tips left after the invoice was issued enter the register with their own payment
+    // method: they join the per-method breakdown and, when paid in cash, the expected cash.
+    for (Object[] row :
+        invoiceLateTipRepository.sumByMethodForSession(sessionId, InvoiceStatus.ISSUED)) {
+      String method = String.valueOf(row[0]);
+      BigDecimal amount = (BigDecimal) row[1];
+      boolean merged = false;
+      for (int i = 0; i < paymentSummary.size(); i++) {
+        if (paymentSummary.get(i).method().equals(method)) {
+          paymentSummary.set(
+              i,
+              new CashSessionDetailResponse.PaymentMethodSummary(
+                  method, paymentSummary.get(i).total().add(amount)));
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) {
+        paymentSummary.add(new CashSessionDetailResponse.PaymentMethodSummary(method, amount));
+      }
       if ("CASH".equals(method)) {
         expectedCash = expectedCash.add(amount);
       }

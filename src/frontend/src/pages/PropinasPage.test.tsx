@@ -548,6 +548,87 @@ describe("PropinasPage", () => {
       expect(femmePostJson.mock.calls[0][1]).toEqual({ reason: "Monto mal cargado" });
     });
 
+    it("shows tips left after issuing with how they were paid; the admin can only void them (never edit) and voided ones are struck", async () => {
+      const base = femmeJson.getMockImplementation()!;
+      femmeJson.mockImplementation((url: unknown) => {
+        if (String(url).startsWith("/api/propinas/report?")) {
+          return Promise.resolve({
+            ...report([]),
+            rows: [
+              {
+                professionalId: 1,
+                professionalName: "Laura",
+                amount: 10000,
+                clientName: "María Gómez",
+                serviceDateTime: recent.toISOString(),
+                lateTipId: 5,
+                paymentMethod: "DEBIT_CARD",
+                cardBrand: "VISA",
+                invoiceNumberFormatted: "0000126",
+                createdByName: "ana@demo.com",
+                voided: false,
+              },
+              {
+                professionalId: 2,
+                professionalName: "Ana",
+                amount: 1000,
+                clientName: "María Gómez",
+                serviceDateTime: wdDate.toISOString(),
+                lateTipId: 6,
+                paymentMethod: "CASH",
+                invoiceNumberFormatted: "0000126",
+                createdByName: "ana@demo.com",
+                voided: true,
+                voidReason: "Monto mal cargado",
+                voidedByName: "admin@demo.com",
+              },
+            ],
+          });
+        }
+        return base(url);
+      });
+      femmePostJson.mockResolvedValue({ invoiceId: 30, invoiceStatus: "ISSUED", items: [], total: 0 });
+      renderPage();
+
+      const rows = await screen.findAllByTestId("propinas-movement");
+      const lateRows = rows.filter((r) =>
+        within(r).queryByTestId("propinas-movement-concept")?.textContent?.includes("María Gómez"),
+      );
+      expect(lateRows).toHaveLength(2);
+      const liveRow = lateRows.find((r) => r.getAttribute("data-voided") !== "true")!;
+      const voidedRow = lateRows.find((r) => r.getAttribute("data-voided") === "true")!;
+
+      // The detail (tooltip) says it was collected after issuing, how, the invoice and who entered it.
+      const tooltip = liveRow.querySelector("td[title]")?.getAttribute("title") ?? "";
+      expect(tooltip).toMatch(/Collected after issuing/);
+      expect(tooltip).toMatch(/Debit card · Visa/);
+      expect(tooltip).toMatch(/#0000126/);
+      expect(tooltip).toMatch(/ana@demo\.com/);
+
+      // A voided one is flagged, explained in its tooltip and has no actions left.
+      expect(within(voidedRow).getByTestId("propinas-voided-tag")).toBeTruthy();
+      expect(voidedRow.querySelector("td[title]")?.getAttribute("title")).toMatch(/Monto mal cargado/);
+      expect(within(voidedRow).queryByRole("button")).toBeNull();
+
+      // The live one only offers «Void»: it moved money in the cash register, so it is not editable.
+      await userEvent.click(within(liveRow).getByRole("button"));
+      expect(await screen.findByRole("menuitem", { name: "Void" })).toBeTruthy();
+      expect(screen.queryByRole("menuitem", { name: "Edit" })).toBeNull();
+      await userEvent.click(screen.getByRole("menuitem", { name: "Void" }));
+
+      // The reason is mandatory.
+      await userEvent.click(await screen.findByTestId("late-tip-void-confirm"));
+      expect(screen.getByText(/Enter the reason for voiding/)).toBeTruthy();
+      expect(femmePostJson).not.toHaveBeenCalled();
+      await userEvent.type(screen.getByTestId("late-tip-void-reason"), "Monto mal cargado");
+      await userEvent.click(screen.getByTestId("late-tip-void-confirm"));
+      await waitFor(() => expect(femmePostJson).toHaveBeenCalledTimes(1));
+      expect(femmePostJson.mock.calls[0][0]).toBe("/api/propinas/late/5/void");
+      expect(femmePostJson.mock.calls[0][1]).toEqual({ reason: "Monto mal cargado" });
+      // The list is reloaded after voiding.
+      await waitFor(() => expect(calls("/api/propinas/report?").length).toBeGreaterThan(1));
+    });
+
     it("«Agregar propina» is a button of the page header, not of the Movimientos card", async () => {
       renderPage();
       const button = await screen.findByTestId("propinas-add-manual");

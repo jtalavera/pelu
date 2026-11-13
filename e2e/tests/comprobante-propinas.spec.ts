@@ -8,7 +8,7 @@ import {
   voidInvoice,
   type CommissionWorld,
 } from "../fixtures/commissions";
-import { goToBillingHome, openLineMoreOptions, pickInvoiceLineProfessional, openMoreOptions, showPaymentAmounts } from "../fixtures/billing";
+import { goToBillingHome, pickInvoiceLineProfessional, showPaymentAmounts } from "../fixtures/billing";
 import { openFichaByText } from "../fixtures/ui";
 
 /**
@@ -50,27 +50,25 @@ test("propinas por profesional que atendió: debajo de Métodos de pago, total e
   await loginAdminUi(page, w);
   await openNewInvoice(page);
 
-  // The section sits below the payment step (inside "More options") and starts empty (no
-  // professional yet).
-  await openMoreOptions(page);
+  // The section is always visible, sits right after the services and before the payment step, and
+  // starts empty (no professional yet).
   const tipsSection = page.getByTestId("billing-tips-section");
   await expect(tipsSection.getByRole("heading", { name: "Tips" })).toBeVisible();
+  const itemsBox = await page.getByTestId("billing-step-items").boundingBox();
   const paymentsBox = await page.getByRole("heading", { name: "How does the client pay?" }).boundingBox();
   const tipsBox = await tipsSection.boundingBox();
-  expect(tipsBox!.y).toBeGreaterThan(paymentsBox!.y);
+  expect(tipsBox!.y).toBeGreaterThan(itemsBox!.y);
+  expect(tipsBox!.y).toBeLessThan(paymentsBox!.y);
   await expect(page.getByTestId("billing-tips-empty")).toBeVisible();
 
   await pickServiceLine(page, w.service.name, 0);
   // Without the commissions module the professional is still selectable, with no commission hint.
-  await openLineMoreOptions(page, 0);
   await pickInvoiceLineProfessional(page, 0, w.ana.name);
   await expect(page.getByTestId("line-no-commission-0")).toHaveCount(0);
   await pickServiceLine(page, w.service2.name, 1);
-  await openLineMoreOptions(page, 1);
   await pickInvoiceLineProfessional(page, 1, w.bea.name);
   // A product line's seller does not get a tip row.
   await pickServiceLine(page, w.product.name, 2);
-  await openLineMoreOptions(page, 2);
   await pickInvoiceLineProfessional(page, 2, w.ana.name);
 
   await expect(page.getByTestId("billing-tips-empty")).toHaveCount(0);
@@ -132,7 +130,6 @@ test("desde una ficha: las propinas se precargan, se pueden corregir y reemplaza
   await page.getByTestId("service-record-generate-invoice").click();
   await expect(page).toHaveURL(/\/app\/billing/);
 
-  await openMoreOptions(page);
   await expect(page.locator(`#billing-tip-${w.ana.id}`)).toHaveValue("4.000");
   await expect(page.locator("#billing-tips-amount")).toHaveText("4.000");
   await page.locator(`#billing-tip-${w.ana.id}`).fill("6000");

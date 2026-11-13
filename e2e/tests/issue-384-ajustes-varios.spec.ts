@@ -15,8 +15,6 @@ import { addFichaLine, openFichaDialog, pickLineService } from "../fixtures/fich
 import {
   fillPaymentAmount,
   goToBillingHome,
-  openLineMoreOptions,
-  openMoreOptions,
   pickInvoiceLineProfessional,
   showPaymentAmounts,
 } from "../fixtures/billing";
@@ -109,7 +107,6 @@ test.describe("Issue #384 · Ajustes varios", () => {
       await loginAdminUi(page, w);
       await openNewInvoice(page);
       await pickServiceLine(page, w.service.name, 0);
-      await openLineMoreOptions(page, 0);
 
       const input = page.locator("#line-professional-0");
       await input.click();
@@ -146,9 +143,7 @@ test.describe("Issue #384 · Ajustes varios", () => {
       const total = parseGs(await page.locator("#pay-amount-0").inputValue());
       expect(total).toBeGreaterThan(0);
 
-      await openLineMoreOptions(page, 0);
       await pickInvoiceLineProfessional(page, 0, w.ana.name);
-      await openMoreOptions(page);
       await page.locator(`#billing-tip-${w.ana.id}`).fill("5000");
 
       // The amount to collect is the invoiced total plus the tip, and the first payment follows it.
