@@ -9,6 +9,9 @@
       "closeDialog": "Cerrar diálogo",
       "close": "Cerrar"
     },
+    "alert": {
+      "close": "Cerrar aviso"
+    },
     "theme": {
       "switchToLight": "Cambiar a modo claro",
       "switchToDark": "Cambiar a modo oscuro",
@@ -1552,7 +1555,6 @@
           "viewDetail": "Ver detalle",
           "kudeUnavailable": "No disponible: sin KuDE aprobado"
         },
-        "closeNotice": "Cerrar aviso",
         "emailDialog": {
           "title": "Enviar KuDE por correo",
           "invoiceLine": "Comprobante {{number}} · {{date}}",
@@ -4023,7 +4025,10 @@
       "warningTitle": "Cuota",
       "warningBody": "Te estás acercando al límite de tu plan.",
       "destructiveTitle": "Pago fallido",
-      "destructiveBody": "Actualiza tu método de facturación e inténtalo de nuevo."
+      "destructiveBody": "Actualiza tu método de facturación e inténtalo de nuevo.",
+      "closableTitle": "Aviso con ×",
+      "closableBody": "Con onClose el aviso muestra una × para cerrarlo: se queda hasta que la persona lo cierra.",
+      "closableReset": "Mostrar el aviso de nuevo"
     },
     "badges": {
       "default": "Predeterminado",

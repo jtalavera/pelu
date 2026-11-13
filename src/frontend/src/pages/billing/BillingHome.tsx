@@ -29,7 +29,6 @@ import { femmeJson } from "../../api/femmeClient";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 import { ActionIcon } from "../../components/actionIcons";
-import { DismissibleAlert } from "../../components/DismissibleAlert";
 import { FieldValidationError } from "../../components/FieldValidationError";
 import { SendKudeEmailDialog } from "../../components/invoice/SendKudeEmailDialog";
 import { InvoiceCorrectionForm } from "../../components/InvoiceCorrectionForm";
@@ -486,7 +485,7 @@ export function BillingHome({
                   </Text>
                 )}
                 {todayNotice && (
-                  <DismissibleAlert
+                  <Alert
                     variant={todayNotice.kind === "error" ? "destructive" : "success"}
                     title={
                       todayNotice.kind === "error"
@@ -495,11 +494,10 @@ export function BillingHome({
                     }
                     data-testid="billing-today-notice"
                     className="mx-2 mt-3"
-                    closeLabel={t("femme.billing.home.closeNotice")}
-                    onDismiss={() => setTodayNotice(null)}
+                    onClose={() => setTodayNotice(null)}
                   >
                     {todayNotice.kind === "error" ? todayNotice.text : null}
-                  </DismissibleAlert>
+                  </Alert>
                 )}
                 {todayLoading ? (
                   <div className="flex items-center gap-2 p-3">

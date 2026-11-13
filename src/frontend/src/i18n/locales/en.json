@@ -9,6 +9,9 @@
       "closeDialog": "Close dialog",
       "close": "Close"
     },
+    "alert": {
+      "close": "Close notice"
+    },
     "theme": {
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
@@ -1552,7 +1555,6 @@
           "viewDetail": "View details",
           "kudeUnavailable": "Not available: no approved KuDE"
         },
-        "closeNotice": "Close notice",
         "emailDialog": {
           "title": "Send KuDE by email",
           "invoiceLine": "Invoice {{number}} · {{date}}",
@@ -4023,7 +4025,10 @@
       "warningTitle": "Quota",
       "warningBody": "You are approaching the limit of your plan.",
       "destructiveTitle": "Payment failed",
-      "destructiveBody": "Update your billing method and try again."
+      "destructiveBody": "Update your billing method and try again.",
+      "closableTitle": "Closable alert",
+      "closableBody": "With onClose the alert shows a × to close it: it stays until the person closes it.",
+      "closableReset": "Show the alert again"
     },
     "badges": {
       "default": "Default",

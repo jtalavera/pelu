@@ -93,6 +93,7 @@ export default function DesignSystemShowcasePage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [toastOpen, setToastOpen] = useState(false);
+  const [closableAlertOpen, setClosableAlertOpen] = useState(true);
   const [tab, setTab] = useState("overview");
   const [page, setPage] = useState(1);
   const [plan, setPlan] = useState("pro");
@@ -486,6 +487,27 @@ export default function DesignSystemShowcasePage() {
             <Alert variant="destructive" title={t("app.alerts.destructiveTitle")}>
               {t("app.alerts.destructiveBody")}
             </Alert>
+            {closableAlertOpen ? (
+              <Alert
+                variant="success"
+                title={t("app.alerts.closableTitle")}
+                onClose={() => setClosableAlertOpen(false)}
+                data-testid="showcase-closable-alert"
+              >
+                {t("app.alerts.closableBody")}
+              </Alert>
+            ) : (
+              <div className="flex items-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setClosableAlertOpen(true)}
+                  data-testid="showcase-closable-alert-reset"
+                >
+                  {t("app.alerts.closableReset")}
+                </Button>
+              </div>
+            )}
           </div>
           <div className="flex max-w-md flex-col gap-4">
             <Progress value={62} label={t("app.progress.label")} />

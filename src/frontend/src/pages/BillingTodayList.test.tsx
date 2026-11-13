@@ -457,8 +457,8 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
       fireEvent.click(within(dialog).getByTestId("kude-email-send"));
 
       const notice = await screen.findByTestId("billing-today-notice");
-      const close = within(notice.parentElement as HTMLElement).getByRole("button", { name: "Close notice" });
-      expect(close).toBe(screen.getByTestId("billing-today-notice-close"));
+      const close = within(notice).getByRole("button", { name: "Close notice" });
+      expect(close).toBe(within(notice).getByTestId("alert-close"));
       fireEvent.click(close);
       expect(screen.queryByTestId("billing-today-notice")).toBeNull();
     });
@@ -470,7 +470,7 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
       fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
       expect((await screen.findByTestId("billing-today-notice")).textContent).toMatch(/unexpected error/i);
 
-      fireEvent.click(screen.getByTestId("billing-today-notice-close"));
+      fireEvent.click(within(screen.getByTestId("billing-today-notice")).getByTestId("alert-close"));
       expect(screen.queryByTestId("billing-today-notice")).toBeNull();
     });
 

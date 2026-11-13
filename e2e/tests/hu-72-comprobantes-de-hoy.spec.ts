@@ -476,7 +476,7 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await page.getByTestId(`billing-today-menu-${inv.id}`).click();
     await page.getByTestId(`billing-today-menu-download-${inv.id}`).click();
     await expect(notice).toBeVisible();
-    await page.getByTestId("billing-today-notice-close").click();
+    await notice.getByTestId("alert-close").click();
     await expect(notice).toHaveCount(0);
     await page.unroute(`**/api/invoices/${inv.id}/sifen/kude`);
   });
