@@ -69,6 +69,10 @@ export default function BillingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // HU-73: tips registered/voided from any invoice detail change the open cash register; the home
+  // (which keeps the register's figures and today's list) reloads on this trigger.
+  const refreshCashRegister = useCallback(() => setInvoiceListRefresh((k) => k + 1), []);
+
   const openHistory = useCallback((view: HistoryView) => {
     setHistoryView(view);
     if (view === "invoices") setHistoryRefresh((k) => k + 1);
@@ -140,6 +144,7 @@ export default function BillingPage() {
         {currentSession ? (
           <NewInvoiceFlow
             onIssued={() => setInvoiceListRefresh((k) => k + 1)}
+            onTipsChanged={refreshCashRegister}
             onBack={() => setScreen("home")}
             initialClient={pendingInitialClient}
             onInitialClientConsumed={() => setPendingInitialClient(null)}
@@ -164,12 +169,14 @@ export default function BillingPage() {
           invoicesRefresh={historyRefresh}
           cashRefresh={cashHistoryRefresh}
           isActive={screen === "history"}
+          onTipsChanged={refreshCashRegister}
         />
       </div>
 
       {viewInvoiceId !== null ? (
         <InvoiceDetailModal
           invoiceId={viewInvoiceId}
+          onTipsChanged={refreshCashRegister}
           onClose={() => setViewInvoiceId(null)}
           onVoided={() => {
             setViewInvoiceId(null);
