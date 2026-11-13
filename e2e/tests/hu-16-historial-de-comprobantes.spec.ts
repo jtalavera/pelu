@@ -88,16 +88,8 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     for (const status of ["all", "APPROVED", "PROCESSING", "ATTENTION", "VOIDED"]) {
       await expect(page.getByTestId(`invoice-history-status-${status}`)).toBeVisible();
     }
-    // The shared table (HU-74): one column per datum, with a single plain-language state (no SIFEN status column).
-    await expect(page.getByRole("columnheader")).toHaveText([
-      "Invoice date",
-      "Number",
-      "Client",
-      "Status",
-      "Payment",
-      "Sent to SIFEN",
-      "Total",
-    ]);
+    // No table with a column per technical field any more.
+    await expect(page.getByRole("columnheader")).toHaveCount(0);
 
     await searchInvoiceHistory(page, client.fullName);
     const row = page.getByTestId(`invoice-history-row-${invoice.id}`);
@@ -199,7 +191,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
 
     // No standalone "View" button exists anymore — only the row itself is interactive.
     await expect(histRow.getByRole("button", { name: "View" })).toHaveCount(0);
-    await expect(histRow).toHaveAttribute("tabindex", "0");
+    await expect(histRow).toHaveAttribute("role", "button");
 
     // Clicking anywhere on the row opens the detail modal.
     await histRow.click();
@@ -274,8 +266,7 @@ test.describe("HU-16 · Historial de comprobantes", () => {
     await expect(rejRow).toBeVisible({ timeout: 30_000 });
     await expect(rejRow.locator("[data-invoice-state]")).toHaveText("Needs attention");
     await expect(page.getByTestId(`invoice-row-correct-resend-${rejected.id}`)).toBeVisible();
-    // The date of the SIFEN submission has its own column («Sent to SIFEN»).
-    await expect(page.getByRole("columnheader", { name: "Sent to SIFEN" })).toBeVisible();
+    await expect(rejRow.getByTestId("invoice-row-sifen-sent")).toContainText("SIFEN");
     await expect(rejRow.getByTestId("invoice-row-sifen-sent")).toContainText(/\d/);
   });
 });

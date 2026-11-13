@@ -102,6 +102,7 @@ test.describe("Issue #216 · Panel de clientes inactivos", () => {
     await seedClientWithCompletedVisit(request, token, salon, recentLabel, "0981100003", 5);
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const rows = await widgetRows(page);
 
     const veryOldRow = rows.find((r) => hasLabel(r.fullName, veryOldLabel));
@@ -139,6 +140,7 @@ test.describe("Issue #216 · Panel de clientes inactivos", () => {
     await seedClient(request, token, label, "0981100004");
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const rows = await widgetRows(page);
     const row = rows.find((r) => hasLabel(r.fullName, label));
     expect(row, "a client who never had a completed visit must not appear as inactive").toBeUndefined();
@@ -168,6 +170,7 @@ test.describe("Issue #216 · Panel de clientes inactivos", () => {
     expect(deactivateRes.ok(), await deactivateRes.text()).toBeTruthy();
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const rows = await widgetRows(page);
     const row = rows.find((r) => hasLabel(r.fullName, label));
     expect(
@@ -206,6 +209,7 @@ test.describe("Issue #216 · Panel de clientes inactivos", () => {
     }
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const rows = await widgetRows(page);
 
     expect(rows).toHaveLength(10);

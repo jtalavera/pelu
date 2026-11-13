@@ -138,6 +138,13 @@ const DashboardIcon = () => (
   </svg>
 );
 
+const TodayIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="4" y="5" width="16" height="16" rx="2" />
+    <path d="M8 3v4M16 3v4M4 10h16M9 15l2 2 4-4" />
+  </svg>
+);
+
 const CalendarIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" />
@@ -989,7 +996,18 @@ function AppShellInner() {
         }}
       >
         <SectionLabel label={t("femme.nav.sectionMain")} />
-        <SideNavItem to="/app" end label={t("femme.nav.dashboard")} icon={<DashboardIcon />} tourId="nav-dashboard" />
+        {/* Admin: «Resumen» (how the salon is doing) and «Hoy» (the working-day screen). Professionals
+            have a single home, their working-day screen. */}
+        <SideNavItem
+          to="/app"
+          end
+          label={isProfessional ? t("femme.nav.today") : t("femme.nav.dashboard")}
+          icon={<DashboardIcon />}
+          tourId="nav-dashboard"
+        />
+        {!isProfessional && (
+          <SideNavItem to="/app/hoy" label={t("femme.nav.today")} icon={<TodayIcon />} tourId="nav-today" />
+        )}
         <SideNavItem to="/app/calendar" label={t("femme.nav.calendar")} icon={<CalendarIcon />} tourId="nav-calendar" />
         {!isProfessional && (
           <SideNavItem

@@ -110,6 +110,7 @@ test.describe("Turno y ficha de servicio", () => {
     const turno = await seedTurno(request, admin, seed, client.id);
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName });
     await expect(row).toContainText("Pending");
     await expect(row.getByTestId("dashboard-appointment-ficha-go")).toHaveCount(0);
@@ -163,6 +164,7 @@ test.describe("Turno y ficha de servicio", () => {
     await openFicha(request, admin, other.id, seed);
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName });
     await expect(row).toContainText("Confirmed");
     await row.getByTestId("dashboard-appointment-ficha-create-or-assign").click();
@@ -185,6 +187,7 @@ test.describe("Turno y ficha de servicio", () => {
     await apiPostJson(request, admin, `/api/appointments/${turno.id}/service-record`, {});
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const card = page.getByTestId("dashboard-service-record-card").filter({ hasText: clientName });
     await expect(card).toBeVisible({ timeout: 20_000 });
     await card.click({ position: { x: 40, y: 20 } });
@@ -206,6 +209,7 @@ test.describe("Turno y ficha de servicio", () => {
     await apiPostJson(request, admin, `/api/appointments/${turno.id}/service-record`, {});
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     // The turno's detail opens from the client's name (the first button of the row).
     await page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName }).locator("button").first().click();
     const detail = page.getByRole("dialog").last();
@@ -292,6 +296,7 @@ test.describe("Turno y ficha de servicio", () => {
     await chargeFicha(request, admin, client.id, ficha, seed);
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     // The charged ficha waits in the folded «Cobradas y anuladas»: open it (and page) until it shows.
     const card = await revealFichaCard(page, new RegExp(clientName, "i"));
     await card.click({ position: { x: 40, y: 20 } });
@@ -330,6 +335,7 @@ test.describe("Turno y ficha de servicio", () => {
     expect((await apiGetJson<Ficha>(request, admin, `/api/service-records/${ficha.id}`)).status).toBe("CLOSED");
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     // Charged: the turno waits in the folded «Cobrados».
     const row = await revealAppointmentRow(page, (rows) => rows.filter({ hasText: clientName }));
     await expect(row).toContainText("Completed");
@@ -350,6 +356,7 @@ test.describe("Turno y ficha de servicio", () => {
     await setStatus(request, admin, turno.id, "IN_PROGRESS");
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await page.getByTestId("dashboard-appointment-row").filter({ hasText: clientName }).locator("button").first().click();
     // The turno opens in place on Inicio (no navigation to the Agenda).
     await expect(page).toHaveURL(/\/app\/?$/);
@@ -387,6 +394,7 @@ test.describe("Turno y ficha de servicio", () => {
     const keep = await seedTurno(request, admin, await seedCategoryServiceProfessional(request, admin), client.id);
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await ensureCashSessionOpen(page);
     await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
@@ -415,6 +423,7 @@ test.describe("Turno y ficha de servicio", () => {
     const turno = await seedTurno(request, admin, seed, client.id);
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await ensureCashSessionOpen(page);
     await goToBillingHome(page);
     await page.getByRole("button", { name: "New Invoice" }).click();
@@ -492,7 +501,7 @@ test.describe("Turno y ficha de servicio", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     const row = page
       .getByTestId("dashboard-appointment-row")
       .filter({ hasText: seed.professionalFullName })
@@ -534,7 +543,7 @@ test.describe("Turno y ficha de servicio", () => {
 
     // Inicio: the occasional turno only offers «Ir a la ficha» (no «Ver comprobante» on the row);
     // the comprobante is reached from the charged ficha.
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     const paidRow = await revealAppointmentRow(page, (rows) =>
       rows.filter({ hasText: seed.professionalFullName }).filter({ hasText: "Occasional" }),
     );
@@ -570,6 +579,7 @@ test.describe("Turno y ficha de servicio", () => {
 
     // A completed turno is not on the week grid: it is opened from the Inicio's list.
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const chargedRow = await revealAppointmentRow(page, (rows) => rows.filter({ hasText: clientName }));
     await chargedRow.locator("button").first().click({ timeout: 20_000 });
     // The turno opens in place on Inicio (no navigation to the Agenda).
@@ -620,6 +630,7 @@ test.describe("Turno y ficha de servicio", () => {
     expect(charged.serviceRecordId).toBeNull();
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const row = await revealAppointmentRow(page, (rows) => rows.filter({ hasText: clientName }));
     // No ficha to go to: the row's only link is the comprobante (and there is no «Cobrar»).
     await expect(row.getByTestId("dashboard-appointment-invoice")).toHaveText("View invoice", { timeout: 20_000 });
@@ -648,6 +659,7 @@ test.describe("Turno y ficha de servicio", () => {
     await chargeFicha(request, admin, client.id, ficha, seed);
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const row = await revealAppointmentRow(page, (rows) => rows.filter({ hasText: new RegExp(clientName, "i") }));
     await row.locator("button").first().click({ timeout: 20_000 });
     const dialog = page.getByRole("dialog");
@@ -694,6 +706,7 @@ test.describe("Turno y ficha de servicio", () => {
 
     // A completed turno is not on the week grid: it is opened from the Inicio's list.
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await page
       .getByTestId("dashboard-appointment-row")
       .filter({ hasText: clientName })

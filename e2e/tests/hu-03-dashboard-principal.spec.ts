@@ -12,6 +12,7 @@ import { openDashboardMore } from "../fixtures/dashboard";
 test.describe("HU-03 · Dashboard principal", () => {
   test("HU-03 · 1 resumen de turnos e ingresos del día en una línea", async ({ page }) => {
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await expect(page.getByTestId("dashboard-summary-appointments")).toHaveText(/^\d+ appointments? today$/);
     // Revenue figures must use dot thousands separator with no decimals (e.g. "Gs. 1.234.567")
     await expect(page.getByTestId("dashboard-summary-collected")).toHaveText(
@@ -26,7 +27,7 @@ test.describe("HU-03 · Dashboard principal", () => {
     await loginAsDemo(page);
     await page.getByRole("link", { name: "View agenda →" }).click();
     await expect(page).toHaveURL(/\/app\/calendar/);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     await page.getByRole("button", { name: "+ New appointment" }).first().click();
     // The booking form opens right on Inicio: no navigation to the Agenda.
     await expect(page.getByRole("dialog")).toBeVisible();
@@ -38,6 +39,7 @@ test.describe("HU-03 · Dashboard principal", () => {
     // appointments list to exercise the empty state.
     await page.route("**/api/appointments?**", (route) => route.fulfill({ json: [] }));
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await expect(page.getByText("No appointments today", { exact: true }).first()).toBeVisible();
   });
 
@@ -53,6 +55,7 @@ test.describe("HU-03 · Dashboard principal", () => {
     page,
   }) => {
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const toggles = page.getByTestId("dashboard-more").getByRole("button");
     await expect(toggles).toHaveCount(3);
     await expect(toggles.nth(0)).toContainText("Occupancy by professional");
@@ -88,6 +91,7 @@ test.describe("HU-03 · Dashboard principal", () => {
       startAt: slot.toISOString(),
     });
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: new RegExp(clientName, "i") });
     await expect(row).toContainText("Pending");
     await row.getByTestId("dashboard-appointment-ficha-create-or-assign").click();

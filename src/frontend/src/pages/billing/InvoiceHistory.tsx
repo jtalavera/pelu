@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
-  DataTable,
   FloatingDropdown,
   Heading,
   Input,
@@ -25,7 +24,7 @@ import { InvoiceStatePill, deriveInvoiceState } from "../../components/InvoiceSt
 import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../../hooks/useSifenStatusLiveRefresh";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatAmountDecimal } from "../../lib/formatMoney";
-import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
+import { formatParaguayDate, formatParaguayDateTime, formatParaguayTime } from "../../lib/paraguayDateTime";
 import {
   getDefaultInvoiceHistoryDateRange,
   invoiceHistoryRangeErrorKey,
@@ -216,6 +215,13 @@ function InvoiceListView({
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   // Issue #175: "Corregir y reenviar" opened directly from a Rechazado row.
   const [correctionInvoiceId, setCorrectionInvoiceId] = useState<number | null>(null);
+
+  /** «09:04» when SIFEN got it the same day it was issued, the full date and time otherwise. */
+  function sifenSentLabel(issuedAt: string, sentAt: string): string {
+    return formatParaguayDate(sentAt, dateLocale) === formatParaguayDate(issuedAt, dateLocale)
+      ? formatParaguayTime(sentAt, dateLocale)
+      : formatParaguayDateTime(sentAt, dateLocale);
+  }
 
   /** «Corregir y reenviar» for a comprobante that needs attention (table row and phone card). */
   function correctResendButton(inv: InvoiceListItem): ReactNode {
@@ -570,105 +576,61 @@ function InvoiceListView({
           </div>
         ) : (
           <div className="overflow-hidden rounded-card border border-line bg-surface">
-            <DataTable<InvoiceListItem>
-              className="px-2"
-              testId="invoice-history-list"
-              minWidthClassName="min-w-[52rem]"
-              rows={invoices}
-              getRowId={(inv) => inv.id}
-              rowTestId={(inv) => `invoice-history-row-${inv.id}`}
-              onRowClick={(inv) => setSelectedInvoiceId(inv.id)}
-              rowLabel={(inv) =>
-                t("femme.billing.history.openDetail", { invoiceNumber: inv.invoiceNumberFormatted })
-              }
-              columns={[
-                {
-                  id: "date",
-                  header: t("femme.billing.history.colDate"),
-                  cell: (inv) => (
-                    <span data-testid="invoice-row-date" className="tabular-nums">
-                      {formatParaguayDateTime(inv.issuedAt, dateLocale)}
-                    </span>
-                  ),
-                },
-                {
-                  id: "number",
-                  header: t("femme.billing.history.colNumber"),
-                  cell: (inv) => (
-                    <span data-testid="invoice-row-number" className="font-mono text-xs">
-                      {inv.invoiceNumberFormatted}
-                    </span>
-                  ),
-                },
-                {
-                  id: "client",
-                  header: t("femme.billing.history.colClient"),
-                  cell: (inv) => (
-                    <span data-testid="invoice-row-client" className="block max-w-[16rem] truncate font-semibold">
+            <ul className="divide-y divide-line" data-testid="invoice-history-list">
+              {invoices.map((inv) => (
+                <li key={inv.id}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    data-testid={`invoice-history-row-${inv.id}`}
+                    aria-label={t("femme.billing.history.openDetail", { invoiceNumber: inv.invoiceNumberFormatted })}
+                    onClick={() => setSelectedInvoiceId(inv.id)}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedInvoiceId(inv.id);
+                      }
+                    }}
+                    className="grid min-h-16 w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-left hover:bg-primary-lt"
+                  >
+                    <span
+                      data-testid="invoice-row-client"
+                      className="col-start-1 min-w-0 truncate font-semibold text-ink"
+                    >
                       {inv.clientDisplayName || t("femme.billing.invoice.noName")}
                     </span>
-                  ),
-                },
-                {
-                  id: "state",
-                  header: t("femme.billing.history.colStatus"),
-                  cell: (inv) => (
-                    <span className="flex flex-wrap items-center gap-2">
-                      <InvoiceStatePill invoice={inv} />
+                    <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end gap-1.5">
+                      <span
+                        data-testid="invoice-row-total"
+                        className="text-right font-heading font-bold tabular-nums text-ink"
+                      >
+                        {formatAmountDecimal(inv.total)}
+                      </span>
                       {correctResendButton(inv)}
                     </span>
-                  ),
-                },
-                {
-                  id: "method",
-                  header: t("femme.billing.history.colPaymentMethod"),
-                  cell: (inv) => (
-                    <span data-testid="invoice-row-method">
-                      {paymentMethodsLabel(inv.paymentMethodsSummary, t)}
-                    </span>
-                  ),
-                },
-                {
-                  id: "sifenSent",
-                  header: t("femme.billing.history.colSifenSentAt"),
-                  cell: (inv) =>
-                    inv.sifenSubmittedAt ? (
-                      <span data-testid="invoice-row-sifen-sent" className="tabular-nums">
-                        {formatParaguayDateTime(inv.sifenSubmittedAt, dateLocale)}
+                    <span className="col-start-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
+                      <InvoiceStatePill invoice={inv} />
+                      <span data-testid="invoice-row-number" className="font-mono text-xs">
+                        {t("femme.billing.history.numberShort", { number: inv.invoiceNumberFormatted })}
                       </span>
-                    ) : null,
-                },
-                {
-                  id: "total",
-                  header: t("femme.billing.history.colTotal"),
-                  align: "right",
-                  cell: (inv) => (
-                    <span data-testid="invoice-row-total" className="font-heading font-bold tabular-nums">
-                      {formatAmountDecimal(inv.total)}
-                    </span>
-                  ),
-                },
-              ]}
-              mobileCard={(inv) => (
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate font-semibold text-ink">
-                      {inv.clientDisplayName || t("femme.billing.invoice.noName")}
-                    </span>
-                    <span className="shrink-0 font-heading text-sm font-bold tabular-nums text-ink">
-                      {formatAmountDecimal(inv.total)}
+                      <span data-testid="invoice-row-date">
+                        {formatParaguayDateTime(inv.issuedAt, dateLocale)}
+                      </span>
+                      <span data-testid="invoice-row-method">
+                        {paymentMethodsLabel(inv.paymentMethodsSummary, t)}
+                      </span>
+                      {inv.sifenSubmittedAt && (
+                        <span data-testid="invoice-row-sifen-sent">
+                          {t("femme.billing.history.sifenShort")}{" "}
+                          {sifenSentLabel(inv.issuedAt, inv.sifenSubmittedAt)}
+                        </span>
+                      )}
                     </span>
                   </div>
-                  <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
-                    <InvoiceStatePill invoice={inv} />
-                    <span className="font-mono text-xs">{inv.invoiceNumberFormatted}</span>
-                    <span>{formatParaguayDateTime(inv.issuedAt, dateLocale)}</span>
-                    <span>{paymentMethodsLabel(inv.paymentMethodsSummary, t)}</span>
-                  </div>
-                  {correctResendButton(inv)}
-                </div>
-              )}
-            />
+                </li>
+              ))}
+            </ul>
             <ListFooter
               pageSize={pageSize}
               setPageSize={setPageSize}

@@ -63,6 +63,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     const client = await seedClient(request, token, `E2E129 Msg ${Date.now()}`);
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const dlg = await openNewFichaDialog(page);
     await pickFichaClient(page, dlg, client.fullName);
     await pickLineService(page, 0, seed.serviceFullName);
@@ -89,6 +90,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     });
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const dialog = await openFichaDialog(page, client.fullName);
     const box = await dialog.boundingBox();
     expect(box).toBeTruthy();
@@ -115,6 +117,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     const client = await seedClient(request, token, `E2E129 NoLines ${Date.now()}`);
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const dlg = await openNewFichaDialog(page);
     await pickFichaClient(page, dlg, client.fullName);
 
@@ -138,6 +141,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     const client = await seedClient(request, token, `E2E129 PartialLine ${Date.now()}`);
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const dlg = await openNewFichaDialog(page);
     await pickFichaClient(page, dlg, client.fullName);
     await pickLineService(page, 0, seed.serviceFullName);
@@ -180,7 +184,7 @@ test.describe("Issue #129 · Ajustes en Ficha de servicio (iteración 2)", () =>
     }
 
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
 
     await openDashboardMore(page, "records");
     const grid = page.getByTestId("dashboard-service-records-grid");

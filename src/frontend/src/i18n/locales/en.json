@@ -518,9 +518,10 @@
       "myCommissions": "My commissions",
       "mainLabel": "Main navigation",
       "catalog": "Catalog",
-      "dashboard": "Dashboard",
+      "dashboard": "Overview",
       "calendar": "Agenda",
-      "dashboards": "Summary",
+      "dashboards": "Reports",
+      "today": "Today",
       "services": "Services",
       "products": "Products",
       "professionals": "Professionals",
@@ -1148,8 +1149,74 @@
       "noPayments": "No payments yet.",
       "appointmentsByDay": "Appointments by day of the week"
     },
+    "resumen": {
+      "loading": "Loading…",
+      "error": "The overview could not be loaded.",
+      "greeting": "Hello, team!",
+      "subtitle": "Here's how your salon is doing today · {{date}}",
+      "newAppointment": "+ New appointment",
+      "newInvoice": "+ New invoice",
+      "appointments": {
+        "title": "Today's appointments",
+        "pending_one": "{{count}} pending",
+        "pending_other": "{{count}} pending",
+        "confirmed_one": "{{count}} confirmed",
+        "confirmed_other": "{{count}} confirmed",
+        "empty": "No appointments today.",
+        "viewAgenda": "Open agenda →"
+      },
+      "cash": {
+        "title": "Daily cash",
+        "cash": "Cash",
+        "card": "Card",
+        "transfer": "Transfer",
+        "other": "Other",
+        "openedSince": "Open since {{time}}",
+        "viewCash": "Open cash →",
+        "closedTitle": "Cash register closed",
+        "closedBody": "Open the register to start charging.",
+        "goCash": "Go to Cash →"
+      },
+      "fichas": {
+        "title": "Today's service records",
+        "viewAll": "See all →",
+        "empty": "No service records yet today.",
+        "toCollectIn": "to collect in",
+        "openRecords_one": "{{count}} open record",
+        "openRecords_other": "{{count}} open records",
+        "barLabel": "Today's service records: paid, open and voided",
+        "paid_one": "paid",
+        "paid_other": "paid",
+        "open_one": "open",
+        "open_other": "open",
+        "voided_one": "voided",
+        "voided_other": "voided",
+        "collect": "Collect",
+        "collectFor": "Collect the record of {{client}}",
+        "moreOpen_one": "and {{count}} more open record",
+        "moreOpen_other": "and {{count}} more open records",
+        "olderOpen_one": "{{count}} open from a previous day",
+        "olderOpen_other": "{{count}} open from previous days"
+      },
+      "ago": {
+        "justNow": "just now",
+        "minutes": "{{m}} min ago",
+        "hours": "{{h}} h ago",
+        "hoursMinutes": "{{h}} h {{m}} min ago"
+      },
+      "invoices": {
+        "title": "Invoices",
+        "titleSifen": "Electronic invoices",
+        "emitted": "Issued today",
+        "emittedSifen": "Issued today",
+        "allUpToDate": "All up to date",
+        "needAttention_one": "{{count}} needs attention",
+        "needAttention_other": "{{count}} need attention",
+        "view": "See invoices →"
+      }
+    },
     "dashboardsPage": {
-      "pageTitle": "Summary",
+      "pageTitle": "Reports",
       "pageSubtitle": "Business charts and trends at a glance."
     },
     "inactiveClients": {
@@ -1845,7 +1912,8 @@
         "colNumber": "Number",
         "colDate": "Invoice date",
         "colSifenSentAt": "Sent to SIFEN",
-        "colPaymentMethod": "Payment",
+        "numberShort": "No. {{number}}",
+        "sifenShort": "SIFEN",
         "colClient": "Client",
         "colTotal": "Total",
         "colStatus": "Status",
@@ -3481,7 +3549,7 @@
       },
       "nav": {
         "sidebar": { "title": "Navigation menu", "content": "This panel lets you move between all the sections of the app." },
-        "dashboard": { "title": "Dashboard", "content": "Your home base — view today's appointments, earnings, and activity at a glance." },
+        "dashboard": { "title": "Overview", "content": "Your starting point: how the salon is doing today at a glance (appointments, cash, service records and invoices)." },
         "calendar": { "title": "Agenda", "content": "Manage appointments by day or week. Book, reschedule, and cancel from here." },
         "catalog": { "title": "Catalog", "content": "Services, products and professionals in one place. Switch between them at the top." },
         "services": { "title": "Services", "content": "Manage the list of services and their prices offered by your salon." },

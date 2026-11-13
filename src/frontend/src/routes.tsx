@@ -7,6 +7,7 @@ import { AdminOnlyRoute } from "./auth/AdminOnlyRoute";
 import { ProfessionalOrAdminRoute, RedirectToTechnicalSheet } from "./auth/ProfessionalOrAdminRoute";
 import DesignSystemShowcasePage from "./pages/DesignSystemShowcasePage";
 import DashboardPage from "./pages/DashboardPage";
+import ResumenPage from "./pages/ResumenPage";
 import ProfessionalHomePage from "./pages/ProfessionalHomePage";
 import DashboardsPage from "./pages/DashboardsPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
@@ -66,14 +67,16 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        {/* Inicio: the admin's dashboard, or the professional's open fichas of today (also in a
+        {/* Inicio: the admin's «Resumen» (HU-77), or the professional's open fichas of today (also in a
             shared-device PIN session, where it is the first screen). */}
         <Route
           path="/app"
           element={
-            <ProfessionalOrAdminRoute admin={<DashboardPage />} professional={<ProfessionalHomePage />} />
+            <ProfessionalOrAdminRoute admin={<ResumenPage />} professional={<ProfessionalHomePage />} />
           }
         />
+        {/* «Hoy»: the admin's working-day screen (appointments and fichas of today with their actions). */}
+        <Route path="/app/hoy" element={<ProfessionalOrAdminRoute admin={<DashboardPage />} professional={<Navigate to="/app" replace />} />} />
         <Route path="/app/calendar" element={<CalendarPage />} />
         <Route element={<NotInPinSessionRoute />}>
           <Route path="/app/my-commissions" element={<MyCommissionsPage />} />

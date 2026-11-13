@@ -82,10 +82,8 @@ test.describe("Issue #190 · Ajustes varios", () => {
       .filter({ visible: true });
     await expect(row).toBeVisible({ timeout: 30_000 });
     await expect(row.getByTestId("invoice-row-date")).toContainText(/\d{1,2}:\d{2}/);
-    // The submission date has its own column, apart from the invoice date.
-    await expect(page.getByRole("columnheader", { name: "Invoice date" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "Sent to SIFEN" })).toBeVisible();
-    await expect(row.getByTestId("invoice-row-sifen-sent")).toContainText(/\d{1,2}:\d{2}/);
+    await expect(row.getByTestId("invoice-row-sifen-sent")).toContainText(/SIFEN \d{1,2}:\d{2}/);
+    await expect(page.getByRole("columnheader")).toHaveCount(0);
   });
 
   test("AC2 + AC3 · 'Corregir y reenviar' muestra el número y la fecha de emisión del comprobante", async ({

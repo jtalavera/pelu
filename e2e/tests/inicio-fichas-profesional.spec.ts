@@ -96,7 +96,7 @@ test.describe("Inicio del admin · tarjetas de fichas", () => {
     await apiPostJson(request, token, `/api/service-records/${toVoid.id}/void`, { voidReason: "E2E tarjetas" });
 
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     await expect(page.getByTestId("dashboard-today-records")).toBeVisible({ timeout: 20_000 });
     // Cards are right on the Inicio (not folded) and every open one is counted in the header pill.
     await expect(page.getByTestId("dashboard-today-records-open-count")).toContainText("open");
@@ -126,7 +126,7 @@ test.describe("Inicio del admin · tarjetas de fichas", () => {
     await createFicha(request, token, client.id, seed);
 
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     const card = cardOf(page, client.fullName);
     await expect(card).toBeVisible({ timeout: 20_000 });
 
@@ -163,11 +163,12 @@ test.describe("Inicio de la profesional (con clave)", () => {
     await apiPostJson(request, admin, `/api/service-records/${voided.id}/void`, { voidReason: "E2E" });
 
     await loginAs(page, pro.email, PASSWORD);
+    await page.goto("/app/hoy");
 
     // First screen: the Inicio with the cards.
     await expect(page).toHaveURL(/\/app\/?$/);
     await expect(page.getByTestId("professional-home")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Dashboard" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Today", exact: true })).toBeVisible();
 
     const own = cardOf(page, ownClient.fullName);
     await expect(own).toBeVisible({ timeout: 20_000 });

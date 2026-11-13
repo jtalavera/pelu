@@ -127,6 +127,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     const client = await seedClient(request, token, `E2E Ficha ${Date.now()}`);
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const dlg = await openNewFichaDialog(page);
     await pickFichaClient(page, dlg, client.fullName);
 
@@ -181,6 +182,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     const newClientName = `E2E New Client ${Date.now()}`;
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const dlg0 = await openNewFichaDialog(page);
     await dlg0.getByLabel("Search or select client").fill(newClientName);
     await page.getByRole("button", { name: "+ Create new client" }).click();
@@ -220,6 +222,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const dialogOpen = await openFichaDialog(page, client.fullName);
     await expect(dialogOpen.getByTestId("service-record-status")).toHaveText(/Open/);
     // "Charge" is the dialog's primary action; it opens Billing with the ficha prefilled.
@@ -286,6 +289,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const dialogV = await openFichaDialog(page, client.fullName);
     await clickFichaMenuItem(page, dialogV, "service-record-void-open");
     await dialogV.getByLabel("Reason").fill("Cliente se retiró antes de comenzar");
@@ -330,7 +334,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
         await revealAllTodayRecords(page);
     await expect(page.getByText(newerClient.fullName)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(olderClient.fullName)).toBeVisible();
@@ -370,7 +374,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     }
 
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     await openDashboardMore(page, "records");
     await expect(page.getByText(capMarker, { exact: false }).first()).toBeVisible({
       timeout: 15_000,
@@ -439,6 +443,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     });
 
     await loginAs(page, email, password);
+    await page.goto("/app/hoy");
     // She lands on the Inicio (open fichas of the day); the full "Service records" screen stays admin-only.
     await expect(page).toHaveURL(/\/app\/?$/);
     await expect(page.getByRole("link", { name: "Service records" })).toHaveCount(0);

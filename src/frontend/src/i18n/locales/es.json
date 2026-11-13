@@ -518,9 +518,10 @@
       "myCommissions": "Mis comisiones",
       "mainLabel": "Navegación principal",
       "catalog": "Catálogo",
-      "dashboard": "Panel",
+      "dashboard": "Resumen",
       "calendar": "Agenda",
-      "dashboards": "Resumen",
+      "dashboards": "Reportes",
+      "today": "Hoy",
       "services": "Servicios",
       "products": "Productos",
       "professionals": "Profesionales",
@@ -1148,8 +1149,74 @@
       "noPayments": "Todavía no hay cobros.",
       "appointmentsByDay": "Turnos por día de la semana"
     },
+    "resumen": {
+      "loading": "Cargando…",
+      "error": "No se pudo cargar el resumen.",
+      "greeting": "¡Hola, equipo!",
+      "subtitle": "Así va tu salón hoy · {{date}}",
+      "newAppointment": "+ Nuevo turno",
+      "newInvoice": "+ Nueva factura",
+      "appointments": {
+        "title": "Turnos de hoy",
+        "pending_one": "{{count}} pendiente",
+        "pending_other": "{{count}} pendientes",
+        "confirmed_one": "{{count}} confirmado",
+        "confirmed_other": "{{count}} confirmados",
+        "empty": "No hay turnos para hoy.",
+        "viewAgenda": "Ver agenda →"
+      },
+      "cash": {
+        "title": "Caja del día",
+        "cash": "Efectivo",
+        "card": "Tarjeta",
+        "transfer": "Transferencia",
+        "other": "Otros",
+        "openedSince": "Abierta desde las {{time}}",
+        "viewCash": "Ver caja →",
+        "closedTitle": "Caja cerrada",
+        "closedBody": "Abrí la caja para empezar a cobrar.",
+        "goCash": "Ir a Caja →"
+      },
+      "fichas": {
+        "title": "Fichas de hoy",
+        "viewAll": "Ver todas →",
+        "empty": "Todavía no hay fichas hoy.",
+        "toCollectIn": "por cobrar en",
+        "openRecords_one": "{{count}} ficha abierta",
+        "openRecords_other": "{{count}} fichas abiertas",
+        "barLabel": "Fichas de hoy: cobradas, abiertas y anuladas",
+        "paid_one": "cobrada",
+        "paid_other": "cobradas",
+        "open_one": "abierta",
+        "open_other": "abiertas",
+        "voided_one": "anulada",
+        "voided_other": "anuladas",
+        "collect": "Cobrar",
+        "collectFor": "Cobrar la ficha de {{client}}",
+        "moreOpen_one": "y {{count}} ficha abierta más",
+        "moreOpen_other": "y {{count}} fichas abiertas más",
+        "olderOpen_one": "{{count}} abierta de un día anterior",
+        "olderOpen_other": "{{count}} abiertas de días anteriores"
+      },
+      "ago": {
+        "justNow": "hace un momento",
+        "minutes": "hace {{m}} min",
+        "hours": "hace {{h}} h",
+        "hoursMinutes": "hace {{h}} h {{m}} min"
+      },
+      "invoices": {
+        "title": "Comprobantes",
+        "titleSifen": "Factura electrónica",
+        "emitted": "Emitidos hoy",
+        "emittedSifen": "Emitidas hoy",
+        "allUpToDate": "Todas al día",
+        "needAttention_one": "{{count}} requiere atención",
+        "needAttention_other": "{{count}} requieren atención",
+        "view": "Ver comprobantes →"
+      }
+    },
     "dashboardsPage": {
-      "pageTitle": "Resumen",
+      "pageTitle": "Reportes",
       "pageSubtitle": "Gráficos y tendencias del negocio de un vistazo."
     },
     "inactiveClients": {
@@ -1845,7 +1912,8 @@
         "colNumber": "Número",
         "colDate": "Fecha factura",
         "colSifenSentAt": "Enviado a SIFEN",
-        "colPaymentMethod": "Forma de pago",
+        "numberShort": "N.º {{number}}",
+        "sifenShort": "SIFEN",
         "colClient": "Cliente",
         "colTotal": "Total",
         "colStatus": "Estado",
@@ -3481,7 +3549,7 @@
       },
       "nav": {
         "sidebar": { "title": "Menú de navegación", "content": "Este panel te permite moverte entre todas las secciones de la app." },
-        "dashboard": { "title": "Panel de inicio", "content": "Tu punto de partida: ves los turnos de hoy, los ingresos y la actividad reciente de un vistazo." },
+        "dashboard": { "title": "Resumen", "content": "Tu punto de partida: cómo va el salón hoy, de un vistazo (turnos, caja, fichas y facturas)." },
         "calendar": { "title": "Agenda", "content": "Gestioná los turnos por día o semana. Reservá, reprogramá y cancelá desde aquí." },
         "catalog": { "title": "Catálogo", "content": "Servicios, productos y profesionales en un solo lugar. Cambiá de uno a otro arriba." },
         "services": { "title": "Servicios", "content": "Administrá el catálogo de servicios y precios que ofrece tu salón." },
