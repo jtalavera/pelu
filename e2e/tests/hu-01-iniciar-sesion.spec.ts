@@ -20,6 +20,7 @@ test.describe("HU-01 · Iniciar sesión", () => {
 
   test("login exitoso redirige al panel", async ({ page }) => {
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await expect(page.getByTestId("dashboard-summary-appointments")).toBeVisible();
   });
 

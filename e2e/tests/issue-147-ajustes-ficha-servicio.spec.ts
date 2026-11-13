@@ -53,6 +53,7 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     });
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const dialog = await openFichaDialog(page, client.fullName);
 
     await expectVoidBesideClose(page, dialog);
@@ -79,7 +80,7 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     await openDashboardMore(page, "records");
     const grid = page.getByTestId("dashboard-service-records-grid");
     await expect(grid).toBeVisible({ timeout: 15_000 });
@@ -107,6 +108,7 @@ test.describe("Issue #147 · Ajustes en Ficha de servicio", () => {
     expect(deactivateRes.ok()).toBeTruthy();
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const dlg = await openNewFichaDialog(page);
     await dlg.getByLabel("Search or select client").fill(client.fullName.slice(0, 10));
     // Let the debounced search land before asserting the inactive client is absent.

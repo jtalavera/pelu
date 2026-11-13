@@ -8,14 +8,14 @@ import { openSummaryMore } from "../fixtures/ui";
  * (`/app`) onto their own screen (`/app/dashboards`), reached via a "Dashboards" nav item placed
  * right below "Agenda" in the sidebar.
  */
-test.describe("Summary screen (ex Dashboards)", () => {
-  test("the Summary nav item sits right below Calendar and opens the charts screen", async ({
+test.describe("Reports screen (ex Summary, ex Dashboards)", () => {
+  test("the Reports nav item sits right below Calendar and opens the charts screen", async ({
     page,
   }) => {
     await loginAsDemo(page);
 
     const calendarLink = page.getByRole("link", { name: "Agenda", exact: true });
-    const summaryLink = page.getByRole("link", { name: "Summary" });
+    const summaryLink = page.getByRole("link", { name: "Reports" });
     await expect(calendarLink).toBeVisible();
     await expect(summaryLink).toBeVisible();
 
@@ -30,7 +30,7 @@ test.describe("Summary screen (ex Dashboards)", () => {
 
     await summaryLink.click();
     await expect(page).toHaveURL(/\/app\/dashboards$/);
-    await expect(page.getByRole("heading", { name: "Summary" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
 
     // Redesign: period selector, headline figures and ONE main chart; the rest is folded.
     for (const days of [7, 30, 90]) {

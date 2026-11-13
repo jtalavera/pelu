@@ -640,9 +640,7 @@ test.describe("Facturación rediseñada · historial", () => {
     await expect(row.locator("[data-invoice-state]")).toHaveAttribute("data-invoice-state", "issued");
     // The technical SIFEN badge is no longer part of the list (it stays in the invoice detail).
     await expect(row).not.toContainText("Pending verification");
-    // The list is the shared table (HU-74): one column for the single, plain-language state.
-    await expect(page.getByRole("columnheader", { name: "Status" })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "SIFEN status" })).toHaveCount(0);
+    await expect(page.getByRole("columnheader")).toHaveCount(0);
   });
 
   test("RD-18 el historial de cajas es accesible desde el panel de caja", async ({ page, request }) => {

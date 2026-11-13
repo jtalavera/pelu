@@ -134,6 +134,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     });
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const dialog = await openFichaDialog(page, client.fullName);
     const scrollContainer = dialog.locator(".overflow-y-auto");
 
@@ -176,7 +177,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     await openDashboardMore(page, "records");
     const grid = page.getByTestId("dashboard-service-records-grid");
     await expect(grid).toBeVisible({ timeout: 15_000 });
@@ -214,7 +215,7 @@ test.describe("Issue #135 · Ajustes varios v2", () => {
     });
 
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     await openDashboardMore(page, "records");
     const grid = page.getByTestId("dashboard-service-records-grid");
     await expect(grid).toBeVisible({ timeout: 15_000 });

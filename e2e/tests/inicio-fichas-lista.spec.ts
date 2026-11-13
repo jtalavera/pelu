@@ -31,6 +31,7 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     });
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const row = page.getByTestId("dashboard-service-record-card").filter({ hasText: "E2E Lista" }).first();
     await expect(row).toBeVisible({ timeout: 20_000 });
 
@@ -52,6 +53,7 @@ test.describe("Inicio · fichas de hoy en lista", () => {
 
   test("la lista termina con «+ Nueva ficha» y la cabecera la ofrece junto a «Nuevo turno»", async ({ page }) => {
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const header = page.getByTestId("dashboard-new-service-record");
     await expect(header).toBeVisible({ timeout: 20_000 });
     await expect(header).toHaveText("+ New service record");
@@ -83,6 +85,7 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     const token = await loginAsDemoApi(request);
     const seed = await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const row = page.getByTestId("dashboard-appointments-add-row");
     // With no turnos today the list is replaced by the empty state (its button opens the same form).
     const opener = (await row.count()) ? row : page.getByRole("button", { name: "New appointment" }).last();
@@ -136,6 +139,7 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     });
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     // The charged ficha waits in the folded «Cobradas y anuladas»: open it first.
     await revealFichaCard(page, client.fullName);
     const badge = page.getByTestId(`dashboard-service-record-invoice-${record.id}`);
@@ -153,6 +157,7 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     const token = await loginAsDemoApi(request);
     await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await page.getByTestId("dashboard-new-service-record").click({ timeout: 20_000 });
     const dialog = page.getByRole("dialog");
     await dialog.locator("#service-record-client-search").click();
@@ -186,6 +191,7 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     };
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const inicio = page.getByTestId(`dashboard-service-record-pay-${record.id}`);
     await expect(inicio).toBeVisible({ timeout: 20_000 });
     const inicioLook = await inicio.evaluate(look);
@@ -205,6 +211,7 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     const token = await loginAsDemoApi(request);
     await seedCategoryServiceProfessional(request, token);
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
 
     const history = page.getByTestId("dashboard-service-records-history-link");
     await expect(history).toBeVisible({ timeout: 20_000 });

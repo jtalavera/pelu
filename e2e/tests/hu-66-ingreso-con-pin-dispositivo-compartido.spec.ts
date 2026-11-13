@@ -476,7 +476,7 @@ test.describe("HU-66 · Ingreso con PIN en un dispositivo compartido", () => {
     await page.getByLabel("Password").fill(DEMO_PASSWORD);
     await page.getByRole("button", { name: /sign in/i }).click();
     await expect(page).toHaveURL(/\/app$/);
-    await expect(page.getByRole("link", { name: "Dashboard", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Today", exact: true })).toBeVisible();
     // A normal admin session: full menu, no "Cambiar de profesional".
     await expect(page.getByTestId("switch-professional")).toHaveCount(0);
     await page.getByRole("button", { name: /user menu/i }).click();

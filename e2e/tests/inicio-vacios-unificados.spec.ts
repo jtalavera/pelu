@@ -13,6 +13,7 @@ test.describe("Inicio · estados vacíos unificados", () => {
       route.fulfill({ json: { content: [], page: 0, size: 100, totalElements: 0, totalPages: 0 } }),
     );
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
 
     const turnos = page.getByTestId("dashboard-appointments-empty");
     const fichas = page.getByTestId("dashboard-service-records-empty");

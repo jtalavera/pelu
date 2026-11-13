@@ -61,7 +61,7 @@ export default function InactiveClientsPage() {
       <Button
         type="button"
         variant="ghost"
-        onClick={() => navigate("/app")}
+        onClick={() => navigate("/app/hoy")}
         className="self-start"
       >
         ← {t("femme.inactiveClients.backToDashboard")}

@@ -57,6 +57,7 @@ test.describe("Inicio · listas del panel", () => {
     }
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const cards = page.getByTestId("dashboard-service-record-card");
     // The open one is on view with no click; the voided ones are not listed yet.
     await expect(cards.filter({ hasText: openClient.fullName })).toBeVisible({ timeout: 20_000 });
@@ -101,6 +102,7 @@ test.describe("Inicio · listas del panel", () => {
     expect(res.ok(), await res.text()).toBeTruthy();
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await expect(page.getByTestId("dashboard-service-records-closed-toggle")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("dashboard-service-records-closed-toggle")).toHaveAttribute("aria-expanded", "false");
 
@@ -162,6 +164,7 @@ test.describe("Inicio · listas del panel", () => {
     });
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const rows = page.getByTestId("dashboard-appointment-row");
     const pendingRow = rows.filter({ hasText: pending.client.fullName.toUpperCase() });
     const unchargedRow = rows.filter({ hasText: uncharged.client.fullName.toUpperCase() });
@@ -206,6 +209,7 @@ test.describe("Inicio · listas del panel", () => {
     });
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await expect(page.getByTestId("dashboard-appointments-charged-toggle")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("dashboard-appointments-charged-toggle")).toHaveAttribute("aria-expanded", "false");
     await page.locator("#dashboard-appt-filter").fill(client.fullName.slice(0, 12));

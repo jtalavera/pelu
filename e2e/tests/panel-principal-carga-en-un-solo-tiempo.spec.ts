@@ -11,6 +11,7 @@ test.describe("Panel principal · carga en un solo tiempo", () => {
     // Log in first (the helper waits for the page itself), then hold the agenda and the fichas
     // requests and reload: nothing of the page may show up on its own.
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -24,7 +25,7 @@ test.describe("Panel principal · carga en un solo tiempo", () => {
       await route.continue();
     });
 
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     await expect(page.getByTestId("dashboard-loading")).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(700);
     await expect(page.getByTestId("dashboard-summary")).toBeHidden();

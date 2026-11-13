@@ -9,6 +9,7 @@ import { loginAsDemo } from "../fixtures/auth";
 test.describe("Inicio · scroll tras abrir y cerrar popups", () => {
   test("el body no queda bloqueado después de abrir y cerrar «Nueva ficha» y «Nuevo turno»", async ({ page }) => {
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const overflow = () => page.evaluate(() => document.body.style.overflow);
 
     const newRecord = page.getByTestId("dashboard-new-service-record");

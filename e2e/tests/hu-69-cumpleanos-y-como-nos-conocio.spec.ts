@@ -198,7 +198,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
     expect(deact.ok()).toBeTruthy();
 
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     await openDashboardMore(page, "birthdays");
     const card = page.getByTestId("dashboard-birthdays");
     const todayList = card.getByTestId("dashboard-birthdays-today");
@@ -235,7 +235,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
       route.fulfill({ json: { today: [], upcoming: [], upcomingDays: 7 } }),
     );
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     await openDashboardMore(page, "birthdays");
     await expect(page.getByTestId("dashboard-birthdays")).toContainText(
       "No birthdays in the next 7 days.",
@@ -278,6 +278,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
 
     // Admin.
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await openWeekWithAppointment(page, withBirthday.id);
     const badge = page.getByTestId(`birthday-badge-${withBirthday.id}`);
     await expect(badge).toBeVisible();
@@ -288,6 +289,7 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
     await page.context().clearCookies();
     await page.evaluate(() => sessionStorage.clear());
     await loginAs(page, pro.email, PASSWORD);
+    await page.goto("/app/hoy");
     await openWeekWithAppointment(page, withBirthday.id);
     await expect(page.getByTestId(`birthday-badge-${withBirthday.id}`)).toBeVisible();
     await page.getByTestId(`calendar-appt-${withBirthday.id}`).click();

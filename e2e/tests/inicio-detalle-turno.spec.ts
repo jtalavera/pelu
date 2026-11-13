@@ -37,6 +37,7 @@ test.describe("Inicio · detalle del turno en el lugar", () => {
   }) => {
     const { token, clientName, turnoId } = await seedTodayTurno(request);
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: new RegExp(clientName, "i") });
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.locator("button").first().click();
@@ -62,6 +63,7 @@ test.describe("Inicio · detalle del turno en el lugar", () => {
   test("cancelar desde el detalle pide el motivo y el turno sale de la lista", async ({ page, request }) => {
     const { token, clientName, turnoId } = await seedTodayTurno(request);
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: new RegExp(clientName, "i") });
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.locator("button").first().click();

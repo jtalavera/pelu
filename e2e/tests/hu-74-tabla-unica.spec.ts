@@ -9,9 +9,9 @@ import {
   setTenantFeatureFlag,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { goToBillingHome, goToInvoiceHistory } from "../fixtures/billing";
+import { goToBillingHome } from "../fixtures/billing";
 
-// HU-74 · Una sola tabla para todo el sistema (look de Propinas): Hoy, Historial y Propinas usan el
+// HU-74 · Una sola tabla para todo el sistema (look de Propinas): Hoy y Propinas usan el
 // mismo componente `DataTable`; aquí se comprueba que se ven y se comportan igual.
 
 const DEMO_TENANT_ID = 1;
@@ -89,7 +89,7 @@ test.describe("HU-74 · Una sola tabla para todo el sistema", () => {
     await expect(page.getByTestId(`billing-today-row-${invoiceId}`)).toBeVisible({ timeout: 30_000 });
   }
 
-  test("AC1 · Hoy, Historial y Propinas tienen el mismo encabezado, alto de fila y ⋮", async ({ page }) => {
+  test("AC1 · Hoy y Propinas tienen el mismo encabezado, alto de fila y ⋮", async ({ page }) => {
     test.setTimeout(120_000);
     await openToday(page);
     const today = page.locator("table[data-testid=billing-today-table]");
@@ -100,12 +100,6 @@ test.describe("HU-74 · Una sola tabla para todo el sistema", () => {
     const todayMenu = page.getByTestId(`billing-today-menu-${invoiceId}-trigger`);
     await expect(todayMenu).toHaveClass(/border-transparent/);
     await expect(todayMenu.locator("svg circle")).toHaveCount(3);
-
-    await goToInvoiceHistory(page);
-    const history = page.locator("table[data-testid=invoice-history-list]");
-    await expect(history).toBeVisible({ timeout: 30_000 });
-    expect(await headerLook(history)).toEqual(todayLook);
-    expect(await firstRowHeight(history)).toBeGreaterThanOrEqual(44);
 
     await page.goto("/app/propinas");
     const propinas = page.getByTestId("propinas-table");
@@ -134,16 +128,12 @@ test.describe("HU-74 · Una sola tabla para todo el sistema", () => {
     await expect(page.getByRole("dialog")).toBeVisible();
   });
 
-  test("AC4 · en el celular Hoy, Historial y Propinas se muestran como tarjetas", async ({ page }) => {
+  test("AC4 · en el celular Hoy y Propinas se muestran como tarjetas", async ({ page }) => {
     test.setTimeout(120_000);
     await page.setViewportSize({ width: 375, height: 800 });
     await openToday(page);
     await expect(page.locator("table[data-testid=billing-today-table]")).toHaveCount(0);
     await expect(page.getByTestId(`billing-today-menu-${invoiceId}-trigger`)).toBeVisible();
-
-    await goToInvoiceHistory(page);
-    await expect(page.getByTestId("invoice-history-list")).toBeVisible({ timeout: 30_000 });
-    await expect(page.locator("table[data-testid=invoice-history-list]")).toHaveCount(0);
 
     await page.goto("/app/propinas");
     await expect(page.getByTestId("propinas-movements-cards")).toBeVisible({ timeout: 20_000 });
