@@ -234,27 +234,28 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await openToday(page);
     await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
 
-    const trigger = page.getByTestId(`billing-today-menu-${inv.id}`);
+    const trigger = page.getByTestId(`billing-today-menu-${inv.id}-trigger`);
     await expect(trigger).toHaveAccessibleName("More actions");
-    // Three VERTICAL dots (⋮), not the horizontal «⋯».
-    await expect(trigger.locator('svg[data-icon="dots-vertical"] circle')).toHaveCount(3);
+    // Three VERTICAL dots (⋮), borderless: the same KebabMenu as the rows of the Propinas screen.
+    await expect(trigger.locator("svg circle")).toHaveCount(3);
+    await expect(trigger).toHaveClass(/border-transparent/);
     await expect(trigger).not.toContainText("⋯");
     const box = await trigger.boundingBox();
     expect(box!.width).toBeGreaterThanOrEqual(44);
     expect(box!.height).toBeGreaterThanOrEqual(44);
 
     await trigger.click();
-    const menu = page.getByTestId(`billing-today-menu-panel-${inv.id}`);
+    const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
-    await expect(page.getByTestId(`billing-today-menu-whatsapp-${inv.id}`)).toHaveText(/Send by WhatsApp/);
-    await expect(page.getByTestId(`billing-today-menu-email-${inv.id}`)).toHaveText(/Send by email/);
-    await expect(page.getByTestId(`billing-today-menu-email-${inv.id}`)).toHaveText(/Check the email before sending/);
-    await expect(page.getByTestId(`billing-today-menu-download-${inv.id}`)).toHaveText(/Download KuDE \(PDF\)/);
-    await expect(page.getByTestId(`billing-today-menu-detail-${inv.id}`)).toHaveText(/View details/);
+    await expect(page.getByTestId(`billing-today-menu-${inv.id}-item-whatsapp`)).toHaveText(/Send by WhatsApp/);
+    await expect(page.getByTestId(`billing-today-menu-${inv.id}-item-email`)).toHaveText(/Send by email/);
+    await expect(page.getByTestId(`billing-today-menu-${inv.id}-item-email`)).toHaveText(/Check the email before sending/);
+    await expect(page.getByTestId(`billing-today-menu-${inv.id}-item-download`)).toHaveText(/Download KuDE \(PDF\)/);
+    await expect(page.getByTestId(`billing-today-menu-${inv.id}-item-detail`)).toHaveText(/View details/);
     // Opening the menu did not open the row's detail.
     await expect(page.getByRole("dialog")).toHaveCount(0);
 
-    await page.getByTestId(`billing-today-menu-detail-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-item-detail`).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText(inv.invoiceNumberFormatted);
@@ -272,21 +273,21 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await expect(todayRow(page, rejected.id)).toBeVisible({ timeout: 30_000 });
 
     for (const inv of [approved, inProcess]) {
-      await page.getByTestId(`billing-today-menu-${inv.id}`).click();
+      await page.getByTestId(`billing-today-menu-${inv.id}-trigger`).click();
       for (const action of ["whatsapp", "email", "download"]) {
-        await expect(page.getByTestId(`billing-today-menu-${action}-${inv.id}`)).toBeEnabled();
+        await expect(page.getByTestId(`billing-today-menu-${inv.id}-item-${action}`)).toBeEnabled();
       }
       await page.keyboard.press("Escape");
-      await expect(page.getByTestId(`billing-today-menu-panel-${inv.id}`)).toHaveCount(0);
+      await expect(page.getByRole("menu")).toHaveCount(0);
     }
 
-    await page.getByTestId(`billing-today-menu-${rejected.id}`).click();
+    await page.getByTestId(`billing-today-menu-${rejected.id}-trigger`).click();
     for (const action of ["whatsapp", "email", "download"]) {
-      const item = page.getByTestId(`billing-today-menu-${action}-${rejected.id}`);
+      const item = page.getByTestId(`billing-today-menu-${rejected.id}-item-${action}`);
       await expect(item).toBeDisabled();
       await expect(item).toContainText("Not available: no approved KuDE");
     }
-    await expect(page.getByTestId(`billing-today-menu-detail-${rejected.id}`)).toBeEnabled();
+    await expect(page.getByTestId(`billing-today-menu-${rejected.id}-item-detail`)).toBeEnabled();
   });
 
   test("AC7 · «Descargar KuDE» descarga el PDF del comprobante de esa fila", async ({ page, request }) => {
@@ -295,20 +296,20 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await openToday(page);
     await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
 
-    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-trigger`).click();
     const [download, kudeResponse] = await Promise.all([
       page.waitForEvent("download"),
       page.waitForResponse(
         (r) => r.url().includes(`/api/invoices/${inv.id}/sifen/kude`) && r.request().method() === "GET",
       ),
-      page.getByTestId(`billing-today-menu-download-${inv.id}`).click(),
+      page.getByTestId(`billing-today-menu-${inv.id}-item-download`).click(),
     ]);
     expect(kudeResponse.ok(), await kudeResponse.text()).toBeTruthy();
     expect(download.suggestedFilename()).toMatch(/^KUDE-.*\.pdf$/);
     // Picking an option closes the menu and does not open the detail.
-    await expect(page.getByTestId(`billing-today-menu-panel-${inv.id}`)).toHaveCount(0);
+    await expect(page.getByRole("menu")).toHaveCount(0);
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(page.getByTestId(`billing-today-menu-${inv.id}`)).toBeEnabled();
+    await expect(page.getByTestId(`billing-today-menu-${inv.id}-trigger`)).toBeEnabled();
   });
 
   test("AC8 · «Enviar por correo» abre un diálogo con el correo del cliente precargado y no envía hasta confirmar", async ({
@@ -327,8 +328,8 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
       sent += 1;
       return route.continue();
     });
-    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
-    await page.getByTestId(`billing-today-menu-email-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-trigger`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-item-email`).click();
 
     const dialog = page.getByTestId("kude-email-dialog");
     await expect(dialog).toBeVisible();
@@ -338,7 +339,7 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await expect(page.getByTestId("kude-email-input")).toHaveValue("cliente-hu72@example.com");
     await expect(page.getByTestId("kude-email-hint")).toContainText("email on file for the client");
     // The menu closed and the row's detail did not open behind the dialog.
-    await expect(page.getByTestId(`billing-today-menu-panel-${inv.id}`)).toHaveCount(0);
+    await expect(page.getByRole("menu")).toHaveCount(0);
     expect(sent).toBe(0);
 
     // «Cancel» closes it without sending anything.
@@ -359,8 +360,8 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await openToday(page);
     await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
 
-    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
-    await page.getByTestId(`billing-today-menu-email-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-trigger`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-item-email`).click();
     await page.getByTestId("kude-email-input").fill("otro-correo@example.com");
     const [emailResponse] = await Promise.all([
       page.waitForResponse(
@@ -390,8 +391,8 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
       sent += 1;
       return route.continue();
     });
-    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
-    await page.getByTestId(`billing-today-menu-email-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-trigger`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-item-email`).click();
     const input = page.getByTestId("kude-email-input");
     await expect(input).toHaveValue("");
     await expect(page.getByTestId("kude-email-hint")).toContainText("no email on file");
@@ -433,8 +434,8 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await page.route(`**/api/invoices/${inv.id}/sifen/kude/email`, (route) =>
       route.fulfill({ status: 500, contentType: "application/json", body: '{"error":"EMAIL_FAILED"}' }),
     );
-    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
-    await page.getByTestId(`billing-today-menu-email-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-trigger`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-item-email`).click();
     await page.getByTestId("kude-email-send").click();
 
     await expect(page.getByTestId("kude-email-error")).toBeVisible();
@@ -457,8 +458,8 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
 
     // Success notice (email sent).
-    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
-    await page.getByTestId(`billing-today-menu-email-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-trigger`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-item-email`).click();
     await page.getByTestId("kude-email-send").click();
     const notice = page.getByTestId("billing-today-notice");
     await expect(notice).toContainText("KuDE sent by email.");
@@ -473,8 +474,8 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await page.route(`**/api/invoices/${inv.id}/sifen/kude`, (route) =>
       route.fulfill({ status: 500, contentType: "application/json", body: '{"error":"KUDE_FAILED"}' }),
     );
-    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
-    await page.getByTestId(`billing-today-menu-download-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-trigger`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-item-download`).click();
     await expect(notice).toBeVisible();
     await notice.getByTestId("alert-close").click();
     await expect(notice).toHaveCount(0);
@@ -501,10 +502,10 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await openToday(page);
     await expect(todayRow(page, inv.id)).toBeVisible({ timeout: 30_000 });
 
-    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-trigger`).click();
     const [download] = await Promise.all([
       page.waitForEvent("download"),
-      page.getByTestId(`billing-today-menu-whatsapp-${inv.id}`).click(),
+      page.getByTestId(`billing-today-menu-${inv.id}-item-whatsapp`).click(),
     ]);
     expect(download.suggestedFilename()).toMatch(/^KUDE-.*\.pdf$/);
 
@@ -536,11 +537,11 @@ test.describe("HU-72 · Comprobantes de hoy: actualizar, fecha y hora y comparti
     await page.route(`**/api/invoices/${inv.id}/sifen/kude`, (route) =>
       route.fulfill({ status: 500, contentType: "application/json", body: '{"error":"KUDE_FAILED"}' }),
     );
-    await page.getByTestId(`billing-today-menu-${inv.id}`).click();
-    await page.getByTestId(`billing-today-menu-download-${inv.id}`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-trigger`).click();
+    await page.getByTestId(`billing-today-menu-${inv.id}-item-download`).click();
 
     await expect(page.getByTestId("billing-today-notice")).toBeVisible();
-    await expect(page.getByTestId(`billing-today-menu-${inv.id}`)).toBeEnabled();
+    await expect(page.getByTestId(`billing-today-menu-${inv.id}-trigger`)).toBeEnabled();
     await page.unroute(`**/api/invoices/${inv.id}/sifen/kude`);
   });
 });

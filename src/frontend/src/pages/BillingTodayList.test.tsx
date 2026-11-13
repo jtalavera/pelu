@@ -231,12 +231,12 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
   describe("row menu «Más acciones»", () => {
     it("offers WhatsApp, email, KuDE download and view details for an approved invoice", async () => {
       await renderHome();
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
 
-      const whatsapp = (await screen.findByTestId("billing-today-menu-whatsapp-1")) as HTMLButtonElement;
-      const email = screen.getByTestId("billing-today-menu-email-1") as HTMLButtonElement;
-      const download = screen.getByTestId("billing-today-menu-download-1") as HTMLButtonElement;
-      const detail = screen.getByTestId("billing-today-menu-detail-1") as HTMLButtonElement;
+      const whatsapp = (await screen.findByTestId("billing-today-menu-1-item-whatsapp")) as HTMLButtonElement;
+      const email = screen.getByTestId("billing-today-menu-1-item-email") as HTMLButtonElement;
+      const download = screen.getByTestId("billing-today-menu-1-item-download") as HTMLButtonElement;
+      const detail = screen.getByTestId("billing-today-menu-1-item-detail") as HTMLButtonElement;
       expect(whatsapp.textContent).toMatch(/Send by WhatsApp/);
       expect(email.textContent).toMatch(/Send by email/);
       expect(email.textContent).toMatch(/Check the email before sending/);
@@ -247,61 +247,62 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
 
     it("keeps the KuDE actions enabled while SIFEN is still validating", async () => {
       await renderHome();
-      fireEvent.click(screen.getByTestId("billing-today-menu-2"));
-      expect(((await screen.findByTestId("billing-today-menu-download-2")) as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(screen.getByTestId("billing-today-menu-2-trigger"));
+      expect(((await screen.findByTestId("billing-today-menu-2-item-download")) as HTMLButtonElement).disabled).toBe(false);
     });
 
     it("disables the KuDE actions, with a hint, when SIFEN rejected the invoice; view details stays available", async () => {
       await renderHome();
-      fireEvent.click(screen.getByTestId("billing-today-menu-3"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-3-trigger"));
 
       for (const id of ["whatsapp", "email", "download"]) {
-        const item = (await screen.findByTestId(`billing-today-menu-${id}-3`)) as HTMLButtonElement;
+        const item = (await screen.findByTestId(`billing-today-menu-3-item-${id}`)) as HTMLButtonElement;
         expect(item.disabled).toBe(true);
         expect(item.textContent).toMatch(/Not available: no approved KuDE/);
       }
-      expect((screen.getByTestId("billing-today-menu-detail-3") as HTMLButtonElement).disabled).toBe(false);
+      expect((screen.getByTestId("billing-today-menu-3-item-detail") as HTMLButtonElement).disabled).toBe(false);
     });
 
     it("opening the menu does not open the invoice detail, and «View details» does", async () => {
       await renderHome();
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
-      await screen.findByTestId("billing-today-menu-detail-1");
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
+      await screen.findByTestId("billing-today-menu-1-item-detail");
       expect(screen.queryByTestId("detail-stub")).toBeNull();
 
-      fireEvent.click(screen.getByTestId("billing-today-menu-detail-1"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-item-detail"));
       expect((await screen.findByTestId("detail-stub")).textContent).toMatch(/detail-1/);
     });
 
     it("«Descargar KuDE» downloads the KuDE of that invoice", async () => {
       await renderHome();
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
-      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-1-item-download"));
 
       await waitFor(() => expect(downloadSifenKude).toHaveBeenCalledWith(1));
       // Picking an option closes the menu, and it must not open the detail either.
-      expect(screen.queryByTestId("billing-today-menu-panel-1")).toBeNull();
+      expect(screen.queryByRole("menu")).toBeNull();
       expect(screen.queryByTestId("detail-stub")).toBeNull();
     });
 
-    it("the row's menu button is the vertical «⋮»", async () => {
+    it("the row's menu button is the same borderless vertical «⋮» as the Propinas rows (KebabMenu)", async () => {
       await renderHome();
-      const trigger = screen.getByTestId("billing-today-menu-1");
-      expect(trigger.querySelector('svg[data-icon="dots-vertical"]')).not.toBeNull();
+      const trigger = screen.getByTestId("billing-today-menu-1-trigger");
+      expect(trigger.querySelectorAll("svg circle")).toHaveLength(3);
+      expect(trigger.className).toContain("border-transparent");
       expect(trigger.textContent).not.toMatch(/⋯/);
     });
 
     it("«Enviar por WhatsApp» reads the invoice (for the client's phone) and hands it to the WhatsApp flow", async () => {
       await renderHome();
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
-      fireEvent.click(await screen.findByTestId("billing-today-menu-whatsapp-1"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-1-item-whatsapp"));
 
       await waitFor(() => expect(sendKudeByWhatsapp).toHaveBeenCalledTimes(1));
       expect(sendKudeByWhatsapp.mock.calls[0][0]).toEqual(detailOfApproved);
       expect(femmeJson.mock.calls.some((c) => c[0] === "/api/invoices/1")).toBe(true);
     });
 
-    it("disables the row's menu button while the KuDE is being prepared", async () => {
+    it("disables the KuDE options of the row while its KuDE is being prepared", async () => {
       await renderHome();
       let finish: () => void = () => undefined;
       downloadSifenKude.mockImplementation(
@@ -310,30 +311,39 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
             finish = resolve;
           }),
       );
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
-      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-1-item-download"));
 
+      // Re-open that row's menu: its KuDE options wait, «Ver detalle» stays available.
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
       await waitFor(() =>
-        expect((screen.getByTestId("billing-today-menu-1") as HTMLButtonElement).disabled).toBe(true),
+        expect((screen.getByTestId("billing-today-menu-1-item-download") as HTMLButtonElement).disabled).toBe(true),
       );
+      expect((screen.getByTestId("billing-today-menu-1-item-email") as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByTestId("billing-today-menu-1-item-detail") as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.mouseDown(document.body);
+
       // Only that row: the others stay usable.
-      expect((screen.getByTestId("billing-today-menu-2") as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.click(screen.getByTestId("billing-today-menu-2-trigger"));
+      expect((await screen.findByTestId("billing-today-menu-2-item-download") as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.mouseDown(document.body);
 
       await act(async () => finish());
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
       await waitFor(() =>
-        expect((screen.getByTestId("billing-today-menu-1") as HTMLButtonElement).disabled).toBe(false),
+        expect((screen.getByTestId("billing-today-menu-1-item-download") as HTMLButtonElement).disabled).toBe(false),
       );
     });
 
     it("shows an error notice above the list when the KuDE action fails", async () => {
       await renderHome();
       downloadSifenKude.mockRejectedValue(new Error("boom"));
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
-      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-1-item-download"));
 
       const notice = await screen.findByTestId("billing-today-notice");
       expect(notice.textContent).toMatch(/unexpected error/i);
-      expect((screen.getByTestId("billing-today-menu-1") as HTMLButtonElement).disabled).toBe(false);
+      expect((screen.getByTestId("billing-today-menu-1-trigger") as HTMLButtonElement).disabled).toBe(false);
     });
   });
 
@@ -347,8 +357,8 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
 
     async function openEmailDialog() {
       await renderHome();
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
-      fireEvent.click(await screen.findByTestId("billing-today-menu-email-1"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-1-item-email"));
       return screen.findByTestId("kude-email-dialog");
     }
 
@@ -362,7 +372,7 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
       expect(within(dialog).getByTestId("kude-email-hint").textContent).toMatch(/email on file for the client/);
       expect(sendSifenKudeByEmail).not.toHaveBeenCalled();
       // The menu is closed and the detail did not open behind it.
-      expect(screen.queryByTestId("billing-today-menu-panel-1")).toBeNull();
+      expect(screen.queryByRole("menu")).toBeNull();
       expect(screen.queryByTestId("detail-stub")).toBeNull();
     });
 
@@ -450,8 +460,8 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
   describe("the notices above the list can be closed with a «×»", () => {
     it("closes a success notice", async () => {
       await renderHome();
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
-      fireEvent.click(await screen.findByTestId("billing-today-menu-email-1"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-1-item-email"));
       const dialog = await screen.findByTestId("kude-email-dialog");
       await within(dialog).findByDisplayValue("maria@example.com");
       fireEvent.click(within(dialog).getByTestId("kude-email-send"));
@@ -466,8 +476,8 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
     it("closes an error notice too (here, from a failed download)", async () => {
       downloadSifenKude.mockRejectedValue(new Error("boom"));
       await renderHome();
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
-      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-1-item-download"));
       expect((await screen.findByTestId("billing-today-notice")).textContent).toMatch(/unexpected error/i);
 
       fireEvent.click(within(screen.getByTestId("billing-today-notice")).getByTestId("alert-close"));
@@ -477,12 +487,12 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
     it("starting a new action clears the previous notice by itself", async () => {
       downloadSifenKude.mockRejectedValueOnce(new Error("boom")).mockResolvedValue(undefined);
       await renderHome();
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
-      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-1-item-download"));
       await screen.findByTestId("billing-today-notice");
 
-      fireEvent.click(screen.getByTestId("billing-today-menu-1"));
-      fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
+      fireEvent.click(screen.getByTestId("billing-today-menu-1-trigger"));
+      fireEvent.click(await screen.findByTestId("billing-today-menu-1-item-download"));
       await waitFor(() => expect(downloadSifenKude).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(screen.queryByTestId("billing-today-notice")).toBeNull());
     });

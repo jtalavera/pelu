@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -6,6 +6,8 @@ import {
   Card,
   Heading,
   Input,
+  KebabMenu,
+  type KebabMenuItem,
   Label,
   Modal,
   PageSizeSelect,
@@ -34,7 +36,6 @@ import { SendKudeEmailDialog } from "../../components/invoice/SendKudeEmailDialo
 import { InvoiceCorrectionForm } from "../../components/InvoiceCorrectionForm";
 import { InvoiceDetailModal, type InvoiceDetail } from "../../components/InvoiceDetailModal";
 import { InvoiceStatePill, deriveInvoiceState } from "../../components/InvoiceStatePill";
-import { MoreActionsMenu, type MoreActionsItem } from "../../components/MoreActionsMenu";
 import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../../hooks/useSifenStatusLiveRefresh";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
@@ -222,8 +223,7 @@ export function BillingHome({
   const [todayRefreshing, setTodayRefreshing] = useState(false);
   // When the list was last read from the server (any reload: first load, manual, live or on closing a detail).
   const [todayUpdatedAt, setTodayUpdatedAt] = useState<Date | null>(null);
-  // «Más acciones» of a row: which row's menu is open, which row is preparing a KuDE, and the outcome.
-  const [rowMenuOpenId, setRowMenuOpenId] = useState<number | null>(null);
+  // «Más acciones» of a row: which row is preparing a KuDE (its KuDE actions wait until it is done).
   const [kudeBusyId, setKudeBusyId] = useState<number | null>(null);
   // «Enviar por correo»: the row whose KuDE is being sent (the dialog lets the user check the address).
   const [emailTarget, setEmailTarget] = useState<InvoiceListItem | null>(null);
@@ -288,26 +288,39 @@ export function BillingHome({
     }
   }
 
-  function rowMenuItems(inv: InvoiceListItem): MoreActionsItem[] {
+  /** An option label with its optional second line (why it is not available, what it does). */
+  function menuLabel(text: string, hint?: string): ReactNode {
+    if (!hint) return text;
+    return (
+      <>
+        {text}
+        <span className="block text-xs font-normal text-ink-3">{hint}</span>
+      </>
+    );
+  }
+
+  /** Same menu as the rows of the Propinas screen (design-system KebabMenu: ⋮, no border). */
+  function rowMenuItems(inv: InvoiceListItem): KebabMenuItem[] {
     const shareable = isKudeShareable(inv);
     const unavailable = shareable ? undefined : t("femme.billing.home.rowMenu.kudeUnavailable");
+    // While this row prepares a KuDE its KuDE actions wait, so the same send cannot be started twice.
+    const kudeDisabled = !shareable || kudeBusyId === inv.id;
     return [
       {
         id: "whatsapp",
-        label: t("femme.billing.history.detail.sifen.kudeWhatsappButton"),
+        label: menuLabel(t("femme.billing.history.detail.sifen.kudeWhatsappButton"), unavailable),
         icon: <ActionIcon name="whatsapp" />,
-        disabled: !shareable,
-        hint: unavailable,
-        testId: `billing-today-menu-whatsapp-${inv.id}`,
+        disabled: kudeDisabled,
         onSelect: () => void runKudeAction(inv, "whatsapp"),
       },
       {
         id: "email",
-        label: t("femme.billing.home.rowMenu.email"),
+        label: menuLabel(
+          t("femme.billing.home.rowMenu.email"),
+          unavailable ?? t("femme.billing.home.rowMenu.emailHint"),
+        ),
         icon: <ActionIcon name="mail" />,
-        disabled: !shareable,
-        hint: unavailable ?? t("femme.billing.home.rowMenu.emailHint"),
-        testId: `billing-today-menu-email-${inv.id}`,
+        disabled: kudeDisabled,
         onSelect: () => {
           setTodayNotice(null);
           setEmailTarget(inv);
@@ -315,18 +328,15 @@ export function BillingHome({
       },
       {
         id: "download",
-        label: t("femme.billing.history.detail.sifen.kudeDownloadButton"),
+        label: menuLabel(t("femme.billing.history.detail.sifen.kudeDownloadButton"), unavailable),
         icon: <ActionIcon name="download" />,
-        disabled: !shareable,
-        hint: unavailable,
-        testId: `billing-today-menu-download-${inv.id}`,
+        disabled: kudeDisabled,
         onSelect: () => void runKudeAction(inv, "download"),
       },
       {
         id: "detail",
         label: t("femme.billing.home.rowMenu.viewDetail"),
         icon: <ActionIcon name="file" />,
-        testId: `billing-today-menu-detail-${inv.id}`,
         onSelect: () => setSelectedInvoiceId(inv.id),
       },
     ];
@@ -563,15 +573,9 @@ export function BillingHome({
                               className="col-start-3 row-span-2 row-start-1"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <MoreActionsMenu
-                                compact
-                                triggerIcon="vertical"
-                                label={t("femme.billing.history.detail.moreActions")}
-                                open={rowMenuOpenId === inv.id}
-                                onOpenChange={(o) => setRowMenuOpenId(o ? inv.id : null)}
-                                triggerTestId={`billing-today-menu-${inv.id}`}
-                                menuTestId={`billing-today-menu-panel-${inv.id}`}
-                                disabled={kudeBusyId === inv.id}
+                              <KebabMenu
+                                id={`billing-today-menu-${inv.id}`}
+                                triggerAriaLabel={t("femme.billing.history.detail.moreActions")}
                                 items={rowMenuItems(inv)}
                               />
                             </span>
