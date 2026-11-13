@@ -29,11 +29,22 @@ vi.mock("../lib/invoiceKudeShare", async () => {
 });
 // The detail dialog is its own feature: here it only matters when it opens and closes.
 vi.mock("../components/InvoiceDetailModal", () => ({
-  InvoiceDetailModal: ({ invoiceId, onClose }: { invoiceId: number; onClose: () => void }) => (
+  InvoiceDetailModal: ({
+    invoiceId,
+    onClose,
+    onTipsChanged,
+  }: {
+    invoiceId: number;
+    onClose: () => void;
+    onTipsChanged?: () => void;
+  }) => (
     <div role="dialog" data-testid="detail-stub">
       <span>detail-{invoiceId}</span>
       <button type="button" onClick={onClose}>
         close-detail
+      </button>
+      <button type="button" onClick={onTipsChanged}>
+        tips-changed
       </button>
     </div>
   ),
@@ -485,6 +496,33 @@ describe("Billing home · Comprobantes de hoy: refresh, issue time and row menu"
       fireEvent.click(await screen.findByTestId("billing-today-menu-download-1"));
       await waitFor(() => expect(downloadSifenKude).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(screen.queryByTestId("billing-today-notice")).toBeNull());
+    });
+  });
+
+  describe("the cash register follows the tips registered from an invoice detail (HU-73)", () => {
+    const sessionDetailCalls = () =>
+      femmeJson.mock.calls.filter((c) => String(c[0]) === "/api/cash-sessions/1").length;
+
+    it("reloads the register's figures right away when tips change in the detail, before anyone opens it", async () => {
+      await renderHome();
+      await waitFor(() => expect(sessionDetailCalls()).toBeGreaterThan(0));
+      fireEvent.click(screen.getByTestId("billing-today-row-1"));
+      await screen.findByTestId("detail-stub");
+      const before = sessionDetailCalls();
+
+      fireEvent.click(screen.getByText("tips-changed"));
+
+      await waitFor(() => expect(sessionDetailCalls()).toBe(before + 1));
+    });
+
+    it("re-reads the register every time its panel is opened, so nothing registered meanwhile is missing", async () => {
+      await renderHome();
+      await waitFor(() => expect(sessionDetailCalls()).toBeGreaterThan(0));
+      const before = sessionDetailCalls();
+
+      fireEvent.click(await screen.findByTestId("billing-cash-chip"));
+
+      await waitFor(() => expect(sessionDetailCalls()).toBe(before + 1));
     });
   });
 });

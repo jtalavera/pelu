@@ -191,7 +191,15 @@ function ListFooter({
   );
 }
 
-function InvoiceListView({ refreshTrigger, isActive }: { refreshTrigger: number; isActive: boolean }) {
+function InvoiceListView({
+  refreshTrigger,
+  isActive,
+  onTipsChanged,
+}: {
+  refreshTrigger: number;
+  isActive: boolean;
+  onTipsChanged?: () => void;
+}) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const [invoicePage, setInvoicePage] = useState<PagedInvoicesResponse | null>(null);
@@ -627,6 +635,7 @@ function InvoiceListView({ refreshTrigger, isActive }: { refreshTrigger: number;
       {selectedInvoiceId !== null && (
         <InvoiceDetailModal
           invoiceId={selectedInvoiceId}
+          onTipsChanged={onTipsChanged}
           onClose={() => setSelectedInvoiceId(null)}
           onVoided={() => {
             setSelectedInvoiceId(null);
@@ -909,6 +918,7 @@ export function BillingHistory({
   invoicesRefresh,
   cashRefresh,
   isActive,
+  onTipsChanged,
 }: {
   view: HistoryView;
   onViewChange: (v: HistoryView) => void;
@@ -916,6 +926,8 @@ export function BillingHistory({
   invoicesRefresh: number;
   cashRefresh: number;
   isActive: boolean;
+  /** HU-73: tips registered/voided from an invoice detail (they move the cash register). */
+  onTipsChanged?: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -947,7 +959,7 @@ export function BillingHistory({
         ))}
       </div>
       {view === "invoices" ? (
-        <InvoiceListView refreshTrigger={invoicesRefresh} isActive={isActive} />
+        <InvoiceListView refreshTrigger={invoicesRefresh} isActive={isActive} onTipsChanged={onTipsChanged} />
       ) : (
         <CashListView refreshTrigger={cashRefresh} />
       )}

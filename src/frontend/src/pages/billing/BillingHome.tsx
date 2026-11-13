@@ -120,6 +120,9 @@ export function BillingHome({
   }, [loadLiveDetail, refreshTrigger]);
 
   function openPanel() {
+    // Whatever happened since the last read (tips registered from an invoice detail, invoices issued,
+    // withdrawals…) must be in what the register shows when it opens.
+    void loadLiveDetail();
     setPanelView("summary");
     setMovementSubmitError(null);
     setMovementSubmitSuccess(false);
@@ -949,6 +952,8 @@ export function BillingHome({
       {selectedInvoiceId !== null && (
         <InvoiceDetailModal
           invoiceId={selectedInvoiceId}
+          // Tips registered/voided from the detail move the cash register: reload it right away.
+          onTipsChanged={() => void loadLiveDetail()}
           onClose={() => {
             setSelectedInvoiceId(null);
             // The detail keeps its own copy and can change the invoice (live SIFEN status, check/cancel,

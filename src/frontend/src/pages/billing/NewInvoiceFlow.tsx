@@ -131,6 +131,7 @@ function emptyLine(): InvoiceLineForm {
 
 export function NewInvoiceFlow({
   onIssued,
+  onTipsChanged,
   onBack,
   initialClient,
   onInitialClientConsumed,
@@ -139,6 +140,8 @@ export function NewInvoiceFlow({
   resetKey,
 }: {
   onIssued: () => void;
+  /** HU-73: tips were registered or voided for the issued invoice (they move the cash register). */
+  onTipsChanged?: () => void;
   onBack: () => void;
   initialClient?: InitialClientForBilling | null;
   onInitialClientConsumed?: () => void;
@@ -1190,6 +1193,7 @@ export function NewInvoiceFlow({
               served={servedProfessionals(issuedInvoice.lines)}
               highlightPending
               onGoToCash={onBack}
+              onChanged={onTipsChanged}
             />
           )}
           <div className="flex flex-col gap-3">
@@ -1251,6 +1255,7 @@ export function NewInvoiceFlow({
         {showIssuedDetail && lastInvoiceId != null && (
           <InvoiceDetailModal
             invoiceId={lastInvoiceId}
+            onTipsChanged={onTipsChanged}
             onClose={() => {
               setShowIssuedDetail(false);
               refreshIssuedInvoice();

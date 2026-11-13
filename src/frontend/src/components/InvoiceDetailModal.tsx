@@ -267,6 +267,7 @@ export function InvoiceDetailModal({
   onClose,
   onVoided,
   onCorrected,
+  onTipsChanged,
   allowVoid = true,
 }: {
   invoiceId: number;
@@ -274,6 +275,11 @@ export function InvoiceDetailModal({
   onVoided?: () => void;
   /** Issue #175: called after a rejected invoice is corrected and re-queued. */
   onCorrected?: () => void;
+  /**
+   * HU-73: called after tips were registered or voided from this detail. They enter (or leave) the
+   * open cash register, so the screen showing the register must reload it.
+   */
+  onTipsChanged?: () => void;
   allowVoid?: boolean;
 }) {
   const { t } = useTranslation();
@@ -1840,6 +1846,7 @@ export function InvoiceDetailModal({
               invoiceId={invoice.id}
               served={servedProfessionals(invoice.lines)}
               onGoToCash={onClose}
+              onChanged={onTipsChanged}
             />
 
             {assignProfessionalsSuccess && (
