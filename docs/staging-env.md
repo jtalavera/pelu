@@ -314,8 +314,40 @@ Import (run from `up.sh`):
       (a configurable rate), since it calls the external `sifen-test` endpoint and every tenant
       shares Femme Coiffure's RUC and timbrado. Non-SIFEN tenants run the non-fiscal comprobante
       flow.
-- [ ] Runner: GH Actions `workflow_dispatch` (`loadtest.yml`) on a hosted runner. Azure Load
-      Testing is an option for higher volumes.
+- [ ] **Runner (decided): k6 on GitHub Actions**, in a new workflow `.github/workflows/loadtest.yml`.
+      - **Capacity is not the limit.** `jtalavera/pelu` is a public repo, so standard hosted
+        runners are free with unlimited minutes. Each is 4 vCPU / 16 GB, with a 6 h job limit and
+        20 concurrent jobs. One runner generates roughly 1,000–3,000 VUs against a REST API, far
+        more than staging can absorb: one 0.5 vCPU replica and a Basic 5-DTU DB will saturate
+        first. If more load is ever needed, split the test across a job matrix
+        (k6 `--execution-segment`). Azure Load Testing stays a fallback only.
+      - **Trigger and secrets.** `workflow_dispatch` only, never on push or PR, bound to the
+        `v2-staging` GitHub Environment with the owner as required reviewer. Forks and outside
+        PRs can't read environment secrets, so they can't fire a load test.
+      - Inputs:
+        - `ref`
+        - `bacpac` (to record N/M in the report)
+        - `vus` / `duration` or a ramp profile
+        - `sifen_rate`
+      - The staging API URL and test-user credentials come from `v2-staging` secrets
+        (`LOADTEST_BASE_URL`, `LOADTEST_USERS_JSON`). `up.sh` refreshes them on every recreate,
+        next to the other `v2-staging` secrets.
+      - **Public logs and artifacts.** Anyone can read the workflow logs of a public repo, and any
+        signed-in user can download its artifacts. So:
+        - everything sensitive goes through secrets, which GitHub masks in logs
+        - the scripts never log request or response bodies, tokens or user emails
+        - the job prints only the k6 summary
+        - the detailed report (k6 JSON/HTML) is uploaded to the **private** staging storage
+          account (`femme-staging-data-rg`, container `loadtest-reports/`), not to public workflow
+          artifacts
+      - **Latency caveat.** Hosted runners are in Azure US regions, close to `centralus`, so
+        client-side latency is lower than what real users in Paraguay get. Use k6 numbers for
+        capacity (throughput, error rate, where it saturates). Judge user-facing response times
+        from server-side App Insights request durations.
+      - **No inbound rate limiting today.** `SifenRateLimiter` only throttles outbound SIFEN
+        calls, so many logins from one runner IP won't be blocked. If login throttling is added
+        later, it must exempt the staging load-test users (or staging altogether), or the test
+        will measure the limiter instead of the system.
 - [ ] Thresholds: p95 latency per endpoint and error rate.
 - [ ] Results template under `loadtest/reports/`. It covers:
   - k6 summary
@@ -401,6 +433,6 @@ windows around it. The persistent BACPAC storage account costs pennies.
    password.
 2. Load-test data: per-tenant volumes per block of 10. The margin added above the SIFEN
    high-water mark (e.g. +1,000).
-3. k6 on GH Actions vs Azure Load Testing.
+3. ~~k6 on GH Actions vs Azure Load Testing~~ **Decided:** k6 on GitHub Actions (T7).
 4. Whether `v2-staging` deploys need a required reviewer.
 5. Retention (N days) for prod snapshots in `femme-staging-data-rg`.
