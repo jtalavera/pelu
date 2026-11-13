@@ -1061,11 +1061,12 @@ export default function PropinasPage() {
                 {
                   id: "date",
                   header: t("femme.propinas.colDate"),
+                  cellClassName: "font-heading font-extrabold",
                   cell: (m) => (
-                    <span className="font-heading font-extrabold">
+                    <>
                       {fmtDay(m.at)}
                       <span className="ml-1.5 text-xs font-normal text-ink-3">{fmtTime(m.at)}</span>
-                    </span>
+                    </>
                   ),
                 },
                 {

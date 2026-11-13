@@ -152,7 +152,7 @@ test.describe("Propina manual (solo admin)", () => {
     await expect(row).toHaveAttribute("data-manual", "true");
     await expect(row.getByTestId("propinas-movement-concept")).toHaveText("Manual tip");
     await expect(row).not.toContainText("Propina en efectivo");
-    await expect(row.locator("td[title]")).toHaveAttribute("title", /Propina en efectivo/);
+    await expect(row).toHaveAttribute("title", /Propina en efectivo/);
     await expect(row).toContainText("Gs. 20.000");
   });
 
@@ -249,7 +249,7 @@ test.describe("Propina manual (solo admin)", () => {
     await expect(voided.getByTestId("propinas-voided-tag")).toBeVisible();
     // The table does not show the reason; it is in the tooltip.
     await expect(voided).not.toContainText("Monto mal cargado");
-    await expect(voided.locator("td[title]")).toHaveAttribute("title", /Monto mal cargado/);
+    await expect(voided).toHaveAttribute("title", /Monto mal cargado/);
     await expect(voided.getByRole("button")).toHaveCount(0);
   });
 
