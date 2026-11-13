@@ -28,6 +28,7 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { AssignInvoiceProfessionalsDialog } from "./invoice/AssignInvoiceProfessionalsDialog";
+import { getInvoiceTips, type InvoiceTips } from "../api/invoiceTips";
 import { InvoiceTipsPanel, servedProfessionals } from "./invoice/InvoiceTipsPanel";
 import { FieldValidationError } from "./FieldValidationError";
 import { MoreActionsMenu } from "./MoreActionsMenu";
@@ -41,6 +42,50 @@ import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
 import { sendKudeByWhatsapp } from "../lib/invoiceKudeShare";
 import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../hooks/useSifenStatusLiveRefresh";
+
+/**
+ * What the detail looks like before it arrives: same blocks and heights (header, items, payments,
+ * the Propinas tab and the buttons), so nothing moves when the real content replaces it.
+ */
+function InvoiceDetailSkeleton({ label }: { label: string }) {
+  const bar = "rounded-md bg-line";
+  return (
+    <div
+      data-testid="invoice-detail-skeleton"
+      role="status"
+      aria-busy="true"
+      className="flex animate-pulse flex-col gap-4"
+    >
+      <span className="sr-only">{label}</span>
+      <div className="flex justify-between gap-3">
+        <div className="flex flex-col gap-2">
+          <div className={`h-6 w-44 ${bar}`} />
+          <div className={`h-4 w-52 ${bar}`} />
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <div className={`h-7 w-24 ${bar}`} />
+          <div className="h-6 w-20 rounded-full bg-line" />
+        </div>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        <div className={`h-4 w-16 ${bar}`} />
+        <div className={`h-5 ${bar}`} />
+      </div>
+      <div className="flex flex-col gap-2.5">
+        <div className={`h-4 w-16 ${bar}`} />
+        <div className={`h-5 ${bar}`} />
+      </div>
+      <div className="h-14 rounded-xl border border-line bg-bg" />
+      <div className="flex flex-col gap-2.5 border-t border-line pt-3.5">
+        <div className="h-12 rounded-full bg-line" />
+        <div className="flex gap-2.5">
+          <div className="h-11 w-24 rounded-full bg-line" />
+          <div className="h-11 w-32 rounded-full bg-line" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export type InvoiceLine = {
   id: number;
@@ -305,6 +350,9 @@ export function InvoiceDetailModal({
   const [showAssignProfessionals, setShowAssignProfessionals] = useState(false);
   const [assignProfessionalsSuccess, setAssignProfessionalsSuccess] = useState(false);
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null);
+  // The tips are read together with the invoice so both appear at once (`null`: that read failed,
+  // the tab simply does not show).
+  const [initialTips, setInitialTips] = useState<InvoiceTips | null | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [voidReason, setVoidReason] = useState("");
@@ -369,10 +417,16 @@ export function InvoiceDetailModal({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setLoadError(null);
-    femmeJson<InvoiceDetail>(`/api/invoices/${invoiceId}`)
-      .then((data) => {
+    setInitialTips(undefined);
+    Promise.all([
+      femmeJson<InvoiceDetail>(`/api/invoices/${invoiceId}`),
+      // Not critical for the screen: without the answer the Propinas tab does not show.
+      getInvoiceTips(invoiceId).catch(() => null),
+    ])
+      .then(([data, tips]) => {
         if (cancelled) return;
         setInvoice(data);
+        setInitialTips(tips);
         // Issue #167/#173: prefill the KuDE-by-email field with the email captured on the
         // comprobante form for this document, falling back to the client's own email on file.
         if (data.recipientEmail) setKudeEmail(data.recipientEmail);
@@ -1844,6 +1898,7 @@ export function InvoiceDetailModal({
             {/* HU-73: tips, including the ones left after issuing; neutral while there are none. */}
             <InvoiceTipsPanel
               invoiceId={invoice.id}
+              initialTips={initialTips}
               served={servedProfessionals(invoice.lines)}
               onGoToCash={onClose}
               onChanged={onTipsChanged}
@@ -2065,12 +2120,7 @@ export function InvoiceDetailModal({
       }
     >
       <div className="flex flex-col gap-4">
-        {loading && (
-          <div className="flex items-center gap-2">
-            <Spinner size="sm" />
-            <Text>{t("femme.billing.history.detail.loading")}</Text>
-          </div>
-        )}
+        {loading && <InvoiceDetailSkeleton label={t("femme.billing.history.detail.loading")} />}
         {loadError && (
           <Alert variant="destructive" title={t("femme.billing.errorTitle")}>
             {loadError}

@@ -148,7 +148,8 @@ test("AC1-3 · «Comprobante emitido»: la solapa llega plegada y resaltada; las
   await page.getByTestId("invoice-tips-submit").click();
   await expect(extra.getByText("Select the card brand.")).toBeVisible();
   await extra.getByLabel("Card brand").selectOption("VISA");
-  await expect(page.getByTestId("invoice-tips-entered-total")).toHaveText("15.000");
+  // The total typed so far is on the submit button.
+  await expect(page.getByTestId("invoice-tips-submit")).toHaveText("Register · 15.000");
 
   await page.getByTestId("invoice-tips-submit").click();
 
@@ -426,7 +427,8 @@ test("AC9 · el administrador anula desde el detalle con motivo: queda «Anulada
   await expect(page.getByTestId("late-tip-void-dialog")).toHaveCount(0);
   const tip = page.getByTestId(`invoice-tip-${tipId}`);
   await expect(tip).toContainText("Voided");
-  await expect(tip).toContainText("«Monto mal cargado»");
+  // The list only says «Voided»: no who and no reason (HU-75).
+  await expect(tip).not.toContainText("Monto mal cargado");
   await expect(page.getByTestId("invoice-tips-notice")).toContainText("Tip voided");
   await expect(page.getByTestId(`invoice-tip-void-${tipId}`)).toHaveCount(0);
   await expect(page.getByTestId("invoice-tips")).toHaveAttribute("data-state", "none");
