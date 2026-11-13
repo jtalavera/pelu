@@ -1,4 +1,5 @@
 import { type HTMLAttributes, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/cn";
 
 /**
@@ -21,6 +22,14 @@ export type AlertProps = HTMLAttributes<HTMLDivElement> & {
   title?: string;
   /** Replaces the round icon of the variant. */
   icon?: ReactNode;
+  /**
+   * Makes the alert closable: shows a «×» (44 px touch target, top right) that calls this. The alert
+   * is not removed by itself — the screen decides when it goes, so a message is never lost before
+   * it is read.
+   */
+  onClose?: () => void;
+  /** Accessible name of the «×» button. Defaults to the translated «Cerrar aviso». */
+  closeLabel?: string;
 };
 
 /** Drawn as SVG (no text), so the alert's text content stays exactly the message. */
@@ -72,9 +81,12 @@ export function Alert({
   variant = "default",
   title,
   icon,
+  onClose,
+  closeLabel,
   children,
   ...props
 }: AlertProps) {
+  const { t } = useTranslation();
   const style = variants[variant];
   const mark =
     icon ??
@@ -92,7 +104,12 @@ export function Alert({
   return (
     <div
       role="alert"
-      className={cn("relative w-full rounded-card px-4 py-3 text-sm", style.box, className)}
+      className={cn(
+        "relative w-full rounded-card px-4 py-3 text-sm",
+        style.box,
+        onClose && "pr-14",
+        className,
+      )}
       {...props}
     >
       <div className="flex gap-3">
@@ -102,6 +119,17 @@ export function Alert({
           <div className="leading-relaxed [&_p]:m-0">{children}</div>
         </div>
       </div>
+      {onClose ? (
+        <button
+          type="button"
+          data-testid="alert-close"
+          aria-label={closeLabel ?? t("designSystem.alert.close")}
+          onClick={onClose}
+          className="absolute right-1.5 top-1.5 flex size-11 items-center justify-center rounded-xl text-xl leading-none text-ink transition-colors hover:bg-ink/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <span aria-hidden>×</span>
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -394,7 +394,7 @@ test("AC5-7 · el detalle muestra la misma solapa (neutra), se agrega desde ahí
     .first();
   await expect(movement).toBeVisible({ timeout: 20_000 });
   await expect(movement).toContainText("7.000");
-  const tooltip = (await movement.locator("[title]").first().getAttribute("title")) ?? "";
+  const tooltip = (await movement.getAttribute("title")) ?? "";
   expect(tooltip).toContain("Collected after issuing");
   expect(tooltip).toContain("Transfer");
 });

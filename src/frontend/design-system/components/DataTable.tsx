@@ -1,453 +1,195 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { useTranslation } from "react-i18next";
-import {
-  DndContext,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  horizontalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { useCallback, type KeyboardEvent, type ReactNode } from "react";
+import { useMediaQuery } from "../../src/hooks/useMediaQuery";
 import { cn } from "../lib/cn";
-import { Button } from "./Button";
-import { Checkbox } from "./Checkbox";
-
-function GripIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="12"
-      height="12"
-      viewBox="0 0 12 12"
-      fill="currentColor"
-      aria-hidden
-    >
-      <circle cx="3" cy="2.5" r="1" />
-      <circle cx="9" cy="2.5" r="1" />
-      <circle cx="3" cy="6" r="1" />
-      <circle cx="9" cy="6" r="1" />
-      <circle cx="3" cy="9.5" r="1" />
-      <circle cx="9" cy="9.5" r="1" />
-    </svg>
-  );
-}
-
-function ColumnsIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function SortChevron({
-  direction,
-  className,
-}: {
-  direction: "asc" | "desc" | null;
-  className?: string;
-}) {
-  if (!direction) {
-    return (
-      <span
-        className={cn(
-          "inline-flex flex-col text-ink-3",
-          className,
-        )}
-        aria-hidden
-      >
-        <svg width="10" height="6" viewBox="0 0 10 6" className="-mb-1">
-          <path d="M5 0L10 6H0z" fill="currentColor" />
-        </svg>
-        <svg width="10" height="6" viewBox="0 0 10 6" className="rotate-180">
-          <path d="M5 0L10 6H0z" fill="currentColor" />
-        </svg>
-      </span>
-    );
-  }
-  return (
-    <span
-      className={cn("text-primary", className)}
-      aria-hidden
-    >
-      {direction === "asc" ? (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-          <path d="M6 2l4 6H2z" />
-        </svg>
-      ) : (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-          <path d="M6 10L2 4h8z" />
-        </svg>
-      )}
-    </span>
-  );
-}
-
-function mergeOrderWithVisibleReorder(
-  fullOrder: string[],
-  isReorderableColumn: (id: string) => boolean,
-  newReorderableOrder: string[],
-): string[] {
-  const queue = [...newReorderableOrder];
-  return fullOrder.map((id) => {
-    if (!isReorderableColumn(id)) return id;
-    return queue.shift()!;
-  });
-}
 
 export type DataTableColumn<T> = {
   id: string;
   header: ReactNode;
   cell: (row: T, rowIndex: number) => ReactNode;
-  sortable?: boolean;
-  /** Required when sortable is true */
-  sortFn?: (a: T, b: T) => number;
-  /** Column always shown; excluded from visibility toggles */
-  alwaysVisible?: boolean;
-  /** Start hidden until user enables in column settings */
-  defaultHidden?: boolean;
+  /** Alignment of the header and the cells; amounts go on the right. */
+  align?: "left" | "right";
+  /** Extra classes for the cells of this column (e.g. `max-w-[16rem]` to truncate). */
+  cellClassName?: string;
+  /** Let the content wrap onto several lines (default: one line, `whitespace-nowrap`). */
+  wrap?: boolean;
 };
 
 export type DataTableProps<T> = {
   columns: DataTableColumn<T>[];
-  data: T[];
-  getRowId?: (row: T, index: number) => string | number;
+  rows: T[];
+  getRowId: (row: T, index: number) => string | number;
   className?: string;
-  /** Show the column configuration (visibility) control */
-  showColumnSettings?: boolean;
+  /** `data-testid` of the `<table>`. */
+  testId?: string;
+  /** `data-testid` of the `<ul>` of cards on a phone (default: `testId`). */
+  mobileTestId?: string;
+  /** `data-testid` of every row (`<tr>` / `<li>`). */
+  rowTestId?: (row: T) => string;
+  /** Extra `data-*` attributes of a row (e.g. `data-kind`). */
+  rowAttributes?: (row: T) => Record<string, string | undefined>;
+  /** Makes the whole row clickable (mouse, Enter and Space). Needs `rowLabel`. */
+  onRowClick?: (row: T) => void;
+  /** Accessible name of a clickable row. */
+  rowLabel?: (row: T) => string;
+  /** `"muted"` dims the row (voided, withdrawn…). */
+  rowTone?: (row: T) => "muted" | undefined;
+  /** Last column: the row's «Más acciones» menu (a `KebabMenu`). Clicks on it never reach `onRowClick`. */
+  rowActions?: (row: T) => ReactNode;
+  /** Accessible header of the actions column. */
+  actionsHeader?: ReactNode;
+  /** On a phone (< 640 px) each row is this card instead of a table row. Without it the table scrolls sideways. */
+  mobileCard?: (row: T) => ReactNode;
+  /** Shown (under the header) when there are no rows. */
+  emptyLabel?: ReactNode;
+  /** `data-testid` of the empty-state cell. */
+  emptyTestId?: string;
+  /** Tailwind min-width of the table, so narrow screens scroll inside their own box. */
+  minWidthClassName?: string;
 };
 
-type SortState = { columnId: string | null; direction: "asc" | "desc" | null };
-
-function SortableHeader<T>({
-  column,
-  sort,
-  onSort,
-  dragLabel,
-}: {
-  column: DataTableColumn<T>;
-  sort: SortState;
-  onSort: (columnId: string) => void;
-  dragLabel: string;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: column.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  const active =
-    sort.columnId === column.id ? sort.direction : null;
-  const sortable = column.sortable && column.sortFn;
-
-  return (
-    <th
-      ref={setNodeRef}
-      style={style}
-      scope="col"
-      aria-sort={
-        !sortable
-          ? undefined
-          : active === "asc"
-            ? "ascending"
-            : active === "desc"
-              ? "descending"
-              : "none"
-      }
-      className={cn(
-        "border-b border-line bg-page px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-ink-2",
-        "",
-        isDragging &&
-          "z-10 bg-surface shadow-md ring-1 ring-line",
-      )}
-    >
-      <div className="flex min-w-[8rem] items-center gap-1.5">
-        <button
-          type="button"
-          className="inline-flex shrink-0 cursor-grab touch-none rounded p-1 text-ink-3 hover:bg-line hover:text-ink-2 active:cursor-grabbing"
-          aria-label={dragLabel}
-          {...attributes}
-          {...listeners}
-        >
-          <GripIcon />
-        </button>
-        {sortable ? (
-          <button
-            type="button"
-            onClick={() => onSort(column.id)}
-            className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded px-1 text-left font-semibold text-ink-2 hover:bg-page hover:text-ink"
-          >
-            <span className="truncate">{column.header}</span>
-            <SortChevron direction={active} />
-          </button>
-        ) : (
-          <span className="min-w-0 flex-1 truncate font-semibold text-ink-2">
-            {column.header}
-          </span>
-        )}
-      </div>
-    </th>
-  );
-}
-
+/**
+ * The one table of the product (Propinas look): small uppercase header over a hairline, 44 px rows with thin
+ * separators, amounts on the right and the «⋮» menu in the last column. Cards on a phone.
+ */
 export function DataTable<T>({
   columns,
-  data,
-  getRowId = (_, i) => i,
+  rows,
+  getRowId,
   className,
-  showColumnSettings = true,
+  testId,
+  mobileTestId,
+  rowTestId,
+  rowAttributes,
+  onRowClick,
+  rowLabel,
+  rowTone,
+  rowActions,
+  actionsHeader,
+  mobileCard,
+  emptyLabel,
+  emptyTestId,
+  minWidthClassName = "min-w-[26rem]",
 }: DataTableProps<T>) {
-  const { t } = useTranslation();
-  const columnMap = useMemo(
-    () => Object.fromEntries(columns.map((c) => [c.id, c])) as Record<
-      string,
-      DataTableColumn<T>
-    >,
-    [columns],
+  const isPhone = useMediaQuery("(max-width: 639px)");
+
+  const clickProps = useCallback(
+    (row: T) =>
+      onRowClick
+        ? {
+            tabIndex: 0,
+            "aria-label": rowLabel?.(row),
+            onClick: () => onRowClick(row),
+            onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+              if (e.target !== e.currentTarget) return;
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onRowClick(row);
+              }
+            },
+          }
+        : {},
+    [onRowClick, rowLabel],
   );
 
-  const [columnOrder, setColumnOrder] = useState<string[]>(() =>
-    columns.map((c) => c.id),
-  );
-  const [visibility, setVisibility] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(
-      columns.map((c) => [c.id, c.defaultHidden !== true]),
-    ),
-  );
-  const [sort, setSort] = useState<SortState>({
-    columnId: null,
-    direction: null,
-  });
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
-  const menuId = useId();
+  const stopRowClick = rowActions && onRowClick ? { onClick: (e: { stopPropagation: () => void }) => e.stopPropagation() } : {};
 
-  const columnIdsKey = useMemo(
-    () => columns.map((c) => c.id).join("\0"),
-    [columns],
-  );
-
-  useEffect(() => {
-    // Re-derive column order/visibility whenever the caller passes a different
-    // column set (columnIdsKey); not a render-time derivation since order is
-    // also mutated later by user drag-reordering.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setColumnOrder(columns.map((c) => c.id));
-    setVisibility(
-      Object.fromEntries(
-        columns.map((c) => [c.id, c.defaultHidden !== true]),
-      ),
-    );
-  }, [columnIdsKey, columns]);
-
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!settingsRef.current?.contains(e.target as Node)) {
-        setSettingsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [settingsOpen]);
-
-  const visibleOrderedColumns = useMemo(() => {
-    return columnOrder
-      .map((id) => columnMap[id])
-      .filter(
-        (c): c is DataTableColumn<T> =>
-          Boolean(c) && (c.alwaysVisible || visibility[c.id] !== false),
+  if (isPhone && mobileCard) {
+    if (rows.length === 0 && emptyLabel) {
+      return (
+        <p className="py-3 text-center text-sm text-ink-3" data-testid={emptyTestId}>
+          {emptyLabel}
+        </p>
       );
-  }, [columnOrder, columnMap, visibility]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
-    }),
-  );
-
-  const handleSort = useCallback(
-    (columnId: string) => {
-      const col = columnMap[columnId];
-      if (!col?.sortable || !col.sortFn) return;
-      setSort((prev) => {
-        if (prev.columnId !== columnId) {
-          return { columnId, direction: "asc" };
-        }
-        if (prev.direction === "asc") {
-          return { columnId, direction: "desc" };
-        }
-        return { columnId: null, direction: null };
-      });
-    },
-    [columnMap],
-  );
-
-  const sortedData = useMemo(() => {
-    if (!sort.columnId || !sort.direction) return data;
-    const col = columnMap[sort.columnId];
-    if (!col?.sortFn) return data;
-    const next = [...data];
-    next.sort((a, b) => {
-      const r = col.sortFn!(a, b);
-      return sort.direction === "asc" ? r : -r;
-    });
-    return next;
-  }, [data, sort, columnMap]);
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const isReorderable = (id: string) => {
-      const c = columnMap[id];
-      return Boolean(c && (c.alwaysVisible || visibility[id] !== false));
-    };
-    const reorderableIds = columnOrder.filter(isReorderable);
-    const oldIndex = reorderableIds.indexOf(String(active.id));
-    const newIndex = reorderableIds.indexOf(String(over.id));
-    if (oldIndex < 0 || newIndex < 0) return;
-    const newOrder = arrayMove(reorderableIds, oldIndex, newIndex);
-    setColumnOrder(
-      mergeOrderWithVisibleReorder(columnOrder, isReorderable, newOrder),
-    );
-  };
-
-  const toggleableColumns = columns.filter((c) => !c.alwaysVisible);
-  const sortableIds = visibleOrderedColumns.map((c) => c.id);
-
-  return (
-    <div className={cn("w-full space-y-2", className)}>
-      {showColumnSettings && toggleableColumns.length > 0 ? (
-        <div className="flex justify-end">
-          <div className="relative" ref={settingsRef}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-ink-2"
-              aria-expanded={settingsOpen}
-              aria-haspopup="true"
-              aria-controls={settingsOpen ? menuId : undefined}
-              onClick={() => setSettingsOpen((o) => !o)}
-            >
-              <ColumnsIcon className="size-4 shrink-0" />
-              <span className="sr-only sm:not-sr-only">
-                {t("designSystem.dataTable.columns")}
-              </span>
-            </Button>
-            {settingsOpen ? (
-              <div
-                id={menuId}
-                role="menu"
-                className="absolute right-0 z-20 mt-1 w-56 rounded-xl border border-line bg-surface p-3 shadow-lg"
-              >
-                <p className="mb-2 text-xs font-medium text-ink-3">
-                  {t("designSystem.dataTable.visibleColumns")}
-                </p>
-                <ul className="max-h-64 space-y-2 overflow-y-auto">
-                  {toggleableColumns.map((col) => (
-                    <li key={col.id}>
-                      <label className="flex cursor-pointer items-center gap-2 text-sm text-ink-2">
-                        <Checkbox
-                          checked={visibility[col.id] !== false}
-                          onChange={(e) =>
-                            setVisibility((v) => ({
-                              ...v,
-                              [col.id]: e.target.checked,
-                            }))
-                          }
-                        />
-                        <span className="truncate">{col.header}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
+    }
+    return (
+      <ul className={cn("flex flex-col", className)} data-testid={mobileTestId ?? testId}>
+        {rows.map((row, i) => (
+          <li
+            key={getRowId(row, i)}
+            data-testid={rowTestId?.(row)}
+            {...rowAttributes?.(row)}
+            {...clickProps(row)}
+            className={cn(
+              "flex items-center gap-2 border-t border-line py-3 first:border-t-0",
+              onRowClick && "cursor-pointer",
+              rowTone?.(row) === "muted" ? "text-ink-3" : "text-ink",
+            )}
+          >
+            <div className="min-w-0 flex-1">{mobileCard(row)}</div>
+            {rowActions ? (
+              <div className="w-11 shrink-0 text-right" {...stopRowClick}>
+                {rowActions(row)}
               </div>
             ) : null}
-          </div>
-        </div>
-      ) : null}
+          </li>
+        ))}
+      </ul>
+    );
+  }
 
-      <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-card">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <table className="w-full min-w-[32rem] border-collapse text-sm">
-            <thead>
-              <tr>
-                <SortableContext
-                  items={sortableIds}
-                  strategy={horizontalListSortingStrategy}
+  return (
+    <div className={cn("overflow-x-auto", className)}>
+      <table className={cn("w-full border-collapse text-sm", minWidthClassName)} data-testid={testId}>
+        <thead>
+          <tr className="border-b border-line text-left text-[11px] font-extrabold uppercase tracking-wider text-ink-3">
+            {columns.map((col) => (
+              <th key={col.id} className={cn("px-2 py-2", col.align === "right" && "text-right")}>
+                {col.header}
+              </th>
+            ))}
+            {rowActions ? (
+              <th className="w-11 px-1 py-2">
+                {actionsHeader ? <span className="sr-only">{actionsHeader}</span> : null}
+              </th>
+            ) : null}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && emptyLabel ? (
+            <tr>
+              <td
+                colSpan={columns.length + (rowActions ? 1 : 0)}
+                className="px-2 py-6 text-center text-xs text-ink-3"
+                data-testid={emptyTestId}
+              >
+                {emptyLabel}
+              </td>
+            </tr>
+          ) : null}
+          {rows.map((row, i) => (
+            <tr
+              key={getRowId(row, i)}
+              data-testid={rowTestId?.(row)}
+              {...rowAttributes?.(row)}
+              {...clickProps(row)}
+              className={cn(
+                "h-11 border-t border-line first:border-t-0",
+                onRowClick && "cursor-pointer hover:bg-primary-lt",
+                rowTone?.(row) === "muted" ? "text-ink-3" : "text-ink",
+              )}
+            >
+              {columns.map((col) => (
+                <td
+                  key={col.id}
+                  className={cn(
+                    "px-2 py-1.5",
+                    !col.wrap && "whitespace-nowrap",
+                    col.align === "right" && "text-right",
+                    col.cellClassName,
+                  )}
                 >
-                  {visibleOrderedColumns.map((col) => (
-                    <SortableHeader
-                      key={col.id}
-                      column={col}
-                      sort={sort}
-                      onSort={handleSort}
-                      dragLabel={t("designSystem.dataTable.dragReorderColumn")}
-                    />
-                  ))}
-                </SortableContext>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedData.map((row, rowIndex) => (
-                <tr
-                  key={String(getRowId(row, rowIndex))}
-                  className="border-b border-line last:border-0 hover:bg-primary/5"
-                >
-                  {visibleOrderedColumns.map((col) => (
-                    <td
-                      key={col.id}
-                      className="px-3 py-2.5 align-middle text-ink"
-                    >
-                      {col.cell(row, rowIndex)}
-                    </td>
-                  ))}
-                </tr>
+                  {col.cell(row, i)}
+                </td>
               ))}
-            </tbody>
-          </table>
-        </DndContext>
-      </div>
+              {rowActions ? (
+                <td className="px-1 text-right" {...stopRowClick}>
+                  {rowActions(row)}
+                </td>
+              ) : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { Alert, Button, PageSizeSelect, Pagination, Spinner, Text } from "@design-system";
+import { Alert, Button, DataTable, PageSizeSelect, Pagination, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import type { PageResponse } from "../api/pagination";
 import { translateApiError } from "../api/parseApiErrorMessage";
@@ -109,77 +109,30 @@ export default function InactiveClientsPage() {
             overflow: "hidden",
           }}
         >
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm" style={{ tableLayout: "fixed" }}>
-              <colgroup>
-                <col style={{ width: "35%" }} />
-                <col style={{ width: "20%" }} />
-                <col style={{ width: "25%" }} />
-                <col style={{ width: "20%" }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  {[
-                    { key: "colClient", align: "left" },
-                    { key: "colPhone", align: "left" },
-                    { key: "colLastVisit", align: "left" },
-                    { key: "colInactivity", align: "right" },
-                  ].map(({ key, align }) => (
-                    <th
-                      key={key}
-                      style={{
-                        padding: "9px 12px",
-                        fontSize: 10,
-                        fontWeight: 500,
-                        letterSpacing: "0.06em",
-                        textTransform: "uppercase",
-                        color: "var(--color-ink-3)",
-                        background: "var(--color-stone)",
-                        textAlign: align as "left" | "right",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {t(`femme.inactiveClients.${key}`)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {clients.map((c) => (
-                  <tr
-                    key={c.clientId}
-                    data-testid="inactive-clients-row"
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => navigate(`/app/clients/${c.clientId}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        navigate(`/app/clients/${c.clientId}`);
-                      }
-                    }}
-                    style={{ borderTop: "var(--border-default)", cursor: "pointer" }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLTableRowElement).style.background =
-                        "var(--color-rose-lt)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLTableRowElement).style.background = "";
-                    }}
-                  >
-                    <td style={{ padding: "10px 12px" }}>{c.fullName}</td>
-                    <td style={{ padding: "10px 12px" }}>{c.phone ?? "—"}</td>
-                    <td style={{ padding: "10px 12px" }}>
-                      {formatParaguayDateTime(c.lastVisitAt, dateLocale)}
-                    </td>
-                    <td style={{ padding: "10px 12px", textAlign: "right" }}>
-                      {t("femme.inactiveClients.daysValue", { days: c.daysSinceLastVisit })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable<InactiveClient>
+            className="px-2"
+            minWidthClassName="min-w-[32rem]"
+            rows={clients}
+            getRowId={(c) => c.clientId}
+            rowTestId={() => "inactive-clients-row"}
+            onRowClick={(c) => navigate(`/app/clients/${c.clientId}`)}
+            rowLabel={(c) => c.fullName}
+            columns={[
+              { id: "client", header: t("femme.inactiveClients.colClient"), cell: (c) => c.fullName },
+              { id: "phone", header: t("femme.inactiveClients.colPhone"), cell: (c) => c.phone ?? "—" },
+              {
+                id: "lastVisit",
+                header: t("femme.inactiveClients.colLastVisit"),
+                cell: (c) => formatParaguayDateTime(c.lastVisitAt, dateLocale),
+              },
+              {
+                id: "inactivity",
+                header: t("femme.inactiveClients.colInactivity"),
+                align: "right",
+                cell: (c) => t("femme.inactiveClients.daysValue", { days: c.daysSinceLastVisit }),
+              },
+            ]}
+          />
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[var(--border-default)]">
             <PageSizeSelect
               value={pageSize}

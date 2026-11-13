@@ -35,8 +35,6 @@ export type MoreActionsMenuProps = {
   className?: string;
   /** Icon-only trigger («⋯», 44 px round) for crowded rows; `label` stays as its accessible name. */
   compact?: boolean;
-  /** Direction of the dots of the compact trigger: «⋯» (default) or the vertical «⋮». */
-  triggerIcon?: "horizontal" | "vertical";
 };
 
 const MENU_WIDTH = 264;
@@ -76,7 +74,6 @@ export function MoreActionsMenu({
   disabled,
   className,
   compact = false,
-  triggerIcon = "horizontal",
 }: MoreActionsMenuProps) {
   const menuId = useId();
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -184,23 +181,9 @@ export function MoreActionsMenu({
         className={cn(ACTION_BUTTON, compact && "w-11 px-0", open && "bg-primary-lt")}
       >
         {compact ? (
-          triggerIcon === "vertical" ? (
-            <svg
-              aria-hidden
-              data-icon="dots-vertical"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className="size-5"
-            >
-              <circle cx="12" cy="5" r="1.8" />
-              <circle cx="12" cy="12" r="1.8" />
-              <circle cx="12" cy="19" r="1.8" />
-            </svg>
-          ) : (
-            <span aria-hidden className="text-xl leading-none">
-              ⋯
-            </span>
-          )
+          <span aria-hidden className="text-xl leading-none">
+            ⋯
+          </span>
         ) : (
           <>
             {label}

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Alert, Badge, Button, Input, Label, Modal, Spinner, Switch, Text } from "@design-system";
+import { Alert, Badge, Button, DataTable, Input, Label, Modal, Spinner, Switch, Text } from "@design-system";
 import {
   createPlatformTier,
   deletePlatformTier,
@@ -194,13 +194,6 @@ export default function PlatformTiersPage() {
     }
   }
 
-  const onRowKeyOpenEdit = (tier: PlatformTier) => (e: KeyboardEvent<HTMLTableRowElement>) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      openEdit(tier);
-    }
-  };
-
   function closeEditModal() {
     setEditModalOpen(false);
     setEditingTier(null);
@@ -302,25 +295,6 @@ export default function PlatformTiersPage() {
     );
   }
 
-  const thStyle: React.CSSProperties = {
-    padding: "9px 12px",
-    fontSize: 10,
-    fontWeight: 500,
-    color: "var(--color-ink-3)",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    textAlign: "left",
-    background: "var(--color-stone)",
-    whiteSpace: "nowrap",
-  };
-  const tdStyle: React.CSSProperties = {
-    padding: "10px 12px",
-    fontSize: 12,
-    color: "var(--color-ink)",
-    verticalAlign: "middle",
-    borderBottom: "0.5px solid var(--color-stone)",
-  };
-
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -374,93 +348,69 @@ export default function PlatformTiersPage() {
         className="overflow-hidden rounded-[var(--radius-xl)]"
         style={{ background: "var(--color-white)", border: "var(--border-default)" }}
       >
-        <div className="overflow-x-auto">
-          <table style={{ tableLayout: "fixed", width: "100%", borderCollapse: "collapse" }}>
-            <colgroup>
-              <col style={{ width: "20%" }} />
-              <col style={{ width: "32%" }} />
-              <col style={{ width: "16%" }} />
-              <col style={{ width: "32%" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={thStyle}>{t("femme.platform.tiers.colName")}</th>
-                <th style={thStyle}>{t("femme.platform.tiers.colDescription")}</th>
-                <th style={thStyle}>{t("femme.platform.tiers.colTenantCount")}</th>
-                <th style={thStyle}>{t("femme.platform.tiers.colActions")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {content.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={4}
-                    style={{ padding: "24px 12px", textAlign: "center", fontSize: 12, color: "var(--color-ink-3)" }}
-                  >
-                    {t("femme.platform.tiers.emptyBody")}
-                  </td>
-                </tr>
-              ) : (
-                content.map((tier) => (
-                  <tr
-                    key={tier.id}
-                    data-testid={`platform-tier-row-${tier.id}`}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={t("femme.platform.tiers.openEdit", { name: tier.name })}
+        <DataTable<PlatformTier>
+          className="px-2"
+          minWidthClassName="min-w-[40rem]"
+          rows={content}
+          getRowId={(tier) => tier.id}
+          rowTestId={(tier) => `platform-tier-row-${tier.id}`}
+          onRowClick={openEdit}
+          rowLabel={(tier) => t("femme.platform.tiers.openEdit", { name: tier.name })}
+          emptyLabel={t("femme.platform.tiers.emptyBody")}
+          columns={[
+            {
+              id: "name",
+              header: t("femme.platform.tiers.colName"),
+              cell: (tier) => <span className="font-semibold">{tier.name}</span>,
+            },
+            {
+              id: "description",
+              header: t("femme.platform.tiers.colDescription"),
+              cell: (tier) => (
+                <span
+                  className={`block max-w-[20rem] truncate ${tier.description ? "" : "text-ink-3"}`}
+                >
+                  {tier.description ?? "—"}
+                </span>
+              ),
+            },
+            {
+              id: "tenantCount",
+              header: t("femme.platform.tiers.colTenantCount"),
+              cell: (tier) => (
+                <span data-testid={`tier-tenant-count-${tier.id}`}>
+                  {t("femme.platform.tiers.tenantCount", { count: tier.tenantCount })}
+                </span>
+              ),
+            },
+            {
+              id: "actions",
+              header: t("femme.platform.tiers.colActions"),
+              cell: (tier) => (
+                <div className="flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-11"
+                    style={{ padding: "4px 12px", fontSize: 12 }}
                     onClick={() => openEdit(tier)}
-                    onKeyDown={onRowKeyOpenEdit(tier)}
-                    style={{ cursor: "pointer" }}
                   >
-                    <td style={{ ...tdStyle, fontWeight: 500 }}>{tier.name}</td>
-                    <td
-                      style={{
-                        ...tdStyle,
-                        color: tier.description ? "var(--color-ink)" : "var(--color-ink-3)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {tier.description ?? "—"}
-                    </td>
-                    <td style={tdStyle} data-testid={`tier-tenant-count-${tier.id}`}>
-                      {t("femme.platform.tiers.tenantCount", { count: tier.tenantCount })}
-                    </td>
-                    <td style={tdStyle}>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="min-h-11"
-                          style={{ padding: "4px 12px", fontSize: 12 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEdit(tier);
-                          }}
-                        >
-                          {t("femme.platform.tiers.featureFlagsAction")}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="danger"
-                          className="min-h-11"
-                          style={{ padding: "4px 12px", fontSize: 12 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openDeleteConfirm(tier);
-                          }}
-                        >
-                          {t("femme.platform.tiers.deleteAction")}
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    {t("femme.platform.tiers.featureFlagsAction")}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    className="min-h-11"
+                    style={{ padding: "4px 12px", fontSize: 12 }}
+                    onClick={() => openDeleteConfirm(tier)}
+                  >
+                    {t("femme.platform.tiers.deleteAction")}
+                  </Button>
+                </div>
+              ),
+            },
+          ]}
+        />
       </div>
 
       <Modal open={modalOpen} onClose={closeModal} title={t("femme.platform.tiers.addTitle")}>

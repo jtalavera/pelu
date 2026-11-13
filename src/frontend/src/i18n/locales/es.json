@@ -1,13 +1,11 @@
 {
   "designSystem": {
-    "dataTable": {
-      "dragReorderColumn": "Arrastrar para reordenar columna",
-      "columns": "Columnas",
-      "visibleColumns": "Columnas visibles"
-    },
     "modal": {
       "closeDialog": "Cerrar diálogo",
       "close": "Cerrar"
+    },
+    "alert": {
+      "close": "Cerrar aviso"
     },
     "theme": {
       "switchToLight": "Cambiar a modo claro",
@@ -1546,13 +1544,13 @@
         "viewHistory": "Ver historial completo",
         "refreshing": "Actualizando…",
         "updatedAt": "Actualizado a las {{time}}",
+        "colIssuedAt": "Emisión",
         "rowMenu": {
           "email": "Enviar por correo",
           "emailHint": "Revisá el correo antes de enviar",
           "viewDetail": "Ver detalle",
           "kudeUnavailable": "No disponible: sin KuDE aprobado"
         },
-        "closeNotice": "Cerrar aviso",
         "emailDialog": {
           "title": "Enviar KuDE por correo",
           "invoiceLine": "Comprobante {{number}} · {{date}}",
@@ -1848,6 +1846,7 @@
         "colNumber": "Número",
         "colDate": "Fecha factura",
         "colSifenSentAt": "Enviado a SIFEN",
+        "colPaymentMethod": "Forma de pago",
         "colClient": "Cliente",
         "colTotal": "Total",
         "colStatus": "Estado",
@@ -4075,7 +4074,10 @@
       "warningTitle": "Cuota",
       "warningBody": "Te estás acercando al límite de tu plan.",
       "destructiveTitle": "Pago fallido",
-      "destructiveBody": "Actualiza tu método de facturación e inténtalo de nuevo."
+      "destructiveBody": "Actualiza tu método de facturación e inténtalo de nuevo.",
+      "closableTitle": "Aviso con ×",
+      "closableBody": "Con onClose el aviso muestra una × para cerrarlo: se queda hasta que la persona lo cierra.",
+      "closableReset": "Mostrar el aviso de nuevo"
     },
     "badges": {
       "default": "Predeterminado",
@@ -4091,7 +4093,7 @@
       "sam": "Sam Taylor"
     },
     "table": {
-      "hint": "Ordena haciendo clic en los encabezados, arrastra el asa para reordenar columnas y usa el control de columnas para mostrar u ocultar campos (Nombre permanece visible).",
+      "hint": "Una sola tabla para todo el producto: encabezado en mayúsculas pequeñas, filas de 44 px, menú ⋮ en la última columna y tarjetas en el celular.",
       "columns": {
         "name": "Nombre",
         "team": "Equipo",

@@ -2,7 +2,7 @@ import { TodayEmptyState } from "../components/TodayEmptyState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import { Alert, Button, Card, Spinner, Text } from "@design-system";
+import { Alert, Button, Card, DataTable, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
 import { SectionTitle } from "../components/SectionTitle";
@@ -115,21 +115,6 @@ const APPT_STATUS_TEXT: Record<string, string> = {
 // ─── Shared card style ────────────────────────────────────────────────────────
 // `cardStyle` itself now lives in `components/charts/chartTheme.ts` (single source of truth,
 // also used by `ChartCard` — see issue #219 code review) — imported below, not redefined here.
-
-const inactiveClientsThStyle: React.CSSProperties = {
-  textAlign: "left",
-  fontSize: 10,
-  fontWeight: 500,
-  color: "var(--color-ink-3)",
-  padding: "0 8px 8px 0",
-  borderBottom: "0.5px solid var(--color-stone)",
-};
-
-const inactiveClientsTdStyle: React.CSSProperties = {
-  padding: "8px 8px 8px 0",
-  color: "var(--color-ink)",
-  whiteSpace: "nowrap",
-};
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
@@ -415,44 +400,24 @@ export default function DashboardPage() {
           {inactiveClients.length === 0 ? (
             <div className="py-2 text-sm text-ink-3">{t("femme.dashboard.inactiveClientsEmpty")}</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead>
-                  <tr>
-                    <th style={inactiveClientsThStyle}>{t("femme.dashboard.inactiveClientsColClient")}</th>
-                    <th style={inactiveClientsThStyle}>{t("femme.dashboard.inactiveClientsColPhone")}</th>
-                    <th style={inactiveClientsThStyle}>{t("femme.dashboard.inactiveClientsColInactivity")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inactiveClients.map((c) => {
-                    const goToClientDetail = () => navigate(`/app/clients/${c.clientId}`);
-                    return (
-                      <tr
-                        key={c.clientId}
-                        data-testid="dashboard-inactive-client-row"
-                        role="button"
-                        tabIndex={0}
-                        onClick={goToClientDetail}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            goToClientDetail();
-                          }
-                        }}
-                        style={{ cursor: "pointer", borderBottom: "0.5px solid var(--color-stone)" }}
-                      >
-                        <td style={inactiveClientsTdStyle}>{c.fullName}</td>
-                        <td style={inactiveClientsTdStyle}>{c.phone ?? "—"}</td>
-                        <td style={inactiveClientsTdStyle}>
-                          {t("femme.dashboard.inactiveClientsDaysValue", { days: c.daysSinceLastVisit })}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<(typeof inactiveClients)[number]>
+              minWidthClassName="min-w-[22rem]"
+              rows={inactiveClients}
+              getRowId={(c) => c.clientId}
+              rowTestId={() => "dashboard-inactive-client-row"}
+              onRowClick={(c) => navigate(`/app/clients/${c.clientId}`)}
+              rowLabel={(c) => c.fullName}
+              columns={[
+                { id: "client", header: t("femme.dashboard.inactiveClientsColClient"), cell: (c) => c.fullName },
+                { id: "phone", header: t("femme.dashboard.inactiveClientsColPhone"), cell: (c) => c.phone ?? "—" },
+                {
+                  id: "inactivity",
+                  header: t("femme.dashboard.inactiveClientsColInactivity"),
+                  align: "right",
+                  cell: (c) => t("femme.dashboard.inactiveClientsDaysValue", { days: c.daysSinceLastVisit }),
+                },
+              ]}
+            />
           )}
           {inactiveClients.length > 0 && (
             <Button

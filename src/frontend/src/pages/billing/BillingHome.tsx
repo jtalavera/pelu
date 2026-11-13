@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
   Card,
+  DataTable,
   Heading,
   Input,
+  KebabMenu,
+  type KebabMenuItem,
   Label,
   Modal,
   PageSizeSelect,
@@ -29,13 +32,11 @@ import { femmeJson } from "../../api/femmeClient";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 import { ActionIcon } from "../../components/actionIcons";
-import { DismissibleAlert } from "../../components/DismissibleAlert";
 import { FieldValidationError } from "../../components/FieldValidationError";
 import { SendKudeEmailDialog } from "../../components/invoice/SendKudeEmailDialog";
 import { InvoiceCorrectionForm } from "../../components/InvoiceCorrectionForm";
 import { InvoiceDetailModal, type InvoiceDetail } from "../../components/InvoiceDetailModal";
 import { InvoiceStatePill, deriveInvoiceState } from "../../components/InvoiceStatePill";
-import { MoreActionsMenu, type MoreActionsItem } from "../../components/MoreActionsMenu";
 import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../../hooks/useSifenStatusLiveRefresh";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
@@ -226,8 +227,7 @@ export function BillingHome({
   const [todayRefreshing, setTodayRefreshing] = useState(false);
   // When the list was last read from the server (any reload: first load, manual, live or on closing a detail).
   const [todayUpdatedAt, setTodayUpdatedAt] = useState<Date | null>(null);
-  // «Más acciones» of a row: which row's menu is open, which row is preparing a KuDE, and the outcome.
-  const [rowMenuOpenId, setRowMenuOpenId] = useState<number | null>(null);
+  // «Más acciones» of a row: which row is preparing a KuDE (its KuDE actions wait until it is done).
   const [kudeBusyId, setKudeBusyId] = useState<number | null>(null);
   // «Enviar por correo»: the row whose KuDE is being sent (the dialog lets the user check the address).
   const [emailTarget, setEmailTarget] = useState<InvoiceListItem | null>(null);
@@ -292,26 +292,58 @@ export function BillingHome({
     }
   }
 
-  function rowMenuItems(inv: InvoiceListItem): MoreActionsItem[] {
+  /** «Corregir y reenviar» for a comprobante that needs attention (shared by the table and the phone list). */
+  function correctResendButton(inv: InvoiceListItem): ReactNode {
+    if (deriveInvoiceState(inv) !== "attention" || inv.status !== "ISSUED") return null;
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        data-testid={`today-row-correct-resend-${inv.id}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setCorrectionInvoiceId(inv.id);
+        }}
+      >
+        {t("femme.billing.history.detail.sifen.correctResendButton")}
+      </Button>
+    );
+  }
+
+  /** An option label with its optional second line (why it is not available, what it does). */
+  function menuLabel(text: string, hint?: string): ReactNode {
+    if (!hint) return text;
+    return (
+      <>
+        {text}
+        <span className="block text-xs font-normal text-ink-3">{hint}</span>
+      </>
+    );
+  }
+
+  /** Same menu as the rows of the Propinas screen (design-system KebabMenu: ⋮, no border). */
+  function rowMenuItems(inv: InvoiceListItem): KebabMenuItem[] {
     const shareable = isKudeShareable(inv);
     const unavailable = shareable ? undefined : t("femme.billing.home.rowMenu.kudeUnavailable");
+    // While this row prepares a KuDE its KuDE actions wait, so the same send cannot be started twice.
+    const kudeDisabled = !shareable || kudeBusyId === inv.id;
     return [
       {
         id: "whatsapp",
-        label: t("femme.billing.history.detail.sifen.kudeWhatsappButton"),
+        label: menuLabel(t("femme.billing.history.detail.sifen.kudeWhatsappButton"), unavailable),
         icon: <ActionIcon name="whatsapp" />,
-        disabled: !shareable,
-        hint: unavailable,
-        testId: `billing-today-menu-whatsapp-${inv.id}`,
+        disabled: kudeDisabled,
         onSelect: () => void runKudeAction(inv, "whatsapp"),
       },
       {
         id: "email",
-        label: t("femme.billing.home.rowMenu.email"),
+        label: menuLabel(
+          t("femme.billing.home.rowMenu.email"),
+          unavailable ?? t("femme.billing.home.rowMenu.emailHint"),
+        ),
         icon: <ActionIcon name="mail" />,
-        disabled: !shareable,
-        hint: unavailable ?? t("femme.billing.home.rowMenu.emailHint"),
-        testId: `billing-today-menu-email-${inv.id}`,
+        disabled: kudeDisabled,
         onSelect: () => {
           setTodayNotice(null);
           setEmailTarget(inv);
@@ -319,18 +351,15 @@ export function BillingHome({
       },
       {
         id: "download",
-        label: t("femme.billing.history.detail.sifen.kudeDownloadButton"),
+        label: menuLabel(t("femme.billing.history.detail.sifen.kudeDownloadButton"), unavailable),
         icon: <ActionIcon name="download" />,
-        disabled: !shareable,
-        hint: unavailable,
-        testId: `billing-today-menu-download-${inv.id}`,
+        disabled: kudeDisabled,
         onSelect: () => void runKudeAction(inv, "download"),
       },
       {
         id: "detail",
         label: t("femme.billing.home.rowMenu.viewDetail"),
         icon: <ActionIcon name="file" />,
-        testId: `billing-today-menu-detail-${inv.id}`,
         onSelect: () => setSelectedInvoiceId(inv.id),
       },
     ];
@@ -489,7 +518,7 @@ export function BillingHome({
                   </Text>
                 )}
                 {todayNotice && (
-                  <DismissibleAlert
+                  <Alert
                     variant={todayNotice.kind === "error" ? "destructive" : "success"}
                     title={
                       todayNotice.kind === "error"
@@ -498,11 +527,10 @@ export function BillingHome({
                     }
                     data-testid="billing-today-notice"
                     className="mx-2 mt-3"
-                    closeLabel={t("femme.billing.home.closeNotice")}
-                    onDismiss={() => setTodayNotice(null)}
+                    onClose={() => setTodayNotice(null)}
                   >
                     {todayNotice.kind === "error" ? todayNotice.text : null}
-                  </DismissibleAlert>
+                  </Alert>
                 )}
                 {todayLoading ? (
                   <div className="flex items-center gap-2 p-3">
@@ -520,80 +548,87 @@ export function BillingHome({
                         {t("femme.billing.session.todayTotalExcludesRejected")}
                       </Text>
                     )}
-                    <ul className="divide-y divide-line">
-                      {todayInvoices.map((inv) => (
-                        <li key={inv.id}>
-                          <div
-                            role="button"
-                            tabIndex={0}
-                            data-testid={`billing-today-row-${inv.id}`}
-                            aria-label={t("femme.billing.history.openDetail", {
-                              invoiceNumber: inv.invoiceNumberFormatted,
-                            })}
-                            onClick={() => setSelectedInvoiceId(inv.id)}
-                            onKeyDown={(e) => {
-                              if (e.target !== e.currentTarget) return;
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                setSelectedInvoiceId(inv.id);
-                              }
-                            }}
-                            className="grid min-h-14 w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_2.75rem] items-center gap-x-2 gap-y-1 rounded-md py-2 pl-2 pr-0 text-left hover:bg-primary-lt"
-                          >
-                            <span className="col-start-1 min-w-0 truncate font-semibold text-ink">
+                    <DataTable<InvoiceListItem>
+                      testId="billing-today-table"
+                      minWidthClassName="min-w-[40rem]"
+                      rows={todayInvoices}
+                      getRowId={(inv) => inv.id}
+                      rowTestId={(inv) => `billing-today-row-${inv.id}`}
+                      onRowClick={(inv) => setSelectedInvoiceId(inv.id)}
+                      rowLabel={(inv) =>
+                        t("femme.billing.history.openDetail", { invoiceNumber: inv.invoiceNumberFormatted })
+                      }
+                      columns={[
+                        {
+                          id: "issuedAt",
+                          header: t("femme.billing.home.colIssuedAt"),
+                          cell: (inv) => (
+                            <span data-testid={`billing-today-issued-at-${inv.id}`} className="tabular-nums">
+                              {formatParaguayDateTime(inv.issuedAt, dateLocale)}
+                            </span>
+                          ),
+                        },
+                        {
+                          id: "number",
+                          header: t("femme.billing.history.colNumber"),
+                          cell: (inv) => <span className="font-mono text-xs">{inv.invoiceNumberFormatted}</span>,
+                        },
+                        {
+                          id: "client",
+                          header: t("femme.billing.history.colClient"),
+                          cell: (inv) => (
+                            <span className="block max-w-[16rem] truncate font-semibold">
                               {inv.clientDisplayName || t("femme.billing.invoice.noName")}
                             </span>
-                            <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end gap-1.5">
-                              <span className="text-right font-bold tabular-nums text-ink">
-                                {formatGuaraniesGs(inv.total)}
-                              </span>
-                              {deriveInvoiceState(inv) === "attention" && inv.status === "ISSUED" && (
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  data-testid={`today-row-correct-resend-${inv.id}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setCorrectionInvoiceId(inv.id);
-                                  }}
-                                >
-                                  {t("femme.billing.history.detail.sifen.correctResendButton")}
-                                </Button>
-                              )}
-                            </span>
-                            {/* «Más acciones»: the row itself opens the detail, so clicks on the menu (and on
-                                its portalled panel, which bubbles through React) must not reach the row. */}
-                            <span
-                              className="col-start-3 row-span-2 row-start-1"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreActionsMenu
-                                compact
-                                triggerIcon="vertical"
-                                label={t("femme.billing.history.detail.moreActions")}
-                                open={rowMenuOpenId === inv.id}
-                                onOpenChange={(o) => setRowMenuOpenId(o ? inv.id : null)}
-                                triggerTestId={`billing-today-menu-${inv.id}`}
-                                menuTestId={`billing-today-menu-panel-${inv.id}`}
-                                disabled={kudeBusyId === inv.id}
-                                items={rowMenuItems(inv)}
-                              />
-                            </span>
-                            <span className="col-start-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
+                          ),
+                        },
+                        {
+                          id: "state",
+                          header: t("femme.billing.history.colStatus"),
+                          cell: (inv) => (
+                            <span className="flex flex-wrap items-center gap-2">
                               <InvoiceStatePill invoice={inv} />
-                              <span className="font-mono text-xs">{inv.invoiceNumberFormatted}</span>
-                              <span
-                                data-testid={`billing-today-issued-at-${inv.id}`}
-                                className="tabular-nums"
-                              >
-                                {formatParaguayDateTime(inv.issuedAt, dateLocale)}
-                              </span>
+                              {correctResendButton(inv)}
+                            </span>
+                          ),
+                        },
+                        {
+                          id: "total",
+                          header: t("femme.billing.history.colTotal"),
+                          align: "right",
+                          cell: (inv) => (
+                            <span className="font-heading font-bold tabular-nums">{formatGuaraniesGs(inv.total)}</span>
+                          ),
+                        },
+                      ]}
+                      rowActions={(inv) => (
+                        <KebabMenu
+                          id={`billing-today-menu-${inv.id}`}
+                          triggerAriaLabel={t("femme.billing.history.detail.moreActions")}
+                          items={rowMenuItems(inv)}
+                        />
+                      )}
+                      mobileCard={(inv) => (
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 truncate font-semibold text-ink">
+                              {inv.clientDisplayName || t("femme.billing.invoice.noName")}
+                            </span>
+                            <span className="shrink-0 font-heading text-sm font-bold tabular-nums text-ink">
+                              {formatGuaraniesGs(inv.total)}
                             </span>
                           </div>
-                        </li>
-                      ))}
-                    </ul>
+                          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
+                            <InvoiceStatePill invoice={inv} />
+                            <span className="font-mono text-xs">{inv.invoiceNumberFormatted}</span>
+                            <span data-testid={`billing-today-issued-at-${inv.id}`} className="tabular-nums">
+                              {formatParaguayDateTime(inv.issuedAt, dateLocale)}
+                            </span>
+                          </div>
+                          {correctResendButton(inv)}
+                        </div>
+                      )}
+                    />
                     <div
                       className="flex flex-wrap items-center justify-between gap-3 px-2 pb-4 pt-4"
                       data-testid="billing-today-pagination"

@@ -1,13 +1,11 @@
 {
   "designSystem": {
-    "dataTable": {
-      "dragReorderColumn": "Drag to reorder column",
-      "columns": "Columns",
-      "visibleColumns": "Visible columns"
-    },
     "modal": {
       "closeDialog": "Close dialog",
       "close": "Close"
+    },
+    "alert": {
+      "close": "Close notice"
     },
     "theme": {
       "switchToLight": "Switch to light mode",
@@ -1546,13 +1544,13 @@
         "viewHistory": "View full history",
         "refreshing": "Refreshing…",
         "updatedAt": "Updated at {{time}}",
+        "colIssuedAt": "Issued",
         "rowMenu": {
           "email": "Send by email",
           "emailHint": "Check the email before sending",
           "viewDetail": "View details",
           "kudeUnavailable": "Not available: no approved KuDE"
         },
-        "closeNotice": "Close notice",
         "emailDialog": {
           "title": "Send KuDE by email",
           "invoiceLine": "Invoice {{number}} · {{date}}",
@@ -1848,6 +1846,7 @@
         "colNumber": "Number",
         "colDate": "Invoice date",
         "colSifenSentAt": "Sent to SIFEN",
+        "colPaymentMethod": "Payment",
         "colClient": "Client",
         "colTotal": "Total",
         "colStatus": "Status",
@@ -4075,7 +4074,10 @@
       "warningTitle": "Quota",
       "warningBody": "You are approaching the limit of your plan.",
       "destructiveTitle": "Payment failed",
-      "destructiveBody": "Update your billing method and try again."
+      "destructiveBody": "Update your billing method and try again.",
+      "closableTitle": "Closable alert",
+      "closableBody": "With onClose the alert shows a × to close it: it stays until the person closes it.",
+      "closableReset": "Show the alert again"
     },
     "badges": {
       "default": "Default",
@@ -4091,7 +4093,7 @@
       "sam": "Sam Taylor"
     },
     "table": {
-      "hint": "Sort by clicking headers, drag the grip to reorder columns, and use the columns control to show or hide fields (Name stays visible).",
+      "hint": "A single table for the whole product: small uppercase header, 44 px rows, the ⋮ menu in the last column and cards on a phone.",
       "columns": {
         "name": "Name",
         "team": "Team",

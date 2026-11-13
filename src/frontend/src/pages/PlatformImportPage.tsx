@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
+  DataTable,
   Label,
   PageSizeSelect,
   Pagination,
@@ -55,24 +56,6 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
-const thStyle: React.CSSProperties = {
-  padding: "9px 12px",
-  fontSize: 10,
-  fontWeight: 500,
-  color: "var(--color-ink-3)",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  textAlign: "left",
-  background: "var(--color-stone)",
-  whiteSpace: "nowrap",
-};
-const tdStyle: React.CSSProperties = {
-  padding: "10px 12px",
-  fontSize: 12,
-  color: "var(--color-ink)",
-  verticalAlign: "top",
-  borderBottom: "0.5px solid var(--color-stone)",
-};
 
 /**
  * HU-50 (Épica E — Importación de datos vía Excel): AC-1/AC-2/AC-3/AC-4 documented per-entity
@@ -371,45 +354,48 @@ export default function PlatformImportPage() {
               style={{ background: "var(--color-white)", border: "var(--border-default)" }}
               data-testid={`import-template-table-${tpl.entity}`}
             >
-              <div className="overflow-x-auto">
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      <th style={thStyle}>{t("femme.platform.import.colColumn")}</th>
-                      <th style={thStyle}>{t("femme.platform.import.colRequirement")}</th>
-                      <th style={thStyle}>{t("femme.platform.import.colDescription")}</th>
-                      <th style={thStyle}>{t("femme.platform.import.colValidations")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tpl.columns.map((col) => (
-                      <tr key={col.key} data-testid={`import-column-row-${tpl.entity}-${col.key}`}>
-                        <td style={{ ...tdStyle, fontFamily: "monospace", fontWeight: 500 }}>
-                          {col.key}
-                        </td>
-                        <td style={tdStyle}>
-                          {col.required
-                            ? t("femme.platform.import.required")
-                            : t("femme.platform.import.optional")}
-                        </td>
-                        <td style={tdStyle}>
-                          {t(`femme.platform.import.columnsByEntity.${tpl.entity}.${col.key}`, {
-                            defaultValue: t(`femme.platform.import.columns.${col.key}`, { defaultValue: "" }),
-                          })}
-                        </td>
-                        <td
-                          style={{ ...tdStyle, minWidth: 220 }}
-                          data-testid={`import-column-validations-${tpl.entity}-${col.key}`}
-                        >
-                          {t(`femme.platform.import.validationsByEntity.${tpl.entity}.${col.key}`, {
-                            defaultValue: t("femme.platform.import.noValidations"),
-                          })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable<(typeof tpl.columns)[number]>
+                className="px-2"
+                minWidthClassName="min-w-[40rem]"
+                rows={tpl.columns}
+                getRowId={(col) => col.key}
+                rowTestId={(col) => `import-column-row-${tpl.entity}-${col.key}`}
+                columns={[
+                  {
+                    id: "column",
+                    header: t("femme.platform.import.colColumn"),
+                    cell: (col) => <span className="font-mono font-semibold">{col.key}</span>,
+                  },
+                  {
+                    id: "requirement",
+                    header: t("femme.platform.import.colRequirement"),
+                    cell: (col) =>
+                      col.required ? t("femme.platform.import.required") : t("femme.platform.import.optional"),
+                  },
+                  {
+                    id: "description",
+                    header: t("femme.platform.import.colDescription"),
+                    wrap: true,
+                    cell: (col) =>
+                      t(`femme.platform.import.columnsByEntity.${tpl.entity}.${col.key}`, {
+                        defaultValue: t(`femme.platform.import.columns.${col.key}`, { defaultValue: "" }),
+                      }),
+                  },
+                  {
+                    id: "validations",
+                    header: t("femme.platform.import.colValidations"),
+                    wrap: true,
+                    cellClassName: "min-w-[220px]",
+                    cell: (col) => (
+                      <span data-testid={`import-column-validations-${tpl.entity}-${col.key}`}>
+                        {t(`femme.platform.import.validationsByEntity.${tpl.entity}.${col.key}`, {
+                          defaultValue: t("femme.platform.import.noValidations"),
+                        })}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
             </div>
 
             <section
@@ -730,52 +716,44 @@ export default function PlatformImportPage() {
                         {report.rows.length > 0 ? (
                           <>
                             <div
-                              className="overflow-x-auto rounded-[var(--radius-xl)]"
+                              className="rounded-[var(--radius-xl)] px-2"
                               style={{ border: "var(--border-default)" }}
                             >
-                              <table
-                                style={{ width: "100%", borderCollapse: "collapse" }}
-                                data-testid={`import-last-report-table-${tpl.entity}`}
-                              >
-                                <thead>
-                                  <tr>
-                                    <th style={thStyle}>{t("femme.platform.import.colRow")}</th>
-                                    <th style={thStyle}>{t("femme.platform.import.colStatus")}</th>
-                                    <th style={thStyle}>{t("femme.platform.import.colName")}</th>
-                                    <th style={thStyle}>{t("femme.platform.import.colReason")}</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {report.rows
-                                    .slice(
-                                      reportPage * reportPageSize,
-                                      reportPage * reportPageSize + reportPageSize,
-                                    )
-                                    .map((row) => (
-                                      <tr
-                                        key={row.rowNumber}
-                                        data-testid={`import-last-report-row-${tpl.entity}-${row.rowNumber}`}
-                                      >
-                                        <td style={tdStyle}>{row.rowNumber}</td>
-                                        <td style={tdStyle}>
-                                          {row.imported
-                                            ? t("femme.platform.import.statusImported")
-                                            : t("femme.platform.import.statusFailed")}
-                                        </td>
-                                        <td style={tdStyle}>{row.name ?? "—"}</td>
-                                        <td style={tdStyle}>
-                                          {row.imported
-                                            ? "—"
-                                            : row.errorCode
-                                              ? t(`femme.apiErrors.${row.errorCode}`, {
-                                                  defaultValue: t("femme.apiErrors.GENERIC"),
-                                                })
-                                              : t("femme.apiErrors.GENERIC")}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                </tbody>
-                              </table>
+                              <DataTable<(typeof report.rows)[number]>
+                                testId={`import-last-report-table-${tpl.entity}`}
+                                minWidthClassName="min-w-[32rem]"
+                                rows={report.rows.slice(
+                                  reportPage * reportPageSize,
+                                  reportPage * reportPageSize + reportPageSize,
+                                )}
+                                getRowId={(row) => row.rowNumber}
+                                rowTestId={(row) => `import-last-report-row-${tpl.entity}-${row.rowNumber}`}
+                                columns={[
+                                  { id: "row", header: t("femme.platform.import.colRow"), cell: (row) => row.rowNumber },
+                                  {
+                                    id: "status",
+                                    header: t("femme.platform.import.colStatus"),
+                                    cell: (row) =>
+                                      row.imported
+                                        ? t("femme.platform.import.statusImported")
+                                        : t("femme.platform.import.statusFailed"),
+                                  },
+                                  { id: "name", header: t("femme.platform.import.colName"), cell: (row) => row.name ?? "—" },
+                                  {
+                                    id: "reason",
+                                    header: t("femme.platform.import.colReason"),
+                                    wrap: true,
+                                    cell: (row) =>
+                                      row.imported
+                                        ? "—"
+                                        : row.errorCode
+                                          ? t(`femme.apiErrors.${row.errorCode}`, {
+                                              defaultValue: t("femme.apiErrors.GENERIC"),
+                                            })
+                                          : t("femme.apiErrors.GENERIC"),
+                                  },
+                                ]}
+                              />
                             </div>
                             <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                               <PageSizeSelect
