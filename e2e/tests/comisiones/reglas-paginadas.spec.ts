@@ -3,6 +3,7 @@ import { apiGetJson, apiPostJson } from "../../fixtures/api";
 import {
   enableCommissionsGlobally,
   loginAdminUi,
+  openCommissions,
   provisionCommissionWorld,
   restoreCommissionsGlobal,
   type CommissionWorld,
@@ -46,9 +47,10 @@ test.beforeEach(async ({ request }) => {
 });
 
 async function openRules(page: Page) {
-  await page.getByRole("link", { name: "Commissions" }).click();
-  await page.getByRole("tab", { name: "Rules", exact: true }).click();
-  await page.getByTestId("rules-kind-SERVICE").click(); // Rules opens on «By professional» (HU-COM-14)
+  // HU-COM-15: the service and product exceptions live in Setup › Advanced.
+  await openCommissions(page, "setup");
+  await page.getByTestId("config-advanced-link").click();
+  await page.getByTestId("rules-kind-SERVICE").click();
   await expect(page.getByTestId("rules-table")).toBeVisible();
 }
 

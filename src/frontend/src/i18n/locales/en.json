@@ -681,6 +681,299 @@
           "adjustAmount": "Enter a whole amount other than 0, for example -2,350 or 5,000.",
           "reason": "Enter the reason for the adjustment, for example «voided invoice»."
         }
+      },
+      "nav": {
+        "home": "Home",
+        "settle": "Settle",
+        "team": "Team",
+        "activity": "Activity",
+        "setup": "Setup"
+      },
+      "disabled": {
+        "title": "Commissions is not enabled yet",
+        "what": "Here you calculate, settle and pay your team's commissions.",
+        "how": "Ask Flowbit to enable the commissions module for your salon."
+      },
+      "period": {
+        "WEEKLY": "Week of {{from}} to {{to}}",
+        "BIWEEKLY": "Fortnight of {{from}} to {{to}}",
+        "MONTHLY": "Month of {{from}} to {{to}}",
+        "MANUAL": "Manual period"
+      },
+      "status": {
+        "UNSETTLED": "Not settled",
+        "DRAFT": "Draft",
+        "APPROVED": "Approved",
+        "PAID": "Paid",
+        "NONE": "No movements"
+      },
+      "guide": {
+        "title": "Let's start: 4 steps and your commissions are running",
+        "intro": "First we define how it is calculated, then we group the services and finally we set rules for each professional. You only do it once.",
+        "progress": "{{done}} of {{total}} steps done",
+        "optional": "Optional",
+        "whatFor": "What is it for?",
+        "open": "Open",
+        "change": "Review",
+        "footer": "You can change all of this whenever you want from «Setup».",
+        "step1": {
+          "title": "How it is calculated",
+          "done": "Already defined",
+          "todo": "Choose the base and the default %",
+          "why": "Defines whether the commission is calculated on the price with or without VAT and which % is paid when there is no rule.",
+          "example": "Example: a 100,000 Gs service with the «without VAT» base is commissioned on 90,909 Gs.",
+          "start": "See how it is calculated"
+        },
+        "step2": {
+          "title": "Service groups",
+          "done": "Every service has a group",
+          "todo": "{{count}} services without a group",
+          "why": "A group puts together the services that commission the same way (Color, Nails, Blow-dry…), so you set one rule per group instead of one per service.",
+          "example": "Example: «Nails» groups Manicure, Pedicure and Gel polish.",
+          "start": "Create the groups"
+        },
+        "step3": {
+          "title": "Rules per professional",
+          "done": "Everybody has rules",
+          "todo": "Some professionals are missing rules",
+          "why": "Here you define how much each professional earns in each group. Without a rule, the default % is paid.",
+          "example": "Example: Ana earns 45 % in Color and 40 % in Nails.",
+          "start": "Set the rules"
+        },
+        "step4": {
+          "title": "Aguinaldo and product cost",
+          "done": "Aguinaldo enabled",
+          "todo": "If your salon withholds aguinaldo, turn it on here",
+          "why": "Some salons withhold a % of every commission to pay the aguinaldo later. If yours does not, skip this step.",
+          "example": "Example: 45 % is paid and 5 % is withheld from each service.",
+          "start": "Set up"
+        }
+      },
+      "home": {
+        "toPay": "To pay · {{period}}",
+        "nothingYet": "There are no commissions to settle in this period yet.",
+        "progress": "{{people}} professionals · {{liquidated}} already settled · {{missing}} to settle",
+        "legend": {
+          "UNSETTLED": "{{count}} not settled",
+          "DRAFT": "{{count}} in draft",
+          "APPROVED": "{{count}} approved",
+          "PAID": "{{count}} paid"
+        },
+        "continue": "Continue with the settlement",
+        "how": "How does it work?",
+        "howTitle": "Settle in three steps",
+        "how1": "1. Generate the period's settlements: they are built from what was invoiced.",
+        "how2": "2. Review and approve them: everything gets frozen.",
+        "how3": "3. Pay them and record how (cash, transfer…).",
+        "reviewTitle": "To review",
+        "allGood": "All good: there is nothing to review.",
+        "review": {
+          "lines": {
+            "title": "{{count}} lines without a professional",
+            "help": "Some sales have no professional assigned: they earn no commission.",
+            "action": "Assign"
+          },
+          "ungrouped": {
+            "title": "{{count}} services without a group",
+            "help": "Without a group they are paid the default %.",
+            "action": "Create groups"
+          },
+          "noRules": {
+            "title": "{{count}} professionals without rules",
+            "help": "They are paid the default % on everything.",
+            "action": "Set rules"
+          },
+          "drafts": {
+            "title": "{{count}} settlements in draft",
+            "help": "They must be approved before they can be paid.",
+            "action": "Review"
+          }
+        },
+        "teamTitle": "Your team",
+        "teamAll": "See the whole team",
+        "teamEmpty": "There are no active professionals yet.",
+        "aguinaldoTitle": "Aguinaldo fund",
+        "aguinaldoHelp": "What has been withheld so far, to pay at year end.",
+        "aguinaldoLink": "See aguinaldo"
+      },
+      "liquidar": {
+        "prevPeriod": "Previous period",
+        "nextPeriod": "Next period",
+        "periodicityNote": "Periods follow your salon's periodicity (changed in Setup).",
+        "step1": {
+          "title": "Generate",
+          "help": "Builds one settlement per professional from what was invoiced.",
+          "count": "{{count}} to generate",
+          "button": "Generate {{count}}"
+        },
+        "step2": {
+          "title": "Approve",
+          "help": "Review and approve: it gets frozen.",
+          "count": "{{count}} to approve",
+          "button": "Approve {{count}}"
+        },
+        "step3": {
+          "title": "Pay",
+          "help": "Record the payment of each one.",
+          "count": "{{count}} to pay · {{paid}} already paid",
+          "button": "Pay {{count}}"
+        },
+        "tableTitle": "Professionals of the period",
+        "total": "Total",
+        "filterAria": "Filter by status",
+        "filterAll": "All",
+        "empty": "There are no professionals in this status.",
+        "pick": "Select {{name}}",
+        "withSelected": "With the selected ones:",
+        "action": {
+          "GENERATE": "Generate",
+          "APPROVE": "Approve",
+          "PAY": "Pay",
+          "VIEW": "View"
+        },
+        "csv": "Download CSV",
+        "done": {
+          "GENERATE": "{{count}} settlements were generated.",
+          "APPROVE": "{{count}} settlements were approved.",
+          "PAY": "{{count}} settlements were paid.",
+          "GENERATE_one": "{{count}} settlement was generated.",
+          "APPROVE_one": "{{count}} settlement was approved.",
+          "PAY_one": "{{count}} settlement was paid."
+        },
+        "dialog": {
+          "total": "Total: {{amount}}",
+          "retained": "Withheld for aguinaldo: {{amount}}",
+          "GENERATE": {
+            "title": "Generate {{count}} settlements",
+            "description": "A draft settlement is built per professional from what was invoiced.",
+            "confirm": "Generate {{count}}",
+            "period": "Period: {{period}}",
+            "title_one": "Generate {{count}} settlement",
+            "confirm_one": "Generate {{count}}"
+          },
+          "APPROVE": {
+            "title": "Approve {{count}} settlements",
+            "description": "Once approved, the amounts are frozen.",
+            "confirm": "Approve {{count}}",
+            "warning": "After approving, the amounts can no longer be changed.",
+            "title_one": "Approve {{count}} settlement",
+            "confirm_one": "Approve {{count}}"
+          },
+          "PAY": {
+            "title": "Pay {{count}} settlements",
+            "description": "Choose how it was paid and the date.",
+            "confirm": "Record payment of {{count}}",
+            "method": "Payment method",
+            "date": "Payment date",
+            "reference": "Reference (optional)",
+            "title_one": "Pay {{count}} settlement",
+            "confirm_one": "Record payment of {{count}}"
+          }
+        },
+        "detail": "See detail"
+      },
+      "team": {
+        "tabPeople": "Professionals ({{count}})",
+        "tabAguinaldo": "Aguinaldo",
+        "search": "Search professional",
+        "filterAria": "Filter the team",
+        "filter": {
+          "all": "All ({{count}})",
+          "norules": "No rules ({{count}})",
+          "retain": "Withhold aguinaldo ({{count}})",
+          "pending": "With pending commission ({{count}})"
+        },
+        "empty": "No professionals match.",
+        "noRulesYet": "No rules: earns the default %",
+        "missingRules": "Rules missing",
+        "thisPeriod": "This period",
+        "aguinaldo": "Aguinaldo accrued",
+        "footer": "Tap a professional to see their summary, rules and history."
+      },
+      "pro": {
+        "back": "Back to the team",
+        "tabsAria": "Professional sections",
+        "tabSummary": "Summary",
+        "tabRules": "Rules",
+        "tabAguinaldo": "Aguinaldo",
+        "tabHistory": "History",
+        "rulesCount_one": "{{count}} rule",
+        "rulesCount_other": "{{count}} rules",
+        "summaryTotal": "To pay this period",
+        "summaryLines": "{{count}} invoiced lines",
+        "summaryServices": "Services",
+        "summaryProducts": "Products",
+        "summaryAdjustments": "Adjustments",
+        "summaryRetained": "Withheld for aguinaldo",
+        "openSettlement": "Open the settlement",
+        "goSettle": "Go to settle",
+        "rulesIntro": "What {{name}} earns in each service group. The most specific rule wins.",
+        "noRulesYet": "{{name}} has no rules yet.",
+        "defaultNote": "Meanwhile the default {{percent}} is paid.",
+        "createGroups": "Create service groups",
+        "sentencePaid": "Earns {{percent}}",
+        "sentenceRetains": "withholds {{percent}} for aguinaldo",
+        "sentenceFixedPro": "product cost {{amount}} (for her)",
+        "sentenceFixedSalon": "product cost {{amount}} (for the salon)",
+        "servicesInGroup_one": "{{count}} service in the group",
+        "servicesInGroup_other": "{{count}} services in the group",
+        "remove": "Remove",
+        "addRule": "Add a rule",
+        "pickGroup": "Choose the service group of the new rule.",
+        "groupLabel": "Service group",
+        "next": "Next →",
+        "editorTitle": "{{group}} · {{name}}",
+        "fieldPaid": "Earns (%)",
+        "fieldPaidHelp": "Percentage of the service that is paid.",
+        "fieldRetention": "Withholds for aguinaldo (%)",
+        "fieldRetentionHelp": "It goes to the fund and is paid later.",
+        "fieldFixed": "Product cost (Gs)",
+        "fieldFixedHelp": "Fixed amount deducted before calculating the %. Leave empty if it does not apply.",
+        "fieldDestination": "The product cost goes to",
+        "exampleTitle": "Example with a service of",
+        "exampleRetained": "Withheld for aguinaldo",
+        "applySummary": "{{group}} rule for {{name}}",
+        "removeSummary": "Remove the {{group}} rule from {{name}}",
+        "copySummary": "Copy {{count}} rules to {{name}}",
+        "exceptionHint": "Does a specific service commission differently?",
+        "exceptionLink": "Set an exception in Advanced",
+        "summaryCarried": "Includes {{amount}} carried over from earlier periods.",
+        "summaryLines_one": "{{count}} invoiced line"
+      },
+      "activity": {
+        "intro": "Everything that happened with commissions: every movement and the reports.",
+        "movements": "Movements",
+        "reports": "Reports"
+      },
+      "config": {
+        "back": "Back to Setup",
+        "advancedLink": "Advanced options (exceptions, scheduled changes and history)",
+        "step1": {
+          "title": "How it is calculated",
+          "help": "The calculation base, the default % and how often you settle."
+        },
+        "step2": {
+          "title": "Service groups",
+          "help": "Put together the services that commission the same way.",
+          "open": "Open groups"
+        },
+        "step3": {
+          "title": "Rules per professional",
+          "help": "How much each professional earns in each group.",
+          "open": "Go to the team"
+        },
+        "step4": {
+          "title": "Aguinaldo and product cost",
+          "help": "Whether your salon withholds aguinaldo and who gets the product cost."
+        }
+      },
+      "advanced": {
+        "precedenceTitle": "Which rule wins",
+        "precedence1": "Professional + specific service",
+        "precedence2": "Professional + group",
+        "precedence3": "Specific service",
+        "precedence4": "Group",
+        "precedence5": "Default %"
       }
     },
     "appTitle": "Flowbit",

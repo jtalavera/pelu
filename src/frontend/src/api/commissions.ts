@@ -152,6 +152,36 @@ export type ProfessionalRulesView = {
   groups: GroupRuleRow[];
 };
 
+// ── Period overview (HU-COM-15) ─────────────────────────────────────────────────────────────
+
+export type OverviewStatus = "UNSETTLED" | "DRAFT" | "APPROVED" | "PAID" | "NONE";
+export type OverviewRow = {
+  professionalId: number;
+  professionalName: string;
+  status: OverviewStatus;
+  amount: number;
+  retention: number;
+  settlementId: number | null;
+  ruleCount: number;
+};
+export type Overview = {
+  period: PeriodInfo;
+  offset: number;
+  rows: OverviewRow[];
+  total: number;
+  retentionTotal: number;
+  unsettled: number;
+  drafts: number;
+  approved: number;
+  paid: number;
+  linesWithoutProfessional: number;
+  ungroupedServices: number;
+  professionalsWithoutRules: number;
+  groupCount: number;
+  aguinaldoEnabled: boolean;
+  aguinaldoBalance: number;
+};
+
 // ── Aguinaldo fund (HU-COM-14) ──────────────────────────────────────────────────────────────
 
 export type AguinaldoBalance = {
@@ -470,6 +500,7 @@ export const paySettlement = (id: number, paymentMethod: string, paidOn: string 
   femmePostJson<SettlementDetail>(`/api/commissions/settlements/${id}/pay`, { paymentMethod, paidOn, paymentReference });
 export const voidSettlement = (id: number, reason: string) =>
   femmePostJson<SettlementDetail>(`/api/commissions/settlements/${id}/void`, { reason });
+export const getOverview = (offset = 0) => femmeJson<Overview>(`/api/commissions/overview${qs({ offset })}`);
 export const getGroups = () => femmeJson<GroupView[]>("/api/commissions/groups");
 export const createGroup = (name: string) => femmePostJson<GroupView>("/api/commissions/groups", { name });
 export const renameGroup = (id: number, name: string) =>

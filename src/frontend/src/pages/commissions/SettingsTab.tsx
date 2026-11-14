@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { Alert, Button, Input, Label, Modal, Radio, RadioGroup, Select, Spinner, Text } from "@design-system";
 import { applyChanges, getSettings, type ConfigChange, type SettingsResponse } from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
@@ -7,6 +8,7 @@ import { FieldValidationError } from "../../components/FieldValidationError";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ApplyChangeDialog } from "./ApplyChangeDialog";
+import { useOverview } from "./overview";
 import { ScheduledChangesList, describeVersionValue } from "./ScheduledChangesList";
 import { TableWrap, formatPercent, parsePercentInput, tdClass, thClass } from "./common";
 
@@ -27,8 +29,10 @@ const FOLD =
  * HU-COM-01 / HU-COM-09: calculation base, default percentages and settlement periodicity (one row each,
  * changed from a small dialog), plus the scheduled changes and the change history, folded.
  */
-export function SettingsTab() {
+export function SettingsTab({ part = "setup" }: { part?: "setup" | "advanced" } = {}) {
   const { t } = useTranslation();
+  const { refresh: refreshOverview } = useOverview();
+  const firstLoad = useRef(true);
   const dateLocale = useDateLocale();
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -48,10 +52,13 @@ export function SettingsTab() {
     try {
       setSettings(await getSettings());
       setLoadError(null);
+      // The rest of the screen (Aguinaldo tab, setup badge…) follows what was just changed.
+      if (firstLoad.current) firstLoad.current = false;
+      else void refreshOverview();
     } catch (err) {
       setLoadError(translateApiError(err, t));
     }
-  }, [t]);
+  }, [t, refreshOverview]);
 
   useEffect(() => {
     void load();
@@ -207,16 +214,18 @@ export function SettingsTab() {
 
   const editingLabel = rows.find((r) => r.scope === editing)?.label ?? "";
 
-  return (
-    <div className="flex flex-col gap-3" data-testid="commission-settings">
-      <p className="px-0.5 text-sm text-ink-3">{t("femme.commissions.settings.intro")}</p>
-      {notice && (
-        <Alert variant="success" role="status">
-          {notice}
-        </Alert>
-      )}
-      <div className="rounded-card border border-line bg-surface shadow-sm">
-        {rows.map((r) => (
+  /** One numbered step of the setup (HU-COM-15): its title, why, and its rows with «Cambiar». */
+  function setupStep(n: 1 | 4, scopes: Exclude<Editing, null>[]) {
+    const stepRows = rows.filter((r) => scopes.includes(r.scope));
+    return (
+      <section className="rounded-card border border-line bg-surface shadow-sm" data-testid={`config-step-${n}`}>
+        <div className="px-4 pt-3">
+          <h3 className="font-heading font-extrabold text-ink">
+            {n} · {t(`femme.commissions.config.step${n}.title`)}
+          </h3>
+          <p className="text-sm text-ink-3">{t(`femme.commissions.config.step${n}.help`)}</p>
+        </div>
+        {stepRows.map((r) => (
           <div
             key={r.scope}
             className="grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-line px-4 py-2 first:border-t-0"
@@ -238,8 +247,40 @@ export function SettingsTab() {
             </Button>
           </div>
         ))}
-      </div>
+      </section>
+    );
+  }
 
+  function linkStep(n: 2 | 3, to: string) {
+    return (
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 py-3 shadow-sm" data-testid={`config-step-${n}`}>
+        <div className="min-w-0">
+          <h3 className="font-heading font-extrabold text-ink">
+            {n} · {t(`femme.commissions.config.step${n}.title`)}
+          </h3>
+          <p className="text-sm text-ink-3">{t(`femme.commissions.config.step${n}.help`)}</p>
+        </div>
+        <Link to={to} className="inline-flex min-h-11 items-center rounded-xl border border-line px-4 text-sm font-extrabold text-primary" data-testid={`config-step-${n}-link`}>
+          {t(`femme.commissions.config.step${n}.open`)}
+        </Link>
+      </section>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3" data-testid="commission-settings">
+      {notice && (
+        <Alert variant="success" role="status" data-testid="commission-settings-notice">
+          {notice}
+        </Alert>
+      )}
+      {part === "setup" && (
+        <>
+          <p className="px-0.5 text-sm text-ink-3">{t("femme.commissions.settings.intro")}</p>
+          {setupStep(1, ["BASE", "DEFAULT_SERVICE", "DEFAULT_PRODUCT", "PERIODICITY"])}
+          {linkStep(2, "/app/commissions/configurar/grupos")}
+          {linkStep(3, "/app/commissions/equipo")}
+          {setupStep(4, ["AGUINALDO_ENABLED", "AGUINALDO_DEFAULT", "FIXED_DESTINATION"])}
       {settings.aguinaldoEnabled && (
         <section className="rounded-card border border-line bg-surface shadow-sm" data-testid="commission-retention-profiles">
           <div className="px-4 pt-3">
@@ -284,6 +325,18 @@ export function SettingsTab() {
         </section>
       )}
 
+          <Link
+            to="/app/commissions/configurar/avanzado"
+            className="inline-flex min-h-11 items-center self-start font-bold text-primary"
+            data-testid="config-advanced-link"
+          >
+            {t("femme.commissions.config.advancedLink")} →
+          </Link>
+        </>
+      )}
+
+      {part === "advanced" && (
+        <>
       <button
         type="button"
         aria-expanded={scheduledOpen}
@@ -357,6 +410,9 @@ export function SettingsTab() {
             </tbody>
           </TableWrap>
         </div>
+      )}
+
+        </>
       )}
 
       <Modal

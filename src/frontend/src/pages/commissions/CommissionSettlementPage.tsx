@@ -109,7 +109,7 @@ export default function CommissionSettlementPage() {
 
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4" data-testid="commission-settlement-detail">
-      <Link to="/app/commissions" className="inline-flex min-h-11 items-center text-sm font-bold text-primary">
+      <Link to="/app/commissions/liquidar" className="inline-flex min-h-11 items-center text-sm font-bold text-primary" data-testid="settlement-back">
         ← {t("femme.commissions.pageTitle")}
       </Link>
 

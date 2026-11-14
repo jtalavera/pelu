@@ -327,18 +327,49 @@ export async function professionalWithAccess(
   return { id: created.id, email };
 }
 
-// ── Redesigned Comisiones screen (3 tabs + «⋯ More» menu) ────────────────────────────────────────
+// ── Comisiones (HU-COM-15): Inicio · Liquidar · Equipo · Actividad · Configurar ──────────────────
 
-/** Opens a section of the «More» menu (Preview / Reports / Settings) on the Comisiones screen. */
-export async function openCommissionsMore(page: Page, name: "Preview" | "Reports" | "Settings" | "Aguinaldo") {
-  await page.getByTestId("commissions-more-trigger").click();
-  await page.getByRole("menuitem", { name }).click();
+export type CommissionsSection = "home" | "settle" | "team" | "activity" | "setup";
+
+/** Opens Comisiones from the app menu, optionally going straight to one of its five places. */
+export async function openCommissions(page: Page, section?: CommissionsSection) {
+  await page.getByRole("link", { name: "Commissions" }).click();
+  await expect(page.getByTestId("commissions")).toBeVisible();
+  if (section && section !== "home") await page.getByTestId(`commissions-nav-${section}`).click();
 }
 
-/** Opens the «Generate settlements» dialog (the form lives in a dialog now). */
-export async function openGenerateSettlements(page: Page) {
-  await page.getByTestId("commission-generate-open").click();
-  await expect(page.getByRole("dialog")).toBeVisible();
+/**
+ * Compatibility helper for the places the old «⋯ More» menu used to reach: Reports and Movements
+ * live in Activity, Settings in Setup, Aguinaldo inside Team (only when the salon enabled it).
+ */
+export async function openCommissionsMore(page: Page, name: "Reports" | "Settings" | "Aguinaldo") {
+  if (name === "Reports") {
+    await page.getByTestId("commissions-nav-activity").click();
+    await page.getByTestId("activity-tab-reports").click();
+  } else if (name === "Settings") {
+    await page.getByTestId("commissions-nav-setup").click();
+  } else {
+    await page.getByTestId("commissions-nav-team").click();
+    await page.getByTestId("team-tab-aguinaldo").click();
+  }
+}
+
+/** The row of a professional in «Liquidar» (names come uppercased from the backend). */
+export const liquidarRow = (page: Page, name: string) =>
+  page.getByTestId("liquidar-row").filter({ hasText: name });
+
+/** Liquidar › step N button (generate / approve / pay everything pending) and its confirmation. */
+export async function liquidarStep(page: Page, step: 1 | 2 | 3) {
+  await page.getByTestId(`liquidar-step-${step}-action`).click();
+  await page.getByTestId("liquidar-confirm").click();
+}
+
+/** Opens a professional's page in Equipo, optionally on one of its tabs. */
+export async function openProfessional(page: Page, name: string, tab?: "summary" | "rules" | "aguinaldo" | "history") {
+  await page.getByTestId("commissions-nav-team").click();
+  await page.getByTestId("team-card").filter({ hasText: name }).click();
+  await expect(page.getByTestId("commission-professional")).toBeVisible();
+  if (tab && tab !== "summary") await page.getByTestId(`pro-tab-${tab}`).click();
 }
 
 /** Expands a folded section by its test id when it is collapsed. */

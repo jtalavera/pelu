@@ -681,6 +681,299 @@
           "adjustAmount": "Ingresá un monto entero distinto de 0, por ejemplo -2.350 o 5.000.",
           "reason": "Indicá el motivo del ajuste, por ejemplo «factura anulada»."
         }
+      },
+      "nav": {
+        "home": "Inicio",
+        "settle": "Liquidar",
+        "team": "Equipo",
+        "activity": "Actividad",
+        "setup": "Configurar"
+      },
+      "disabled": {
+        "title": "Comisiones todavía no está activada",
+        "what": "Acá vas a calcular, liquidar y pagar las comisiones de tu equipo.",
+        "how": "Pedí a Flowbit que active el módulo de comisiones para tu salón."
+      },
+      "period": {
+        "WEEKLY": "Semana del {{from}} al {{to}}",
+        "BIWEEKLY": "Quincena del {{from}} al {{to}}",
+        "MONTHLY": "Mes del {{from}} al {{to}}",
+        "MANUAL": "Período manual"
+      },
+      "status": {
+        "UNSETTLED": "Sin liquidar",
+        "DRAFT": "Borrador",
+        "APPROVED": "Aprobada",
+        "PAID": "Pagada",
+        "NONE": "Sin movimientos"
+      },
+      "guide": {
+        "title": "Empecemos: 4 pasos y tus comisiones quedan andando",
+        "intro": "Primero definimos cómo se calcula, después agrupamos los servicios y por último le ponemos reglas a cada profesional. Es una sola vez.",
+        "progress": "{{done}} de {{total}} pasos listos",
+        "optional": "Opcional",
+        "whatFor": "¿Para qué sirve?",
+        "open": "Abrir",
+        "change": "Revisar",
+        "footer": "Podés volver a cambiar todo esto cuando quieras desde «Configurar».",
+        "step1": {
+          "title": "Cómo se calcula",
+          "done": "Ya definido",
+          "todo": "Elegí la base y el % por defecto",
+          "why": "Define si la comisión se calcula sobre el precio con o sin IVA y qué % se paga cuando no hay una regla.",
+          "example": "Ejemplo: un servicio de 100.000 Gs con base «sin IVA» comisiona sobre 90.909 Gs.",
+          "start": "Ver cómo se calcula"
+        },
+        "step2": {
+          "title": "Grupos de servicios",
+          "done": "Todos los servicios tienen grupo",
+          "todo": "{{count}} servicios sin grupo",
+          "why": "Un grupo junta los servicios que comisionan igual (Color, Manos, Brushing…), así cargás una regla por grupo y no una por servicio.",
+          "example": "Ejemplo: «Manos» agrupa Manicura, Pedicura y Esmaltado semipermanente.",
+          "start": "Crear los grupos"
+        },
+        "step3": {
+          "title": "Reglas por profesional",
+          "done": "Todas tienen reglas",
+          "todo": "Faltan reglas de algunas profesionales",
+          "why": "Acá definís cuánto cobra cada profesional en cada grupo. Si no hay regla, se le paga el % por defecto.",
+          "example": "Ejemplo: Ana cobra 45 % en Color y 40 % en Manos.",
+          "start": "Cargar las reglas"
+        },
+        "step4": {
+          "title": "Aguinaldo y costo de producto",
+          "done": "Aguinaldo activado",
+          "todo": "Si tu salón retiene aguinaldo, activalo acá",
+          "why": "Algunos salones retienen un % de cada comisión para pagar el aguinaldo después. Si el tuyo no lo usa, saltá este paso.",
+          "example": "Ejemplo: se paga 45 % y se retiene 5 % de cada servicio.",
+          "start": "Configurar"
+        }
+      },
+      "home": {
+        "toPay": "A pagar · {{period}}",
+        "nothingYet": "Todavía no hay comisiones para liquidar en este período.",
+        "progress": "{{people}} profesionales · {{liquidated}} ya liquidadas · {{missing}} por liquidar",
+        "legend": {
+          "UNSETTLED": "{{count}} sin liquidar",
+          "DRAFT": "{{count}} en borrador",
+          "APPROVED": "{{count}} aprobadas",
+          "PAID": "{{count}} pagadas"
+        },
+        "continue": "Continuar con la liquidación",
+        "how": "¿Cómo funciona?",
+        "howTitle": "Liquidar en tres pasos",
+        "how1": "1. Generá las liquidaciones del período: se arman solas con lo facturado.",
+        "how2": "2. Revisalas y aprobalas: queda todo congelado.",
+        "how3": "3. Pagalas y registrá cómo (efectivo, transferencia…).",
+        "reviewTitle": "Para revisar",
+        "allGood": "Todo en orden: no hay nada para revisar.",
+        "review": {
+          "lines": {
+            "title": "{{count}} líneas sin profesional",
+            "help": "Hay ventas sin profesional asignada: no generan comisión.",
+            "action": "Asignar"
+          },
+          "ungrouped": {
+            "title": "{{count}} servicios sin grupo",
+            "help": "Sin grupo se les paga el % por defecto.",
+            "action": "Crear grupos"
+          },
+          "noRules": {
+            "title": "{{count}} profesionales sin reglas",
+            "help": "Se les paga el % por defecto en todo.",
+            "action": "Cargar reglas"
+          },
+          "drafts": {
+            "title": "{{count}} liquidaciones en borrador",
+            "help": "Falta aprobarlas para poder pagarlas.",
+            "action": "Revisar"
+          }
+        },
+        "teamTitle": "Tu equipo",
+        "teamAll": "Ver todo el equipo",
+        "teamEmpty": "Todavía no hay profesionales activos.",
+        "aguinaldoTitle": "Fondo de aguinaldo",
+        "aguinaldoHelp": "Lo retenido hasta hoy, para pagar a fin de año.",
+        "aguinaldoLink": "Ver aguinaldo"
+      },
+      "liquidar": {
+        "prevPeriod": "Período anterior",
+        "nextPeriod": "Período siguiente",
+        "periodicityNote": "Los períodos siguen la periodicidad de tu salón (se cambia en Configurar).",
+        "step1": {
+          "title": "Generar",
+          "help": "Arma una liquidación por profesional con lo facturado.",
+          "count": "{{count}} por generar",
+          "button": "Generar {{count}}"
+        },
+        "step2": {
+          "title": "Aprobar",
+          "help": "Revisá y aprobá: queda congelada.",
+          "count": "{{count}} por aprobar",
+          "button": "Aprobar {{count}}"
+        },
+        "step3": {
+          "title": "Pagar",
+          "help": "Registrá el pago de cada una.",
+          "count": "{{count}} por pagar · {{paid}} ya pagadas",
+          "button": "Pagar {{count}}"
+        },
+        "tableTitle": "Profesionales del período",
+        "total": "Total",
+        "filterAria": "Filtrar por estado",
+        "filterAll": "Todas",
+        "empty": "No hay profesionales en este estado.",
+        "pick": "Elegir a {{name}}",
+        "withSelected": "Con las seleccionadas:",
+        "action": {
+          "GENERATE": "Generar",
+          "APPROVE": "Aprobar",
+          "PAY": "Pagar",
+          "VIEW": "Ver"
+        },
+        "csv": "Descargar CSV",
+        "done": {
+          "GENERATE": "Se generaron {{count}} liquidaciones.",
+          "APPROVE": "Se aprobaron {{count}} liquidaciones.",
+          "PAY": "Se pagaron {{count}} liquidaciones.",
+          "GENERATE_one": "Se generó {{count}} liquidación.",
+          "APPROVE_one": "Se aprobó {{count}} liquidación.",
+          "PAY_one": "Se pagó {{count}} liquidación."
+        },
+        "dialog": {
+          "total": "Total: {{amount}}",
+          "retained": "Retenido para aguinaldo: {{amount}}",
+          "GENERATE": {
+            "title": "Generar {{count}} liquidaciones",
+            "description": "Se arma una liquidación en borrador por profesional con lo facturado.",
+            "confirm": "Generar {{count}}",
+            "period": "Período: {{period}}",
+            "title_one": "Generar {{count}} liquidación",
+            "confirm_one": "Generar {{count}}"
+          },
+          "APPROVE": {
+            "title": "Aprobar {{count}} liquidaciones",
+            "description": "Al aprobar, los montos quedan congelados.",
+            "confirm": "Aprobar {{count}}",
+            "warning": "Después de aprobar ya no se pueden cambiar los montos.",
+            "title_one": "Aprobar {{count}} liquidación",
+            "confirm_one": "Aprobar {{count}}"
+          },
+          "PAY": {
+            "title": "Pagar {{count}} liquidaciones",
+            "description": "Elegí cómo se pagó y la fecha.",
+            "confirm": "Registrar pago de {{count}}",
+            "method": "Forma de pago",
+            "date": "Fecha de pago",
+            "reference": "Referencia (opcional)",
+            "title_one": "Pagar {{count}} liquidación",
+            "confirm_one": "Registrar pago de {{count}}"
+          }
+        },
+        "detail": "Ver detalle"
+      },
+      "team": {
+        "tabPeople": "Profesionales ({{count}})",
+        "tabAguinaldo": "Aguinaldo",
+        "search": "Buscar profesional",
+        "filterAria": "Filtrar el equipo",
+        "filter": {
+          "all": "Todas ({{count}})",
+          "norules": "Sin reglas ({{count}})",
+          "retain": "Retienen aguinaldo ({{count}})",
+          "pending": "Con comisión pendiente ({{count}})"
+        },
+        "empty": "No hay profesionales que coincidan.",
+        "noRulesYet": "Sin reglas: cobra el % por defecto",
+        "missingRules": "Faltan reglas",
+        "thisPeriod": "Este período",
+        "aguinaldo": "Aguinaldo acumulado",
+        "footer": "Tocá una profesional para ver su resumen, sus reglas y su historial."
+      },
+      "pro": {
+        "back": "Volver al equipo",
+        "tabsAria": "Secciones de la profesional",
+        "tabSummary": "Resumen",
+        "tabRules": "Reglas",
+        "tabAguinaldo": "Aguinaldo",
+        "tabHistory": "Historial",
+        "rulesCount_one": "{{count}} regla",
+        "rulesCount_other": "{{count}} reglas",
+        "summaryTotal": "A pagar este período",
+        "summaryLines": "{{count}} líneas facturadas",
+        "summaryServices": "Servicios",
+        "summaryProducts": "Productos",
+        "summaryAdjustments": "Ajustes",
+        "summaryRetained": "Retenido para aguinaldo",
+        "openSettlement": "Abrir la liquidación",
+        "goSettle": "Ir a liquidar",
+        "rulesIntro": "Lo que cobra {{name}} en cada grupo de servicios. Gana la regla más específica.",
+        "noRulesYet": "{{name}} todavía no tiene reglas.",
+        "defaultNote": "Mientras tanto se le paga el {{percent}} por defecto.",
+        "createGroups": "Crear grupos de servicios",
+        "sentencePaid": "Cobra {{percent}}",
+        "sentenceRetains": "retiene {{percent}} para aguinaldo",
+        "sentenceFixedPro": "costo de producto {{amount}} (para ella)",
+        "sentenceFixedSalon": "costo de producto {{amount}} (para el salón)",
+        "servicesInGroup_one": "{{count}} servicio en el grupo",
+        "servicesInGroup_other": "{{count}} servicios en el grupo",
+        "remove": "Quitar",
+        "addRule": "Agregar una regla",
+        "pickGroup": "Elegí el grupo de servicios de la nueva regla.",
+        "groupLabel": "Grupo de servicios",
+        "next": "Siguiente →",
+        "editorTitle": "{{group}} · {{name}}",
+        "fieldPaid": "Cobra (%)",
+        "fieldPaidHelp": "Porcentaje del servicio que se le paga.",
+        "fieldRetention": "Retiene para aguinaldo (%)",
+        "fieldRetentionHelp": "Se guarda en el fondo y se paga más adelante.",
+        "fieldFixed": "Costo de producto (Gs)",
+        "fieldFixedHelp": "Monto fijo que se descuenta antes de calcular el %. Dejalo vacío si no aplica.",
+        "fieldDestination": "El costo de producto va para",
+        "exampleTitle": "Ejemplo con un servicio de",
+        "exampleRetained": "Se retiene para aguinaldo",
+        "applySummary": "Regla de {{group}} para {{name}}",
+        "removeSummary": "Quitar la regla de {{group}} de {{name}}",
+        "copySummary": "Copiar {{count}} reglas a {{name}}",
+        "exceptionHint": "¿Un servicio puntual comisiona distinto?",
+        "exceptionLink": "Cargá una excepción en Avanzado",
+        "summaryCarried": "Incluye {{amount}} arrastrados de períodos anteriores.",
+        "summaryLines_one": "{{count}} línea facturada"
+      },
+      "activity": {
+        "intro": "Todo lo que pasó con las comisiones: cada movimiento y los reportes.",
+        "movements": "Movimientos",
+        "reports": "Reportes"
+      },
+      "config": {
+        "back": "Volver a Configurar",
+        "advancedLink": "Opciones avanzadas (excepciones, cambios programados e historial)",
+        "step1": {
+          "title": "Cómo se calcula",
+          "help": "La base de cálculo, los % por defecto y cada cuánto se liquida."
+        },
+        "step2": {
+          "title": "Grupos de servicios",
+          "help": "Juntá los servicios que comisionan igual.",
+          "open": "Abrir grupos"
+        },
+        "step3": {
+          "title": "Reglas por profesional",
+          "help": "Cuánto cobra cada profesional en cada grupo.",
+          "open": "Ir al equipo"
+        },
+        "step4": {
+          "title": "Aguinaldo y costo de producto",
+          "help": "Si tu salón retiene aguinaldo y a quién va el costo de producto."
+        }
+      },
+      "advanced": {
+        "precedenceTitle": "Qué regla gana",
+        "precedence1": "Profesional + servicio puntual",
+        "precedence2": "Profesional + grupo",
+        "precedence3": "Servicio puntual",
+        "precedence4": "Grupo",
+        "precedence5": "% por defecto"
       }
     },
     "appTitle": "Flowbit",

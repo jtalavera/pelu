@@ -12,7 +12,7 @@ import {
   provisionCommissionWorld,
   restoreCommissionsGlobal,
   type CommissionWorld,
-  openCommissionsMore,
+  openCommissions,
 } from "../../fixtures/commissions";
 
 /** HU-COM-09 · Aplicar cambios de cálculo a mitad de periodo (§4.4). */
@@ -103,8 +103,8 @@ test("«Desde el inicio del próximo periodo»: queda programado, no altera el p
 
   // Listed in settings with what / current / new / date / author, and cancellable.
   await page.keyboard.press("Escape");
-  await page.getByRole("link", { name: "Commissions" }).click();
-  await openCommissionsMore(page, "Settings");
+  await openCommissions(page, "setup");
+  await page.getByTestId("config-advanced-link").click(); // HU-COM-15: scheduled changes live in Advanced
   await page.getByTestId("commission-scheduled-toggle").click();
   const row = page.getByTestId("commission-scheduled-row");
   await expect(row).toContainText(w.service.name);

@@ -5,6 +5,7 @@ import com.cursorpoc.backend.commission.CommissionAccess;
 import com.cursorpoc.backend.commission.CommissionConfigService;
 import com.cursorpoc.backend.commission.CommissionExportService;
 import com.cursorpoc.backend.commission.CommissionGroupService;
+import com.cursorpoc.backend.commission.CommissionOverviewService;
 import com.cursorpoc.backend.commission.CommissionQueryService;
 import com.cursorpoc.backend.commission.CommissionReassignmentService;
 import com.cursorpoc.backend.commission.CommissionSettlementService;
@@ -32,6 +33,7 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.ItemWithoutRule;
 import com.cursorpoc.backend.web.dto.CommissionDtos.LineWithoutBeneficiary;
 import com.cursorpoc.backend.web.dto.CommissionDtos.MySettlementDetail;
 import com.cursorpoc.backend.web.dto.CommissionDtos.MySummary;
+import com.cursorpoc.backend.web.dto.CommissionDtos.Overview;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PagedSettlements;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PayRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalRulesView;
@@ -83,6 +85,7 @@ public class CommissionController {
   private final CommissionReassignmentService reassignmentService;
   private final CommissionGroupService groupService;
   private final AguinaldoService aguinaldoService;
+  private final CommissionOverviewService overviewService;
 
   public CommissionController(
       CommissionAccess access,
@@ -92,7 +95,8 @@ public class CommissionController {
       CommissionExportService exportService,
       CommissionReassignmentService reassignmentService,
       CommissionGroupService groupService,
-      AguinaldoService aguinaldoService) {
+      AguinaldoService aguinaldoService,
+      CommissionOverviewService overviewService) {
     this.access = access;
     this.configService = configService;
     this.settlementService = settlementService;
@@ -101,6 +105,19 @@ public class CommissionController {
     this.reassignmentService = reassignmentService;
     this.groupService = groupService;
     this.aguinaldoService = aguinaldoService;
+    this.overviewService = overviewService;
+  }
+
+  /** HU-COM-15: one row per professional for a settlement period, plus what is worth reviewing. */
+  @GetMapping("/overview")
+  public Overview overview(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @RequestParam(required = false, defaultValue = "0") int offset) {
+    return admin(
+        p,
+        "GET",
+        "/api/commissions/overview",
+        () -> overviewService.overview(p.getTenantId(), offset));
   }
 
   // ── Groups, professional rules (HU-COM-14) ────────────────────────────────────────────────

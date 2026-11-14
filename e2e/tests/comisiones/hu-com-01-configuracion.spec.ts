@@ -7,7 +7,7 @@ import {
   restoreCommissionsGlobal,
   setTenantFlag,
   type CommissionWorld,
-  openCommissionsMore,
+  openCommissions,
 } from "../../fixtures/commissions";
 
 /** HU-COM-01 · Configurar el módulo de comisiones del negocio (base y comisión general en Reglas → Reglas generales). */
@@ -23,8 +23,7 @@ test.afterAll(async ({ request }) => {
 });
 
 async function openSettings(page: import("@playwright/test").Page) {
-  await page.getByRole("link", { name: "Commissions" }).click();
-  await openCommissionsMore(page, "Settings");
+  await openCommissions(page, "setup");
   await expect(page.getByTestId("commission-settings")).toBeVisible();
 }
 
@@ -57,6 +56,8 @@ test("la base por defecto es «Sin IVA», con ayuda y ejemplo, en Configuración
   await applyImmediately(page);
   await expect(page.getByTestId("commission-setting-BASE")).toContainText("Including VAT");
 
+  // HU-COM-15: the change history lives in Setup › Advanced.
+  await page.getByTestId("config-advanced-link").click();
   await page.getByTestId("commission-history-toggle").click();
   const history = page.getByTestId("commission-settings-history");
   await expect(history.getByText("Calculation base").first()).toBeVisible();

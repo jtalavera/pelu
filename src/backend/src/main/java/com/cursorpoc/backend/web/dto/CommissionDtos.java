@@ -157,6 +157,42 @@ public final class CommissionDtos {
       BigDecimal defaultPercentService,
       List<GroupRuleRow> groups) {}
 
+  // ── Overview of a settlement period (HU-COM-15) ───────────────────────────────────────────
+
+  /**
+   * One professional in a period. {@code status}: UNSETTLED (accrued, no settlement yet), DRAFT,
+   * APPROVED, PAID or NONE (nothing to pay).
+   */
+  public record OverviewRow(
+      Long professionalId,
+      String professionalName,
+      String status,
+      BigDecimal amount,
+      BigDecimal retention,
+      Long settlementId,
+      int ruleCount) {}
+
+  public record Overview(
+      PeriodInfo period,
+      /** 0 = the current period, -1 = the one before… */
+      int offset,
+      List<OverviewRow> rows,
+      /** What the professionals earned in the period (paid or not). */
+      BigDecimal total,
+      BigDecimal retentionTotal,
+      int unsettled,
+      int drafts,
+      int approved,
+      int paid,
+      /* "Para revisar" */
+      int linesWithoutProfessional,
+      int ungroupedServices,
+      int professionalsWithoutRules,
+      int groupCount,
+      /* Aguinaldo */
+      boolean aguinaldoEnabled,
+      BigDecimal aguinaldoBalance) {}
+
   // ── Aguinaldo fund (HU-COM-14) ────────────────────────────────────────────────────────────
 
   public record AguinaldoBalance(

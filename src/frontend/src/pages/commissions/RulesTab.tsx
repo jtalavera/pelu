@@ -18,12 +18,10 @@ import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ApplyChangeDialog } from "./ApplyChangeDialog";
-import { GroupsPanel } from "./GroupsPanel";
-import { ProfessionalRulesPanel } from "./ProfessionalRulesPanel";
 import { describeVersionValue } from "./ScheduledChangesList";
 import { TableWrap, formatPercent, parsePercentInput, tdClass, thClass, todayYmd } from "./common";
 
-type SubTab = "PROFESSIONAL" | "SERVICE" | "PRODUCT" | "GROUPS";
+type SubTab = "SERVICE" | "PRODUCT";
 
 /** Unsaved changes, keyed by scope + item + professional ("Guardar cambios" applies them all). */
 type Pending = Record<string, ConfigChange>;
@@ -72,9 +70,7 @@ const normalize = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, 
 /** HU-COM-02 rules: general % → item % → professional + item exception (the most specific wins). */
 export function RulesTab() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<SubTab>("PROFESSIONAL");
-  /** Bumped after saving so the «Por profesional» view reads the saved rules again. */
-  const [reloadKey, setReloadKey] = useState(0);
+  const [tab, setTab] = useState<SubTab>("SERVICE");
   const [views, setViews] = useState<Partial<Record<ItemKind, RulesView>>>({});
   const [date, setDate] = useState(todayYmd());
   const [onlyExceptions, setOnlyExceptions] = useState(false);
@@ -125,7 +121,7 @@ export function RulesTab() {
       <p className="px-0.5 text-sm text-ink-3">{t("femme.commissions.rules.intro")}</p>
 
       <div className="flex gap-2" role="group" aria-label={t("femme.commissions.tabs.rules")}>
-        {(["PROFESSIONAL", "SERVICE", "PRODUCT", "GROUPS"] as const).map((k) => (
+        {(["SERVICE", "PRODUCT"] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -151,10 +147,6 @@ export function RulesTab() {
       )}
       {error && <Alert variant="destructive">{error}</Alert>}
 
-      {tab === "PROFESSIONAL" && (
-        <ProfessionalRulesPanel pending={pending} stage={stage} unstage={unstage} reloadKey={reloadKey} />
-      )}
-      {tab === "GROUPS" && <GroupsPanel />}
       {(tab === "SERVICE" || tab === "PRODUCT") &&
         (!views[tab] ? (
         <Spinner />
@@ -213,7 +205,6 @@ export function RulesTab() {
           setSaving(false);
           setPending({});
           setNotice(t("femme.commissions.applyDialog.applied"));
-          setReloadKey((k) => k + 1);
           void load();
         }}
       />

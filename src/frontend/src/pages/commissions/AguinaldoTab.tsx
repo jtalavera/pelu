@@ -44,7 +44,7 @@ function parseSigned(raw: string): number | null {
  * HU-COM-14 «Aguinaldo»: the fund of what was retained from each professional's commissions —
  * balances, movements, payments (partial, whole, on departure, to everyone) and manual adjustments.
  */
-export function AguinaldoTab() {
+export function AguinaldoTab({ professionalId }: { professionalId?: number } = {}) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const [summary, setSummary] = useState<AguinaldoSummary | null>(null);
@@ -59,20 +59,31 @@ export function AguinaldoTab() {
 
   const load = useCallback(async () => {
     try {
-      setSummary(await getAguinaldo());
+      const all = await getAguinaldo();
+      if (professionalId === undefined) setSummary(all);
+      else {
+        const balances = all.balances.filter((b) => b.professionalId === professionalId);
+        setSummary({ ...all, balances, totalBalance: balances.reduce((acc, b) => acc + b.balance, 0) });
+      }
       setError(null);
     } catch (err) {
       setError(translateApiError(err, t));
     }
-  }, [t]);
+  }, [t, professionalId]);
 
   useEffect(() => {
     void load();
+    if (professionalId !== undefined) {
+      getAguinaldoDetail(professionalId)
+        .then(setDetail)
+        .catch((err) => setError(translateApiError(err, t)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load]);
 
-  async function openDetail(professionalId: number) {
+  async function openDetail(id: number) {
     try {
-      setDetail(await getAguinaldoDetail(professionalId));
+      setDetail(await getAguinaldoDetail(id));
     } catch (err) {
       setError(translateApiError(err, t));
     }
@@ -194,7 +205,7 @@ export function AguinaldoTab() {
             </b>
           </div>
         </div>
-        {payable.length > 0 && (
+        {payable.length > 0 && professionalId === undefined && (
           <Button
             type="button"
             className={ACTION_BUTTON}

@@ -7,7 +7,8 @@ import {
   generateSettlements,
   issueInvoice,
   loginAdminUi,
-  openGenerateSettlements,
+  openCommissions,
+  liquidarRow,
   provisionCommissionWorld,
   restoreCommissionsGlobal,
   todayYmd,
@@ -44,19 +45,15 @@ test("Borrador → Aprobada → Pagada desde la UI, con detalle por línea, subt
   await entriesOfInvoice(request, w.adminToken, inv.id, 2);
 
   await loginAdminUi(page, w);
-  await page.getByRole("link", { name: "Commissions" }).click();
-  await openGenerateSettlements(page);
-  // «Profesionales» is a multi-select: pick Ana only.
-  await page.locator("#settle-professional").click();
-  await page.getByRole("listbox").getByRole("button", { name: w.ana.name }).click();
-  // Escape would close the dialog: click its title to dismiss the list instead.
-  await page.getByRole("dialog").getByRole("heading").first().click();
-  await page.getByTestId("commission-generate-settlements").click();
-  await expect(page.getByRole("status").filter({ hasText: "1 settlement generated." })).toBeVisible();
-  const row = page.getByTestId("commission-settlement-row").first();
-  await expect(row).toContainText(w.ana.name);
+  await openCommissions(page, "settle");
+  // HU-COM-15: Liquidar lists every professional with her state; generate Ana's from her row.
+  const row = liquidarRow(page, w.ana.name);
+  await expect(row).toContainText("Not settled");
+  await row.getByTestId("liquidar-row-generate").click();
+  await page.getByTestId("liquidar-confirm").click();
+  await expect(page.getByTestId("liquidar-notice")).toContainText("1 settlement was generated.");
   await expect(row).toContainText("Draft");
-  await row.click();
+  await row.getByTestId("liquidar-row-detail").click();
 
   const detail = page.getByTestId("commission-settlement-detail");
   await expect(detail.getByTestId("settlement-line")).toHaveCount(2);
@@ -176,20 +173,14 @@ test("listado paginado y filtrable por profesional, estado y periodo; exportaci�
   expect(paged.total).toBe(2);
 
   await loginAdminUi(page, w);
-  await page.getByRole("link", { name: "Commissions" }).click();
-  await expect(page.getByTestId("commission-settlement-row")).toHaveCount(2);
-  await page.getByTestId("settlements-chip-APPROVED").click();
-  await expect(page.getByTestId("commission-settlement-row")).toHaveCount(1);
-  await page.getByTestId("settlements-chip-ALL").click();
-  await page.getByTestId("settlements-filters-toggle").click();
-  // The professional filter is a multi-select (several professionals at once).
-  await page.locator("#settle-filter-professional").click();
-  await page.getByRole("listbox").getByRole("button", { name: w.bea.name }).click();
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("commission-settlement-row")).toHaveCount(1);
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    page.getByRole("button", { name: "Export CSV" }).click(),
-  ]);
+  await openCommissions(page, "settle");
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
+  // HU-COM-15: the filter chips are the states of the period (with their counters).
+  await expect(page.getByTestId("liquidar-filter-APPROVED")).toContainText("1");
+  await page.getByTestId("liquidar-filter-APPROVED").click();
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(1);
+  await page.getByTestId("liquidar-filter-ALL").click();
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("liquidar-csv").click()]);
   expect(download.suggestedFilename()).toBe("liquidaciones.csv");
 });
