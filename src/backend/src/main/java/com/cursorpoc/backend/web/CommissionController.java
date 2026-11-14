@@ -1,21 +1,32 @@
 package com.cursorpoc.backend.web;
 
+import com.cursorpoc.backend.commission.AguinaldoService;
 import com.cursorpoc.backend.commission.CommissionAccess;
 import com.cursorpoc.backend.commission.CommissionConfigService;
 import com.cursorpoc.backend.commission.CommissionExportService;
+import com.cursorpoc.backend.commission.CommissionGroupService;
 import com.cursorpoc.backend.commission.CommissionQueryService;
 import com.cursorpoc.backend.commission.CommissionReassignmentService;
 import com.cursorpoc.backend.commission.CommissionSettlementService;
 import com.cursorpoc.backend.domain.CommissionSettlement;
+import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.web.dto.CommissionDtos.AdjustmentRequest;
+import com.cursorpoc.backend.web.dto.CommissionDtos.AguinaldoAdjustmentRequest;
+import com.cursorpoc.backend.web.dto.CommissionDtos.AguinaldoBulkPaymentRequest;
+import com.cursorpoc.backend.web.dto.CommissionDtos.AguinaldoDetail;
+import com.cursorpoc.backend.web.dto.CommissionDtos.AguinaldoPaymentRequest;
+import com.cursorpoc.backend.web.dto.CommissionDtos.AguinaldoSummary;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyChangesRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyChangesResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyModeOptions;
+import com.cursorpoc.backend.web.dto.CommissionDtos.AssignGroupsRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.AssignInvoiceLinesRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.AssignLineRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.EntryView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GenerateSettlementsRequest;
+import com.cursorpoc.backend.web.dto.CommissionDtos.GroupRequest;
+import com.cursorpoc.backend.web.dto.CommissionDtos.GroupView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ItemRulesResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ItemWithoutRule;
 import com.cursorpoc.backend.web.dto.CommissionDtos.LineWithoutBeneficiary;
@@ -23,6 +34,7 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.MySettlementDetail;
 import com.cursorpoc.backend.web.dto.CommissionDtos.MySummary;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PagedSettlements;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PayRequest;
+import com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalRulesView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ReassignRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ReportResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.RulesView;
@@ -31,6 +43,7 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementDetail;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementGenerationCheck;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementPreview;
 import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementView;
+import com.cursorpoc.backend.web.dto.CommissionDtos.UngroupedService;
 import com.cursorpoc.backend.web.dto.CommissionDtos.VoidSettlementRequest;
 import java.time.LocalDate;
 import java.util.List;
@@ -40,6 +53,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -47,6 +61,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -66,6 +81,8 @@ public class CommissionController {
   private final CommissionQueryService queryService;
   private final CommissionExportService exportService;
   private final CommissionReassignmentService reassignmentService;
+  private final CommissionGroupService groupService;
+  private final AguinaldoService aguinaldoService;
 
   public CommissionController(
       CommissionAccess access,
@@ -73,13 +90,177 @@ public class CommissionController {
       CommissionSettlementService settlementService,
       CommissionQueryService queryService,
       CommissionExportService exportService,
-      CommissionReassignmentService reassignmentService) {
+      CommissionReassignmentService reassignmentService,
+      CommissionGroupService groupService,
+      AguinaldoService aguinaldoService) {
     this.access = access;
     this.configService = configService;
     this.settlementService = settlementService;
     this.queryService = queryService;
     this.exportService = exportService;
     this.reassignmentService = reassignmentService;
+    this.groupService = groupService;
+    this.aguinaldoService = aguinaldoService;
+  }
+
+  // ── Groups, professional rules (HU-COM-12) ────────────────────────────────────────────────
+
+  @GetMapping("/groups")
+  public List<GroupView> groups(@AuthenticationPrincipal FemmeUserPrincipal p) {
+    return admin(p, "GET", "/api/commissions/groups", () -> groupService.list(p.getTenantId()));
+  }
+
+  @PostMapping("/groups")
+  public GroupView createGroup(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody GroupRequest request) {
+    return admin(
+        p,
+        "POST",
+        "/api/commissions/groups",
+        () -> groupService.create(p.getTenantId(), request == null ? null : request.name()));
+  }
+
+  @PutMapping("/groups/{id}")
+  public ResponseEntity<Void> renameGroup(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @PathVariable long id,
+      @RequestBody GroupRequest request) {
+    return admin(
+        p,
+        "PUT",
+        "/api/commissions/groups/" + id,
+        () -> {
+          groupService.rename(p.getTenantId(), id, request == null ? null : request.name());
+          return ResponseEntity.noContent().build();
+        });
+  }
+
+  @DeleteMapping("/groups/{id}")
+  public ResponseEntity<Void> deleteGroup(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @PathVariable long id) {
+    return admin(
+        p,
+        "DELETE",
+        "/api/commissions/groups/" + id,
+        () -> {
+          groupService.delete(p.getTenantId(), id);
+          return ResponseEntity.noContent().build();
+        });
+  }
+
+  @GetMapping("/groups/ungrouped")
+  public List<UngroupedService> ungrouped(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @RequestParam(required = false, defaultValue = "SERVICE") String kind) {
+    return admin(
+        p,
+        "GET",
+        "/api/commissions/groups/ungrouped",
+        () -> groupService.ungrouped(p.getTenantId(), parseKind(kind)));
+  }
+
+  @PostMapping("/groups/assign")
+  public Map<String, Integer> assignGroups(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody AssignGroupsRequest request) {
+    return admin(
+        p,
+        "POST",
+        "/api/commissions/groups/assign",
+        () ->
+            Map.of(
+                "changed",
+                groupService.assign(
+                    p.getTenantId(), request == null ? null : request.assignments())));
+  }
+
+  @PostMapping("/groups/{id}/assign-ungrouped")
+  public Map<String, Integer> assignUngrouped(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @PathVariable long id,
+      @RequestParam(required = false, defaultValue = "PRODUCT") String kind) {
+    return admin(
+        p,
+        "POST",
+        "/api/commissions/groups/" + id + "/assign-ungrouped",
+        () ->
+            Map.of("changed", groupService.assignUngrouped(p.getTenantId(), id, parseKind(kind))));
+  }
+
+  @GetMapping("/professionals/{professionalId}/rules")
+  public ProfessionalRulesView professionalRules(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @PathVariable long professionalId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate date) {
+    return admin(
+        p,
+        "GET",
+        "/api/commissions/professionals/" + professionalId + "/rules",
+        () -> groupService.professionalRules(p.getTenantId(), professionalId, date));
+  }
+
+  // ── Aguinaldo fund (HU-COM-12) ────────────────────────────────────────────────────────────
+
+  @GetMapping("/aguinaldo")
+  public AguinaldoSummary aguinaldo(@AuthenticationPrincipal FemmeUserPrincipal p) {
+    return admin(
+        p, "GET", "/api/commissions/aguinaldo", () -> aguinaldoService.summary(p.getTenantId()));
+  }
+
+  @GetMapping("/aguinaldo/{professionalId}")
+  public AguinaldoDetail aguinaldoDetail(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @PathVariable long professionalId) {
+    return admin(
+        p,
+        "GET",
+        "/api/commissions/aguinaldo/" + professionalId,
+        () -> aguinaldoService.detail(p.getTenantId(), professionalId));
+  }
+
+  @PostMapping("/aguinaldo/payments")
+  public AguinaldoDetail aguinaldoPay(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody AguinaldoPaymentRequest request) {
+    return admin(
+        p,
+        "POST",
+        "/api/commissions/aguinaldo/payments",
+        () -> {
+          aguinaldoService.pay(p.getTenantId(), p.getUsername(), request);
+          return aguinaldoService.detail(p.getTenantId(), request.professionalId());
+        });
+  }
+
+  @PostMapping("/aguinaldo/payments/all")
+  public Map<String, Integer> aguinaldoPayAll(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @RequestBody AguinaldoBulkPaymentRequest request) {
+    return admin(
+        p,
+        "POST",
+        "/api/commissions/aguinaldo/payments/all",
+        () -> Map.of("paid", aguinaldoService.payAll(p.getTenantId(), p.getUsername(), request)));
+  }
+
+  @PostMapping("/aguinaldo/adjustments")
+  public AguinaldoDetail aguinaldoAdjust(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @RequestBody AguinaldoAdjustmentRequest request) {
+    return admin(
+        p,
+        "POST",
+        "/api/commissions/aguinaldo/adjustments",
+        () -> {
+          aguinaldoService.adjust(p.getTenantId(), p.getUsername(), request);
+          return aguinaldoService.detail(p.getTenantId(), request.professionalId());
+        });
+  }
+
+  private static ServiceKind parseKind(String raw) {
+    try {
+      return ServiceKind.valueOf(raw);
+    } catch (RuntimeException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_SCOPE_INVALID");
+    }
   }
 
   // ── Configuration & rules ─────────────────────────────────────────────────────────────────

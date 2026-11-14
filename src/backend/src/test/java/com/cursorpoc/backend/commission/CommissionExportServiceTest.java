@@ -24,6 +24,8 @@ class CommissionExportServiceTest {
           LocalDate.of(2026, 10, 31),
           "PAID",
           new BigDecimal("40000"),
+          BigDecimal.ZERO,
+          BigDecimal.ZERO,
           Instant.EPOCH,
           null,
           null,

@@ -40,7 +40,10 @@ public class CommissionConfigVersion {
   @Column(name = "professional_id")
   private Long professionalId;
 
-  @Column(name = "config_value", length = 32)
+  @Column(name = "group_id")
+  private Long groupId;
+
+  @Column(name = "config_value", length = 128)
   private String configValue;
 
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
@@ -110,6 +113,14 @@ public class CommissionConfigVersion {
 
   public void setProfessionalId(Long professionalId) {
     this.professionalId = professionalId;
+  }
+
+  public Long getGroupId() {
+    return groupId;
+  }
+
+  public void setGroupId(Long groupId) {
+    this.groupId = groupId;
   }
 
   public String getConfigValue() {
