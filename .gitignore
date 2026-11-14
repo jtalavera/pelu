@@ -7,3 +7,9 @@ local-pelu-sqlserver/local-pelu-sqlserver.sqlproj
 
 # Stock cross-system e2e: control-stock checked out next to the sources in CI
 /control-stock/
+
+# Staging scripts working dir (downloaded BACPACs, run reports) — scripts/staging/lib.sh
+/.staging/
+# Load-test seed generator
+/loadtest/seed/node_modules/
+/loadtest/seed/out/
