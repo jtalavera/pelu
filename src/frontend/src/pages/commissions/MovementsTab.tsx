@@ -19,13 +19,13 @@ const initials = (name: string | null) =>
     .toUpperCase();
 
 /** Every commission movement, with «Cambiar profesional» on the live ones. */
-export function MovementsTab() {
+export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: number } = {}) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const professionals = useProfessionals();
   const [from, setFrom] = useState(oneMonthAgoYmd());
   const [to, setTo] = useState(todayYmd());
-  const [professionalIds, setProfessionalIds] = useState<number[]>([]);
+  const [professionalIds, setProfessionalIds] = useState<number[]>(fixedProfessionalId ? [fixedProfessionalId] : []);
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [entries, setEntries] = useState<EntryView[] | null>(null);
@@ -50,7 +50,7 @@ export function MovementsTab() {
 
   /** Back to the defaults (this month, every professional, no text) and search again. */
   function clearFilters() {
-    const defaults = { from: oneMonthAgoYmd(), to: todayYmd(), professionalIds: [] as number[] };
+    const defaults = { from: oneMonthAgoYmd(), to: todayYmd(), professionalIds: (fixedProfessionalId ? [fixedProfessionalId] : []) as number[] };
     setFrom(defaults.from);
     setTo(defaults.to);
     setProfessionalIds(defaults.professionalIds);
@@ -137,6 +137,7 @@ export function MovementsTab() {
                 <LocalizedDateInput id="mov-to" value={to} onChange={setTo} />
               </div>
             </div>
+            {!fixedProfessionalId && (
             <MultiSelect
               id="mov-professional"
               label={t("femme.commissions.common.professionals")}
@@ -148,6 +149,7 @@ export function MovementsTab() {
               noResultsText={t("femme.commissions.common.noProfessionals")}
               summaryTemplate={t("femme.commissions.common.professionalsSelected")}
             />
+            )}
             <div className="flex flex-wrap gap-2">
               <Button type="submit" className="min-h-11">
                 {t("femme.commissions.common.search")}
