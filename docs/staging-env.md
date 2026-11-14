@@ -1,6 +1,7 @@
 # Staging environment (`femme-staging-rg`) — plan
 
-> Status: **plan only** — nothing below is implemented yet. Each task (T1…T8) has acceptance checks.
+> Status: **implemented as code, not applied yet.** All files for T1…T8 are in the repo (see §8).
+> Nothing has been applied to Azure or GitHub. The acceptance checks below run on first use (§9).
 
 ## 1. Purpose & principles
 
@@ -68,6 +69,10 @@ into `environments/staging/terraform.tfvars`, and T2 verifies them.
 | `key_vault_soft_delete_retention_days` / `purge_protection_enabled` | 7 / `false` | A disposable vault must be purgeable; purge protection is irreversible |
 | `frontend_custom_domains`, `website_*` | unset | `flowbit.tech` belongs to prod |
 | `manage_resource_providers` (new, T1) | `false` | The dev state already owns the subscription's provider registrations |
+| `ci_deployer_principal_id` (new, T4) | CI app's object id | Contributor on the recreated RG lives in the staging state |
+| `email_custom_domain`, `email_domain_verification_enabled` | unset | Never send from prod's domain. Prod sets none today, but if it ever does, staging must not follow |
+| `stock_api_base_url` | unset (enforced) | Never call a real Stock system, even after prod gets its Stock URL |
+| `deployer_ip`, `entra_sql_admin_*` | same as dev | Operator machine / admin group. `up.sh` overrides `deployer_ip` with the current public IP |
 | State key | `staging.tfstate` in the dev state account | Separate state |
 | Data | sanitized (§T5) | Privacy and safety |
 
@@ -75,36 +80,41 @@ into `environments/staging/terraform.tfvars`, and T2 verifies them.
 
 ### T1 — Terraform: add the `staging` environment
 
-- [ ] `variables.tf`: allow `staging` in the `environment` validation (`test|prod|staging`).
-- [ ] New `manage_resource_providers` bool (default `true`). Add
+- [x] `variables.tf`: allow `staging` in the `environment` validation (`test|prod|staging`).
+- [x] New `manage_resource_providers` bool (default `true`). Add
       `count = var.manage_resource_providers ? 1 : 0` on
       `azurerm_resource_provider_registration.app` and `.communication`, and fix the
       `depends_on` references.
       **Critical:** without this, a staging apply fails because the registration already exists,
       and a staging `destroy` would **unregister `Microsoft.App`** across the whole subscription,
       which breaks dev. The existing dev/prod states need a `terraform state mv` to the `[0]`
-      addresses (or a `moved {}` block) so they don't plan a destroy.
-- [ ] `environments/staging/backend.hcl`: same account as dev (`rg-terraform-state-dev` /
+      addresses (or a `moved {}` block) so they don't plan a destroy. **Done with `moved {}`
+      blocks** in `main.tf`, so no manual `state mv` is needed.
+- [x] `environments/staging/backend.hcl`: same account as dev (`rg-terraform-state-dev` /
       `sttfstatedev3tfruqf0` / `tfstate`) with `key = "staging.tfstate"`. It overrides the `key` in
       `versions.tf`.
-- [ ] `environments/staging/terraform.tfvars`: subscription `677a6eab…`,
+- [x] `environments/staging/terraform.tfvars`: subscription `677a6eab…`,
       `environment = "staging"`, every value from §2.1, the deviations from §2.2, same
       `entra_sql_admin_*` and `deployer_ip` as dev.
-- [ ] Update the environments table and apply commands in `infrastructure_v2/infrastructure_v2.md`.
+- [x] Update the environments table and apply commands in `infrastructure_v2/infrastructure_v2.md`.
 
 **Acceptance:** `terraform plan` for staging creates `femme-staging-rg` with no provider
 registrations. `terraform plan` for dev and for prod shows **no changes**.
 
 ### T2 — Parity guard
 
-- [ ] `scripts/staging/check-parity.sh`:
+- [x] `scripts/staging/check-parity.sh` (logic in `parity.py`, self-test in `test-parity.sh`):
   - parses `environments/prod/terraform.tfvars` and `environments/staging/terraform.tfvars`
   - compares every performance/cost/scale key from §2.1, taking variable defaults into account
     when a key is absent (e.g. `backend_report_warmup_enabled`)
-  - fails on any difference not listed in the §2.2 allowlist
-- [ ] Runs as a CI step on PRs that touch `infrastructure_v2/**`, so a prod sizing change without
-      the matching staging change fails the PR.
-- [ ] Live drift check in `up.sh`: read the **live** prod settings (`az sql db show` SKU,
+  - fails on any difference not listed in the §2.2 allowlist. It compares **every** declared
+    variable, not a hand-picked list, so a new sizing variable is covered automatically
+  - also enforces staging safety rules: `sifen_environment = TEST`, no provider registrations,
+    no purge protection, no prod domains, no Stock URL
+- [x] Runs as a CI step on PRs that touch `infrastructure_v2/**`, so a prod sizing change without
+      the matching staging change fails the PR (`.github/workflows/staging-parity.yml`, which also
+      runs `terraform fmt -check` / `validate` and shellcheck).
+- [x] Live drift check in `up.sh` (`check-parity.sh --live`, verified read-only against prod): read the **live** prod settings (`az sql db show` SKU,
       `az containerapp show` cpu/memory/scale) and compare them to the staging tfvars. The SQL
       tier was once changed by hand in the Portal, so tfvars alone can't be trusted.
 
@@ -113,7 +123,7 @@ adding it to staging too makes it pass.
 
 ### T3 — Lifecycle scripts
 
-- [ ] `scripts/staging/up.sh --data=prod|loadtest|empty --ref=<git ref> [--bacpac=<name>]`:
+- [x] `scripts/staging/up.sh --data=prod|loadtest|empty --ref=<git ref> [--bacpac=<name>]`:
   1. Preflight:
      - `az account show` is on subscription `677a6eab…`
      - `femme-staging-rg` does not exist (or `--recreate` runs `down.sh` first)
@@ -124,8 +134,11 @@ adding it to staging too makes it pass.
      the hello-world image, so **Flyway has not touched the DB yet**.
   3. Data restore (T5 or T6) into the empty DB, unless `--data=empty`.
   4. Managed-identity DB user grant (runbook in `infrastructure_v2.md`).
-  5. Seed `app-femme-jwt-secret` with a fresh random value. Set the platform-admin credentials
-     the same way prod gets them.
+  5. Seed `app-femme-jwt-secret` with a fresh random value. Platform admin (decided): `up.sh`
+     stores `STAGING_PLATFORM_ADMIN_PASSWORD` as a Container App secret and sets
+     `APP_FEMME_PLATFORM_ADMIN_EMAIL` / `…_PASSWORD=secretref:…` with `az containerapp`, so
+     nothing lands in tfvars or state. With imported data the admin already exists and gets the
+     shared staging password.
   6. Update GitHub Environment `v2-staging`:
      - secrets: `AZURE_STATIC_WEB_APPS_API_TOKEN`, `VITE_API_BASE_URL`,
        `AZURE_RESOURCE_GROUP_NAME`, `AZURE_CONTAINER_APP_NAME`
@@ -136,26 +149,33 @@ adding it to staging too makes it pass.
   7. `gh workflow run deploy-v2.yml --ref <git ref> -f environment=v2-staging` and wait for it.
   8. Smoke test: `/health` returns 200, a login works, Flyway history shows the expected version.
      Print the SPA and API URLs.
-- [ ] `scripts/staging/down.sh`:
+- [x] `scripts/staging/down.sh`:
   1. `terraform destroy` with the staging tfvars, so state stays consistent.
   2. `az keyvault purge` the soft-deleted vault.
   3. Clear the `v2-staging` secrets that point at dead resources.
   4. Confirm the RG is gone.
 
-  Documented fallback when destroy gets stuck: `az group delete -n femme-staging-rg`, then delete
-  the `staging.tfstate` blob.
+  Fallback when destroy gets stuck: `down.sh --fallback` (`az group delete -n femme-staging-rg`,
+  then delete the `staging.tfstate` blob, purge, clear secrets).
 
 **Acceptance:** `up.sh --data=empty` followed by `down.sh` leaves no `femme-staging-rg`, no
 soft-deleted vault and an unchanged dev environment.
 
 ### T4 — CI / OIDC
 
-- [ ] `deploy-v2.yml`: add `v2-staging` to the `workflow_dispatch` `environment` options. No
+- [x] `deploy-v2.yml`: add `v2-staging` to the `workflow_dispatch` `environment` options. No
       push trigger: staging deploys only on demand.
-- [ ] Create GitHub Environment `v2-staging` with the same secret names as `v2-test`.
-- [ ] Federated credential `environment:v2-staging` on the test-subscription app registration.
-- [ ] Role for that app registration at **subscription scope**, or re-created by `up.sh` after
-      every apply. A role assigned on the RG disappears when the RG is deleted.
+- [x] Create GitHub Environment `v2-staging` with the same secret names as `v2-test`
+      (`scripts/staging/bootstrap.sh`, **not run yet**; owner as required reviewer).
+- [x] Federated credential `environment:v2-staging` on the test-subscription app registration
+      `femme-cicd-v2-test` (`bootstrap.sh`, not run yet).
+- [x] Role (decided): **Terraform, RG scope.** `azurerm_role_assignment.ci_deployer_contributor`
+      (`ci_deployer_principal_id`) is created with the RG on every apply and goes away on destroy.
+      Note: `femme-cicd-v2-test` *also* holds Contributor at subscription scope today, so staging
+      would work without it. Narrowing that grant to `femme-test-rg` is a separate decision.
+- [x] A ref can only be deployed to staging once its `deploy-v2.yml` has the `v2-staging` option
+      (the dispatch uses the workflow file at that ref). `up.sh` checks this and stops if it's
+      missing.
 
 **Acceptance:** a manual dispatch with `v2-staging` deploys backend and frontend into
 `femme-staging-rg`, and nothing else.
@@ -164,36 +184,44 @@ soft-deleted vault and an unchanged dev environment.
 
 Export (run from the prod subscription, needs `femme-sql-admins`):
 
-- [ ] Create a temporary point-in-time copy of the prod DB with `az sql db restore`, so the
+- [x] Create a temporary point-in-time copy of the prod DB with `az sql db restore`, so the
       export doesn't load the 5-DTU live database.
-- [ ] Export it with `sqlpackage /Action:Export /AccessToken:<entra token>`. SQL is Entra-only,
+- [x] Export it with `sqlpackage /Action:Export /AccessToken:<entra token>`. SQL is Entra-only,
       so `az sql db export` (SQL auth) won't work.
-- [ ] Write it to a **persistent, private** storage account **outside** the disposable RG, e.g.
+- [x] Write it to a **persistent, private** storage account **outside** the disposable RG, e.g.
       `femme-staging-data-rg` / `stfemmestagingdata`:
   - container `snapshots/`, private, no public access
   - RBAC limited to `femme-sql-admins`
-  - lifecycle rule that deletes prod snapshots after N days
-- [ ] Delete the temporary copy.
+  - lifecycle rule that deletes prod snapshots after **7 days** (decided)
+  - shared-key auth disabled, so all access goes through Entra RBAC
+- [x] Delete the temporary copy (`trap` in `export-prod-snapshot.sh`, so it runs even on failure).
 
 Import (run from `up.sh`):
 
-- [ ] `sqlpackage /Action:Import /AccessToken:…` into the empty `femme_app_db`, before the
+- [x] `sqlpackage /Action:Import /AccessToken:…` into the empty `femme_app_db`, before the
       backend image first starts.
-- [ ] Run `scripts/staging/sanitize-prod-snapshot.sql`. It is **mandatory**; `up.sh` refuses to
+- [x] Run `scripts/staging/sql/sanitize-prod-snapshot.sql`, then `verify-sanitized.sql`
+      (`VIOLATIONS=0`, or no deploy). It is **mandatory**; `up.sh` refuses to
       deploy if it didn't run:
   - `DROP USER [femme-backend]`: the imported user carries the **prod** managed identity SID.
     Re-create it `FROM EXTERNAL PROVIDER` (step 4 of `up.sh`).
-  - Rewrite every client and app-user **email** to a safe value (e.g.
-    `staging+<id>@<team-controlled domain>`) and every **phone** to a dummy. This keeps
+  - Rewrite every **email** to a safe value and every **phone** to a dummy (decided:
+    `staging+<sha256(lower(email))[0:16]>@example.invalid` and `0000000000`). RFC 2606 `.invalid`
+    is undeliverable by construction. The rule covers every character column named `*email*` or
+    `*_by` (audit and changed-by columns too), not just clients and users. The mapping is
+    deterministic, so `professionals.email` ↔ `app_users.email` stays linked and uniqueness
+    holds. This keeps
     `AppointmentReminderScheduler` and the KuDE/cancellation emails from reaching real people.
-  - Replace **all password hashes**; set a known staging password on an agreed list of
-    test accounts.
-  - Delete all `sifen_certificates` rows: their Key Vault refs point at the prod vault, and
-    staging must not sign as a real taxpayer.
+  - Replace **all password hashes** (decided: every user, platform admins included, gets one
+    shared staging password, `STAGING_USER_PASSWORD`, never committed). Professional PIN hashes
+    are cleared, and shared-device sessions are deleted. `up.sh` writes the admin logins (with
+    rewritten e-mails) to `.staging/runs/<id>/accounts.tsv`.
+  - Delete all `sifen_certificates` **and `sifen_csc`** rows: their Key Vault refs point at the
+    prod vault, and staging must not sign as a real taxpayer.
   - Mark pending `commission_outbox` / `stock_outbox` rows and pending SIFEN submissions as
     processed/void, so the reconcilers don't replay them.
   - Invalidate activation and password-reset tokens.
-- [ ] On boot, Flyway applies the new release's migrations to real prod data. **This is a
+- [x] On boot, Flyway applies the new release's migrations to real prod data. **This is a
       migration rehearsal:** record its duration and any errors in the test report.
 
 **Acceptance:**
@@ -206,21 +234,24 @@ Import (run from `up.sh`):
 
 ### T6 — Data mode B: multi-tenant load-test golden DB
 
-- [ ] Generator under `loadtest/seed/`:
+- [x] Generator under `loadtest/seed/` (Node 20, no dependencies), driven by
+      `scripts/staging/seed-golden-db.sh`:
   - creates tenants, admin users, professionals, services and schedules through the **real
     Platform Admin and tenant APIs**, reusing the provisioning pattern in
     `e2e/global-setup.mt.ts`, so the data is valid by construction
   - then bulk-generates history as SQL for speed: clients, appointments, fichas
     (service records), invoices (TEST SIFEN state), cash sessions/movements, tips
-- [ ] **Tenant count is a parameter, not a fixed profile.** The generator takes
+- [x] **Tenant count is a parameter, not a fixed profile.** The generator takes
       `--tenants=N`, where N is a multiple of 10 (10, 20, 30, …). It rejects any other value.
       - Volumes are generated **in blocks of 10 tenants** with a fixed seed, so a `--tenants=30`
         DB is the `--tenants=20` DB plus one more block. Results from different runs stay
         comparable, and a bigger DB can be grown from an existing smaller BACPAC by adding blocks
         instead of regenerating everything.
       - Per-tenant volumes come from prod averages, measured with a query on a T5 snapshot (no
-        prod data is copied).
-- [ ] **SIFEN tenants are a parameter too.** `--sifen-tenants=M` (0 ≤ M ≤ N) turns
+        prod data is copied): `loadtest/seed/measure-volumes.sql`. **Until then,
+        `volumes.json` holds placeholders** (decided): per tenant, 4 professionals, 12 services,
+        400 clients, about 6 months of appointments.
+- [x] **SIFEN tenants are a parameter too.** `--sifen-tenants=M` (0 ≤ M ≤ N) turns
       `SIFEN_ELECTRONIC_INVOICING` on for the first M tenants and leaves it off for the rest.
       **All M tenants use the same credentials and issuer data as the dev tenant
       "Femme Coiffure"**:
@@ -232,7 +263,11 @@ Import (run from `up.sh`):
         - timbrado number and validity
         - CSC id and value
 
-        The values are only read; nothing in dev changes.
+        The values are only read; nothing in dev changes. Femme Coiffure's contact e-mail and
+        phone are **not** copied.
+      - **CSC:** the CSC is also a Key Vault secret (`sifen_csc.secret_name`). It is copied from
+        the dev vault through the real platform CSC API, and re-linked on every recreate just
+        like the certificate.
       - **Certificate:** the `.p12` file and its password are read from the dev Key Vault
         (`femme-kv-b10via`, Femme Coiffure's `sifen-cert-t<id>-…` secrets). The generator uploads
         them to each SIFEN tenant through the **real certificate upload API**, so each tenant gets
@@ -262,33 +297,41 @@ Import (run from `up.sh`):
         - `up.sh` computes the base for each run as:
 
           ```
-          base = max(Femme Coiffure's current dev number, stored high-water mark) + margin
+          base = max(Femme Coiffure's current dev number + margin, stored high-water mark, floor)
           ```
 
-          rounded up to a multiple of 100. After the run, it stores `base + M * 100` as the new
-          high-water mark.
+          rounded up to a multiple of 100, with margin = 1,000 and **floor = 1,000,000**
+          (decided). The floor keeps staging far from Femme Coiffure's own dev numbering, which
+          keeps growing from the bottom after a staging run and would otherwise eventually hit the
+          numbers staging already sent. `up.sh` stores `base + M * 100` as the new high-water
+          mark **before** anything is sent, so an aborted run never reuses numbers.
         - **Rebase on every recreate.** The golden BACPAC is reused across runs, so its ranges
           can't be baked in. Right after import, `up.sh` rewrites every SIFEN tenant's fiscal stamp
           to that run's `start(k)` / `end(k)`. Invoices generated as history in the BACPAC are not
-          real SIFEN submissions, so they don't use up numbers on `sifen-test`.
+          real SIFEN submissions, so they don't use up numbers on `sifen-test`. They live on a
+          separate **inactive** historic stamp (`LTHIST<k>`), so the rebased active stamp can't
+          collide with them on `(fiscal_stamp_id, invoice_number)`.
         - **Headroom.** The SIFEN invoice number has 7 digits (max 9,999,999). One run uses
           M × 100 numbers, so 100 SIFEN tenants use 10,000 numbers per run. `up.sh` refuses to run
           if `base + M * 100` would go past the max; at that point a new timbrado or punto is
           needed in dev.
 
-- [ ] Must fit under the **Basic 2 GB** cap with headroom. The generator estimates the size
+- [x] Must fit under the **Basic 2 GB** cap with headroom. The generator estimates the size
       before it runs, refuses an N that won't fit, and records the final size.
-- [ ] Export as `loadtest/loadtest-V<flyway version>-t<N>-s<M>.bacpac` into the same storage
+- [x] Export as `loadtest/loadtest-V<flyway version>-t<N>-s<M>.bacpac` into the same storage
       account (no expiry). Regenerate after major schema changes; otherwise Flyway migrates it
-      forward on boot.
-- [ ] **Re-link certificates on every recreate.** The BACPAC keeps the `sifen_certificates` rows,
+      forward on boot. The generation date is stored in `loadtest_meta`. On import, `up.sh`
+      shifts every date by whole weeks, so an old BACPAC still shows today's agenda.
+- [x] **Re-link certificates on every recreate.** The BACPAC keeps the `sifen_certificates` rows,
       but their secrets lived in the *previous* staging Key Vault, which `down.sh` deletes.
       `up.sh --data=loadtest` therefore re-writes Femme Coiffure's `.p12` and password from the
       dev vault into the new staging vault, under the secret names those rows already reference.
       `KeyVaultSifenCertificateSecretStore` checks that each name starts with
-      `sifen-cert-t<tenantId>-`, and the names are kept unchanged.
-- [ ] Publish the test users and passwords, plus which tenants have SIFEN, so k6 can target both
-      groups.
+      `sifen-cert-t<tenantId>-`, and the names are kept unchanged. Key Vault versions are pinned in
+      the rows, so `up.sh` also updates `p12_secret_version` / `password_secret_version` (and
+      `sifen_csc.secret_version`) to the new versions.
+- [x] Publish the test users and passwords, plus which tenants have SIFEN, so k6 can target both
+      groups (`<bacpac>.users.json` next to the BACPAC → `LOADTEST_USERS_JSON`).
 
 **Acceptance:** `up.sh --data=loadtest --bacpac=loadtest-…-t<N>-s<M>` brings up N tenants:
 - every tenant can log in and shows a populated agenda, fichas and billing
@@ -300,7 +343,7 @@ Import (run from `up.sh`):
 
 ### T7 — Load testing
 
-- [ ] k6 scenarios in `loadtest/scenarios/`:
+- [x] k6 scenarios in `loadtest/scenarios/`:
   - login and session refresh
   - agenda/calendar reads
   - create and edit appointment
@@ -310,11 +353,11 @@ Import (run from `up.sh`):
   - dashboard
 
   Users and tenants are spread across the golden DB.
-- [ ] SIFEN issuance runs only against the M SIFEN tenants. It is excluded or tightly throttled
+- [x] SIFEN issuance runs only against the M SIFEN tenants. It is excluded or tightly throttled
       (a configurable rate), since it calls the external `sifen-test` endpoint and every tenant
       shares Femme Coiffure's RUC and timbrado. Non-SIFEN tenants run the non-fiscal comprobante
       flow.
-- [ ] **Runner (decided): k6 on GitHub Actions**, in a new workflow `.github/workflows/loadtest.yml`.
+- [x] **Runner (decided): k6 on GitHub Actions**, in a new workflow `.github/workflows/loadtest.yml`.
       - **Capacity is not the limit.** `jtalavera/pelu` is a public repo, so standard hosted
         runners are free with unlimited minutes. Each is 4 vCPU / 16 GB, with a 6 h job limit and
         20 concurrent jobs. One runner generates roughly 1,000–3,000 VUs against a REST API, far
@@ -348,13 +391,14 @@ Import (run from `up.sh`):
         calls, so many logins from one runner IP won't be blocked. If login throttling is added
         later, it must exempt the staging load-test users (or staging altogether), or the test
         will measure the limiter instead of the system.
-- [ ] Thresholds: p95 latency per endpoint and error rate.
-- [ ] Results template under `loadtest/reports/`. It covers:
+- [x] Thresholds: p95 latency per endpoint and error rate.
+- [x] Results template under `loadtest/reports/` (`TEMPLATE.md`).
+      `scripts/staging/collect-loadtest-metrics.sh` pulls the server-side half for the run window. It covers:
   - k6 summary
   - from the "Femme - Infra (staging)" workbook: CPU, working-set memory, replica count, restarts
   - SQL DTU % and storage
   - cold-start time
-- [ ] Rules:
+- [x] Rules (`up.sh --tf-var=K=V` for labeled what-if overrides):
   - `max_replicas = 1` and SQL Basic 5 DTU **are the prod limits being measured**. Expect the DB
     or the single replica to saturate first; that is the finding.
   - "What-if" runs with different sizing are allowed only as an explicitly labeled, temporary
@@ -368,7 +412,7 @@ above. The report states N and M.
 
 ### T8 — Docs & runbook
 
-- [ ] Add a "Staging" section to `infrastructure_v2/infrastructure_v2.md`: lifecycle, data modes
+- [x] Add a "Staging" section to `infrastructure_v2/infrastructure_v2.md`: lifecycle, data modes
       and safeguards. Link it to this file.
 - [ ] Add a short "how to test a release in staging" checklist to this doc after the first real
       use.
@@ -429,10 +473,46 @@ windows around it. The persistent BACPAC storage account costs pennies.
 
 ## 7. Open decisions
 
-1. Sanitization details: target domain for rewritten emails, and which accounts get a known
-   password.
-2. Load-test data: per-tenant volumes per block of 10. The margin added above the SIFEN
-   high-water mark (e.g. +1,000).
+All decided:
+
+1. ~~Sanitization details~~ **Decided:** `staging+<hash>@example.invalid`, phones `0000000000`,
+   every user gets one shared staging password (T5).
+2. ~~Load-test volumes and SIFEN margin~~ **Decided:** placeholder volumes in
+   `loadtest/seed/volumes.json` until calibrated with `measure-volumes.sql`. Margin +1,000,
+   floor 1,000,000 (T6).
 3. ~~k6 on GH Actions vs Azure Load Testing~~ **Decided:** k6 on GitHub Actions (T7).
-4. Whether `v2-staging` deploys need a required reviewer.
-5. Retention (N days) for prod snapshots in `femme-staging-data-rg`.
+4. ~~Required reviewer on `v2-staging`~~ **Decided:** yes (repo owner). `up.sh` prints the deploy
+   run URL and waits up to 90 min for the approval.
+5. ~~Snapshot retention~~ **Decided:** 7 days (lifecycle rule on `snapshots/prod-*`).
+
+## 8. Implementation map
+
+| Task | Files |
+|---|---|
+| T1 | `infrastructure_v2/{variables,main}.tf`, `infrastructure_v2/environments/staging/{backend.hcl,terraform.tfvars}` |
+| T2 | `scripts/staging/{parity.py,check-parity.sh,test-parity.sh}`, `.github/workflows/staging-parity.yml` |
+| T3 | `scripts/staging/{up,down}.sh`, `lib.sh`, `staging.env`, `sql/grant-mi-user.sql` |
+| T4 | `.github/workflows/deploy-v2.yml` (`v2-staging` option), `scripts/staging/bootstrap.sh` |
+| T5 | `scripts/staging/export-prod-snapshot.sh`, `sql/{sanitize-prod-snapshot,verify-sanitized}.sql` |
+| T6 | `loadtest/seed/*`, `scripts/staging/{seed-golden-db.sh,sifen-loadtest.sh}`, `sql/shift-loadtest-dates.sql` |
+| T7 | `loadtest/scenarios/*`, `.github/workflows/loadtest.yml`, `loadtest/reports/TEMPLATE.md`, `scripts/staging/collect-loadtest-metrics.sh` |
+| T8 | `infrastructure_v2/infrastructure_v2.md` (Staging section), this file |
+
+Operator environment for the scripts (never committed): `STAGING_PLATFORM_ADMIN_EMAIL`,
+`STAGING_PLATFORM_ADMIN_PASSWORD`, `STAGING_USER_PASSWORD`, plus `SEED_USER_PASSWORD` for the
+generator. Tools: `az`, `terraform`, `gh`, `jq`, `python3`, go-sqlcmd, `sqlpackage`, Node 20 (seed
+only), and `pip install bcrypt` or `htpasswd`.
+
+## 9. First use (not done yet)
+
+Nothing has been applied. In order:
+
+1. **Before merging this branch:** run `terraform plan` for dev and for prod. Both must show
+   **no changes** (the `moved {}` blocks absorb the new `count`). This is T1's acceptance.
+2. `scripts/staging/bootstrap.sh`: creates the GitHub Environment, the federated credential and
+   the persistent storage. If `stfemmestagingdata` is taken, change it in `staging.env`.
+3. `scripts/staging/up.sh --data=empty --ref=develop`, then `down.sh`. This is T3's acceptance.
+   Check that dev is unchanged.
+4. Export a prod snapshot and run `up.sh --data=prod` (T5), then calibrate `volumes.json`.
+5. Generate `t10-s2` (T6) and run `loadtest.yml` against it (T7).
+6. After the first real use, add the "how to test a release in staging" checklist (T8).

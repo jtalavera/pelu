@@ -1,6 +1,7 @@
 # Infrastructure v2
 
-Cost-optimised two-environment Azure stack for Femme/Pelu.
+Cost-optimised Azure stack for Femme/Pelu: two long-lived environments (test, prod) plus a
+disposable prod-parity **staging** environment (see [Staging](#staging-disposable-prod-parity)).
 
 ## Architecture
 
@@ -20,9 +21,11 @@ Browser
 |---|---|---|---|
 | test | `develop` | `677a6eab-…` | `v2-test` |
 | prod | `main` | `9e394b80-…` | `v2-production` |
+| staging | manual dispatch only | `677a6eab-…` (same as test) | `v2-staging` |
 
-Both environments run from this single root module with per-environment
-`environments/<env>/backend.hcl` + `environments/<env>/terraform.tfvars`.
+All environments run from this single root module with per-environment
+`environments/<env>/backend.hcl` + `environments/<env>/terraform.tfvars`. Staging has no fork of
+`main.tf`: it is a third tfvars file whose sizing must equal prod's (`scripts/staging/check-parity.sh`).
 
 This is now the sole deploy pipeline — the legacy v1 pipeline and its Terraform
 code (`infrastructure/`, `ci.yml`) have been retired.
@@ -54,7 +57,17 @@ terraform apply -var-file=environments/dev/terraform.tfvars
 terraform init  -reconfigure -backend-config=environments/prod/backend.hcl
 terraform plan  -var-file=environments/prod/terraform.tfvars
 terraform apply -var-file=environments/prod/terraform.tfvars
+
+# Staging — never by hand: scripts/staging/up.sh / down.sh wrap these
+terraform init  -reconfigure -backend-config=environments/staging/backend.hcl
+terraform plan  -var-file=environments/staging/terraform.tfvars
 ```
+
+`manage_resource_providers` (default `true`) controls the subscription-wide `Microsoft.App` /
+`Microsoft.Communication` registrations. Staging sets it to `false` because it shares the test
+subscription: a staging destroy must never unregister `Microsoft.App` under dev. The
+registrations gained `count` for this; `moved {}` blocks in `main.tf` map the existing dev/prod
+state addresses to `[0]`, so their plans show no change.
 
 `-reconfigure` is needed when switching between environments on the same machine
 (Terraform resets the local backend pointer).
@@ -99,6 +112,7 @@ resource group, then add federated credentials for the workflows that deploy to 
 | `repo:OWNER/REPO:ref:refs/heads/main` | push to main → deploy-v2.yml |
 | `repo:OWNER/REPO:environment:v2-test` | job environment in deploy-v2.yml |
 | `repo:OWNER/REPO:environment:v2-production` | job environment in deploy-v2.yml |
+| `repo:OWNER/REPO:environment:v2-staging` | deploy-v2.yml (manual) and loadtest.yml → staging (test-subscription app; `scripts/staging/bootstrap.sh`) |
 
 Store `clientId`, `tenantId`, and `subscriptionId` as secrets in the
 corresponding GitHub Environment (`v2-test` / `v2-production`).
@@ -249,7 +263,10 @@ Terraform/CLI update to the existing one.
 
 ## GitHub Environments (configure in GitHub repo settings)
 
-Create two environments — **v2-test** and **v2-production** — each with:
+Create **v2-test** and **v2-production** by hand. **v2-staging** is created by
+`scripts/staging/bootstrap.sh` (owner as required reviewer), and `up.sh` / `down.sh` refresh or
+clear its resource-specific secrets on every recreate, plus `LOADTEST_BASE_URL` and
+`LOADTEST_USERS_JSON` for `loadtest.yml`. Each environment has:
 
 | Secret | Description |
 |---|---|
@@ -310,6 +327,39 @@ Rollout checklist (per env, dev first):
    read the real volume, then set explicit dev/prod values:
    `Usage | where TimeGenerated > ago(7d) | summarize GB = sum(Quantity) / 1024 by DataType, bin(TimeGenerated, 1d)`.
    When the cap is hit, ingestion stops for the rest of the day, so the workbooks go blank.
+
+## Staging (disposable prod parity)
+
+Full plan, safeguards and acceptance checks: [docs/staging-env.md](../docs/staging-env.md).
+
+- **What:** `femme-staging-rg` in the test subscription, state `staging.tfstate` in the test state
+  account. It is built from the same module with prod's sizing, and is **destroyed and recreated**
+  for every important change, never patched by hand.
+- **Parity is enforced:** `scripts/staging/check-parity.sh` (CI: `staging-parity.yml`) fails on
+  any prod/staging tfvars difference outside the allowlist: subscription, naming, `sifen_environment
+  = TEST`, Key Vault purge settings, prod domains, Stock URL, provider registrations, CI grant, and
+  operator/admin IDs. `up.sh` also compares the **live** prod SQL tier, Container App
+  size/scale and Log Analytics settings, because the SQL tier was once changed in the Portal.
+- **Lifecycle:** one-time `scripts/staging/bootstrap.sh`, then for each test:
+
+  ```bash
+  scripts/staging/up.sh --data=prod|loadtest|empty --ref=<branch or tag> [--bacpac=…] [--recreate]
+  scripts/staging/down.sh            # destroy, purge the vault, clear v2-staging secrets
+  scripts/staging/down.sh --fallback # destroy stuck: az group delete + drop staging.tfstate
+  ```
+
+- **Data modes:**
+  - `prod`: a sanitized point-in-time snapshot (`export-prod-snapshot.sh`, expires after 7 days).
+    The sanitization is mandatory and verified before deploy: undeliverable e-mails, dummy phones,
+    one shared password, no certificates/CSC/tokens, pending SIFEN/outbox work voided.
+  - `loadtest`: a golden multi-tenant DB (`seed-golden-db.sh`, `loadtest/seed`).
+  - `empty`: a fresh Flyway schema.
+- **Persistent data** lives outside the disposable RG in `femme-staging-data-rg` (private, no
+  shared-key auth, RBAC limited to `femme-sql-admins`): snapshots, golden BACPACs, k6 reports and
+  the SIFEN numbering high-water mark.
+- **CI rights:** Terraform grants the deploy app Contributor on `femme-staging-rg`
+  (`ci_deployer_principal_id`), so the grant comes back with every recreate.
+- **Cost:** about the same per day as prod while it exists (≈ $0.55/day). Tear it down when idle.
 
 ## DR runbook (RTO 1h / RPO 10 min)
 
