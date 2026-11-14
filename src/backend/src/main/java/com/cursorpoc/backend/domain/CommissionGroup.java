@@ -10,7 +10,7 @@ import java.time.Instant;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** HU-COM-12: grupo de comisión (Brushing, Color, Manos…): junta servicios que comisionan igual. */
+/** HU-COM-14: grupo de comisión (Brushing, Color, Manos…): junta servicios que comisionan igual. */
 @Entity
 @Table(name = "commission_groups")
 public class CommissionGroup {

@@ -160,7 +160,7 @@ class CommissionCalculatorTest {
         .hasMessageContaining("COMMISSION_PERCENT_OUT_OF_RANGE");
   }
 
-  // ── HU-COM-12: reglas del salón (precio con IVA, retención de aguinaldo, monto fijo) ──────────
+  // ── HU-COM-14: reglas del salón (precio con IVA, retención de aguinaldo, monto fijo) ──────────
 
   private static final Instant NOW = Instant.parse("2026-11-14T12:00:00Z");
   private static final Instant EARLIER = NOW.minusSeconds(3600);

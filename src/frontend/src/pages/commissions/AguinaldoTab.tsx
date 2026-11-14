@@ -41,7 +41,7 @@ function parseSigned(raw: string): number | null {
 }
 
 /**
- * HU-COM-12 «Aguinaldo»: the fund of what was retained from each professional's commissions —
+ * HU-COM-14 «Aguinaldo»: the fund of what was retained from each professional's commissions —
  * balances, movements, payments (partial, whole, on departure, to everyone) and manual adjustments.
  */
 export function AguinaldoTab() {

@@ -103,7 +103,7 @@ public class CommissionController {
     this.aguinaldoService = aguinaldoService;
   }
 
-  // ── Groups, professional rules (HU-COM-12) ────────────────────────────────────────────────
+  // ── Groups, professional rules (HU-COM-14) ────────────────────────────────────────────────
 
   @GetMapping("/groups")
   public List<GroupView> groups(@AuthenticationPrincipal FemmeUserPrincipal p) {
@@ -199,7 +199,7 @@ public class CommissionController {
         () -> groupService.professionalRules(p.getTenantId(), professionalId, date));
   }
 
-  // ── Aguinaldo fund (HU-COM-12) ────────────────────────────────────────────────────────────
+  // ── Aguinaldo fund (HU-COM-14) ────────────────────────────────────────────────────────────
 
   @GetMapping("/aguinaldo")
   public AguinaldoSummary aguinaldo(@AuthenticationPrincipal FemmeUserPrincipal p) {

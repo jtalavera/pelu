@@ -106,7 +106,7 @@ function Harness({ onChange }: { onChange: (all: ConfigChange[]) => void }) {
   );
 }
 
-describe("HU-COM-12 · Por profesional", () => {
+describe("HU-COM-14 · Por profesional", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("es");
     api.getProfessionalRules.mockImplementation(async (id: number) =>
@@ -237,7 +237,7 @@ describe("HU-COM-12 · Por profesional", () => {
   });
 });
 
-describe("HU-COM-12 · Grupos", () => {
+describe("HU-COM-14 · Grupos", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("es");
     api.getGroups.mockResolvedValue([
@@ -322,7 +322,7 @@ describe("HU-COM-12 · Grupos", () => {
   });
 });
 
-describe("HU-COM-12 · Aguinaldo", () => {
+describe("HU-COM-14 · Aguinaldo", () => {
   const balance = (id: number, name: string, amount: number) => ({
     professionalId: id,
     professionalName: name,

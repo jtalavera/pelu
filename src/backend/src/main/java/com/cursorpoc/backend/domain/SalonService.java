@@ -55,7 +55,7 @@ public class SalonService {
   @Column(length = 64)
   private String sku;
 
-  /** HU-COM-12: grupo de comisión del servicio (null = sin grupo). */
+  /** HU-COM-14: grupo de comisión del servicio (null = sin grupo). */
   @Column(name = "commission_group_id")
   private Long commissionGroupId;
 

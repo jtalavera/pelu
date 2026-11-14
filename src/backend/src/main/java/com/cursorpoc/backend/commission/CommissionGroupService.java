@@ -34,7 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-COM-12: grupos de comisión (CRUD, asignación de servicios con sugerencias por nombre) y la
+ * HU-COM-14: grupos de comisión (CRUD, asignación de servicios con sugerencias por nombre) y la
  * vista de reglas de una profesional (una fila por grupo).
  */
 @Service

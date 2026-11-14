@@ -16,7 +16,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * HU-COM-12: pago o ajuste manual del fondo de aguinaldo de una profesional. Lo retenido entra solo
+ * HU-COM-14: pago o ajuste manual del fondo de aguinaldo de una profesional. Lo retenido entra solo
  * desde las liquidaciones aprobadas; {@code amount} lleva signo (el pago resta).
  */
 @Entity

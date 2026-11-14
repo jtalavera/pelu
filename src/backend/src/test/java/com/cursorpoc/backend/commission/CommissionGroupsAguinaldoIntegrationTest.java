@@ -46,7 +46,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * HU-COM-12 against the real JPA mapping (H2): rules by professional + group with aguinaldo
+ * HU-COM-14 against the real JPA mapping (H2): rules by professional + group with aguinaldo
  * retention and fixed amounts, the groups API and the aguinaldo fund. Each test has its own tenant.
  */
 @SpringBootTest

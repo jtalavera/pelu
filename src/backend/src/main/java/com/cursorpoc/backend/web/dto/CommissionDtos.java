@@ -85,17 +85,17 @@ public final class CommissionDtos {
       PeriodInfo currentPeriod,
       List<VersionView> scheduledChanges,
       List<VersionView> history,
-      /* HU-COM-12 */
+      /* HU-COM-14 */
       String fixedDestination,
       boolean aguinaldoEnabled,
       BigDecimal aguinaldoDefaultPercent,
       List<RetentionProfile> retentionProfiles) {}
 
-  /** HU-COM-12: % retained for aguinaldo from a professional by default (null = she does not). */
+  /** HU-COM-14: % retained for aguinaldo from a professional by default (null = she does not). */
   public record RetentionProfile(
       Long professionalId, String professionalName, boolean active, BigDecimal percent) {}
 
-  // ── Commission groups (HU-COM-12) ─────────────────────────────────────────────────────────
+  // ── Commission groups (HU-COM-14) ─────────────────────────────────────────────────────────
 
   public record GroupView(
       Long id,
@@ -140,7 +140,7 @@ public final class CommissionDtos {
       BigDecimal defaultPercentService,
       List<GroupRuleRow> groups) {}
 
-  // ── Aguinaldo fund (HU-COM-12) ────────────────────────────────────────────────────────────
+  // ── Aguinaldo fund (HU-COM-14) ────────────────────────────────────────────────────────────
 
   public record AguinaldoBalance(
       Long professionalId,
@@ -262,7 +262,7 @@ public final class CommissionDtos {
       BigDecimal percentApplied,
       String ruleOrigin,
       BigDecimal commissionAmount,
-      /* HU-COM-12 */
+      /* HU-COM-14 */
       BigDecimal fixedAmount,
       boolean fixedToProfessional,
       BigDecimal retentionPercent,
@@ -361,7 +361,7 @@ public final class CommissionDtos {
       LocalDate periodTo,
       String status,
       BigDecimal totalAmount,
-      /* HU-COM-12: retenido para aguinaldo y monto fijo incluido en totalAmount */
+      /* HU-COM-14: retenido para aguinaldo y monto fijo incluido en totalAmount */
       BigDecimal retentionAmount,
       BigDecimal fixedAmount,
       Instant createdAt,
@@ -429,7 +429,7 @@ public final class CommissionDtos {
       BigDecimal productsTotal,
       List<MyEntryView> currentPeriodEntries,
       List<SettlementView> settlements,
-      /* HU-COM-12 */
+      /* HU-COM-14 */
       BigDecimal currentPeriodRetention,
       BigDecimal currentPeriodFixed,
       boolean aguinaldoEnabled,

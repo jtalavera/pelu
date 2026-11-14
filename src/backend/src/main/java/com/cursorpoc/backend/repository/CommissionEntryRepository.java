@@ -16,7 +16,7 @@ public interface CommissionEntryRepository extends JpaRepository<CommissionEntry
 
   boolean existsByReversesEntryId(long reversesEntryId);
 
-  /** HU-COM-12: retention carried by each settlement (all settlements of the tenant). */
+  /** HU-COM-14: retention carried by each settlement (all settlements of the tenant). */
   @Query(
       "SELECT e.settlementId, e.professionalId, SUM(e.retentionAmount) FROM CommissionEntry e"
           + " WHERE e.tenantId = :tenantId AND e.settlementId IS NOT NULL"

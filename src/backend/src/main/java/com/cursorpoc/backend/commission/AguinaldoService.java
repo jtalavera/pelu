@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * HU-COM-12: fondo de aguinaldo de cada profesional. Lo retenido entra solo cuando la liquidación
+ * HU-COM-14: fondo de aguinaldo de cada profesional. Lo retenido entra solo cuando la liquidación
  * se aprueba (suma de {@code retention_amount} de sus movimientos); los pagos y ajustes manuales
  * viven en {@code aguinaldo_movements}. Saldo = retenido + pagos (negativos) + ajustes.
  */

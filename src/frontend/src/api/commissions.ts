@@ -25,7 +25,7 @@ export type ConfigChange = {
   scope: ConfigScope;
   serviceId?: number | null;
   professionalId?: number | null;
-  /** HU-COM-12: commission group of a GROUP_RULE. */
+  /** HU-COM-14: commission group of a GROUP_RULE. */
   groupId?: number | null;
   /** A percent, or for rules "pago|retención|montoFijo|destino" (e.g. "45|5|3000|P"). */
   value: string | null;
@@ -98,7 +98,7 @@ export type RetentionProfile = {
   percent: number | null;
 };
 
-// ── Commission groups & rules by professional (HU-COM-12) ───────────────────────────────────
+// ── Commission groups & rules by professional (HU-COM-14) ───────────────────────────────────
 
 export type GroupView = {
   id: number;
@@ -135,7 +135,7 @@ export type ProfessionalRulesView = {
   groups: GroupRuleRow[];
 };
 
-// ── Aguinaldo fund (HU-COM-12) ──────────────────────────────────────────────────────────────
+// ── Aguinaldo fund (HU-COM-14) ──────────────────────────────────────────────────────────────
 
 export type AguinaldoBalance = {
   professionalId: number;

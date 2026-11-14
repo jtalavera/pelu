@@ -1,4 +1,4 @@
--- Comisiones v2 (HU-COM-12): grupos de comisión, reglas por profesional + grupo con retención de
+-- Comisiones v2 (HU-COM-14): grupos de comisión, reglas por profesional + grupo con retención de
 -- aguinaldo y monto fijo (costo de producto), y fondo de aguinaldo por profesional.
 
 -- Grupos de comisión: juntan servicios que comisionan igual (Brushing, Color, Manos…).

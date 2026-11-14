@@ -43,12 +43,12 @@ public final class CommissionConfigSnapshot {
       return new ScopeKey(CommissionConfigScope.RULE, serviceId, professionalId, null);
     }
 
-    /** HU-COM-12: rule of a commission group (professionalId null = whole team). */
+    /** HU-COM-14: rule of a commission group (professionalId null = whole team). */
     public static ScopeKey group(long groupId, Long professionalId) {
       return new ScopeKey(CommissionConfigScope.GROUP_RULE, null, professionalId, groupId);
     }
 
-    /** HU-COM-12: retention % profile of one professional. */
+    /** HU-COM-14: retention % profile of one professional. */
     public static ScopeKey retentionProfile(long professionalId) {
       return new ScopeKey(CommissionConfigScope.RETENTION_PROFILE, null, professionalId, null);
     }
@@ -124,7 +124,7 @@ public final class CommissionConfigSnapshot {
         .filter(v -> v.getConfigValue() != null);
   }
 
-  /** HU-COM-12: el salón retiene para aguinaldo (por defecto no). */
+  /** HU-COM-14: el salón retiene para aguinaldo (por defecto no). */
   public boolean aguinaldoEnabledAt(Instant at) {
     return versionAt(ScopeKey.of(CommissionConfigScope.AGUINALDO_ENABLED), at)
         .map(v -> "true".equalsIgnoreCase(v.getConfigValue()))

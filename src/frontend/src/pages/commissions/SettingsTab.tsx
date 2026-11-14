@@ -40,7 +40,7 @@ export function SettingsTab() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [scheduledOpen, setScheduledOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  /** HU-COM-12: the professional whose usual retention % is being edited. */
+  /** HU-COM-14: the professional whose usual retention % is being edited. */
   const [retention, setRetention] = useState<{ professionalId: number; name: string; value: string } | null>(null);
   const [retentionError, setRetentionError] = useState<string | null>(null);
 

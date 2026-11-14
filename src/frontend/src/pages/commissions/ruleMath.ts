@@ -1,6 +1,6 @@
 import type { BaseType, FixedDestination } from "../../api/commissions";
 
-/** HU-COM-12: one rule of a professional for a commission group. */
+/** HU-COM-14: one rule of a professional for a commission group. */
 export type RuleFields = {
   /** % that is paid. */
   paid: number;

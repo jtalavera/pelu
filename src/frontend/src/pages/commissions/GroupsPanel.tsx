@@ -18,7 +18,7 @@ import { FieldValidationError } from "../../components/FieldValidationError";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 
 /**
- * HU-COM-12 «Grupos»: commission groups (a service belongs to one at most), services still without
+ * HU-COM-14 «Grupos»: commission groups (a service belongs to one at most), services still without
  * a group — with the group their name suggests — and a bulk assignment for products.
  */
 export function GroupsPanel() {

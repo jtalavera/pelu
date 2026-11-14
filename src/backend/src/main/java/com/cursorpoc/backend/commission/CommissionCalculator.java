@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * Pure calculation rules of the module (§3, §4 and HU-COM-12): rule resolution (professional + item
+ * Pure calculation rules of the module (§3, §4 and HU-COM-14): rule resolution (professional + item
  * → professional + group → item → group → default of the item's kind) and the amounts of a line:
  * base (line total after discounts, with or without IVA) minus the fixed amount, then the percent
  * that is paid and the percent retained for aguinaldo. Amounts are rounded per entry to the

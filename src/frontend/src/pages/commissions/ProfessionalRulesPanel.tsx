@@ -53,7 +53,7 @@ function draftOf(row: GroupRuleRow, change: ConfigChange | undefined): Draft | n
 const EMPTY: Draft = { paid: "", retention: "", fixed: "", destination: "DEFAULT" };
 
 /**
- * HU-COM-12 «Por profesional»: one row per commission group with what is paid, what is retained for
+ * HU-COM-14 «Por profesional»: one row per commission group with what is paid, what is retained for
  * aguinaldo, the fixed amount (costo de producto) and who gets it. Edits are staged as GROUP_RULE
  * changes and saved together from the Rules tab bar.
  */
