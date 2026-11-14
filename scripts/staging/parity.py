@@ -35,6 +35,7 @@ ALLOWED_DEVIATIONS = {
     "key_vault_soft_delete_retention_days": "disposable vault must be purgeable",
     "key_vault_purge_protection_enabled": "purge protection is irreversible",
     "frontend_custom_domains": "flowbit.tech belongs to prod",
+    "frontend_primary_domain": "e-mail links must point at the staging SWA, not a prod domain",
     "website_swa_name": "flowbit.tech belongs to prod",
     "website_swa_resource_group": "flowbit.tech belongs to prod",
     "website_custom_domain": "flowbit.tech belongs to prod",
@@ -63,6 +64,7 @@ def _staging_rules(v: dict) -> list[str]:
     want("manage_resource_providers", False, "a staging destroy would unregister Microsoft.App")
     want("key_vault_purge_protection_enabled", False, "down.sh must be able to purge the vault")
     want("frontend_custom_domains", [], "flowbit.tech belongs to prod")
+    want("frontend_primary_domain", "", "e-mail links must not point at a prod domain")
     want("website_custom_domain", "", "flowbit.tech belongs to prod")
     want("email_custom_domain", "", "AzureManaged sender domain only")
     want("stock_api_base_url", "", "no Stock calls from staging")

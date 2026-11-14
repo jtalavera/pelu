@@ -67,7 +67,7 @@ into `environments/staging/terraform.tfvars`, and T2 verifies them.
 | `environment` | `staging` | RG and resource naming |
 | `sifen_environment` | `TEST` — **never** `PRODUCTION` | Staging must never send real fiscal documents |
 | `key_vault_soft_delete_retention_days` / `purge_protection_enabled` | 7 / `false` | A disposable vault must be purgeable; purge protection is irreversible |
-| `frontend_custom_domains`, `website_*` | unset | `flowbit.tech` belongs to prod |
+| `frontend_custom_domains`, `frontend_primary_domain`, `website_*` | unset (enforced) | `flowbit.tech` belongs to prod; e-mail links fall back to the staging SWA host |
 | `manage_resource_providers` (new, T1) | `false` | The dev state already owns the subscription's provider registrations |
 | `ci_deployer_principal_id` (new, T4) | CI app's object id | Contributor on the recreated RG lives in the staging state |
 | `email_custom_domain`, `email_domain_verification_enabled` | unset | Never send from prod's domain. Prod sets none today, but if it ever does, staging must not follow |
