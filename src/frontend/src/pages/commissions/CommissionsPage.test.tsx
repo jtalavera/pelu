@@ -127,6 +127,8 @@ describe("CommissionsPage (redesigned)", () => {
       if (url.startsWith("/api/commissions/settlements")) return settlements;
       if (url.startsWith("/api/commissions/settings")) return settings;
       if (url.startsWith("/api/commissions/rules")) return rulesView(url.includes("PRODUCT") ? "PRODUCT" : "SERVICE");
+      if (url.startsWith("/api/commissions/professionals/summary"))
+        return { aguinaldoEnabled: false, professionals: [{ professionalId: 1, name: "Laura Gómez", ruleCount: 0, retentionPercent: null }] };
       if (url.startsWith("/api/commissions/professionals/"))
         return {
           professionalId: 1,

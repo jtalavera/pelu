@@ -159,6 +159,27 @@ public class CommissionController {
         () -> groupService.ungrouped(p.getTenantId(), parseKind(kind)));
   }
 
+  @GetMapping("/groups/services")
+  public List<com.cursorpoc.backend.web.dto.CommissionDtos.GroupServiceRow> groupServices(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @RequestParam(required = false, defaultValue = "SERVICE") String kind) {
+    return admin(
+        p,
+        "GET",
+        "/api/commissions/groups/services",
+        () -> groupService.services(p.getTenantId(), parseKind(kind)));
+  }
+
+  @GetMapping("/professionals/summary")
+  public com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalsRuleSummary professionalsSummary(
+      @AuthenticationPrincipal FemmeUserPrincipal p) {
+    return admin(
+        p,
+        "GET",
+        "/api/commissions/professionals/summary",
+        () -> groupService.professionalsSummary(p.getTenantId()));
+  }
+
   @PostMapping("/groups/assign")
   public Map<String, Integer> assignGroups(
       @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody AssignGroupsRequest request) {

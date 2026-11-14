@@ -13,9 +13,9 @@ import { AguinaldoTab } from "./AguinaldoTab";
 const api = vi.hoisted(() => ({
   getProfessionalRules: vi.fn(),
   getGroups: vi.fn(),
-  getUngrouped: vi.fn(),
+  getGroupServices: vi.fn(),
+  getProfessionalsSummary: vi.fn(),
   assignGroups: vi.fn(),
-  assignUngroupedToGroup: vi.fn(),
   createGroup: vi.fn(),
   renameGroup: vi.fn(),
   deleteGroup: vi.fn(),
@@ -109,6 +109,14 @@ function Harness({ onChange }: { onChange: (all: ConfigChange[]) => void }) {
 describe("HU-COM-14 · Por profesional", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("es");
+    api.getProfessionalsSummary.mockResolvedValue({
+      aguinaldoEnabled: true,
+      professionals: [
+        { professionalId: 1, name: "Gaby", ruleCount: 2, retentionPercent: 5 },
+        { professionalId: 2, name: "Migue", ruleCount: 1, retentionPercent: null },
+        { professionalId: 3, name: "Norma", ruleCount: 0, retentionPercent: null },
+      ],
+    });
     api.getProfessionalRules.mockImplementation(async (id: number) =>
       id === 1
         ? gaby
@@ -237,88 +245,251 @@ describe("HU-COM-14 · Por profesional", () => {
   });
 });
 
-describe("HU-COM-14 · Grupos", () => {
+describe("HU-COM-14 · selector de profesional", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("es");
-    api.getGroups.mockResolvedValue([
-      { id: 1, name: "Brushing", serviceCount: 2, serviceNames: ["Brushing pelo corto", "Brushing pelo largo"], professionalsWithRule: 4 },
-      { id: 2, name: "Tratamiento", serviceCount: 0, serviceNames: [], professionalsWithRule: 0 },
-    ]);
-    api.getUngrouped.mockImplementation(async (kind: string) =>
-      kind === "PRODUCT"
-        ? [{ serviceId: 90, name: "Shampoo", suggestion: null }]
-        : [
-            { serviceId: 10, name: "Baño de crema", suggestion: { groupId: 2, groupName: "Tratamiento", reason: "bano de crema" } },
-            { serviceId: 11, name: "Aplicación de ampolla", suggestion: { groupId: 2, groupName: "Tratamiento", reason: "apli" } },
-            { serviceId: 12, name: "Maquillaje", suggestion: null },
-          ],
-    );
-    api.assignGroups.mockResolvedValue({ changed: 2 });
-    api.assignUngroupedToGroup.mockResolvedValue({ changed: 1 });
-    api.createGroup.mockResolvedValue({ id: 3 });
+    api.getProfessionalsSummary.mockResolvedValue({
+      aguinaldoEnabled: true,
+      professionals: [
+        { professionalId: 1, name: "Gaby", ruleCount: 2, retentionPercent: 5 },
+        { professionalId: 2, name: "Migue", ruleCount: 1, retentionPercent: null },
+        { professionalId: 3, name: "Norma", ruleCount: 0, retentionPercent: null },
+      ],
+    });
+    api.getProfessionalRules.mockImplementation(async (id: number) => ({ ...gaby, professionalId: id, professionalName: ["", "Gaby", "Migue", "Norma"][id] }));
   });
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
   });
 
-  it("lista los servicios sin grupo con la sugerencia por nombre", async () => {
+  it("muestra a la profesional elegida con cuántas reglas tiene y su retención, en una sola fila", async () => {
+    wrap(<Harness onChange={() => {}} />);
+    expect((await screen.findByTestId("pro-rules-name")).textContent).toBe("Gaby");
+    expect(screen.getByTestId("pro-rules-selector-detail").textContent).toBe("2 reglas · retiene 5 %");
+    // No chips any more: the only professional controls are the selector and its arrows.
+    expect(screen.queryByTestId("pro-rules-professional-1")).toBeNull();
+  });
+
+  it("el desplegable lista a todas ordenadas, con reglas por persona, y elegir una carga la suya", async () => {
+    wrap(<Harness onChange={() => {}} />);
+    await userEvent.click(await screen.findByTestId("pro-rules-selector-trigger"));
+    const options = within(screen.getByTestId("pro-rules-dropdown")).getAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual(["GAGaby2 reglas · retiene 5 %", "MIMigue1 regla", "NONormaSin reglas"]);
+    await userEvent.click(screen.getByTestId("pro-rules-option-2"));
+    await waitFor(() => expect(api.getProfessionalRules).toHaveBeenLastCalledWith(2));
+    await waitFor(() => expect(screen.getByTestId("pro-rules-name").textContent).toBe("Migue"));
+    expect(screen.queryByTestId("pro-rules-dropdown")).toBeNull();
+  });
+
+  it("busca por nombre sin tildes ni mayúsculas; Enter elige la primera coincidencia", async () => {
+    wrap(<Harness onChange={() => {}} />);
+    await userEvent.click(await screen.findByTestId("pro-rules-selector-trigger"));
+    await userEvent.type(screen.getByTestId("pro-rules-search"), "NOR");
+    expect(within(screen.getByTestId("pro-rules-dropdown")).getAllByRole("option")).toHaveLength(1);
+    await userEvent.type(screen.getByTestId("pro-rules-search"), "{Enter}");
+    await waitFor(() => expect(screen.getByTestId("pro-rules-name").textContent).toBe("Norma"));
+    await userEvent.click(screen.getByTestId("pro-rules-selector-trigger"));
+    await userEvent.type(screen.getByTestId("pro-rules-search"), "zzz");
+    expect(screen.getByTestId("pro-rules-no-match").textContent).toBe("Ninguna profesional coincide.");
+  });
+
+  it("las flechas pasan a la anterior o a la siguiente y se apagan en los extremos", async () => {
+    wrap(<Harness onChange={() => {}} />);
+    await screen.findByTestId("pro-rules-name");
+    expect((screen.getByTestId("pro-rules-prev") as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(screen.getByTestId("pro-rules-next"));
+    await waitFor(() => expect(screen.getByTestId("pro-rules-name").textContent).toBe("Migue"));
+    await userEvent.click(screen.getByTestId("pro-rules-next"));
+    await waitFor(() => expect(screen.getByTestId("pro-rules-name").textContent).toBe("Norma"));
+    expect((screen.getByTestId("pro-rules-next") as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.click(screen.getByTestId("pro-rules-prev"));
+    await waitFor(() => expect(screen.getByTestId("pro-rules-name").textContent).toBe("Migue"));
+  });
+
+  it("la base se escribe «con IVA» (IVA en mayúsculas)", async () => {
+    wrap(<Harness onChange={() => {}} />);
+    await screen.findByTestId("pro-rules-name");
+    expect(screen.getByText("Base de cálculo: precio con IVA.")).toBeTruthy();
+  });
+});
+
+describe("HU-COM-14 · Grupos", () => {
+  const svc = (serviceId: number, name: string, over: Record<string, unknown> = {}) => ({
+    serviceId,
+    name,
+    categoryName: "Peluquería",
+    price: 100000,
+    groupId: null,
+    groupName: null,
+    suggestion: null,
+    ...over,
+  });
+  beforeEach(async () => {
+    await i18n.changeLanguage("es");
+    api.getGroups.mockResolvedValue([
+      { id: 1, name: "Brushing", serviceCount: 1, serviceNames: ["Brushing pelo corto"], professionalsWithRule: 4 },
+      { id: 2, name: "Tratamiento", serviceCount: 0, serviceNames: [], professionalsWithRule: 0 },
+    ]);
+    api.getGroupServices.mockImplementation(async (kind: string) =>
+      kind === "PRODUCT"
+        ? [svc(90, "Shampoo"), svc(91, "Acondicionador")]
+        : [
+            svc(10, "Baño de crema", { suggestion: { groupId: 2, groupName: "Tratamiento", reason: "bano de crema" } }),
+            svc(11, "Aplicación de ampolla", { suggestion: { groupId: 2, groupName: "Tratamiento", reason: "apli" } }),
+            svc(12, "Maquillaje"),
+            svc(13, "Brushing pelo corto", { groupId: 1, groupName: "Brushing" }),
+          ],
+    );
+    api.assignGroups.mockResolvedValue({ changed: 2 });
+    api.createGroup.mockResolvedValue({ id: 3, name: "Color" });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  const rowOf = (name: string) => screen.getAllByTestId("groups-row").find((r) => r.getAttribute("data-name") === name)!;
+
+  it("abre en «Sin grupo» con contadores y la sugerencia por nombre de cada servicio", async () => {
     wrap(<GroupsPanel />);
-    const rows = await screen.findAllByTestId("groups-ungrouped-row");
-    expect(rows).toHaveLength(3);
+    await screen.findAllByTestId("groups-row");
+    expect(screen.getAllByTestId("groups-row")).toHaveLength(3);
+    expect(screen.getByTestId("groups-scope-UNGROUPED").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("groups-scope-UNGROUPED").textContent).toBe("Sin grupo · 3");
+    expect(screen.getByTestId("groups-scope-GROUPED").textContent).toBe("Con grupo · 1");
+    expect(screen.getByTestId("groups-scope-ALL").textContent).toBe("Todos · 4");
+    expect(screen.getByTestId("groups-kind-SERVICE").textContent).toBe("Servicios · 4");
+    expect(screen.getByTestId("groups-kind-PRODUCT").textContent).toBe("Productos · 2");
     const suggestions = screen.getAllByTestId("groups-suggestion").map((s) => s.textContent);
     expect(suggestions[0]).toContain("Sugerido: Tratamiento · contiene «bano de crema»");
     expect(suggestions[1]).toContain("«apli»");
-    expect(within(rows[2]).queryByTestId("groups-suggestion")).toBeNull();
-    const groupRows = screen.getAllByTestId("group-row");
-    expect(groupRows[0].textContent).toContain("2 servicios");
-    expect(groupRows[0].textContent).toContain("Brushing pelo corto · Brushing pelo largo");
+    expect(within(rowOf("Maquillaje")).queryByTestId("groups-suggestion")).toBeNull();
+    expect(screen.getByTestId("groups-new")).toBeTruthy(); // «+ Nuevo grupo» a la vista, arriba
   });
 
-  it("aceptar una sugerencia asigna ese servicio al grupo", async () => {
+  it("busca por nombre sin importar tildes ni mayúsculas y muestra todos con «Todos»", async () => {
     wrap(<GroupsPanel />);
-    const rows = await screen.findAllByTestId("groups-ungrouped-row");
-    await userEvent.click(within(rows[0]).getByTestId("groups-accept"));
+    await screen.findAllByTestId("groups-row");
+    await userEvent.click(screen.getByTestId("groups-scope-ALL"));
+    expect(screen.getAllByTestId("groups-row")).toHaveLength(4);
+    await userEvent.type(screen.getByTestId("groups-search"), "BANO");
+    expect(screen.getAllByTestId("groups-row").map((r) => r.getAttribute("data-name"))).toEqual(["Baño de crema"]);
+    await userEvent.clear(screen.getByTestId("groups-search"));
+    await userEvent.type(screen.getByTestId("groups-search"), "zzz");
+    expect(screen.getByTestId("groups-no-matches").textContent).toContain("Ningún ítem coincide");
+  });
+
+  it("filtra por grupo y tocar un grupo de la lista filtra sus servicios", async () => {
+    wrap(<GroupsPanel />);
+    await screen.findAllByTestId("groups-row");
+    await userEvent.selectOptions(screen.getByTestId("groups-group-filter"), "1");
+    expect(screen.getAllByTestId("groups-row").map((r) => r.getAttribute("data-name"))).toEqual(["Brushing pelo corto"]);
+    await userEvent.selectOptions(screen.getByTestId("groups-group-filter"), "");
+    await userEvent.click(screen.getByTestId("groups-scope-UNGROUPED"));
+    expect(screen.getAllByTestId("groups-row")).toHaveLength(3);
+    await userEvent.click(screen.getAllByTestId("group-open")[0]);
+    expect(screen.getAllByTestId("groups-row").map((r) => r.getAttribute("data-name"))).toEqual(["Brushing pelo corto"]);
+    expect((screen.getByTestId("groups-group-filter") as HTMLSelectElement).value).toBe("1");
+  });
+
+  it("aceptar una sugerencia asigna ese servicio; aceptar todas, solo las que tienen sugerencia", async () => {
+    wrap(<GroupsPanel />);
+    await screen.findAllByTestId("groups-row");
+    await userEvent.click(within(rowOf("Baño de crema")).getByTestId("groups-accept"));
     await waitFor(() => expect(api.assignGroups).toHaveBeenCalledWith([{ serviceId: 10, groupId: 2 }]));
     expect((await screen.findByTestId("groups-notice")).textContent).toContain("Se asignó 1 servicio");
-  });
-
-  it("aceptar todas las sugerencias asigna solo los que tienen sugerencia", async () => {
-    wrap(<GroupsPanel />);
-    await userEvent.click(await screen.findByTestId("groups-accept-all"));
+    expect(screen.getByTestId("groups-accept-all").textContent).toBe("Aceptar las 2 sugerencias");
+    await userEvent.click(screen.getByTestId("groups-accept-all"));
     await waitFor(() =>
-      expect(api.assignGroups).toHaveBeenCalledWith([
+      expect(api.assignGroups).toHaveBeenLastCalledWith([
         { serviceId: 10, groupId: 2 },
         { serviceId: 11, groupId: 2 },
       ]),
     );
   });
 
-  it("elegir un grupo a mano asigna el servicio", async () => {
+  it("elegir un grupo en la fila asigna; un servicio con grupo se puede quitar del grupo", async () => {
     wrap(<GroupsPanel />);
-    const rows = await screen.findAllByTestId("groups-ungrouped-row");
-    await userEvent.selectOptions(within(rows[2]).getByTestId("groups-choose"), "1");
+    await screen.findAllByTestId("groups-row");
+    await userEvent.selectOptions(within(rowOf("Maquillaje")).getByTestId("groups-row-select"), "1");
     await waitFor(() => expect(api.assignGroups).toHaveBeenCalledWith([{ serviceId: 12, groupId: 1 }]));
+    await userEvent.click(screen.getByTestId("groups-scope-GROUPED"));
+    await userEvent.selectOptions(within(rowOf("Brushing pelo corto")).getByTestId("groups-row-select"), "");
+    await waitFor(() => expect(api.assignGroups).toHaveBeenLastCalledWith([{ serviceId: 13, groupId: null }]));
+    expect((await screen.findByTestId("groups-notice")).textContent).toContain("Se quitó 1 ítem del grupo");
   });
 
-  it("crear un grupo pide el nombre y lo crea", async () => {
+  it("selecciona varios y los asigna de una vez desde la barra", async () => {
     wrap(<GroupsPanel />);
-    await userEvent.click(await screen.findByTestId("groups-new"));
+    await screen.findAllByTestId("groups-row");
+    expect(screen.queryByTestId("groups-bulk-bar")).toBeNull();
+    await userEvent.click(within(rowOf("Maquillaje")).getByTestId("groups-row-check"));
+    await userEvent.click(within(rowOf("Baño de crema")).getByTestId("groups-row-check"));
+    expect(screen.getByTestId("groups-selected").textContent).toBe("2 seleccionados");
+    expect((screen.getByTestId("groups-bulk-assign") as HTMLButtonElement).disabled).toBe(true);
+    await userEvent.selectOptions(screen.getByTestId("groups-bulk-select"), "2");
+    await userEvent.click(screen.getByTestId("groups-bulk-assign"));
+    await waitFor(() =>
+      expect(api.assignGroups).toHaveBeenCalledWith([
+        { serviceId: 12, groupId: 2 },
+        { serviceId: 10, groupId: 2 },
+      ]),
+    );
+    await waitFor(() => expect(screen.queryByTestId("groups-bulk-bar")).toBeNull());
+  });
+
+  it("«Seleccionar los que coinciden» marca los filtrados y «Quitar selección» los suelta", async () => {
+    wrap(<GroupsPanel />);
+    await screen.findAllByTestId("groups-row");
+    await userEvent.click(screen.getByTestId("groups-select-all"));
+    expect(screen.getByTestId("groups-selected").textContent).toBe("3 seleccionados");
+    await userEvent.click(screen.getByTestId("groups-bulk-clear"));
+    expect(screen.queryByTestId("groups-bulk-bar")).toBeNull();
+  });
+
+  it("crear un grupo desde la barra lo crea y asigna los seleccionados", async () => {
+    wrap(<GroupsPanel />);
+    await screen.findAllByTestId("groups-row");
+    await userEvent.click(within(rowOf("Maquillaje")).getByTestId("groups-row-check"));
+    await userEvent.selectOptions(screen.getByTestId("groups-bulk-select"), "__new__");
+    expect((screen.getByTestId("groups-assign-selected") as HTMLInputElement).checked).toBe(true);
     await userEvent.click(screen.getByTestId("groups-save"));
     expect((await screen.findByText(/Ingresá el nombre del grupo, por ejemplo Brushing/)).getAttribute("role")).toBe("alert");
     expect(api.createGroup).not.toHaveBeenCalled();
     await userEvent.type(screen.getByTestId("groups-name"), "Color");
     await userEvent.click(screen.getByTestId("groups-save"));
     await waitFor(() => expect(api.createGroup).toHaveBeenCalledWith("Color"));
+    await waitFor(() => expect(api.assignGroups).toHaveBeenCalledWith([{ serviceId: 12, groupId: 3 }]));
+    expect((await screen.findByTestId("groups-notice")).textContent).toContain("Se creó el grupo y se asignaron los seleccionados");
   });
 
-  it("asigna todos los productos sin grupo a un solo grupo", async () => {
+  it("«+ Nuevo grupo» sin selección crea un grupo vacío (sin casilla de asignar)", async () => {
     wrap(<GroupsPanel />);
-    const select = await screen.findByTestId("groups-products-group");
-    expect((screen.getByTestId("groups-products-assign") as HTMLButtonElement).disabled).toBe(true);
-    await userEvent.selectOptions(select, "1");
-    await userEvent.click(screen.getByTestId("groups-products-assign"));
-    await waitFor(() => expect(api.assignUngroupedToGroup).toHaveBeenCalledWith(1, "PRODUCT"));
+    await screen.findAllByTestId("groups-row");
+    await userEvent.click(screen.getByTestId("groups-new"));
+    expect(screen.queryByTestId("groups-assign-selected")).toBeNull();
+    await userEvent.type(screen.getByTestId("groups-name"), "Color");
+    await userEvent.click(screen.getByTestId("groups-save"));
+    await waitFor(() => expect(api.createGroup).toHaveBeenCalledWith("Color"));
+    expect(api.assignGroups).not.toHaveBeenCalled();
+  });
+
+  it("los productos están en la misma pantalla y se asignan en lote", async () => {
+    wrap(<GroupsPanel />);
+    await screen.findAllByTestId("groups-row");
+    await userEvent.click(screen.getByTestId("groups-kind-PRODUCT"));
+    expect(screen.getAllByTestId("groups-row").map((r) => r.getAttribute("data-name"))).toEqual(["Shampoo", "Acondicionador"]);
+    await userEvent.click(screen.getByTestId("groups-select-all"));
+    await userEvent.selectOptions(screen.getByTestId("groups-bulk-select"), "1");
+    await userEvent.click(screen.getByTestId("groups-bulk-assign"));
+    await waitFor(() =>
+      expect(api.assignGroups).toHaveBeenCalledWith([
+        { serviceId: 90, groupId: 1 },
+        { serviceId: 91, groupId: 1 },
+      ]),
+    );
+    expect((await screen.findByTestId("groups-notice")).textContent).toContain("Se asignaron 2 productos");
   });
 });
 
