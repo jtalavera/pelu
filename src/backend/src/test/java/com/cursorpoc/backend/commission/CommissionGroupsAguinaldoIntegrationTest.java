@@ -67,6 +67,7 @@ class CommissionGroupsAguinaldoIntegrationTest {
   @Autowired private CommissionSettlementService settlementService;
   @Autowired private CommissionAccrualService accrualService;
   @Autowired private AguinaldoService aguinaldoService;
+  @Autowired private CommissionOverviewService overviewService;
   @Autowired private PlatformTransactionManager transactionManager;
 
   private TransactionTemplate tx;
@@ -509,5 +510,68 @@ class CommissionGroupsAguinaldoIntegrationTest {
                 .get(0)
                 .retentionPercent())
         .isEqualByComparingTo("5");
+  }
+
+  @Test
+  void theOverviewShowsEveryActiveProfessionalWithItsStateInThePeriod() {
+    configureSalon();
+    accrue(invoice(brushingLargo, gaby, "100000")); // 45.000 + 5.000 retained
+    accrue(invoice(brushingLargo, jorgelina, "100000")); // 50.000
+
+    var ov = overviewService.overview(tenant.getId(), 0);
+    assertThat(ov.rows())
+        .extracting(r -> r.professionalName().toLowerCase())
+        .containsExactly("gaby", "jorgelina");
+    assertThat(ov.rows()).extracting(r -> r.status()).containsExactly("UNSETTLED", "UNSETTLED");
+    assertThat(ov.rows().get(0).amount()).isEqualByComparingTo("45000");
+    assertThat(ov.rows().get(0).retention()).isEqualByComparingTo("5000");
+    assertThat(ov.rows().get(0).ruleCount()).isEqualTo(2);
+    assertThat(ov.total()).isEqualByComparingTo("95000");
+    assertThat(ov.retentionTotal()).isEqualByComparingTo("5000");
+    assertThat(ov.unsettled()).isEqualTo(2);
+    assertThat(ov.groupCount()).isEqualTo(2);
+    assertThat(ov.ungroupedServices()).isEqualTo(1); // "Baño de crema" has no group
+    assertThat(ov.professionalsWithoutRules()).isZero();
+    assertThat(ov.aguinaldoEnabled()).isTrue();
+    assertThat(ov.aguinaldoBalance()).isEqualByComparingTo("0");
+    assertThat(ov.period().from()).isNotNull();
+
+    LocalDate today = LocalDate.now(configService.zone());
+    CommissionSettlement draft =
+        settlementService
+            .generate(
+                tenant.getId(),
+                "admin@test",
+                new GenerateSettlementsRequest(today, today, List.of(gaby.getId())))
+            .get(0);
+    var afterGenerate = overviewService.overview(tenant.getId(), 0);
+    assertThat(afterGenerate.rows().get(0).status()).isEqualTo("DRAFT");
+    assertThat(afterGenerate.rows().get(0).settlementId()).isEqualTo(draft.getId());
+    assertThat(afterGenerate.drafts()).isEqualTo(1);
+    assertThat(afterGenerate.unsettled()).isEqualTo(1);
+
+    settlementService.approve(tenant.getId(), draft.getId(), "admin@test");
+    var approved = overviewService.overview(tenant.getId(), 0);
+    assertThat(approved.rows().get(0).status()).isEqualTo("APPROVED");
+    assertThat(approved.approved()).isEqualTo(1);
+    assertThat(approved.aguinaldoBalance()).isEqualByComparingTo("5000");
+
+    settlementService.pay(
+        tenant.getId(), draft.getId(), "admin@test", new PayRequest("CASH", today, ""));
+    assertThat(overviewService.overview(tenant.getId(), 0).paid()).isEqualTo(1);
+
+    // The period before has nothing yet; offsets above 0 are treated as the current one.
+    var before = overviewService.overview(tenant.getId(), -1);
+    assertThat(before.offset()).isEqualTo(-1);
+    assertThat(before.rows()).extracting(r -> r.status()).containsOnly("NONE");
+    assertThat(before.period().to()).isBefore(ov.period().from());
+    assertThat(overviewService.overview(tenant.getId(), 5).offset()).isZero();
+  }
+
+  @Test
+  void theOverviewCountsProfessionalsWithoutRules() {
+    var ov = overviewService.overview(tenant.getId(), 0);
+    assertThat(ov.professionalsWithoutRules()).isEqualTo(2);
+    assertThat(ov.rows()).extracting(r -> r.status()).containsOnly("NONE");
   }
 }
