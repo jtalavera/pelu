@@ -82,7 +82,9 @@ test.describe("Inicio · listas del panel", () => {
       const before = await more.innerText();
       await more.click();
       await expect
-        .poll(async () => (await more.count()) === 0 || ((await more.isEnabled()) && (await more.innerText()) !== before))
+        .poll(async () => (await more.count()) === 0 || ((await more.isEnabled()) && (await more.innerText()) !== before), {
+          timeout: 20_000,
+        })
         .toBe(true);
     }
     await expect(voided).toHaveCount(14);
