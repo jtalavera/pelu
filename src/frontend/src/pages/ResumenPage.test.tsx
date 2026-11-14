@@ -58,7 +58,7 @@ function paged<T>(content: T[], totalElements = content.length) {
   return { content, page: 0, size: 200, totalElements, totalPages: 1 };
 }
 
-function setup(over: { cash?: boolean; attention?: boolean; fiscalAlert?: boolean; failSummary?: boolean } = {}) {
+function setup(over: { cash?: boolean; attention?: boolean; fiscalAlert?: boolean; failSummary?: boolean; openedAt?: string } = {}) {
   femmeJson.mockImplementation((url: string) => {
     if (url === "/api/dashboard") {
       if (over.failSummary) return Promise.reject(new Error("boom"));
@@ -75,7 +75,7 @@ function setup(over: { cash?: boolean; attention?: boolean; fiscalAlert?: boolea
   getCurrentSession.mockResolvedValue(over.cash === false ? undefined : { id: 7, isOpen: true });
   getSessionDetail.mockResolvedValue({
     id: 7,
-    openedAt: "2026-11-13T11:02:00Z",
+    openedAt: over.openedAt ?? new Date().toISOString(),
     paymentSummary: [
       { method: "CASH", total: "750000" },
       { method: "DEBIT_CARD", total: "300000" },
@@ -162,6 +162,30 @@ describe("ResumenPage (HU-77)", () => {
     expect(screen.getByTestId("resumen-cash-transfer").textContent).toMatch(/50\.000/);
     expect(screen.queryByTestId("resumen-cash-other")).toBeNull();
     expect(screen.getByTestId("resumen-view-cash").textContent).toMatch(/Open since/);
+  });
+
+  it("«Caja del día» says only the time when the register was opened today", async () => {
+    setup({ openedAt: new Date().toISOString() });
+    await renderPage();
+    const text = screen.getByTestId("resumen-view-cash").textContent!;
+    expect(text).toMatch(/^Open since \d{1,2}:\d{2} · Open cash →$/);
+  });
+
+  it("«Caja del día» shows the date too when the register was opened before today", async () => {
+    // Two days back: it is a different calendar day whatever the time zone.
+    setup({ openedAt: new Date(Date.now() - 2 * 24 * 3_600_000).toISOString() });
+    await renderPage();
+    const text = screen.getByTestId("resumen-view-cash").textContent!;
+    expect(text).toMatch(/^Open since .*\d{4}.* at \d{1,2}:\d{2} · Open cash →$/);
+  });
+
+  it("«Caja del día» shows the date in Spanish: «Abierta desde el … a las …»", async () => {
+    setup({ openedAt: new Date(Date.now() - 2 * 24 * 3_600_000).toISOString() });
+    await i18n.changeLanguage("es");
+    await renderPage();
+    expect(screen.getByTestId("resumen-view-cash").textContent).toMatch(
+      /^Abierta desde el .*\d{4}.* a las \d{1,2}:\d{2} · Ver caja →$/,
+    );
   });
 
   it("«Caja del día» with no register open says so and points to Caja", async () => {

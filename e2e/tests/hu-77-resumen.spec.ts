@@ -224,3 +224,28 @@ test("AC9 · con la interfaz en español todo el Resumen está en español (incl
   // No English left in the cards (the salon's own names are not translated).
   await expect(page.getByTestId("resumen-page")).not.toContainText(/\b(Hello|pending|confirmed|Collect|All up to date|Open agenda|See all)\b/);
 });
+
+test("AC10 · «Caja del día»: si la caja se abrió antes de hoy se muestra la fecha, no solo la hora", async ({ page }) => {
+  test.setTimeout(60_000);
+  // Today's register: only the time.
+  await loginAdminUi(page, w);
+  await expect(page.getByTestId("resumen-view-cash")).toHaveText(/^Open since \d{1,2}:\d{2} · Open cash →$/, { timeout: 20_000 });
+
+  // The same register, seen as opened two days ago: the date comes with the time.
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 3_600_000).toISOString();
+  const sessionDetail = /\/api\/cash-sessions\/\d+$/;
+  await page.route(sessionDetail, async (route) => {
+    try {
+      const res = await route.fetch();
+      const body = await res.json();
+      await route.fulfill({ response: res, json: { ...body, openedAt: twoDaysAgo } });
+    } catch {
+      // The page was closed while the (polling) request was in flight.
+    }
+  });
+  await page.reload();
+  await expect(page.getByTestId("resumen-view-cash")).toHaveText(/^Open since .*\d{4}.* at \d{1,2}:\d{2} · Open cash →$/, {
+    timeout: 20_000,
+  });
+  await page.unroute(sessionDetail);
+});

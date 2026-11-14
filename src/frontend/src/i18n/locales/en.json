@@ -1172,6 +1172,7 @@
         "transfer": "Transfer",
         "other": "Other",
         "openedSince": "Open since {{time}}",
+        "openedSinceDate": "Open since {{date}} at {{time}}",
         "viewCash": "Open cash →",
         "closedTitle": "Cash register closed",
         "closedBody": "Open the register to start charging.",

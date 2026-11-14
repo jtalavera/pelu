@@ -1172,6 +1172,7 @@
         "transfer": "Transferencia",
         "other": "Otros",
         "openedSince": "Abierta desde las {{time}}",
+        "openedSinceDate": "Abierta desde el {{date}} a las {{time}}",
         "viewCash": "Ver caja →",
         "closedTitle": "Caja cerrada",
         "closedBody": "Abrí la caja para empezar a cobrar.",

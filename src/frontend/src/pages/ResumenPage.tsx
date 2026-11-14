@@ -18,7 +18,7 @@ import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { getDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal, formatGuaraniesGs } from "../lib/formatMoney";
 import { initialsOf } from "../lib/initials";
-import { formatParaguayTime } from "../lib/paraguayDateTime";
+import { formatParaguayDate, formatParaguayTime } from "../lib/paraguayDateTime";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
 
 /** HU-77 · «Resumen»: how the salon is doing today, in four cards. */
@@ -206,6 +206,15 @@ export default function ResumenPage() {
     return m === 0 ? t("femme.resumen.ago.hours", { h }) : t("femme.resumen.ago.hoursMinutes", { h, m });
   }
 
+  /** «Abierta desde las 19:07» for a register opened today; with its date when it was opened before today. */
+  function openedSinceLabel(openedAt: string): string {
+    const time = formatParaguayTime(openedAt, locale);
+    if (formatParaguayDate(openedAt, locale) === formatParaguayDate(now, locale)) {
+      return t("femme.resumen.cash.openedSince", { time });
+    }
+    return t("femme.resumen.cash.openedSinceDate", { date: formatParaguayDate(openedAt, locale), time });
+  }
+
   async function collect(ficha: ServiceRecordListItem) {
     setChargingId(ficha.id);
     try {
@@ -355,7 +364,7 @@ export default function ResumenPage() {
               ))}
             </div>
             <Link to="/app/billing" className={`${cardLink} mt-auto`} data-testid="resumen-view-cash">
-              {t("femme.resumen.cash.openedSince", { time: formatParaguayTime(cash.openedAt, locale) })} ·{" "}
+              {openedSinceLabel(cash.openedAt)} ·{" "}
               {t("femme.resumen.cash.viewCash")}
             </Link>
           </Card>
