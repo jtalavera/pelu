@@ -20,6 +20,9 @@ import { formatGuaraniesGs } from "../../lib/formatMoney";
 
 type Scope = "UNGROUPED" | "GROUPED" | "ALL";
 const NEW_GROUP = "__new__";
+/** Rows drawn at once (the rest appears with «Show more»), and how long an assigned row stays marked. */
+const PAGE = 50;
+const RECENT_MS = 1600;
 
 /** Case- and accent-insensitive text ("pestanas" finds "Pestañas"). */
 const normalize = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -45,10 +48,23 @@ export function GroupsPanel() {
   const [nameError, setNameError] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<GroupView | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  /** Rows just assigned: they stay where they are for a moment, marked, instead of jumping out of the filter. */
+  const [recent, setRecent] = useState<Record<number, string>>({});
+  /** Rows whose change is being saved (shown dimmed until the server answers). */
+  const [saving, setSaving] = useState<Set<number>>(new Set());
+  const [visibleCount, setVisibleCount] = useState(PAGE);
+  /** Saves in flight: a refresh that started before them must not overwrite what is on screen. */
+  const inFlight = useRef(0);
+  const mutation = useRef(0);
+  const timers = useRef<number[]>([]);
+  useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
 
   const load = useCallback(async () => {
+    const mine = mutation.current;
     try {
       const [g, s, p] = await Promise.all([getGroups(), getGroupServices("SERVICE"), getGroupServices("PRODUCT")]);
+      // Something changed (or is being saved) while this was loading: the next refresh is the right one.
+      if (mine !== mutation.current || inFlight.current > 0) return;
       setGroups(g);
       setItems({ SERVICE: s, PRODUCT: p });
       setScope((cur) => cur ?? (s.some((x) => x.groupId === null) ? "UNGROUPED" : "ALL"));
@@ -72,15 +88,23 @@ export function GroupsPanel() {
     [rows],
   );
   const needle = normalize(query.trim());
+  // A new search or filter starts again from the first page of rows.
+  const filterKey = `${kind}|${scope}|${groupFilter}|${needle}`;
+  const [seenKey, setSeenKey] = useState(filterKey);
+  if (seenKey !== filterKey) {
+    setSeenKey(filterKey);
+    setVisibleCount(PAGE);
+  }
   const filtered = useMemo(
     () =>
       rows.filter((r) => {
+        if (recent[r.serviceId]) return true;
         if (groupFilter) return String(r.groupId) === groupFilter;
         if (scope === "UNGROUPED") return r.groupId === null;
         if (scope === "GROUPED") return r.groupId !== null;
         return true;
       }).filter((r) => !needle || normalize(r.name).includes(needle)),
-    [rows, scope, groupFilter, needle],
+    [rows, scope, groupFilter, needle, recent],
   );
   const suggestible = filtered.filter((r) => r.suggestion);
   const allSelected = filtered.length > 0 && filtered.every((r) => selected.has(r.serviceId));
@@ -100,20 +124,88 @@ export function GroupsPanel() {
   const assignedText = (count: number) =>
     t(kind === "PRODUCT" ? "femme.commissions.groups.assignedProducts" : "femme.commissions.groups.assigned", { count });
 
-  /** Assigns the items to a group (null = removes them from their group) and clears them from the selection. */
-  async function assign(ids: number[], groupId: number | null) {
-    await run(
-      async () => {
-        await assignGroups(ids.map((serviceId) => ({ serviceId, groupId })));
-        setSelected((prev) => {
-          const next = new Set(prev);
-          ids.forEach((id) => next.delete(id));
+  /**
+   * Assigns the items (null group = removes them from their group). The screen changes right away
+   * and the server confirms in the background; if it refuses, the real state is read again.
+   */
+  async function assignMany(pairs: { serviceId: number; groupId: number | null }[], success: string, extraGroups?: GroupView[]) {
+    if (pairs.length === 0) return;
+    setNotice(null);
+    const ids = pairs.map((x) => x.serviceId);
+    const names = new Map((extraGroups ?? groups ?? []).concat(groups ?? []).map((g) => [g.id, g.name]));
+    const target = new Map(pairs.map((x) => [x.serviceId, x.groupId]));
+    mutation.current += 1;
+    inFlight.current += 1;
+    const before = new Map<number, number | null>();
+    setItems((cur) => {
+      const next = { ...cur };
+      for (const k of ["SERVICE", "PRODUCT"] as const) {
+        next[k] = cur[k].map((r) => {
+          if (!target.has(r.serviceId)) return r;
+          before.set(r.serviceId, r.groupId);
+          const groupId = target.get(r.serviceId) ?? null;
+          return { ...r, groupId, groupName: groupId === null ? null : (names.get(groupId) ?? null), suggestion: null };
+        });
+      }
+      return next;
+    });
+    setGroups((cur) =>
+      cur
+        ? cur.map((g) => {
+            let delta = 0;
+            for (const [id, to] of target) {
+              if (before.get(id) === g.id && to !== g.id) delta -= 1;
+              if (to === g.id && before.get(id) !== g.id) delta += 1;
+            }
+            return delta === 0 ? g : { ...g, serviceCount: Math.max(0, g.serviceCount + delta) };
+          })
+        : cur,
+    );
+    setSelected((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+    setRecent((cur) => ({ ...cur, ...Object.fromEntries(pairs.map((x) => [x.serviceId, x.groupId === null ? "-" : (names.get(x.groupId) ?? "")])) }));
+    setSaving((cur) => new Set([...cur, ...ids]));
+    timers.current.push(
+      window.setTimeout(() => {
+        setRecent((cur) => {
+          const next = { ...cur };
+          ids.forEach((id) => delete next[id]);
           return next;
         });
-      },
+      }, RECENT_MS),
+    );
+    try {
+      await assignGroups(pairs);
+      setError(null);
+      setNotice(success);
+    } catch (err) {
+      setError(translateApiError(err, t));
+      setRecent((cur) => {
+        const next = { ...cur };
+        ids.forEach((id) => delete next[id]);
+        return next;
+      });
+    } finally {
+      inFlight.current -= 1;
+      setSaving((cur) => {
+        const next = new Set(cur);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+      // Reads the real state (counts, suggestions of the ones taken out of a group) without blocking.
+      mutation.current += 1;
+      void load();
+    }
+  }
+
+  const assign = (ids: number[], groupId: number | null) =>
+    assignMany(
+      ids.map((serviceId) => ({ serviceId, groupId })),
       groupId === null ? t("femme.commissions.groups.removed", { count: ids.length }) : assignedText(ids.length),
     );
-  }
 
   function toggle(id: number) {
     setSelected((prev) => {
@@ -138,16 +230,21 @@ export function GroupsPanel() {
     const { id, name, assignSelected } = editing;
     try {
       if (id === null) {
-        const created = await createGroup(name);
+        const made = await createGroup(name);
+        const created: GroupView = { ...made, serviceCount: made.serviceCount ?? 0, serviceNames: made.serviceNames ?? [], professionalsWithRule: made.professionalsWithRule ?? 0 };
         const ids = [...selected];
+        setGroups((cur) => (cur ? [...cur, created].sort((x, y) => x.name.localeCompare(y.name)) : cur));
         if (assignSelected && ids.length > 0) {
-          await assignGroups(ids.map((serviceId) => ({ serviceId, groupId: created.id })));
-          setSelected(new Set());
+          setEditing(null);
           setBulkGroup("");
-          setNotice(t("femme.commissions.groups.createdAndAssigned"));
-        } else {
-          setNotice(t("femme.commissions.groups.created"));
+          void assignMany(
+            ids.map((serviceId) => ({ serviceId, groupId: created.id })),
+            t("femme.commissions.groups.createdAndAssigned"),
+            [created],
+          );
+          return;
         }
+        setNotice(t("femme.commissions.groups.created"));
       } else {
         await renameGroup(id, name);
         setNotice(t("femme.commissions.groups.renamed"));
@@ -296,15 +393,8 @@ export function GroupsPanel() {
                   className={`${ACTION_BUTTON} ml-auto`}
                   data-testid="groups-accept-all"
                   onClick={() =>
-                    void run(
-                      async () => {
-                        await assignGroups(suggestible.map((r) => ({ serviceId: r.serviceId, groupId: r.suggestion!.groupId })));
-                        setSelected((prev) => {
-                          const next = new Set(prev);
-                          suggestible.forEach((r) => next.delete(r.serviceId));
-                          return next;
-                        });
-                      },
+                    void assignMany(
+                      suggestible.map((r) => ({ serviceId: r.serviceId, groupId: r.suggestion!.groupId })),
                       assignedText(suggestible.length),
                     )
                   }
@@ -314,12 +404,15 @@ export function GroupsPanel() {
               )}
             </div>
             <ul data-testid="groups-rows">
-              {filtered.map((r) => (
+              {filtered.slice(0, visibleCount).map((r) => (
                 <li
                   key={r.serviceId}
                   data-testid="groups-row"
                   data-name={r.name}
-                  className={`flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2 ${selected.has(r.serviceId) ? "bg-primary-lt/40" : ""}`}
+                  data-state={saving.has(r.serviceId) ? "saving" : recent[r.serviceId] ? "assigned" : undefined}
+                  className={`flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-1 py-2 transition-colors duration-300 ${
+                    recent[r.serviceId] ? "bg-success-lt" : selected.has(r.serviceId) ? "bg-primary-lt/40" : ""
+                  } ${saving.has(r.serviceId) ? "opacity-70" : ""}`}
                 >
                   <input
                     type="checkbox"
@@ -341,6 +434,7 @@ export function GroupsPanel() {
                       r.groupName ? "bg-primary-lt text-primary" : "bg-warning-lt text-warning"
                     }`}
                   >
+                    {recent[r.serviceId] ? "✓ " : ""}
                     {r.groupName ?? t("femme.commissions.groups.noGroup")}
                   </span>
                   {r.suggestion && (
@@ -356,6 +450,7 @@ export function GroupsPanel() {
                         variant="secondary"
                         className={ACTION_BUTTON}
                         data-testid="groups-accept"
+                        disabled={saving.has(r.serviceId)}
                         aria-label={t("femme.commissions.groups.acceptAria", { name: r.name })}
                         onClick={() => void assign([r.serviceId], r.suggestion!.groupId)}
                       >
@@ -367,6 +462,7 @@ export function GroupsPanel() {
                     aria-label={t("femme.commissions.groups.chooseAria", { name: r.name })}
                     value={r.groupId === null ? "" : String(r.groupId)}
                     className="w-44"
+                    disabled={saving.has(r.serviceId)}
                     data-testid="groups-row-select"
                     onChange={(e) => {
                       const v = e.target.value;
@@ -385,6 +481,17 @@ export function GroupsPanel() {
                 </li>
               ))}
             </ul>
+            {filtered.length > visibleCount && (
+              <Button
+                type="button"
+                variant="secondary"
+                className={`${ACTION_BUTTON} mt-2 w-full`}
+                data-testid="groups-show-more"
+                onClick={() => setVisibleCount((n) => n + PAGE)}
+              >
+                {t("femme.commissions.groups.showMore", { count: filtered.length - visibleCount })}
+              </Button>
+            )}
           </>
         )}
 

@@ -149,6 +149,34 @@ describe("HU-COM-14 · Grupos", () => {
     expect((await screen.findByTestId("groups-notice")).textContent).toContain("Se quitó 1 ítem del grupo");
   });
 
+  it("la pantalla cambia al instante (sin esperar al servidor), la fila queda marcada y se atenúa mientras guarda", async () => {
+    let finish: (v: unknown) => void = () => {};
+    api.assignGroups.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    wrap(<GroupsPanel />);
+    await screen.findAllByTestId("groups-row");
+    const reads = api.getGroupServices.mock.calls.length;
+    await userEvent.selectOptions(within(rowOf("Maquillaje")).getByTestId("groups-row-select"), "1");
+    // The server has not answered yet: the row already shows its group, marked, and is not editable.
+    const row = rowOf("Maquillaje");
+    expect(within(row).getByTestId("groups-row-chip").textContent).toContain("Brushing");
+    expect(row.getAttribute("data-state")).toBe("saving");
+    expect((within(row).getByTestId("groups-row-select") as HTMLSelectElement).disabled).toBe(true);
+    expect(api.getGroupServices.mock.calls.length).toBe(reads); // nothing is re-read before the answer
+    finish({ changed: 1 });
+    await waitFor(() => expect(rowOf("Maquillaje").getAttribute("data-state")).toBe("assigned"));
+    // Right after saving it still shows in the «No group» list (marked) so rows do not jump around.
+    expect(screen.getAllByTestId("groups-row").length).toBe(3);
+  });
+
+  it("si el servidor rechaza el cambio se vuelve a leer el estado real y no se avisa un éxito", async () => {
+    api.assignGroups.mockRejectedValueOnce(new Error("COMMISSION_GROUP_NOT_FOUND"));
+    wrap(<GroupsPanel />);
+    await screen.findAllByTestId("groups-row");
+    await userEvent.selectOptions(within(rowOf("Maquillaje")).getByTestId("groups-row-select"), "1");
+    await waitFor(() => expect(within(rowOf("Maquillaje")).getByTestId("groups-row-chip").textContent).toContain("Sin grupo"));
+    expect(screen.queryByTestId("groups-notice")).toBeNull(); // no «se asignó» message for a change that failed
+  });
+
   it("selecciona varios y los asigna de una vez desde la barra", async () => {
     wrap(<GroupsPanel />);
     await screen.findAllByTestId("groups-row");

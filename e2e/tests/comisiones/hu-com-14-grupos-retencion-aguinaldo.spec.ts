@@ -311,6 +311,40 @@ test("AC2 · buscar, filtrar y asignar en lote; crear un grupo al asignar; mover
 
 // ── AC3 · AC4 · AC5 · AC6 · AC7 · Reglas por profesional ──────────────────────────────────────
 
+test("AC2 · asignar es inmediato: la fila cambia al instante, queda marcada un momento y sale de «Sin grupo»; el lote de 40 se guarda rápido", async ({
+  page,
+  request,
+}) => {
+  const token = w.adminToken;
+  const group = await createGroup(request, token, "Color");
+  const first = await createCatalogItem(request, token, w, "Color raíz");
+  const extra = [];
+  for (let i = 1; i <= 40; i++) extra.push(await createCatalogItem(request, token, w, `Servicio lote ${String(i).padStart(2, "0")}`));
+  await openGroups(page);
+  await page.getByTestId("groups-scope-UNGROUPED").click();
+  const row = page.getByTestId("groups-row").filter({ hasText: first.name });
+
+  await row.getByTestId("groups-row-select").selectOption({ label: "Color" });
+  // The row shows its group at once (marked) and then leaves «No group» by itself.
+  await expect(row.getByTestId("groups-row-chip")).toContainText("Color");
+  await expect(row).toHaveAttribute("data-state", /saving|assigned/);
+  await expect(row).toHaveCount(0, { timeout: 5000 });
+  expect((await apiGetJson<{ serviceId: number; groupId: number | null }[]>(request, token, "/api/commissions/groups/services?kind=SERVICE")).find((r) => r.serviceId === first.id)?.groupId).toBe(
+    group.id,
+  );
+
+  // A bulk of 40: «Select the N that match» and assign; it feels instant and nothing jumps around.
+  await page.getByTestId("groups-search").fill("Servicio lote");
+  await page.getByTestId("groups-select-all").check();
+  await page.getByTestId("groups-bulk-select").selectOption({ label: "Color" });
+  const started = Date.now();
+  await page.getByTestId("groups-bulk-assign").click();
+  await expect(page.getByTestId("groups-notice")).toContainText("40");
+  expect(Date.now() - started).toBeLessThan(4000);
+  await expect(page.getByTestId("groups-row")).toHaveCount(0, { timeout: 5000 });
+  expect(extra).toHaveLength(40);
+});
+
 test("AC3 · AC4 · la ficha de la profesional cuenta cada regla en una frase; editar, agregar y quitar preguntan «desde cuándo»", async ({
   page,
   request,

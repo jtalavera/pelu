@@ -624,7 +624,8 @@
         "assignSelected_one": "Assign the selected one to it",
         "assignSelected_other": "Assign the {{count}} selected to it",
         "createAndAssign": "Create and assign",
-        "createdAndAssigned": "The group was created and the selected items were assigned."
+        "createdAndAssigned": "The group was created and the selected items were assigned.",
+        "showMore": "Show {{count}} more"
       },
       "aguinaldo": {
         "intro": "What is retained from each commission builds up here once the settlement is approved. It is paid all together or in partial payments, and when a professional leaves her balance is settled.",

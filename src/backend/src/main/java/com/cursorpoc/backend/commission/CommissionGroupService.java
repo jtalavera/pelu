@@ -156,15 +156,25 @@ public class CommissionGroupService {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "COMMISSION_GROUP_ASSIGNMENT_REQUIRED");
     }
+    // Two queries for the whole request (items and groups), not two per item.
+    Map<Long, SalonService> items =
+        serviceRepository
+            .findByTenantIdAndIdIn(
+                tenantId, assignments.stream().map(GroupAssignment::serviceId).distinct().toList())
+            .stream()
+            .collect(Collectors.toMap(SalonService::getId, s -> s, (x, y) -> x));
+    java.util.Set<Long> groupIds =
+        groupRepository.findByTenantIdOrderByNameAsc(tenantId).stream()
+            .map(CommissionGroup::getId)
+            .collect(Collectors.toSet());
     int changed = 0;
     for (GroupAssignment a : assignments) {
-      SalonService s =
-          serviceRepository
-              .findByIdAndTenant_Id(a.serviceId(), tenantId)
-              .orElseThrow(
-                  () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SERVICE_NOT_FOUND"));
-      if (a.groupId() != null) {
-        find(tenantId, a.groupId());
+      SalonService s = items.get(a.serviceId());
+      if (s == null) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "SERVICE_NOT_FOUND");
+      }
+      if (a.groupId() != null && !groupIds.contains(a.groupId())) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "COMMISSION_GROUP_NOT_FOUND");
       }
       if (!Objects.equals(s.getCommissionGroupId(), a.groupId())) {
         s.setCommissionGroupId(a.groupId());

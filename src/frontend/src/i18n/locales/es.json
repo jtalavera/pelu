@@ -624,7 +624,8 @@
         "assignSelected_one": "Asignarle el seleccionado",
         "assignSelected_other": "Asignarle los {{count}} seleccionados",
         "createAndAssign": "Crear y asignar",
-        "createdAndAssigned": "Se creó el grupo y se asignaron los seleccionados."
+        "createdAndAssigned": "Se creó el grupo y se asignaron los seleccionados.",
+        "showMore": "Mostrar {{count}} más"
       },
       "aguinaldo": {
         "intro": "Lo retenido de cada comisión se acumula acá cuando la liquidación se aprueba. Se paga todo junto o en pagos parciales, y al salir una profesional se liquida su saldo.",
