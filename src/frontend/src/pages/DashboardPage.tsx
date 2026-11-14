@@ -1,8 +1,8 @@
 import { TodayEmptyState } from "../components/TodayEmptyState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate } from "react-router-dom";
-import { Alert, Button, Card, DataTable, Spinner, Text } from "@design-system";
+import { Link } from "react-router-dom";
+import { Alert, Button, Card, Spinner, Text } from "@design-system";
 import { femmeJson } from "../api/femmeClient";
 import { AppointmentFichaAction } from "../components/AppointmentFichaAction";
 import { SectionTitle } from "../components/SectionTitle";
@@ -13,7 +13,6 @@ import { AppointmentFormModal } from "../components/AppointmentFormModal";
 import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
 import { TodayServiceRecords } from "../components/TodayServiceRecords";
 import { NewServiceRecordModal } from "../components/NewServiceRecordModal";
-import { BirthdaysCard } from "../components/BirthdaysCard";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useMe } from "../hooks/useMe";
 import { ListSearchField } from "../components/ListSearchField";
@@ -103,8 +102,6 @@ function fmtTime(iso: string, locale: string): string {
 
 const POLL_MS = 60_000;
 
-type MoreKey = "occupancy" | "birthdays" | "inactive";
-
 const APPT_STATUS_TEXT: Record<string, string> = {
   PENDING: "text-warning",
   CONFIRMED: "text-success",
@@ -121,7 +118,6 @@ const APPT_STATUS_TEXT: Record<string, string> = {
 export default function DashboardPage() {
   const { t, i18n } = useTranslation();
   const { me, loading: meLoading } = useMe();
-  const navigate = useNavigate();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
   const tourRole =
     !guidedTourEnabled
@@ -134,9 +130,6 @@ export default function DashboardPage() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState<string | null>(null);
   const [todayAppts, setTodayAppts]   = useState<Appointment[]>([]);
-  const [alertDismissed, setAlertDismissed] = useState(false);
-  const [openMore, setOpenMore] = useState<MoreKey | null>(null);
-  const [birthdaysCount, setBirthdaysCount] = useState<number | null>(0);
   const [openRecordId, setOpenRecordId] = useState<number | null>(null);
   const [newApptOpen, setNewApptOpen] = useState(false);
   const [detailAppt, setDetailAppt] = useState<Appointment | null>(null);
@@ -151,9 +144,8 @@ export default function DashboardPage() {
   // instead of the blocks popping in one after the other ("0 turnos hoy" first, the agenda later).
   const [apptsLoaded, setApptsLoaded] = useState(false);
   const [fichasLoaded, setFichasLoaded] = useState(false);
-  const [birthdaysLoaded, setBirthdaysLoaded] = useState(false);
   const failed = !loading && (error !== null || data === null);
-  const ready = !failed && !loading && !meLoading && apptsLoaded && fichasLoaded && birthdaysLoaded;
+  const ready = !failed && !loading && !meLoading && apptsLoaded && fichasLoaded;
   // The guided tour points at elements of the page: start it only once they are on screen.
   useTour("dashboard", dashboardSteps, tourRole, guidedTourEnabled && ready);
 
@@ -212,24 +204,6 @@ export default function DashboardPage() {
     const id = window.setInterval(refreshAppointments, POLL_MS);
     return () => window.clearInterval(id);
   }, [refreshAppointments]);
-
-  // ── Occupancy by professional ─────────────────────────────────────────────
-  const occupancy = useMemo(() => {
-    const map = new Map<number, { id: number; name: string; count: number }>();
-    for (const a of todayAppts) {
-      const e = map.get(a.professionalId);
-      if (e) e.count++;
-      else
-        map.set(a.professionalId, {
-          id: a.professionalId,
-          name: a.professionalName,
-          count: 1,
-        });
-    }
-    return [...map.values()].sort((a, b) => b.count - a.count);
-  }, [todayAppts]);
-
-  const maxOccupancy = occupancy.length > 0 ? Math.max(...occupancy.map((o) => o.count)) : 1;
 
   const visibleTodayAppts = useMemo(
     () =>
@@ -322,119 +296,9 @@ export default function DashboardPage() {
     );
   }
 
-  // ── Greeting ──────────────────────────────────────────────────────────────
-  const hour = now.getHours();
-  const greetingKey =
-    hour < 12 ? "greetingMorning" : hour < 19 ? "greetingAfternoon" : "greetingEvening";
-  const userName = me?.fullName?.trim() || (me?.email.split("@")[0] ?? "");
-
-  const dateLabel = new Intl.DateTimeFormat(locale, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  }).format(now);
-  const timeLabel = now.toLocaleTimeString(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-
-  // ── Fiscal alert (first non-blocking, dismissable) ────────────────────────
-  const fiscalAlert = !alertDismissed
-    ? (data?.fiscalAlerts.find((a) => a.severity !== "blocking") ?? null)
-    : null;
-
   // The blocks below are always mounted (hidden until `ready`) so that all of their requests start
   // together; until the summary arrives they read neutral defaults that are never seen.
   const a = data?.appointmentsToday ?? { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 };
-  const inactiveClients = Array.isArray(data?.inactiveClients) ? data.inactiveClients : [];
-  // Defensive fallback only for a stale frontend build talking to a newer/older backend
-  // (see auto-reload-on-stale-build) — the real value always comes from the server response,
-  // never hardcoded as the source of truth.
-  const inactiveClientsThresholdDays = data?.inactiveClientsThresholdDays ?? 60;
-
-  const occupancyOpenKey = openMore;
-  const moreSections: Array<{ key: MoreKey; label: string; count: number | null; body: React.ReactNode }> = [
-    {
-      key: "occupancy",
-      label: t("femme.dashboard.home.moreOccupancy"),
-      count: null,
-      body: (
-        <div data-tour="dashboard-occupancy" className="flex flex-col py-1">
-          {occupancy.length === 0 ? (
-            <div className="py-2 text-sm text-ink-3">{t("femme.dashboard.noAppts")}</div>
-          ) : (
-            occupancy.map((prof) => (
-              <div key={prof.id} className="flex min-h-11 items-center gap-3 border-t border-line first:border-t-0">
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{prof.name}</span>
-                <span className="text-xs text-ink-3">
-                  {prof.count} {t("femme.dashboard.occupancyUnit")}
-                </span>
-                <span className="h-2 w-24 shrink-0 rounded bg-line">
-                  <span
-                    className="block h-full rounded bg-primary"
-                    style={{ width: `${(prof.count / maxOccupancy) * 100}%` }}
-                  />
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "birthdays",
-      label: t("femme.dashboard.home.moreBirthdays"),
-      count: birthdaysCount,
-      body: null, // rendered below (always mounted so the count is known while collapsed)
-    },
-    {
-      key: "inactive",
-      label: t("femme.dashboard.home.moreInactive"),
-      count: inactiveClients.length,
-      body: (
-        <div data-testid="dashboard-inactive-clients">
-          <div className="pb-1 text-xs text-ink-3">
-            {t("femme.dashboard.inactiveClientsSubtitle", { days: inactiveClientsThresholdDays })}
-          </div>
-          {inactiveClients.length === 0 ? (
-            <div className="py-2 text-sm text-ink-3">{t("femme.dashboard.inactiveClientsEmpty")}</div>
-          ) : (
-            <DataTable<(typeof inactiveClients)[number]>
-              minWidthClassName="min-w-[22rem]"
-              rows={inactiveClients}
-              getRowId={(c) => c.clientId}
-              rowTestId={() => "dashboard-inactive-client-row"}
-              onRowClick={(c) => navigate(`/app/clients/${c.clientId}`)}
-              rowLabel={(c) => c.fullName}
-              columns={[
-                { id: "client", header: t("femme.dashboard.inactiveClientsColClient"), cell: (c) => c.fullName },
-                { id: "phone", header: t("femme.dashboard.inactiveClientsColPhone"), cell: (c) => c.phone ?? "—" },
-                {
-                  id: "inactivity",
-                  header: t("femme.dashboard.inactiveClientsColInactivity"),
-                  align: "right",
-                  cell: (c) => t("femme.dashboard.inactiveClientsDaysValue", { days: c.daysSinceLastVisit }),
-                },
-              ]}
-            />
-          )}
-          {inactiveClients.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              data-testid="dashboard-inactive-clients-view-all"
-              onClick={() => navigate("/app/inactive-clients")}
-            >
-              {t("femme.dashboard.inactiveClientsViewAll")}
-            </Button>
-          )}
-        </div>
-      ),
-    },
-  ];
 
   return (
     <>
@@ -462,15 +326,9 @@ export default function DashboardPage() {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       {/* ── 1. PAGE HEADER ── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div data-tour="dashboard-greeting">
-          <h1 className="font-heading text-2xl font-extrabold text-ink">
-            {t(`femme.dashboard.${greetingKey}`)}
-            {userName ? `, ${userName}` : ""}
-          </h1>
-          <div className="text-sm text-ink-3">
-            {dateLabel} · {timeLabel}
-          </div>
-        </div>
+        <h1 className="font-heading text-2xl font-extrabold text-ink" data-testid="dashboard-title">
+          {t("femme.dashboard.title")}
+        </h1>
         <div className="flex flex-wrap gap-2">
           <Button
             data-tour="dashboard-new-appointment"
@@ -492,26 +350,6 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
-
-      {/* ── 2. FISCAL ALERT (one line) ── */}
-      {fiscalAlert && (
-        <div
-          role="status"
-          className="flex items-center gap-2 rounded-card bg-warning-lt py-1 pl-4 pr-1 text-sm font-semibold text-warning"
-        >
-          <span className="min-w-0 flex-1">
-            {t(`femme.dashboard.alerts.${fiscalAlert.messageKey}`, { defaultValue: fiscalAlert.message })}
-          </span>
-          <button
-            type="button"
-            aria-label={t("femme.dashboard.fiscalAlertDismiss")}
-            onClick={() => setAlertDismissed(true)}
-            className="min-h-11 min-w-11 text-lg leading-none"
-          >
-            ×
-          </button>
-        </div>
-      )}
 
       {/* ── 3. ONE-LINE SUMMARY ── (only once the numbers are there: never a placeholder «0») */}
       {data ? (
@@ -682,56 +520,6 @@ export default function DashboardPage() {
           }}
         />
       ) : null}
-
-      {/* ── 6. MORE FOR TODAY (collapsed) ── */}
-      <Card className="p-0" data-testid="dashboard-more">
-        <h2 className="px-4 pb-1 pt-4 font-heading text-[15px] font-extrabold text-ink-2 sm:px-5">
-          {t("femme.dashboard.home.moreTitle")}
-        </h2>
-        {moreSections.map((sec) => {
-          const open = occupancyOpenKey === sec.key;
-          return (
-            <div key={sec.key} className="border-t border-line first:border-t-0">
-              <button
-                type="button"
-                data-testid={`dashboard-more-${sec.key}`}
-                aria-expanded={open}
-                onClick={() => setOpenMore(open ? null : sec.key)}
-                className="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left sm:px-5"
-              >
-                <span className="font-semibold text-ink">{sec.label}</span>
-                <span className="flex items-center gap-2.5 text-ink-3">
-                  {sec.count !== null && (
-                    <span
-                      className={`inline-flex h-[26px] min-w-[26px] items-center justify-center rounded-full px-2 text-[13px] font-extrabold ${
-                        sec.count > 0 ? "bg-primary-lt text-primary" : "bg-line text-ink-3"
-                      }`}
-                    >
-                      {sec.count}
-                    </span>
-                  )}
-                  <span aria-hidden className={`transition-transform ${open ? "rotate-180" : ""}`}>
-                    ⌄
-                  </span>
-                </span>
-              </button>
-              {sec.key === "birthdays" ? (
-                <div hidden={!open} className="px-4 pb-3 sm:px-5">
-                  <BirthdaysCard
-                    embedded
-                    onLoaded={(count) => {
-                      setBirthdaysCount(count);
-                      setBirthdaysLoaded(true);
-                    }}
-                  />
-                </div>
-              ) : (
-                open && <div className="px-4 pb-3 sm:px-5">{sec.body}</div>
-              )}
-            </div>
-          );
-        })}
-      </Card>
 
     </div>
     </div>

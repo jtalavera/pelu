@@ -7,9 +7,13 @@ import i18n from "../i18n";
 import DashboardsPage from "./DashboardsPage";
 
 const femmeJson = vi.fn();
+const listAppointments = vi.fn();
 
 vi.mock("../api/femmeClient", () => ({
   femmeJson: (...args: unknown[]) => femmeJson(...args),
+}));
+vi.mock("../api/appointments", () => ({
+  listAppointments: (...args: unknown[]) => listAppointments(...args),
 }));
 
 afterEach(() => cleanup());
@@ -58,10 +62,12 @@ function dashboard(over: Record<string, unknown> = {}, days = 30) {
   };
 }
 
-describe("DashboardsPage (Resumen)", () => {
+describe("DashboardsPage (Reportes)", () => {
   beforeEach(() => {
     void i18n.changeLanguage("en");
     femmeJson.mockReset();
+    listAppointments.mockReset();
+    listAppointments.mockResolvedValue([]);
   });
 
   it("asks for the default 30-day period; the two figures and the chart follow the period", async () => {
@@ -148,13 +154,10 @@ describe("DashboardsPage (Resumen)", () => {
     expect(await screen.findByTestId("summary-revenue-empty")).toBeTruthy();
   });
 
-  it("keeps the detail folded until 'See more detail' is opened", async () => {
+  it("opens the detail by itself when the screen opens, and it can be folded", async () => {
     femmeJson.mockResolvedValue(dashboard());
     renderPage();
     const toggle = await screen.findByTestId("summary-more-toggle");
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    expect(screen.queryByTestId("summary-top-services")).toBeNull();
-    fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByTestId("summary-top-services").textContent).toMatch(/Coloración/);
     // Payment methods use the shared billing labels and show each one's share.
@@ -164,6 +167,81 @@ describe("DashboardsPage (Resumen)", () => {
     expect(methods).toMatch(/75%/);
     expect(methods).toMatch(/25%/);
     expect(screen.getByTestId("summary-weekday-bars").textContent).toMatch(/9/);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("summary-top-services")).toBeNull();
+    expect(screen.queryByTestId("summary-inactive-clients")).toBeNull();
+  });
+
+  it("shows today's occupancy by professional (turnos of today, most first), apart from the period", async () => {
+    femmeJson.mockResolvedValue(dashboard());
+    listAppointments.mockResolvedValue([
+      { id: 1, professionalId: 1, professionalName: "Ana" },
+      { id: 2, professionalId: 2, professionalName: "Laura" },
+      { id: 3, professionalId: 1, professionalName: "Ana" },
+    ]);
+    renderPage();
+    const rows = await screen.findAllByTestId("summary-occupancy-row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toMatch(/Ana/);
+    expect(rows[0].textContent).toMatch(/2/);
+    expect(rows[1].textContent).toMatch(/Laura/);
+    expect(screen.getByTestId("summary-occupancy").textContent).toMatch(/today's appointments/i);
+    // Today's day range is asked as ISO instants, once (it does not follow the 7 / 30 / 90 selector).
+    expect(listAppointments).toHaveBeenCalledTimes(1);
+    expect(listAppointments.mock.calls[0][0]).toMatch(/T/);
+    fireEvent.click(screen.getByTestId("summary-period-7"));
+    await waitFor(() => expect(femmeJson).toHaveBeenCalledWith("/api/dashboard?days=7", expect.anything()));
+    expect(listAppointments).toHaveBeenCalledTimes(1);
+  });
+
+  it("says so when there are no appointments today", async () => {
+    femmeJson.mockResolvedValue(dashboard());
+    renderPage();
+    expect((await screen.findByTestId("summary-occupancy")).textContent).toMatch(/No appointments today/i);
+  });
+
+  describe("inactive clients (moved here from Inicio, issue #216)", () => {
+    const client = (id: number, name: string, days: number) => ({
+      clientId: id,
+      fullName: name,
+      phone: `098100000${id}`,
+      daysSinceLastVisit: days,
+      lastVisitAt: "2026-01-01T00:00:00Z",
+    });
+
+    it("shows the empty state when there are no inactive clients", async () => {
+      femmeJson.mockResolvedValue(dashboard({ inactiveClients: [], inactiveClientsThresholdDays: 60 }));
+      renderPage();
+      expect(await screen.findByText("No inactive clients right now")).toBeTruthy();
+      expect(screen.queryByTestId("summary-inactive-clients-view-all")).toBeNull();
+    });
+
+    it("renders name, phone and days of inactivity for each inactive client, in server order", async () => {
+      femmeJson.mockResolvedValue(
+        dashboard({ inactiveClients: [client(1, "Ana Long Gone", 200), client(2, "Carla Also Gone", 95)] }),
+      );
+      renderPage();
+      const rows = await screen.findAllByTestId("summary-inactive-client-row");
+      expect(rows).toHaveLength(2);
+      expect(rows[0].textContent).toContain("Ana Long Gone");
+      expect(rows[0].textContent).toContain("0981000001");
+      expect(rows[0].textContent).toContain("200 days");
+      expect(rows[1].textContent).toContain("Carla Also Gone");
+      expect(rows[1].textContent).toContain("95 days");
+    });
+
+    it("has a 'View all' button to the full inactive-clients page when there are results", async () => {
+      femmeJson.mockResolvedValue(dashboard({ inactiveClients: [client(1, "Ana Long Gone", 200)] }));
+      renderPage();
+      expect(await screen.findByTestId("summary-inactive-clients-view-all")).toBeTruthy();
+    });
+
+    it("uses the server-provided threshold in the subtitle, not a hardcoded value", async () => {
+      femmeJson.mockResolvedValue(dashboard({ inactiveClients: [], inactiveClientsThresholdDays: 45 }));
+      renderPage();
+      expect(await screen.findByText("Active clients with no completed visit in the last 45 days")).toBeTruthy();
+    });
   });
 
   it("shows a single line in the detail when there is no data at all", async () => {
@@ -171,14 +249,16 @@ describe("DashboardsPage (Resumen)", () => {
       dashboard({ topServices: [], paymentMethodMix: [], appointmentsByDayOfWeek: [] }),
     );
     renderPage();
-    fireEvent.click(await screen.findByTestId("summary-more-toggle"));
-    expect(screen.getByTestId("summary-more-empty")).toBeTruthy();
+    expect(await screen.findByTestId("summary-more-empty")).toBeTruthy();
+    // Occupancy and inactive clients stay: they do not come from the charts' data.
+    expect(screen.getByTestId("summary-occupancy")).toBeTruthy();
+    expect(screen.getByTestId("summary-inactive-clients")).toBeTruthy();
   });
 
   it("has no tips section (tips live in the Propinas screen)", async () => {
     femmeJson.mockResolvedValue(dashboard());
     renderPage();
-    fireEvent.click(await screen.findByTestId("summary-more-toggle"));
+    await screen.findByTestId("summary-more-toggle");
     expect(screen.queryByText(/tips by professional/i)).toBeNull();
   });
 });

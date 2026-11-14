@@ -7,7 +7,6 @@ import {
   seedClient,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { openDashboardMore } from "../fixtures/dashboard";
 
 test.describe("HU-03 · Dashboard principal", () => {
   test("HU-03 · 1 resumen de turnos e ingresos del día en una línea", async ({ page }) => {
@@ -51,24 +50,19 @@ test.describe("HU-03 · Dashboard principal", () => {
     await expect(page.getByTestId("summary-kpi-clients")).toHaveText(/^\d+$/);
   });
 
-  test("HU-03 · 6 «Más del día» está plegado y en el orden Ocupación, Cumpleaños, Inactivos (las fichas son tarjetas siempre visibles)", async ({
+  test("HU-03 · 6 «Hoy» abre con su título y sin saludo ni «Más del día» (ocupación, cumpleaños e inactivos salieron: HU-78)", async ({
     page,
   }) => {
     await loginAsDemo(page);
     await page.goto("/app/hoy");
-    const toggles = page.getByTestId("dashboard-more").getByRole("button");
-    await expect(toggles).toHaveCount(3);
-    await expect(toggles.nth(0)).toContainText("Occupancy by professional");
-    await expect(toggles.nth(1)).toContainText("Birthdays");
-    await expect(toggles.nth(2)).toContainText("Inactive clients");
-    for (let i = 0; i < 3; i++) await expect(toggles.nth(i)).toHaveAttribute("aria-expanded", "false");
-    // The fichas of the day are not folded: they are cards right on the Inicio.
+    await expect(page.getByTestId("dashboard-title")).toHaveText("Today");
+    await expect(page.getByTestId("dashboard-more")).toHaveCount(0);
+    await expect(page.getByTestId("dashboard-more-occupancy")).toHaveCount(0);
+    await expect(page.getByTestId("dashboard-more-birthdays")).toHaveCount(0);
+    await expect(page.getByTestId("dashboard-more-inactive")).toHaveCount(0);
+    // What stays: the lists of the day (the fichas are cards right on the screen).
     await expect(page.getByTestId("dashboard-today-records")).toBeVisible();
-    await expect(page.getByTestId("dashboard-inactive-clients")).toHaveCount(0);
-
-    await openDashboardMore(page, "occupancy");
-    await page.getByTestId("dashboard-more-occupancy").click();
-    await expect(page.getByTestId("dashboard-more-occupancy")).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId("dashboard-summary")).toBeVisible();
   });
 
   test("HU-03 · 7 cada turno muestra estado y «Crear o asignar ficha»; la ficha creada se cobra y abre la factura con cliente y servicio cargados", async ({

@@ -1010,24 +1010,12 @@
         "chargedTitle": "Cobrados",
         "chargedHint": "Ya tienen comprobante",
         "nowTag": "ahora",
-        "moreTitle": "Más del día",
         "moreRecords": "Fichas de hoy",
         "moreOccupancy": "Ocupación por profesional",
-        "moreBirthdays": "Cumpleaños",
         "moreInactive": "Clientes inactivos",
         "moreNone": "Nada por ahora"
       },
-      "birthdays": {
-        "title": "Cumpleaños",
-        "subtitle": "Clientes activas que cumplen años hoy y en los próximos {{days}} días",
-        "loadError": "No se pudieron cargar los cumpleaños.",
-        "empty": "No hay cumpleaños en los próximos {{days}} días.",
-        "today": "Hoy",
-        "upcoming": "Próximos {{days}} días",
-        "turns": "cumple {{count}} año",
-        "turns_other": "cumple {{count}} años"
-      },
-      "title": "Panel",
+      "title": "Hoy",
       "loading": "Cargando…",
       "error": "No se pudo cargar el panel.",
       "appointmentsToday": "Turnos de hoy",
@@ -1042,7 +1030,6 @@
       "collected": "Cobrado",
       "emptyDay": "Aún no hay turnos hoy.",
       "fiscalAlerts": "Alertas",
-      "fiscalAlertDismiss": "Cerrar alerta",
       "alerts": {
         "businessRucMissing": "Agregá un RUC de negocio válido para emitir facturas.",
         "fiscalExpiringSoon": "El timbrado fiscal vence en menos de 30 días.",
@@ -1052,9 +1039,6 @@
         "sifenVoidingPending": "Tenés inutilizaciones de numeración pendientes de reportar a SIFEN. Revisá Configuración → SIFEN.",
         "sifenVoidingOverdue": "Hay inutilizaciones de numeración vencidas sin reportar a SIFEN. Reportalas en Configuración → SIFEN."
       },
-      "greetingMorning": "Buenos días",
-      "greetingAfternoon": "Buenas tardes",
-      "greetingEvening": "Buenas noches",
       "newAppointment": "+ Nuevo turno",
       "newServiceRecord": "+ Nueva ficha",
       "metricRevenueDay": "Ingresos del día",
@@ -1147,7 +1131,8 @@
       "noServices": "Todavía no hay servicios facturados.",
       "paymentMethods": "Medios de pago",
       "noPayments": "Todavía no hay cobros.",
-      "appointmentsByDay": "Turnos por día de la semana"
+      "appointmentsByDay": "Turnos por día de la semana",
+      "todayOnly": "turnos de hoy"
     },
     "resumen": {
       "loading": "Cargando…",
@@ -3574,7 +3559,6 @@
         "forgotPassword": { "title": "¿Olvidaste tu contraseña?", "content": "Hacé clic aquí si no recordás tu contraseña — recibirás instrucciones para restablecerla." }
       },
       "dashboard": {
-        "greeting": { "title": "Saludo de bienvenida", "content": "Esta sección muestra tu nombre y la fecha de hoy de un vistazo." },
         "newAppointment": { "title": "Nuevo turno", "content": "Tocá este botón para reservar un nuevo turno para un cliente ahora mismo." },
         "metrics": { "title": "Métricas del día", "content": "Cifras clave de hoy: turnos programados, clientes atendidos e ingresos cobrados." },
         "apptList": { "title": "Turnos de hoy", "content": "La lista completa de turnos del día, ordenada por hora. Tocá cualquier fila para ver los detalles." },

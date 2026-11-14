@@ -38,7 +38,8 @@ test.describe("Reports screen (ex Summary, ex Dashboards)", () => {
     }
     await expect(page.getByTestId("summary-kpis")).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("summary-revenue-card")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId("summary-more")).toHaveCount(0);
+    // The detail is open when the screen opens (HU-78).
+    await expect(page.getByTestId("summary-more")).toBeVisible();
 
     await openSummaryMore(page);
     await expect(page.getByTestId("summary-top-services").or(page.getByTestId("summary-more-empty"))).toBeVisible();

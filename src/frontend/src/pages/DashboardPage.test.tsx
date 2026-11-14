@@ -70,11 +70,23 @@ describe("DashboardPage fiscal alerts (HU-02b)", () => {
     });
   });
 
-  it("shows fiscal warning when a non-blocking fiscal alert is present", async () => {
+  it("no longer shows the fiscal alert (it lives in Resumen)", async () => {
     renderPage();
-    expect(
-      await screen.findByText(/fiscal stamp is expired/i),
-    ).toBeTruthy();
+    await screen.findByTestId("dashboard-summary-appointments");
+    expect(screen.queryByText(/fiscal stamp is expired/i)).toBeNull();
+  });
+
+  it("opens on a plain «Today» title: no greeting, no date and time, and no «More for today» block", async () => {
+    renderPage();
+    expect((await screen.findByTestId("dashboard-title")).textContent).toBe("Today");
+    expect(screen.queryByText(/good (morning|afternoon|evening)/i)).toBeNull();
+    expect(screen.queryByTestId("dashboard-more")).toBeNull();
+    expect(screen.queryByTestId("dashboard-more-occupancy")).toBeNull();
+    expect(screen.queryByTestId("dashboard-more-birthdays")).toBeNull();
+    expect(screen.queryByTestId("dashboard-more-inactive")).toBeNull();
+    // What stays: the actions, the summary line and the lists of the day.
+    expect(screen.getByTestId("dashboard-new-service-record")).toBeTruthy();
+    expect(screen.getByTestId("dashboard-summary")).toBeTruthy();
   });
 
   it("requests today appointments with ISO-8601 day range (not bare date)", async () => {
@@ -112,90 +124,6 @@ describe("DashboardPage fiscal alerts (HU-02b)", () => {
       /^Gs\.[\s\u00a0]*890.*collected$/,
     );
     expect(screen.queryByText(/^1,284$/)).toBeNull();
-  });
-});
-
-describe("DashboardPage inactive clients widget (issue #216)", () => {
-  beforeEach(() => {
-    void i18n.changeLanguage("en");
-    listAppointmentsMock.mockClear();
-    femmeJson.mockReset();
-  });
-
-  function baseDashboard(inactiveClients: unknown[], inactiveClientsThresholdDays = 60) {
-    return {
-      appointmentsToday: { total: 0, pending: 0, confirmed: 0, inProgress: 0, completed: 0 },
-      revenueDay: { invoiced: "0", collected: "0" },
-      revenueWeek: { invoiced: "0", collected: "0" },
-      clientsThisMonth: 0,
-      fiscalAlerts: [],
-      inactiveClients,
-      inactiveClientsThresholdDays,
-    };
-  }
-
-  it("shows the empty state when there are no inactive clients", async () => {
-    femmeJson.mockResolvedValue(baseDashboard([]));
-    renderPage();
-    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
-    expect(await screen.findByText("No inactive clients right now")).toBeTruthy();
-  });
-
-  it("renders name, phone and days of inactivity for each inactive client, in server order", async () => {
-    femmeJson.mockResolvedValue(
-      baseDashboard([
-        {
-          clientId: 1,
-          fullName: "Ana Long Gone",
-          phone: "0981000001",
-          daysSinceLastVisit: 200,
-          lastVisitAt: "2026-01-01T00:00:00Z",
-        },
-        {
-          clientId: 2,
-          fullName: "Carla Also Gone",
-          phone: "0981000002",
-          daysSinceLastVisit: 95,
-          lastVisitAt: "2026-05-01T00:00:00Z",
-        },
-      ]),
-    );
-    renderPage();
-    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
-
-    const rows = await screen.findAllByTestId("dashboard-inactive-client-row");
-    expect(rows).toHaveLength(2);
-    expect(rows[0].textContent).toContain("Ana Long Gone");
-    expect(rows[0].textContent).toContain("0981000001");
-    expect(rows[0].textContent).toContain("200 days");
-    expect(rows[1].textContent).toContain("Carla Also Gone");
-    expect(rows[1].textContent).toContain("95 days");
-  });
-
-  it("shows a 'View all' button linking to the full inactive-clients page when there are results", async () => {
-    femmeJson.mockResolvedValue(
-      baseDashboard([
-        {
-          clientId: 1,
-          fullName: "Ana Long Gone",
-          phone: "0981000001",
-          daysSinceLastVisit: 200,
-          lastVisitAt: "2026-01-01T00:00:00Z",
-        },
-      ]),
-    );
-    renderPage();
-    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
-    expect(await screen.findByTestId("dashboard-inactive-clients-view-all")).toBeTruthy();
-  });
-
-  it("uses the server-provided threshold in the subtitle copy, not a hardcoded frontend value", async () => {
-    femmeJson.mockResolvedValue(baseDashboard([], 45));
-    renderPage();
-    fireEvent.click(await screen.findByTestId("dashboard-more-inactive"));
-    expect(
-      await screen.findByText("Active clients with no completed visit in the last 45 days"),
-    ).toBeTruthy();
   });
 });
 

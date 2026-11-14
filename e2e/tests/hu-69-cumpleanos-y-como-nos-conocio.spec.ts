@@ -9,7 +9,6 @@ import {
   seedCategoryServiceProfessional,
 } from "../fixtures/api";
 import { loginAs, loginAsDemo } from "../fixtures/auth";
-import { openDashboardMore } from "../fixtures/dashboard";
 import { openWeekWithAppointment } from "../fixtures/ui";
 import { PASSWORD, professionalWithAccess } from "../fixtures/commissions";
 
@@ -166,14 +165,13 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
     expect(await tooLong.text()).toContain("ACQUISITION_CHANNEL_OTHER_TOO_LONG");
   });
 
-  test("AC4, AC5, AC7, AC8 · etiqueta en la ficha y tarjeta del dashboard (hoy / próximos 7 días / solo activas)", async ({
+  test("AC4 · la ficha del cliente muestra «Cumpleaños hoy» solo cuando es hoy (la tarjeta del Inicio ya no existe: HU-78)", async ({
     page,
     request,
   }) => {
     const token = await loginAsDemoApi(request);
     const today = zonedDate(0);
     const inThree = zonedDate(3);
-    const inTen = zonedDate(10);
     const id = uniq();
     const todayClient = await seedClient(request, token, `E2E69 Hoy ${id}`, {
       birthdayDay: today.day,
@@ -184,37 +182,9 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
       birthdayDay: inThree.day,
       birthdayMonth: inThree.month,
     });
-    const laterClient = await seedClient(request, token, `E2E69 Lejos ${id}`, {
-      birthdayDay: inTen.day,
-      birthdayMonth: inTen.month,
-    });
-    const inactiveClient = await seedClient(request, token, `E2E69 Inactiva ${id}`, {
-      birthdayDay: today.day,
-      birthdayMonth: today.month,
-    });
-    const deact = await request.post(`${API_BASE}/api/clients/${inactiveClient.id}/deactivate`, {
-      headers: authHeaders(token),
-    });
-    expect(deact.ok()).toBeTruthy();
 
     await loginAsDemo(page);
-    await page.goto("/app/hoy");
-    await openDashboardMore(page, "birthdays");
-    const card = page.getByTestId("dashboard-birthdays");
-    const todayList = card.getByTestId("dashboard-birthdays-today");
-    await expect(todayList).toContainText(todayClient.fullName);
-    await expect(todayList).toContainText(`turns ${today.year - 1990}`);
-    // Phone shown for today's birthdays.
-    const todayRow = todayList.getByRole("listitem").filter({ hasText: todayClient.fullName });
-    await expect(todayRow).toContainText(/0982\d{6}/);
-    await expect(card.getByTestId("dashboard-birthdays-upcoming")).toContainText(soonClient.fullName);
-    // AC5: outside the 7-day window; AC7: inactive clients never show.
-    await expect(card).not.toContainText(laterClient.fullName);
-    await expect(card).not.toContainText(inactiveClient.fullName);
-
-    // AC4: link to the profile, which shows the "birthday today" badge.
-    await todayList.getByRole("link", { name: todayClient.fullName }).click();
-    await expect(page).toHaveURL(new RegExp(`/app/clients/${todayClient.id}$`));
+    await page.goto(`/app/clients/${todayClient.id}`);
     await expect(page.getByTestId("client-birthday-today")).toHaveText("🎂 Birthday today");
     await page.goto(`/app/clients/${soonClient.id}`);
     await expect(page.getByRole("heading", { name: new RegExp(soonClient.fullName, "i") })).toBeVisible();
@@ -223,23 +193,11 @@ test.describe("HU-69 · Cumpleaños y cómo nos conoció", () => {
     await expect(page.getByTestId("client-section-profile").getByLabel("Day")).toHaveValue(
       String(inThree.day),
     );
-  });
 
-  test("AC5 · sin cumpleaños próximos: mensaje vacío", async ({ page, request }) => {
-    // The shared demo tenant may hold other specs' birthdays, so the empty state is checked with
-    // a stubbed (but real-shaped) response after confirming the endpoint itself answers.
-    const token = await loginAsDemoApi(request);
-    const res = await request.get(`${API_BASE}/api/dashboard/birthdays`, { headers: authHeaders(token) });
-    expect(res.status()).toBe(200);
-    await page.route("**/api/dashboard/birthdays", (route) =>
-      route.fulfill({ json: { today: [], upcoming: [], upcomingDays: 7 } }),
-    );
-    await loginAsDemo(page);
+    // The Inicio no longer has a birthdays card.
     await page.goto("/app/hoy");
-    await openDashboardMore(page, "birthdays");
-    await expect(page.getByTestId("dashboard-birthdays")).toContainText(
-      "No birthdays in the next 7 days.",
-    );
+    await expect(page.getByTestId("dashboard-today-records")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("dashboard-birthdays")).toHaveCount(0);
   });
 
   test("AC6, AC12 · ícono 🎂 en el turno para admin y profesional, sin revelar datos", async ({

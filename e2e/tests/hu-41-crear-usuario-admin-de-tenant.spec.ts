@@ -208,7 +208,7 @@ test.describe("HU-41 · Platform Admin crea un usuario admin de tenant", () => {
 
   // HU-41 follow-up: the name the admin types at activation is what greets them on the dashboard
   // and shows in the top-right user chip — not the email local-part.
-  test("follow-up: the activated admin's full name shows in the greeting and the topbar", async ({
+  test("follow-up: the activated admin's full name shows in the topbar", async ({
     page,
     request,
   }) => {
@@ -230,8 +230,7 @@ test.describe("HU-41 · Platform Admin crea un usuario admin de tenant", () => {
 
     await loginAs(page, email, password);
 
-    // Dashboard greeting ("Good morning, Ana Gómez Torres").
-    await expect(page.locator('[data-tour="dashboard-greeting"]')).toContainText(fullName);
+    // (The home screen no longer greets by name: «Resumen» says «Hello, team!».)
     // Top-right user chip.
     await expect(
       page.getByRole("button", { name: "Open user menu" }).getByText(fullName),

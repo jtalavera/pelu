@@ -29,13 +29,11 @@ test.describe("Panel principal · carga en un solo tiempo", () => {
     await expect(page.getByTestId("dashboard-loading")).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(700);
     await expect(page.getByTestId("dashboard-summary")).toBeHidden();
-    await expect(page.getByTestId("dashboard-more")).toBeHidden();
     await expect(page.getByTestId("dashboard-loading")).toBeVisible();
 
     release();
-    // Everything appears together: summary, agenda section and fichas section.
+    // Everything appears together: summary and the agenda and fichas sections.
     await expect(page.getByTestId("dashboard-summary")).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByTestId("dashboard-more")).toBeVisible();
     await expect(page.getByTestId("dashboard-new-service-record")).toBeVisible();
     await expect(page.getByTestId("dashboard-loading")).toHaveCount(0);
   });
