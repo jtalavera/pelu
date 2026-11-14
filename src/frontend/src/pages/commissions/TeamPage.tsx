@@ -131,7 +131,7 @@ export function TeamList() {
           {t("femme.commissions.team.empty")}
         </Text>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
           {visible.map((r) => {
             const pct = retention.get(r.professionalId);
             const noRules = r.ruleCount === 0;
@@ -142,7 +142,7 @@ export function TeamList() {
                 to={`/app/commissions/equipo/${r.professionalId}`}
                 data-testid="team-card"
                 data-professional={r.professionalName}
-                className={`flex flex-col gap-2.5 rounded-card bg-surface p-4 hover:bg-bg ${noRules ? "border border-warning/40" : "border border-line"}`}
+                className={`flex min-w-0 flex-col gap-2.5 rounded-card bg-surface p-4 hover:bg-bg ${noRules ? "border border-warning/40" : "border border-line"}`}
               >
                 <div className="flex items-center gap-3">
                   <Avatar name={r.professionalName} size={44} />

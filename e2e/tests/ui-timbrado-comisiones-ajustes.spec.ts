@@ -68,25 +68,14 @@ test.describe("Comisiones · solapas redondeadas", () => {
     await restoreCommissionsGlobal(request);
   });
 
-  test("U3: las solapas de Comisiones tienen el mismo radio y alto que las del Catálogo", async ({ page }) => {
+  test("U3: los cinco lugares de Comisiones (HU-COM-15) son redondeados y de alto táctil", async ({ page }) => {
     await loginAdminUi(page, w);
-    // Redesign: Billing has no tabs any more; the reference is the segmented tab bar of Catalog.
-    await page.getByRole("link", { name: "Catalog" }).click();
-    const billingTab = page.getByRole("tab").first();
-    await expect(billingTab).toBeVisible();
-    const billingRadius = await billingTab.evaluate((e) => getComputedStyle(e).borderTopLeftRadius);
-    const billingHeight = Math.round((await billingTab.boundingBox())!.height);
-
     await page.getByRole("link", { name: "Commissions" }).click();
-    const topTabs = page.getByRole("tablist", { name: "Commissions" }).getByRole("tab");
-    await expect(topTabs.first()).toBeVisible();
-    for (const tab of await topTabs.all()) {
-      // Rounded like the rest of the app's segmented tabs, and the same height.
-      expect(parseFloat(await tab.evaluate((e) => getComputedStyle(e).borderTopLeftRadius))).toBeGreaterThanOrEqual(
-        10,
-      );
-      expect(Math.round((await tab.boundingBox())!.height)).toBe(billingHeight);
+    const links = page.locator('[data-testid^="commissions-nav-"]:not([data-testid*="badge"])');
+    await expect(links).toHaveCount(5);
+    for (const link of await links.all()) {
+      expect(parseFloat(await link.evaluate((e) => getComputedStyle(e).borderTopLeftRadius))).toBeGreaterThanOrEqual(10);
+      expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
-    expect(parseFloat(billingRadius)).toBeGreaterThanOrEqual(10);
   });
 });

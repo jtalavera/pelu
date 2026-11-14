@@ -225,7 +225,7 @@ export default function LiquidarPage() {
         ))}
       </section>
 
-      <section className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-sm sm:p-5">
+      <section className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-sm sm:p-5" data-testid="liquidar-table">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-heading text-xl font-extrabold text-ink">{t("femme.commissions.liquidar.tableTitle")}</h2>
           <span className="text-[13px] text-ink-3">
@@ -281,9 +281,20 @@ export default function LiquidarPage() {
                   />
                   <span className="flex min-w-0 items-center gap-2.5">
                     <Avatar name={r.professionalName} />
-                    <Link to={`/app/commissions/equipo/${r.professionalId}`} className="min-w-0 truncate font-extrabold text-ink">
-                      {r.professionalName}
-                    </Link>
+                    <span className="flex min-w-0 flex-col">
+                      <Link to={`/app/commissions/equipo/${r.professionalId}`} className="min-w-0 truncate font-extrabold text-ink">
+                        {r.professionalName}
+                      </Link>
+                      {r.settlementId && r.status !== "PAID" && (
+                        <Link
+                          to={`/app/commissions/settlements/${r.settlementId}`}
+                          className="text-xs font-bold text-primary"
+                          data-testid="liquidar-row-detail"
+                        >
+                          {t("femme.commissions.liquidar.detail")}
+                        </Link>
+                      )}
+                    </span>
                   </span>
                   <b className="text-right tabular-nums" data-testid="liquidar-row-amount">
                     {formatGuaraniesGs(r.amount)}

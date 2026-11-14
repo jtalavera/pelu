@@ -258,6 +258,31 @@ describe("HU-COM-15 · Liquidar", () => {
 });
 
 describe("HU-COM-15 · ficha de la profesional", () => {
+  it("el Resumen (la antigua vista previa) muestra lo que se le paga y lo arrastrado de períodos anteriores", async () => {
+    api.getSettlementPreview.mockResolvedValue({
+      professionalId: 1,
+      professionalName: "Gaby",
+      periodFrom: "2026-11-01",
+      periodTo: "2026-11-15",
+      total: 120000,
+      servicesTotal: 100000,
+      productsTotal: 20000,
+      adjustmentsTotal: 0,
+      retentionTotal: 0,
+      lines: 3,
+      entries: [],
+      draftSettlements: [],
+      carriedAmount: 30000,
+      carriedEntryIds: [1],
+    });
+    mount("/app/commissions/equipo/1");
+    expect((await screen.findByTestId("pro-summary-total")).textContent).toContain("120.000");
+    expect(screen.getByTestId("pro-summary-services").textContent).toContain("100.000");
+    expect(screen.getByTestId("pro-summary-products").textContent).toContain("20.000");
+    expect(screen.getByTestId("pro-summary-carried").textContent).toContain("30.000");
+    expect(screen.getByTestId("pro-summary-lines").textContent).toContain("3 líneas");
+  });
+
   it("cuenta cada regla en una frase (cobra, retiene y costo de producto)", async () => {
     mount("/app/commissions/equipo/1?tab=rules");
     const cards = await screen.findAllByTestId("rule-card");

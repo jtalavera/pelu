@@ -53,7 +53,7 @@ test("desde «Movimientos»: valida profesional y motivo, revierte la comisión 
 }) => {
   await loginAdminUi(page, w);
   await page.getByRole("link", { name: "Commissions" }).click();
-  await page.getByRole("tab", { name: "Movements" }).click();
+  await page.getByTestId("commissions-nav-activity").click();
   const rows = page.getByTestId("movement-row");
   await expect(rows).toHaveCount(1);
   await expect(rows.first()).toContainText(w.ana.name);
@@ -126,7 +126,7 @@ test("si la comisión está en una liquidación aprobada, se avisa; esa liquidac
   await apiPostJson(request, w.adminToken, `/api/commissions/settlements/${s.id}/approve`, {});
   await loginAdminUi(page, w);
   await page.getByRole("link", { name: "Commissions" }).click();
-  await page.getByRole("tab", { name: "Movements" }).click();
+  await page.getByTestId("commissions-nav-activity").click();
   await rowMenuAction(page, page.getByTestId("movement-row").first(), "Change professional");
   await expect(page.getByTestId("reassign-closed-warning")).toBeVisible();
   await reassignTo(page, w.bea.name, "Asignado por error");

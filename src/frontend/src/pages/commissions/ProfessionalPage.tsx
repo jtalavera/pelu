@@ -145,6 +145,11 @@ function SummaryPane({ professionalId }: { professionalId: number }) {
         <Text variant="small" className="mt-1 text-ink-3" data-testid="pro-summary-lines">
           {t("femme.commissions.pro.summaryLines", { count: preview.lines })}
         </Text>
+        {preview.carriedAmount !== 0 && (
+          <Text variant="small" className="mt-1 text-warning" data-testid="pro-summary-carried">
+            {t("femme.commissions.pro.summaryCarried", { amount: formatGuaraniesGs(preview.carriedAmount) })}
+          </Text>
+        )}
       </div>
       <div className="rounded-card border border-line bg-surface shadow-sm">
         {line(t("femme.commissions.pro.summaryServices"), preview.servicesTotal, "pro-summary-services")}

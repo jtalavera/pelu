@@ -63,16 +63,13 @@ test.describe("Buscadores con fecha · «Desde» un mes atrás y tope de 1 año"
     );
   });
 
-  test("Comisiones: «Desde» arranca un mes atrás en Movimientos, Vista previa y Reportes", async ({ page }) => {
+  test("Comisiones: «Desde» arranca un mes atrás en Movimientos y Reportes", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/commissions");
-    // (Generating settlements starts from the current commission period instead, set by the backend.)
-    await page.getByRole("tab", { name: "Movements", exact: true }).click();
+    // (Settlements follow the current commission period instead, set by the backend.)
+    await page.getByTestId("commissions-nav-activity").click();
     await page.getByTestId("movements-filters-toggle").click();
     await expect(page.locator("#mov-from")).toHaveValue(mdy(monthAgo));
-
-    await openCommissionsMore(page, "Preview");
-    await expect(page.locator("#preview-from")).toHaveValue(mdy(monthAgo));
 
     await openCommissionsMore(page, "Reports");
     await expect(page.locator("#report-from")).toHaveValue(mdy(monthAgo));

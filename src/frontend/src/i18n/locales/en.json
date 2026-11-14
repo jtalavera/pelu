@@ -835,7 +835,10 @@
         "done": {
           "GENERATE": "{{count}} settlements were generated.",
           "APPROVE": "{{count}} settlements were approved.",
-          "PAY": "{{count}} settlements were paid."
+          "PAY": "{{count}} settlements were paid.",
+          "GENERATE_one": "{{count}} settlement was generated.",
+          "APPROVE_one": "{{count}} settlement was approved.",
+          "PAY_one": "{{count}} settlement was paid."
         },
         "dialog": {
           "total": "Total: {{amount}}",
@@ -844,13 +847,17 @@
             "title": "Generate {{count}} settlements",
             "description": "A draft settlement is built per professional from what was invoiced.",
             "confirm": "Generate {{count}}",
-            "period": "Period: {{period}}"
+            "period": "Period: {{period}}",
+            "title_one": "Generate {{count}} settlement",
+            "confirm_one": "Generate {{count}}"
           },
           "APPROVE": {
             "title": "Approve {{count}} settlements",
             "description": "Once approved, the amounts are frozen.",
             "confirm": "Approve {{count}}",
-            "warning": "After approving, the amounts can no longer be changed."
+            "warning": "After approving, the amounts can no longer be changed.",
+            "title_one": "Approve {{count}} settlement",
+            "confirm_one": "Approve {{count}}"
           },
           "PAY": {
             "title": "Pay {{count}} settlements",
@@ -858,9 +865,12 @@
             "confirm": "Record payment of {{count}}",
             "method": "Payment method",
             "date": "Payment date",
-            "reference": "Reference (optional)"
+            "reference": "Reference (optional)",
+            "title_one": "Pay {{count}} settlement",
+            "confirm_one": "Record payment of {{count}}"
           }
-        }
+        },
+        "detail": "See detail"
       },
       "team": {
         "tabPeople": "Professionals ({{count}})",
@@ -926,7 +936,9 @@
         "removeSummary": "Remove the {{group}} rule from {{name}}",
         "copySummary": "Copy {{count}} rules to {{name}}",
         "exceptionHint": "Does a specific service commission differently?",
-        "exceptionLink": "Set an exception in Advanced"
+        "exceptionLink": "Set an exception in Advanced",
+        "summaryCarried": "Includes {{amount}} carried over from earlier periods.",
+        "summaryLines_one": "{{count}} invoiced line"
       },
       "activity": {
         "intro": "Everything that happened with commissions: every movement and the reports.",

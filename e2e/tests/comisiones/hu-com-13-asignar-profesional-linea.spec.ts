@@ -83,7 +83,7 @@ test("desde «Líneas sin profesional»: elige un profesional, genera su comisi�
   expect(Number(preview.total)).toBe(50000);
 
   // It now shows in Movements like any other commission, and can be reassigned.
-  await page.getByRole("tab", { name: "Movements" }).click();
+  await page.getByTestId("activity-tab-movements").click();
   const movement = page.getByTestId("movement-row").filter({ hasText: w.bea.name });
   await expect(movement).toContainText("50.000");
   await expect(movement).toContainText("No se cargó al facturar");

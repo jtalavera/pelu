@@ -835,7 +835,10 @@
         "done": {
           "GENERATE": "Se generaron {{count}} liquidaciones.",
           "APPROVE": "Se aprobaron {{count}} liquidaciones.",
-          "PAY": "Se pagaron {{count}} liquidaciones."
+          "PAY": "Se pagaron {{count}} liquidaciones.",
+          "GENERATE_one": "Se generó {{count}} liquidación.",
+          "APPROVE_one": "Se aprobó {{count}} liquidación.",
+          "PAY_one": "Se pagó {{count}} liquidación."
         },
         "dialog": {
           "total": "Total: {{amount}}",
@@ -844,13 +847,17 @@
             "title": "Generar {{count}} liquidaciones",
             "description": "Se arma una liquidación en borrador por profesional con lo facturado.",
             "confirm": "Generar {{count}}",
-            "period": "Período: {{period}}"
+            "period": "Período: {{period}}",
+            "title_one": "Generar {{count}} liquidación",
+            "confirm_one": "Generar {{count}}"
           },
           "APPROVE": {
             "title": "Aprobar {{count}} liquidaciones",
             "description": "Al aprobar, los montos quedan congelados.",
             "confirm": "Aprobar {{count}}",
-            "warning": "Después de aprobar ya no se pueden cambiar los montos."
+            "warning": "Después de aprobar ya no se pueden cambiar los montos.",
+            "title_one": "Aprobar {{count}} liquidación",
+            "confirm_one": "Aprobar {{count}}"
           },
           "PAY": {
             "title": "Pagar {{count}} liquidaciones",
@@ -858,9 +865,12 @@
             "confirm": "Registrar pago de {{count}}",
             "method": "Forma de pago",
             "date": "Fecha de pago",
-            "reference": "Referencia (opcional)"
+            "reference": "Referencia (opcional)",
+            "title_one": "Pagar {{count}} liquidación",
+            "confirm_one": "Registrar pago de {{count}}"
           }
-        }
+        },
+        "detail": "Ver detalle"
       },
       "team": {
         "tabPeople": "Profesionales ({{count}})",
@@ -926,7 +936,9 @@
         "removeSummary": "Quitar la regla de {{group}} de {{name}}",
         "copySummary": "Copiar {{count}} reglas a {{name}}",
         "exceptionHint": "¿Un servicio puntual comisiona distinto?",
-        "exceptionLink": "Cargá una excepción en Avanzado"
+        "exceptionLink": "Cargá una excepción en Avanzado",
+        "summaryCarried": "Incluye {{amount}} arrastrados de períodos anteriores.",
+        "summaryLines_one": "{{count}} línea facturada"
       },
       "activity": {
         "intro": "Todo lo que pasó con las comisiones: cada movimiento y los reportes.",

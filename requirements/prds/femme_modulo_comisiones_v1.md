@@ -373,6 +373,15 @@ Historia completa y criterios: [HU-COM-14](../user_stories/HU-COM-14-grupos-rete
 - **Monto fijo** (costo de producto): se descuenta del precio (según la base con o sin IVA) antes de calcular los %, por servicio; es **para la profesional** (se le paga completo, sin retención) o **para el salón** (solo baja la base). Destino por defecto del salón en Configuración, cambiable por regla.
 - **Fondo de aguinaldo**: pagos parciales, completos, «por salida de la profesional» y «a todas», ajustes manuales con motivo; vista de la profesional con lo retenido y su saldo.
 
+### HU-COM-15 · Rediseño de la experiencia de Comisiones
+
+Historia completa y criterios: [HU-COM-15](../user_stories/HU-COM-15-comisiones-experiencia-rediseno.md). Resumen:
+
+- La pantalla se organiza en cinco lugares: **Inicio · Liquidar · Equipo · Actividad · Configurar**, con el período en curso siempre visible y contadores de lo pendiente.
+- **Liquidar** concentra generar → aprobar → pagar (lo que era «Liquidaciones» y «Vista previa»); **Equipo** tiene la ficha de cada profesional (Resumen, Reglas en frases, Aguinaldo, Historial); **Configurar** es una lista de cuatro pasos con «Avanzado» para excepciones, cambios programados e historial.
+- **Aguinaldo** vive dentro de Equipo y solo se muestra si el salón activó la retención.
+- Funcionalmente no cambia: mismas reglas de cálculo, estados y permisos. Nuevo endpoint de lectura `GET /api/commissions/overview` con el resumen del período por profesional.
+
 ---
 
 ## 6. Modelo de datos conceptual
@@ -454,6 +463,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-12 | Reasignar desde Movimientos (validaciones, reversión + nueva comisión con las reglas del correcto); desde el detalle de un borrador; con liquidación aprobada: aviso, liquidación intacta, corrección en la próxima; códigos de error. |
 | HU-COM-13 | Asignar desde «Líneas sin profesional» (validación, comisión con las reglas del profesional a la fecha de la factura, sin liquidar, la línea deja de figurar, visible en Movimientos); anulación posterior revierte; errores con códigos; aislamiento entre tenants. |
 | HU-COM-14 | Grupos (crear/renombrar/eliminar, sugerencias por nombre, productos juntos); reglas por profesional con validaciones, ejemplo en vivo y copia; Configuración (retención, destino del monto fijo, quién retiene); cálculo con retención y monto fijo (profesional/salón) y precedencia; liquidación con costo de producto y retenido; fondo de aguinaldo (entra al aprobar, sale al anular, pagos parcial/salida/a todas, ajuste); vista de la profesional; historial y recálculo de reglas de grupo. |
+| HU-COM-15 | Cinco lugares y contadores; Inicio (resumen, «Para revisar», guía de primera vez); Liquidar (3 pasos, lote, estados, CSV, sin duplicar períodos); Equipo (lista, búsqueda, filtros); ficha de la profesional (Resumen, Reglas en frases, editor con ejemplo y validaciones, copiar, retención usual, Historial); Aguinaldo solo si está activo; Actividad; Configurar en pasos y Avanzado; endpoint `overview` por tenant. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 
