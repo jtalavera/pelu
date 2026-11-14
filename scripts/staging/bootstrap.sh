@@ -43,7 +43,7 @@ fi
 # ---------------------------------------------------------------------------------------------
 log "2/3 federated credential environment:$GH_ENVIRONMENT on app $CI_APP_CLIENT_ID"
 SUBJECT="repo:$GH_REPO:environment:$GH_ENVIRONMENT"
-if az ad app federated-credential list --id "$CI_APP_CLIENT_ID" --query "[?subject=='$SUBJECT'] | length(@)" -o tsv | grep -q '^0$'; then
+if [[ "$(az ad app federated-credential list --id "$CI_APP_CLIENT_ID" --query "[?subject=='$SUBJECT'] | length(@)" -o tsv)" == "0" ]]; then
   FC_FILE="$(mktemp)"
   jq -n --arg s "$SUBJECT" '{name: "github-v2-staging", issuer: "https://token.actions.githubusercontent.com",
     subject: $s, audiences: ["api://AzureADTokenExchange"], description: "deploy-v2.yml / loadtest.yml → v2-staging"}' \

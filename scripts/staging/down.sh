@@ -51,7 +51,7 @@ fi
 # in staging). The vault may take a moment to appear in the deleted list.
 if [[ -n "$KV_NAME" ]]; then
   for _ in $(seq 1 12); do
-    if az keyvault list-deleted --query "[?name=='$KV_NAME'] | length(@)" -o tsv | grep -q '^1$'; then
+    if [[ "$(az keyvault list-deleted --query "[?name=='$KV_NAME'] | length(@)" -o tsv)" == "1" ]]; then
       log "purging soft-deleted vault $KV_NAME"
       az keyvault purge --name "$KV_NAME" --only-show-errors
       break
@@ -72,7 +72,7 @@ if [[ "$(az group exists -n "$STAGING_RG")" == "true" ]]; then
   warn "$STAGING_RG still exists (deletion may still be in progress: az group show -n $STAGING_RG)"
   fail=1
 fi
-if [[ -n "$KV_NAME" ]] && az keyvault list-deleted --query "[?name=='$KV_NAME'].name" -o tsv | grep -q .; then
+if [[ -n "$KV_NAME" && -n "$(az keyvault list-deleted --query "[?name=='$KV_NAME'].name" -o tsv)" ]]; then
   warn "vault $KV_NAME is still soft-deleted (purge it: az keyvault purge --name $KV_NAME)"
   fail=1
 fi

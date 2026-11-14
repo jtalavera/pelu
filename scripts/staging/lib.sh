@@ -32,7 +32,10 @@ require_env() {
 require_go_sqlcmd() {
   require_cmd sqlcmd
   # go-sqlcmd v1 lists the classic flags (incl. --authentication-method) under `sqlcmd -?`.
-  sqlcmd --version 2>/dev/null | grep -qi 'version' && sqlcmd -? 2>&1 | grep -q 'authentication-method' \
+  # Capture first: `cmd | grep -q` fails under pipefail when grep exits early (SIGPIPE).
+  local help
+  help="$(sqlcmd -? 2>&1 || true)"
+  [[ "$help" == *authentication-method* ]] \
     || die "sqlcmd must be go-sqlcmd (supports --authentication-method). Install: https://aka.ms/go-sqlcmd"
 }
 

@@ -79,7 +79,8 @@ done
 
 git -C "$REPO_ROOT" fetch --quiet origin "$REF" || die "cannot fetch ref '$REF' from origin"
 REF_COMMIT="$(git -C "$REPO_ROOT" rev-parse FETCH_HEAD)"
-git -C "$REPO_ROOT" show "$REF_COMMIT:.github/workflows/deploy-v2.yml" | grep -q 'v2-staging' \
+REF_DEPLOY_WORKFLOW="$(git -C "$REPO_ROOT" show "$REF_COMMIT:.github/workflows/deploy-v2.yml")"
+[[ "$REF_DEPLOY_WORKFLOW" == *v2-staging* ]] \
   || die "ref '$REF' predates the v2-staging deploy option (deploy-v2.yml) — merge develop into it first"
 EXPECTED_FLYWAY="$(expected_flyway_version "$REF_COMMIT")"
 
