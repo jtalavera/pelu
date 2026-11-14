@@ -70,7 +70,7 @@ describe("HU-COM-14 · Grupos", () => {
             svc(13, "Brushing pelo corto", { groupId: 1, groupName: "Brushing" }),
           ],
     );
-    api.assignGroups.mockResolvedValue({ changed: 2 });
+    api.assignGroups.mockResolvedValue({ changed: 2, rows: [] });
     api.createGroup.mockResolvedValue({ id: 3, name: "Color" });
   });
   afterEach(() => {
@@ -128,14 +128,11 @@ describe("HU-COM-14 · Grupos", () => {
     await userEvent.click(within(rowOf("Baño de crema")).getByTestId("groups-accept"));
     await waitFor(() => expect(api.assignGroups).toHaveBeenCalledWith([{ serviceId: 10, groupId: 2 }]));
     expect((await screen.findByTestId("groups-notice")).textContent).toContain("Se asignó 1 servicio");
-    expect(screen.getByTestId("groups-accept-all").textContent).toBe("Aceptar las 2 sugerencias");
+    // The accepted one is already assigned on screen (no re-read): only the other suggestion is left.
+    expect(screen.getByTestId("groups-accept-all").textContent).toBe("Aceptar la sugerencia");
+    expect(rowOf("Baño de crema").getAttribute("data-state")).toMatch(/assigned|saving/);
     await userEvent.click(screen.getByTestId("groups-accept-all"));
-    await waitFor(() =>
-      expect(api.assignGroups).toHaveBeenLastCalledWith([
-        { serviceId: 10, groupId: 2 },
-        { serviceId: 11, groupId: 2 },
-      ]),
-    );
+    await waitFor(() => expect(api.assignGroups).toHaveBeenLastCalledWith([{ serviceId: 11, groupId: 2 }]));
   });
 
   it("elegir un grupo en la fila asigna; un servicio con grupo se puede quitar del grupo", async () => {
@@ -162,8 +159,15 @@ describe("HU-COM-14 · Grupos", () => {
     expect(row.getAttribute("data-state")).toBe("saving");
     expect((within(row).getByTestId("groups-row-select") as HTMLSelectElement).disabled).toBe(true);
     expect(api.getGroupServices.mock.calls.length).toBe(reads); // nothing is re-read before the answer
-    finish({ changed: 1 });
+    const groupReads = api.getGroups.mock.calls.length;
+    finish({
+      changed: 1,
+      rows: [{ serviceId: 12, name: "Maquillaje", categoryName: null, price: null, groupId: 1, groupName: "Brushing", suggestion: null }],
+    });
     await waitFor(() => expect(rowOf("Maquillaje").getAttribute("data-state")).toBe("assigned"));
+    // One round trip is enough: the answer carries the rows, so nothing is read again.
+    expect(api.getGroupServices.mock.calls.length).toBe(reads);
+    expect(api.getGroups.mock.calls.length).toBe(groupReads);
     // Right after saving it still shows in the «No group» list (marked) so rows do not jump around.
     expect(screen.getAllByTestId("groups-row").length).toBe(3);
   });

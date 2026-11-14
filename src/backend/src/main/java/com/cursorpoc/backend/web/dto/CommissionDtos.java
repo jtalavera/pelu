@@ -110,6 +110,9 @@ public final class CommissionDtos {
 
   public record AssignGroupsRequest(List<GroupAssignment> assignments) {}
 
+  /** What an assignment leaves: how many items changed and each one as the list shows it now. */
+  public record AssignGroupsResult(int changed, List<GroupServiceRow> rows) {}
+
   public record GroupSuggestion(Long groupId, String groupName, String reason) {}
 
   public record UngroupedService(Long serviceId, String name, GroupSuggestion suggestion) {}

@@ -511,7 +511,7 @@ export const getGroupServices = (kind: ItemKind = "SERVICE") =>
 export const getProfessionalsSummary = () =>
   femmeJson<ProfessionalsRuleSummary>("/api/commissions/professionals/summary");
 export const assignGroups = (assignments: { serviceId: number; groupId: number | null }[]) =>
-  femmePostJson<{ changed: number }>("/api/commissions/groups/assign", { assignments });
+  femmePostJson<{ changed: number; rows: GroupServiceRow[] }>("/api/commissions/groups/assign", { assignments });
 export const getProfessionalRules = (professionalId: number, date?: string) =>
   femmeJson<ProfessionalRulesView>(`/api/commissions/professionals/${professionalId}/rules${qs({ date })}`);
 

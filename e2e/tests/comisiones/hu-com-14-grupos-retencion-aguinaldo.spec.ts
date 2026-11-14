@@ -329,6 +329,8 @@ test("AC2 · asignar es inmediato: la fila cambia al instante, queda marcada un 
   await expect(row.getByTestId("groups-row-chip")).toContainText("Color");
   await expect(row).toHaveAttribute("data-state", /saving|assigned/);
   await expect(row).toHaveCount(0, { timeout: 5000 });
+  // The group card already counts it (no second read of the screen).
+  await expect(page.getByTestId("group-row").filter({ hasText: "Color" })).toContainText("1 service");
   expect((await apiGetJson<{ serviceId: number; groupId: number | null }[]>(request, token, "/api/commissions/groups/services?kind=SERVICE")).find((r) => r.serviceId === first.id)?.groupId).toBe(
     group.id,
   );
@@ -342,6 +344,7 @@ test("AC2 · asignar es inmediato: la fila cambia al instante, queda marcada un 
   await expect(page.getByTestId("groups-notice")).toContainText("40");
   expect(Date.now() - started).toBeLessThan(4000);
   await expect(page.getByTestId("groups-row")).toHaveCount(0, { timeout: 5000 });
+  await expect(page.getByTestId("group-row").filter({ hasText: "Color" })).toContainText("41 services");
   expect(extra).toHaveLength(40);
 });
 

@@ -206,6 +206,46 @@ class CommissionGroupsAguinaldoIntegrationTest {
   }
 
   @Test
+  void assigningReturnsEachAffectedItemAsTheListShowsItNow() {
+    // Baño de crema has no group yet; assigning it and taking Brushing out of its group in one go.
+    var result =
+        groupService.assignWithRows(
+            tenant.getId(),
+            List.of(
+                new GroupAssignment(banoDeCrema.getId(), brushingGroup),
+                new GroupAssignment(brushingLargo.getId(), null)));
+
+    assertThat(result.changed()).isEqualTo(2);
+    var assigned =
+        result.rows().stream().filter(r -> r.serviceId().equals(banoDeCrema.getId())).findFirst();
+    assertThat(assigned).isPresent();
+    assertThat(assigned.get().groupId()).isEqualTo(brushingGroup);
+    assertThat(assigned.get().groupName()).isEqualTo("Brushing");
+    assertThat(assigned.get().suggestion()).isNull();
+    // The one taken out of its group is ungrouped again, with the suggestion its name gives.
+    var removed =
+        result.rows().stream().filter(r -> r.serviceId().equals(brushingLargo.getId())).findFirst();
+    assertThat(removed).isPresent();
+    assertThat(removed.get().groupId()).isNull();
+    assertThat(removed.get().suggestion()).isNotNull();
+    assertThat(removed.get().suggestion().groupName()).isEqualTo("Brushing");
+  }
+
+  @Test
+  void assigningToAnUnknownGroupOrItemIsRefusedWithItsCode() {
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () ->
+                groupService.assignWithRows(
+                    tenant.getId(), List.of(new GroupAssignment(banoDeCrema.getId(), 999_999L))))
+        .hasMessageContaining("COMMISSION_GROUP_NOT_FOUND");
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () ->
+                groupService.assignWithRows(
+                    tenant.getId(), List.of(new GroupAssignment(999_999L, brushingGroup))))
+        .hasMessageContaining("SERVICE_NOT_FOUND");
+  }
+
+  @Test
   void aGroupRuleAccruesTheSplitAndKeepsASnapshot() {
     configureSalon();
     accrue(invoice(brushingLargo, gaby, "100000"));

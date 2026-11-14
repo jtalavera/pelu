@@ -11,6 +11,7 @@ import com.cursorpoc.backend.repository.CommissionConfigVersionRepository;
 import com.cursorpoc.backend.repository.CommissionGroupRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
+import com.cursorpoc.backend.web.dto.CommissionDtos.AssignGroupsResult;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupAssignment;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupRuleRow;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupServiceRow;
@@ -152,6 +153,15 @@ public class CommissionGroupService {
 
   @Transactional
   public int assign(long tenantId, List<GroupAssignment> assignments) {
+    return assignWithRows(tenantId, assignments).changed();
+  }
+
+  /**
+   * Same as {@link #assign} and also returns each affected item as the list shows it afterwards
+   * (group and name suggestion), so the screen does not have to read everything again.
+   */
+  @Transactional
+  public AssignGroupsResult assignWithRows(long tenantId, List<GroupAssignment> assignments) {
     if (assignments == null || assignments.isEmpty()) {
       throw new ResponseStatusException(
           HttpStatus.BAD_REQUEST, "COMMISSION_GROUP_ASSIGNMENT_REQUIRED");
@@ -163,17 +173,16 @@ public class CommissionGroupService {
                 tenantId, assignments.stream().map(GroupAssignment::serviceId).distinct().toList())
             .stream()
             .collect(Collectors.toMap(SalonService::getId, s -> s, (x, y) -> x));
-    java.util.Set<Long> groupIds =
-        groupRepository.findByTenantIdOrderByNameAsc(tenantId).stream()
-            .map(CommissionGroup::getId)
-            .collect(Collectors.toSet());
+    List<CommissionGroup> groups = groupRepository.findByTenantIdOrderByNameAsc(tenantId);
+    Map<Long, String> names = new HashMap<>();
+    groups.forEach(g -> names.put(g.getId(), g.getName()));
     int changed = 0;
     for (GroupAssignment a : assignments) {
       SalonService s = items.get(a.serviceId());
       if (s == null) {
         throw new ResponseStatusException(HttpStatus.NOT_FOUND, "SERVICE_NOT_FOUND");
       }
-      if (a.groupId() != null && !groupIds.contains(a.groupId())) {
+      if (a.groupId() != null && !names.containsKey(a.groupId())) {
         throw new ResponseStatusException(HttpStatus.NOT_FOUND, "COMMISSION_GROUP_NOT_FOUND");
       }
       if (!Objects.equals(s.getCommissionGroupId(), a.groupId())) {
@@ -181,7 +190,26 @@ public class CommissionGroupService {
         changed++;
       }
     }
-    return changed;
+    List<GroupServiceRow> rows =
+        assignments.stream()
+            .map(GroupAssignment::serviceId)
+            .distinct()
+            .map(items::get)
+            .map(s -> row(s, groups, names))
+            .toList();
+    return new AssignGroupsResult(changed, rows);
+  }
+
+  private GroupServiceRow row(
+      SalonService s, List<CommissionGroup> groups, Map<Long, String> names) {
+    return new GroupServiceRow(
+        s.getId(),
+        s.getName(),
+        s.getCategory() == null ? null : s.getCategory().getName(),
+        s.getPriceMinor(),
+        s.getCommissionGroupId(),
+        s.getCommissionGroupId() == null ? null : names.get(s.getCommissionGroupId()),
+        s.getCommissionGroupId() == null ? suggest(s.getName(), groups) : null);
   }
 
   /** Puts every active item of {@code kind} that has no group into the group. */
@@ -216,16 +244,7 @@ public class CommissionGroupService {
     groups.forEach(g -> names.put(g.getId(), g.getName()));
     return serviceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(tenantId).stream()
         .filter(s -> s.getKind() == kind)
-        .map(
-            s ->
-                new GroupServiceRow(
-                    s.getId(),
-                    s.getName(),
-                    s.getCategory() == null ? null : s.getCategory().getName(),
-                    s.getPriceMinor(),
-                    s.getCommissionGroupId(),
-                    s.getCommissionGroupId() == null ? null : names.get(s.getCommissionGroupId()),
-                    s.getCommissionGroupId() == null ? suggest(s.getName(), groups) : null))
+        .map(s -> row(s, groups, names))
         .toList();
   }
 

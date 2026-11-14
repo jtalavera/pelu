@@ -22,6 +22,7 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyChangesRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyChangesResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyModeOptions;
 import com.cursorpoc.backend.web.dto.CommissionDtos.AssignGroupsRequest;
+import com.cursorpoc.backend.web.dto.CommissionDtos.AssignGroupsResult;
 import com.cursorpoc.backend.web.dto.CommissionDtos.AssignInvoiceLinesRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.AssignLineRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.EntryView;
@@ -198,17 +199,15 @@ public class CommissionController {
   }
 
   @PostMapping("/groups/assign")
-  public Map<String, Integer> assignGroups(
+  public AssignGroupsResult assignGroups(
       @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody AssignGroupsRequest request) {
     return admin(
         p,
         "POST",
         "/api/commissions/groups/assign",
         () ->
-            Map.of(
-                "changed",
-                groupService.assign(
-                    p.getTenantId(), request == null ? null : request.assignments())));
+            groupService.assignWithRows(
+                p.getTenantId(), request == null ? null : request.assignments()));
   }
 
   @PostMapping("/groups/{id}/assign-ungrouped")

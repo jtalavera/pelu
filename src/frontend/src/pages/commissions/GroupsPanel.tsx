@@ -24,6 +24,18 @@ const NEW_GROUP = "__new__";
 const PAGE = 50;
 const RECENT_MS = 1600;
 
+/** How many items (and which, first ones by name) each group has, from the rows on screen. */
+function withMembers(groups: GroupView[], items: Record<ItemKind, GroupServiceRow[]>): GroupView[] {
+  const members = new Map<number, string[]>();
+  for (const r of [...items.SERVICE, ...items.PRODUCT]) {
+    if (r.groupId !== null) members.set(r.groupId, [...(members.get(r.groupId) ?? []), r.name]);
+  }
+  return groups.map((g) => {
+    const names = (members.get(g.id) ?? []).sort((a, b) => a.localeCompare(b));
+    return { ...g, serviceCount: names.length, serviceNames: names.slice(0, 6) };
+  });
+}
+
 /** Case- and accent-insensitive text ("pestanas" finds "Pestañas"). */
 const normalize = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -79,6 +91,8 @@ export function GroupsPanel() {
   }, [load]);
 
   const rows = items[kind];
+  /** Groups with their counts and sample names computed from the rows on screen (no re-read after assigning). */
+  const shownGroups = useMemo(() => (groups ? withMembers(groups, items) : null), [groups, items]);
   const counts = useMemo(
     () => ({
       UNGROUPED: rows.filter((r) => r.groupId === null).length,
@@ -149,18 +163,6 @@ export function GroupsPanel() {
       }
       return next;
     });
-    setGroups((cur) =>
-      cur
-        ? cur.map((g) => {
-            let delta = 0;
-            for (const [id, to] of target) {
-              if (before.get(id) === g.id && to !== g.id) delta -= 1;
-              if (to === g.id && before.get(id) !== g.id) delta += 1;
-            }
-            return delta === 0 ? g : { ...g, serviceCount: Math.max(0, g.serviceCount + delta) };
-          })
-        : cur,
-    );
     setSelected((prev) => {
       const next = new Set(prev);
       ids.forEach((id) => next.delete(id));
@@ -177,11 +179,21 @@ export function GroupsPanel() {
         });
       }, RECENT_MS),
     );
+    let failed = false;
     try {
-      await assignGroups(pairs);
+      const res = await assignGroups(pairs);
+      // The answer carries each item as the list shows it now: nothing else has to be read again.
+      const fresh = new Map((res.rows ?? []).map((r) => [r.serviceId, r]));
+      if (fresh.size > 0) {
+        setItems((cur) => ({
+          SERVICE: cur.SERVICE.map((r) => fresh.get(r.serviceId) ?? r),
+          PRODUCT: cur.PRODUCT.map((r) => fresh.get(r.serviceId) ?? r),
+        }));
+      }
       setError(null);
       setNotice(success);
     } catch (err) {
+      failed = true;
       setError(translateApiError(err, t));
       setRecent((cur) => {
         const next = { ...cur };
@@ -195,9 +207,11 @@ export function GroupsPanel() {
         ids.forEach((id) => next.delete(id));
         return next;
       });
-      // Reads the real state (counts, suggestions of the ones taken out of a group) without blocking.
-      mutation.current += 1;
-      void load();
+      // Only when the server refused is the real state read again (to undo what was shown).
+      if (failed) {
+        mutation.current += 1;
+        void load();
+      }
     }
   }
 
@@ -553,13 +567,13 @@ export function GroupsPanel() {
             · {groups.length} · {t("femme.commissions.groups.listHint")}
           </span>
         </h3>
-        {groups.length === 0 ? (
+        {groups.length === 0 || !shownGroups ? (
           <Text variant="muted" className="mt-2" data-testid="groups-empty">
             {t("femme.commissions.groups.empty")}
           </Text>
         ) : (
           <ul className="mt-2" data-testid="groups-list">
-            {groups.map((g) => (
+            {shownGroups.map((g) => (
               <li
                 key={g.id}
                 data-testid="group-row"
