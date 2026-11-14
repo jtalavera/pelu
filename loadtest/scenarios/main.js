@@ -134,6 +134,25 @@ function slot(daysAhead) {
   return d.toISOString();
 }
 
+// ── action mix (% of salonDay iterations). Issuing invoices is the most important feature: 50 %.
+// The rest keeps its earlier relative weights (25/15/20/15/5/12), scaled to the remaining 50 %.
+const ACTION_MIX = [
+  ["invoice_issue", 50],   // non-fiscal invoice + its PDF
+  ["appointment", 14],     // book; 40 % of those are then rescheduled
+  ["clients_search", 11],
+  ["service_record", 8],
+  ["invoices_list", 8],
+  ["dashboard", 6],
+  ["invoices_report", 3],  // xlsx or pdf, half each
+];
+
+function pickAction(excludeInvoices) {
+  const mix = excludeInvoices ? ACTION_MIX.filter(([a]) => a !== "invoice_issue") : ACTION_MIX;
+  let r = Math.random() * mix.reduce((s, [, w]) => s + w, 0);
+  for (const [a, w] of mix) if ((r -= w) < 0) return a;
+  return mix[mix.length - 1][0];
+}
+
 // ── scenario: a receptionist's day (non-fiscal flows; SIFEN tenants issue only via sifenIssue) ─
 export function salonDay(data) {
   const { tenant, token } = session(data, () => true);
@@ -144,8 +163,10 @@ export function salonDay(data) {
   get(token, `/api/appointments?from=${weekStart.toISOString()}&to=${addDays(weekStart, 7).toISOString()}`, "appointments_list");
   sleep(1 + Math.random() * 2);
 
-  const r = Math.random();
-  if (r < 0.25 && tenant.clients.length && tenant.services.length && tenant.professionals.length) {
+  // SIFEN tenants issue invoices only through the throttled sifenIssue stream (shared RUC on
+  // sifen-test), so their VUs draw from the non-invoice actions only, keeping the same proportions.
+  const action = pickAction(tenant.sifen);
+  if (action === "appointment" && tenant.clients.length && tenant.services.length && tenant.professionals.length) {
     const body = {
       clientId: pick(tenant.clients), professionalId: pick(tenant.professionals),
       serviceId: pick(tenant.services).id, startAt: slot(1 + Math.floor(Math.random() * 12)),
@@ -155,25 +176,25 @@ export function salonDay(data) {
       put(token, `/api/appointments/${created.id}`, { ...body, startAt: slot(2 + Math.floor(Math.random() * 10)) },
         "appointment_update", { responseCallback: OK_OR_CONFLICT });
     }
-  } else if (r < 0.40 && tenant.clients.length && tenant.services.length) {
+  } else if (action === "service_record" && tenant.clients.length && tenant.services.length) {
     const svc = pick(tenant.services);
     post(token, "/api/service-records", {
       clientId: pick(tenant.clients),
       lines: [{ serviceId: svc.id, professionalId: pick(tenant.professionals), quantity: 1 }],
       tips: [],
     }, "service_record_create");
-  } else if (r < 0.60) {
+  } else if (action === "clients_search") {
     const q = pick(["ana", "mar", "gonz", "lop", "vera", "sof", "ben"]);
     get(token, `/api/clients/page?q=${q}&size=10`, "clients_search");
-  } else if (r < 0.75) {
+  } else if (action === "invoices_list") {
     get(token, `/api/invoices?from=${isoInstant(addDays(now, -30))}&to=${isoInstant(now)}&page=0&size=20`, "invoices_list");
-  } else if (r < 0.80) {
+  } else if (action === "invoices_report") {
     const format = Math.random() < 0.5 ? "xlsx" : "pdf";
     get(token, `/api/invoices/report?from=${isoInstant(addDays(now, -30))}&to=${isoInstant(now)}&format=${format}`,
       `invoices_report_${format}`, { timeout: "120s" });
-  } else if (r < 0.92) {
+  } else if (action === "dashboard") {
     get(token, "/api/dashboard?days=30", "dashboard");
-  } else if (!tenant.sifen && tenant.services.length) {
+  } else if (action === "invoice_issue" && tenant.services.length) {
     issueInvoice(tenant, token, "invoice_issue_non_fiscal", nonFiscalIssued, true);
   }
   sleep(2 + Math.random() * 4);
