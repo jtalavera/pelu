@@ -59,6 +59,8 @@ export function refresh(token) {
   return (body && body.accessToken) || token;
 }
 
-export const isoDate = (d) => d.toISOString().slice(0, 10);
+// /api/invoices and /api/invoices/report parse from/to with Instant.parse: full ISO instants only.
+// A bare YYYY-MM-DD throws, and Spring surfaces it as an empty 403 via the secured /error page.
+export const isoInstant = (d) => encodeURIComponent(d.toISOString());
 export const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
 export const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];

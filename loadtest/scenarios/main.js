@@ -17,7 +17,7 @@ import exec from "k6/execution";
 import { Counter } from "k6/metrics";
 import { textSummary } from "https://jslib.k6.io/k6-summary/0.1.0/index.js";
 
-import { OK_OR_CONFLICT, addDays, get, isoDate, json, login, pick, post, put, refresh } from "./lib/api.js";
+import { OK_OR_CONFLICT, addDays, get, isoInstant, json, login, pick, post, put, refresh } from "./lib/api.js";
 
 const USERS = JSON.parse(__ENV.USERS_JSON || '{"tenants":[]}');
 const PASSWORD = USERS.password;
@@ -166,10 +166,10 @@ export function salonDay(data) {
     const q = pick(["ana", "mar", "gonz", "lop", "vera", "sof", "ben"]);
     get(token, `/api/clients/page?q=${q}&size=10`, "clients_search");
   } else if (r < 0.75) {
-    get(token, `/api/invoices?from=${isoDate(addDays(now, -30))}&to=${isoDate(now)}&page=0&size=20`, "invoices_list");
+    get(token, `/api/invoices?from=${isoInstant(addDays(now, -30))}&to=${isoInstant(now)}&page=0&size=20`, "invoices_list");
   } else if (r < 0.80) {
     const format = Math.random() < 0.5 ? "xlsx" : "pdf";
-    get(token, `/api/invoices/report?from=${isoDate(addDays(now, -30))}&to=${isoDate(now)}&format=${format}`,
+    get(token, `/api/invoices/report?from=${isoInstant(addDays(now, -30))}&to=${isoInstant(now)}&format=${format}`,
       `invoices_report_${format}`, { timeout: "120s" });
   } else if (r < 0.92) {
     get(token, "/api/dashboard?days=30", "dashboard");
