@@ -1010,24 +1010,12 @@
         "chargedTitle": "Charged",
         "chargedHint": "Already have a comprobante",
         "nowTag": "now",
-        "moreTitle": "More for today",
         "moreRecords": "Today's service records",
         "moreOccupancy": "Occupancy by professional",
-        "moreBirthdays": "Birthdays",
         "moreInactive": "Inactive clients",
         "moreNone": "Nothing right now"
       },
-      "birthdays": {
-        "title": "Birthdays",
-        "subtitle": "Active clients with a birthday today and in the next {{days}} days",
-        "loadError": "Could not load birthdays.",
-        "empty": "No birthdays in the next {{days}} days.",
-        "today": "Today",
-        "upcoming": "Next {{days}} days",
-        "turns": "turns {{count}}",
-        "turns_other": "turns {{count}}"
-      },
-      "title": "Dashboard",
+      "title": "Today",
       "loading": "Loading…",
       "error": "Could not load dashboard.",
       "appointmentsToday": "Appointments today",
@@ -1042,7 +1030,6 @@
       "collected": "Collected",
       "emptyDay": "No appointments yet today.",
       "fiscalAlerts": "Alerts",
-      "fiscalAlertDismiss": "Dismiss alert",
       "alerts": {
         "businessRucMissing": "Add a valid business RUC to issue invoices.",
         "fiscalExpiringSoon": "Your fiscal stamp (timbrado) expires in less than 30 days.",
@@ -1052,9 +1039,6 @@
         "sifenVoidingPending": "You have document numbers pending voiding (inutilización) with SIFEN. Check Settings → SIFEN.",
         "sifenVoidingOverdue": "There are document-number voidings past their SIFEN deadline. Report them under Settings → SIFEN."
       },
-      "greetingMorning": "Good morning",
-      "greetingAfternoon": "Good afternoon",
-      "greetingEvening": "Good evening",
       "newAppointment": "+ New appointment",
       "newServiceRecord": "+ New service record",
       "metricRevenueDay": "Revenue today",
@@ -1147,7 +1131,8 @@
       "noServices": "No services invoiced yet.",
       "paymentMethods": "Payment methods",
       "noPayments": "No payments yet.",
-      "appointmentsByDay": "Appointments by day of the week"
+      "appointmentsByDay": "Appointments by day of the week",
+      "todayOnly": "today's appointments"
     },
     "resumen": {
       "loading": "Loading…",
@@ -3574,7 +3559,6 @@
         "forgotPassword": { "title": "Forgot your password?", "content": "Click here if you can't remember your password — you'll receive instructions to reset it." }
       },
       "dashboard": {
-        "greeting": { "title": "Welcome greeting", "content": "This section shows your name and today's date at a glance." },
         "newAppointment": { "title": "New appointment", "content": "Tap this button to schedule a new appointment for a client right now." },
         "metrics": { "title": "Daily metrics", "content": "Key numbers for today: appointments scheduled, clients served, and revenue collected." },
         "apptList": { "title": "Today's appointments", "content": "The full list of appointments for today, sorted by time. Tap any row to see details." },

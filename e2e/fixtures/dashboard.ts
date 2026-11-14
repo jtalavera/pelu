@@ -1,18 +1,13 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
-/** Inicio redesign: "Más del día" sections are collapsed until the user opens them. */
-export type DashboardMoreSection = "records" | "occupancy" | "birthdays" | "inactive";
+/** «Hoy» only has the fichas of the day now (occupancy, birthdays and inactive clients left it, HU-78). */
+export type DashboardMoreSection = "records";
 
 export async function openDashboardMore(page: Page, section: DashboardMoreSection): Promise<void> {
-  // "Fichas de hoy" are always-visible cards now (not a folded section): nothing to open.
+  // "Fichas de hoy" are always-visible cards (not a folded section): nothing to open.
   if (section === "records") {
     await expect(page.getByTestId("dashboard-today-records")).toBeVisible({ timeout: 20_000 });
-    return;
   }
-  const toggle = page.getByTestId(`dashboard-more-${section}`);
-  await expect(toggle).toBeVisible({ timeout: 20_000 });
-  if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
 }
 
 /**

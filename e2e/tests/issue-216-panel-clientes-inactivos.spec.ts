@@ -10,7 +10,6 @@ import {
   type SeededSalon,
 } from "../fixtures/api";
 import { loginAsDemo } from "../fixtures/auth";
-import { openDashboardMore } from "../fixtures/dashboard";
 
 /**
  * Issue #216 · "Panel de clientes inactivos" — Dashboard widget listing active clients with at
@@ -73,9 +72,11 @@ type WidgetRow = { fullName: string; phone: string; inactivity: string };
  * concatenated cell text with no separator can otherwise merge e.g. a phone number with a
  * following "N days" into one bogus digit run). */
 async function widgetRows(page: import("@playwright/test").Page): Promise<WidgetRow[]> {
-  await openDashboardMore(page, "inactive");
-  await expect(page.getByTestId("dashboard-inactive-clients")).toBeVisible();
-  const rowLocators = await page.getByTestId("dashboard-inactive-client-row").all();
+  // The widget lives in Reportes now (its «Ver más detalle» is open by default).
+  await page.goto("/app/dashboards");
+  await expect(page.getByTestId("summary-inactive-clients")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("summary-inactive-client-row").first()).toBeVisible({ timeout: 20_000 });
+  const rowLocators = await page.getByTestId("summary-inactive-client-row").all();
   const rows: WidgetRow[] = [];
   for (const row of rowLocators) {
     const cells = await row.locator("td").allTextContents();
@@ -84,7 +85,7 @@ async function widgetRows(page: import("@playwright/test").Page): Promise<Widget
   return rows;
 }
 
-test.describe("Issue #216 · Panel de clientes inactivos", () => {
+test.describe("Issue #216 · Clientes inactivos (en Reportes desde HU-78)", () => {
   test("AC1/AC2 · cliente inactivo (90+ días) aparece con teléfono y días; cliente reciente no aparece; orden desc", async ({
     page,
     request,
@@ -224,7 +225,7 @@ test.describe("Issue #216 · Panel de clientes inactivos", () => {
     expect(hasLabel(rows[0].fullName, `E2E216 Cap10 ${suffix}`)).toBe(true);
 
     // "Ver todas" navigates to the full paginated list, where all 11 (including Cap0) are reachable.
-    await page.getByTestId("dashboard-inactive-clients-view-all").click();
+    await page.getByTestId("summary-inactive-clients-view-all").click();
     await expect(page).toHaveURL(/\/app\/inactive-clients$/);
     await expect(page.getByTestId("inactive-clients-row")).toHaveCount(10);
 
