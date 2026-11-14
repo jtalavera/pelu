@@ -48,14 +48,20 @@ else
 fi
 
 # Soft-deleted vault: purge it so the name and its secrets are really gone (no purge protection
-# in staging). The vault may take a moment to appear in the deleted list.
+# in staging). azurerm's default (purge_soft_delete_on_destroy) usually purges it during destroy
+# already — that is why destroy takes ~30 min — so this is the fallback, e.g. after --fallback.
+# The vault may take a moment to appear in the deleted list.
 if [[ -n "$KV_NAME" ]]; then
+  if [[ -z "$(az keyvault list-deleted --query "[?name=='$KV_NAME'].name" -o tsv)" ]]; then
+    log "vault $KV_NAME is not in the soft-deleted list (already purged by terraform destroy)"
+  fi
   for _ in $(seq 1 12); do
     if [[ "$(az keyvault list-deleted --query "[?name=='$KV_NAME'] | length(@)" -o tsv)" == "1" ]]; then
       log "purging soft-deleted vault $KV_NAME"
       az keyvault purge --name "$KV_NAME" --only-show-errors
       break
     fi
+    [[ -z "$(az keyvault list-deleted --query "[?name=='$KV_NAME'].name" -o tsv)" ]] && ((FALLBACK == 0)) && break
     sleep 10
   done
 fi

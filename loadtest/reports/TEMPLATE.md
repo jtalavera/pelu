@@ -11,6 +11,7 @@
 | Ref deployed | `<branch/tag>` (`<sha>`) |
 | Golden DB | `loadtest-V<v>-t<N>-s<M>` (**N = <N> tenants, M = <M> SIFEN tenants**), actual size `<MB>` |
 | Sizing | prod parity · or **WHAT-IF: `<-var overrides>`** (temporary, never committed) |
+| Container Apps environment | staging `<type>` vs prod `<type>` (from the up.sh report — workload profiles vs consumption-only can affect cold starts) |
 | Profile | `smoke` / `ramp` / `soak` · or flat `<VUS>` VUs × `<DURATION>` |
 | SIFEN rate | `<n>`/min across the M SIFEN tenants |
 | Window (UTC) | `<start>` → `<end>` (inside the 07–20 Mon–Sat Asunción wake window? yes/no) |

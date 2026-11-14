@@ -74,6 +74,7 @@ into `environments/staging/terraform.tfvars`, and T2 verifies them.
 | `stock_api_base_url` | unset (enforced) | Never call a real Stock system, even after prod gets its Stock URL |
 | `deployer_ip`, `entra_sql_admin_*` | same as dev | Operator machine / admin group. `up.sh` overrides `deployer_ip` with the current public IP |
 | State key | `staging.tfstate` in the dev state account | Separate state |
+| Container Apps environment type (**known, not chosen**) | workload profiles (built-in `Consumption` profile) | Azure now creates new environments with workload profiles. Prod and dev were created on 2026-07-01 as consumption-only. Same pricing, scaling, and 0.5 vCPU / 1 GiB limits, but a newer platform generation: cold starts and networking may differ slightly. Prod will switch whenever its environment is recreated. Kept visible, not hidden: every staging apply shows a `workload_profile` drift (`0 added, 2 changed`), the live check prints both types, and the `up.sh` report records them. Mention it next to cold-start numbers in load-test reports. |
 | Data | sanitized (§T5) | Privacy and safety |
 
 ## 3. Tasks
@@ -439,7 +440,7 @@ above. The report states N and M.
 
 **Torn-down checklist:**
 
-- [ ] `az group show -n femme-staging-rg` → not found
+- [ ] `az group show -n femme-staging-rg` → not found (first verified 2026-11-14, Stage 3)
 - [ ] `az keyvault list-deleted` → no `femme-kv-*` from staging
 - [ ] `v2-staging` secrets cleared
 - [ ] Temporary prod PITR copy deleted

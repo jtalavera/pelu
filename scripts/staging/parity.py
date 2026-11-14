@@ -309,6 +309,14 @@ def cmd_live(args) -> int:
         "logs.daily_quota_gb": float((ws.get("workspaceCapping") or {}).get("dailyQuotaGb", -1)),
     }
 
+    # Known deviation (docs/staging-env.md §2.2), reported but never a failure: Azure creates NEW
+    # Container Apps environments with workload profiles, while prod's predates that default.
+    envs = _az("containerapp", "env", "list", "-g", rg, "--subscription", sub)
+    prod_profiles = (envs[0]["properties"].get("workloadProfiles") if envs else None) or []
+    prod_env_type = "workload profiles" if prod_profiles else "consumption-only"
+    print(f"NOTE: prod Container Apps environment is {prod_env_type}; a newly created staging environment "
+          "gets workload profiles (Consumption) — known deviation, see docs/staging-env.md §2.2.")
+
     errors = [f"{k}: live prod={live[k]!r} staging will create={expected[k]!r}" for k in expected if live[k] != expected[k]]
     if errors:
         print("Live prod drift check FAILED (prod was changed outside Terraform, or staging tfvars drifted):", file=sys.stderr)

@@ -145,6 +145,12 @@ report "| SQL server | \`$SQL_SERVER\` |"
 report "| Key Vault | \`$KV_NAME\` |"
 report "| API | $API_URL |"
 report "| SPA | https://$SWA_HOST |"
+env_type() { # env_type <rg> <subscription>
+  local n
+  n="$(az containerapp env list -g "$1" --subscription "$2" --query 'length([0].properties.workloadProfiles || `[]`)' -o tsv 2>/dev/null || echo "?")"
+  case "$n" in 0) echo "consumption-only" ;; '?' | '') echo "unknown" ;; *) echo "workload profiles" ;; esac
+}
+report "| Container Apps environment | staging: $(env_type "$STAGING_RG" "$STAGING_SUBSCRIPTION_ID") · prod: $(env_type "$PROD_RG" "$PROD_SUBSCRIPTION_ID") (known deviation, docs/staging-env.md §2.2) |"
 report ""
 
 # =============================================================================================
