@@ -161,13 +161,14 @@ WHEN NOT MATCHED THEN
 OUTPUT src.k, inserted.id INTO #amap (k, id);
 
 -- ── Fichas (service records) for every completed appointment ───────────────────────────────
+-- The link is appointments.service_record_id (set below); service_records has no appointment_id.
 CREATE TABLE #srmap (k INT PRIMARY KEY, id BIGINT NOT NULL);
 MERGE service_records AS tgt
 USING (SELECT a.*, m.id AS appt_id FROM #appt a JOIN #amap m ON m.k = a.k WHERE a.status = 'COMPLETED') AS src
 ON 1 = 0
 WHEN NOT MATCHED THEN
-  INSERT (tenant_id, client_id, status, total_amount, created_at, closed_at, appointment_id)
-  VALUES (@tenant, src.client_id, 'CLOSED', src.price, src.start_at, src.end_at, src.appt_id)
+  INSERT (tenant_id, client_id, status, total_amount, created_at, closed_at)
+  VALUES (@tenant, src.client_id, 'CLOSED', src.price, src.start_at, src.end_at)
 OUTPUT src.k, inserted.id INTO #srmap (k, id);
 
 UPDATE ap SET service_record_id = sr.id
@@ -224,7 +225,9 @@ FROM clients c JOIN (SELECT client_id, COUNT(*) AS visits FROM #appt WHERE statu
   ON x.client_id = c.id;
 
 COMMIT TRANSACTION;
+-- PRINT/CONCAT arguments must be scalar expressions, not subqueries (Msg 1046).
+DECLARE @appts INT = (SELECT COUNT(*) FROM #appt);
 PRINT CONCAT('loadtest history: tenant ', @tenant, ' clients=', @clients, ' appointments=',
-             (SELECT COUNT(*) FROM #appt), ' invoices=', @invoices);
+             @appts, ' invoices=', @invoices);
 `;
 }

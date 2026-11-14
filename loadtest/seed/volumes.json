@@ -24,20 +24,20 @@
     "openingCashAmount": 100000
   },
   "sizeEstimate": {
-    "_comment": "Bytes per row incl. indexes (×~2.5 of raw width). Recalibrate from the 'actual size' that seed-golden-db.sh records.",
+    "_comment": "Reserved bytes per row incl. indexes, measured on loadtest-V99-t10-s0 (2026-11-14, 41.4 MB actual) and rounded up ~10%. Recalibrate from the 'actual size' that seed-golden-db.sh records. Not part of generation: changing it needs no version bump.",
     "bytesPerRow": {
-      "clients": 700,
+      "clients": 650,
       "appointments": 400,
-      "service_records": 300,
-      "service_record_lines": 450,
-      "invoices": 1500,
-      "invoice_lines": 600,
-      "invoice_payment_allocations": 200,
-      "invoice_tips": 150,
-      "cash_sessions": 250,
-      "cash_movements": 250
+      "service_records": 310,
+      "service_record_lines": 340,
+      "invoices": 660,
+      "invoice_lines": 160,
+      "invoice_payment_allocations": 80,
+      "invoice_tips": 300,
+      "cash_sessions": 200,
+      "cash_movements": 270
     },
-    "baseBytes": 52428800,
+    "baseBytes": 10485760,
     "maxBytes": 1610612736
   }
 }

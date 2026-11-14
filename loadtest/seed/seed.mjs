@@ -117,7 +117,7 @@ async function main() {
     const t = await provisionTenant(api, platformToken, {
       index: i, sifen, tierId: sifen ? tierIds.sifen : tierIds.basic, issuer, userPassword, volumes, existingTenants,
     });
-    writeFileSync(path.join(out, `history-t${pad3(i)}.sql`), historySql(t, t.professionals, t.services, volumes, anchor));
+    writeFileSync(path.join(out, `history-t${pad3(i)}.sql`), historySql({ ...t, index: i }, t.professionals, t.services, volumes, anchor));
     result.push({
       id: t.id, index: i, block: Math.floor(i / volumes.blockSize), name: t.name, sifen,
       sifenIndex: sifen ? i : null,

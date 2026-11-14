@@ -10,6 +10,10 @@
 #   scripts/staging/up.sh --data=loadtest --bacpac=loadtest-V120-t10-s2 --ref=develop
 #   scripts/staging/seed-golden-db.sh --tenants=30 --sifen-tenants=2 --from-bacpac=loadtest-V120-t10-s2
 #
+#   # resume: phase 1 (API provisioning) finished but a history file failed — fix it and rerun
+#   # with the same --tenants/--sifen-tenants; files already applied (*.sql.done) are skipped
+#   scripts/staging/seed-golden-db.sh --tenants=10 --sifen-tenants=0 --resume=loadtest/seed/out/<ts>
+#
 #   scripts/staging/down.sh
 #
 # Environment: SEED_USER_PASSWORD (tenant admins' password at generation time; up.sh resets every
@@ -24,13 +28,14 @@ set -euo pipefail
 # shellcheck source=lib.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-TENANTS="" SIFEN="0" FROM_BACPAC=""
+TENANTS="" SIFEN="0" FROM_BACPAC="" RESUME=""
 for arg in "$@"; do
   case "$arg" in
     --tenants=*) TENANTS="${arg#*=}" ;;
     --sifen-tenants=*) SIFEN="${arg#*=}" ;;
     --from-bacpac=*) FROM_BACPAC="${arg#*=}"; FROM_BACPAC="${FROM_BACPAC%.bacpac}" ;;
-    -h | --help) sed -n '2,24p' "$0"; exit 0 ;;
+    --resume=*) RESUME="${arg#*=}" ;;
+    -h | --help) sed -n '2,28p' "$0"; exit 0 ;;
     *) die "unknown argument: $arg" ;;
   esac
 done
@@ -46,8 +51,16 @@ require_env SEED_PLATFORM_ADMIN_EMAIL SEED_PLATFORM_ADMIN_PASSWORD
 [[ "$(az group exists -n "$STAGING_RG")" == "true" ]] || die "$STAGING_RG does not exist — run up.sh first (see --help)"
 
 SEED_DIR="$REPO_ROOT/loadtest/seed"
-OUT="$SEED_DIR/out/$(date -u +%Y%m%dT%H%M%SZ)"
-mkdir -p "$OUT"
+if [[ -n "$RESUME" ]]; then
+  OUT="$(cd "$RESUME" && pwd)" || die "--resume: no such directory: $RESUME"
+  [[ -f "$OUT/users.json" ]] && compgen -G "$OUT/history-t*.sql" >/dev/null \
+    || die "--resume: $OUT has no users.json/history-t*.sql — phase 1 did not finish, start fresh"
+  [[ "$(jq '.tenants | length' "$OUT/users.json")" == "$TENANTS" ]] \
+    || die "--resume: $OUT was generated for a different --tenants"
+else
+  OUT="$SEED_DIR/out/$(date -u +%Y%m%dT%H%M%SZ)"
+  mkdir -p "$OUT"
+fi
 TMP="$(mktemp -d)"
 chmod 700 "$TMP"
 trap 'rm -rf "$TMP"' EXIT
@@ -69,7 +82,7 @@ if [[ -n "$FROM_BACPAC" ]]; then
 fi
 
 # Issuer file (only when new SIFEN tenants are created).
-if ((SIFEN > FROM_TENANTS)); then
+if [[ -z "$RESUME" ]] && ((SIFEN > FROM_TENANTS)); then
   log "reading Femme Coiffure's issuer data, timbrado, CSC and certificate from dev (read-only)"
   DEV_SQL="$(az sql server list -g "$DEV_RG" --query '[0].fullyQualifiedDomainName' -o tsv)"
   DEV_KV="$(az keyvault list -g "$DEV_RG" --query '[0].name' -o tsv)"
@@ -91,12 +104,23 @@ if ((SIFEN > FROM_TENANTS)); then
   SEED_ARGS+=(--issuer="$TMP/issuer.json")
 fi
 
-log "phase 1: provisioning tenants through the API ($API_URL)"
-node "$SEED_DIR/seed.mjs" "${SEED_ARGS[@]}"
+if [[ -n "$RESUME" ]]; then
+  log "phase 1: skipped (--resume $OUT)"
+else
+  log "phase 1: provisioning tenants through the API ($API_URL)"
+  node "$SEED_DIR/seed.mjs" "${SEED_ARGS[@]}"
+fi
 
+# Each history file is one transaction (XACT_ABORT), so it is applied entirely or not at all;
+# the .done marker makes --resume skip the ones already in.
 log "phase 2: bulk history SQL"
 for f in "$OUT"/history-t*.sql; do
+  if [[ -f "$f.done" ]]; then
+    log "  $(basename "$f"): already applied"
+    continue
+  fi
   sql_file "$SQL_SERVER" "$SQL_DB" "$f"
+  touch "$f.done"
 done
 
 ANCHOR="$(jq -r .anchor "$OUT/users.json")"
