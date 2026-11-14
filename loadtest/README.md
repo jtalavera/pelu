@@ -22,9 +22,12 @@ scripts/staging/up.sh --recreate --data=loadtest --bacpac=loadtest-V<v>-t10-s2 -
 
 # 3. Actions → "Load test (staging)" → Run workflow (approve the v2-staging deployment)
 gh workflow run loadtest.yml -f ref=<ref> -f bacpac=loadtest-V<v>-t10-s2 -f profile=ramp -f sifen_rate=2
+#    …or from an Azure VM, no approval needed (also the only way until loadtest.yml is on main:
+#    GitHub dispatches workflow_dispatch workflows only from the default branch)
+scripts/staging/run-loadtest.sh --bacpac=loadtest-V<v>-t10-s2 --ref=<ref> --profile=ramp --sifen-rate=2
 
 # 4. Server-side metrics while staging still exists, then fill loadtest/reports/TEMPLATE.md
-scripts/staging/collect-loadtest-metrics.sh --run=<prefix printed by the workflow>
+scripts/staging/collect-loadtest-metrics.sh --run=<prefix printed by the workflow / run-loadtest.sh>
 
 # 5. Tear down
 scripts/staging/down.sh

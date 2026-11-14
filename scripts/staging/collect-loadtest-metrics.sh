@@ -31,7 +31,8 @@ START="$(jq -r .started_at "$DIR/run.json")"
 END="$(jq -r .ended_at "$DIR/run.json")"
 
 APP_ID="$(az containerapp show -n "$CONTAINER_APP_NAME" -g "$STAGING_RG" --query id -o tsv)"
-DB_ID="$(az sql db list -g "$STAGING_RG" --query "[?name=='$SQL_DB_NAME'].id | [0]" -o tsv)"
+SQL_SERVER_NAME="$(az sql server list -g "$STAGING_RG" --query '[0].name' -o tsv)"
+DB_ID="$(az sql db show -g "$STAGING_RG" -s "$SQL_SERVER_NAME" -n "$SQL_DB_NAME" --query id -o tsv)"
 AI_APP="$(az resource list -g "$STAGING_RG" --resource-type microsoft.insights/components --query '[0].name' -o tsv)"
 
 metric_table() { # metric_table <resource id> <metric> <aggregation> <label> <scale-expr>
