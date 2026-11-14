@@ -1,0 +1,43 @@
+{
+  "_comment": "Per-tenant volumes for one block of 10 tenants (docs/staging-env.md T6). PLACEHOLDERS until calibrated from a sanitized prod snapshot with measure-volumes.sql. Changing any value changes every generated DB: bump 'version' and regenerate the golden BACPACs.",
+  "version": 1,
+  "seed": 20261114,
+  "blockSize": 10,
+  "historyDays": 180,
+  "futureDays": 14,
+  "workingDays": [1, 2, 3, 4, 5, 6],
+  "openingHour": 9,
+  "closingHour": 19,
+  "utcOffsetHours": -3,
+  "perTenant": {
+    "categories": 3,
+    "services": 12,
+    "professionals": 4,
+    "clients": 400,
+    "appointmentsPerProfessionalPerDay": 3,
+    "futureAppointmentsPerProfessionalPerDay": 2,
+    "statusMix": { "COMPLETED": 85, "CANCELLED": 8, "NO_SHOW": 7 },
+    "tipPercentOfInvoices": 30,
+    "tipAmount": 10000,
+    "paymentMix": { "CASH": 50, "DEBIT_CARD": 20, "CREDIT_CARD": 20, "TRANSFER": 10 },
+    "cashMovementsPerSession": 2,
+    "openingCashAmount": 100000
+  },
+  "sizeEstimate": {
+    "_comment": "Bytes per row incl. indexes (×~2.5 of raw width). Recalibrate from the 'actual size' that seed-golden-db.sh records.",
+    "bytesPerRow": {
+      "clients": 700,
+      "appointments": 400,
+      "service_records": 300,
+      "service_record_lines": 450,
+      "invoices": 1500,
+      "invoice_lines": 600,
+      "invoice_payment_allocations": 200,
+      "invoice_tips": 150,
+      "cash_sessions": 250,
+      "cash_movements": 250
+    },
+    "baseBytes": 52428800,
+    "maxBytes": 1610612736
+  }
+}

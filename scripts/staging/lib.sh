@@ -1,4 +1,5 @@
-# shellcheck shell=bash
+# shellcheck shell=bash disable=SC2034
+# (library: its variables are used by the scripts that source it)
 # Shared helpers for scripts/staging/*.sh (docs/staging-env.md). Sourced, never executed.
 
 STAGING_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -128,10 +129,8 @@ bcrypt_hash() {
     PW="$pw" python3 -c 'import bcrypt,os;print(bcrypt.hashpw(os.environ["PW"].encode(),bcrypt.gensalt(10)).decode())'
   elif command -v htpasswd >/dev/null 2>&1; then
     htpasswd -nbBC 10 "" "$pw" | tr -d ':\n'
-  elif command -v node >/dev/null 2>&1 && [[ -d "$REPO_ROOT/loadtest/seed/node_modules/bcryptjs" ]]; then
-    PW="$pw" node -e 'console.log(require(process.argv[1]).hashSync(process.env.PW,10))' "$REPO_ROOT/loadtest/seed/node_modules/bcryptjs"
   else
-    die "need one of: python3 bcrypt (pip install bcrypt), htpasswd (apache2-utils), or 'npm ci' in loadtest/seed"
+    die "need a BCrypt helper: pip install bcrypt, or apt install apache2-utils (htpasswd)"
   fi
 }
 

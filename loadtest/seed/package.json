@@ -1,0 +1,13 @@
+{
+  "name": "pelu-loadtest-seed",
+  "private": true,
+  "description": "Golden multi-tenant load-test DB generator (docs/staging-env.md, T6). Zero runtime dependencies: Node 20 fetch + crypto only.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "seed": "node seed.mjs",
+    "estimate": "node seed.mjs --estimate-only"
+  }
+}

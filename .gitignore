@@ -10,6 +10,5 @@ local-pelu-sqlserver/local-pelu-sqlserver.sqlproj
 
 # Staging scripts working dir (downloaded BACPACs, run reports) — scripts/staging/lib.sh
 /.staging/
-# Load-test seed generator
-/loadtest/seed/node_modules/
+# Load-test seed generator output (generated SQL, users.json)
 /loadtest/seed/out/

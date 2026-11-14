@@ -1,4 +1,5 @@
-# shellcheck shell=bash
+# shellcheck shell=bash disable=SC2154
+# (sourced by up.sh: RUN_ID, BACPAC, SECRETS_TMP and report() come from it)
 # T6 (docs/staging-env.md): SIFEN numbering rebase + certificate/CSC re-link for a golden load-test
 # DB. Sourced by up.sh after the BACPAC import (needs lib.sh, $SECRETS_TMP, report()).
 #

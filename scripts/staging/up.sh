@@ -186,6 +186,8 @@ case "$DATA" in
     blob_download "$LOADTEST_CONTAINER" "$BACPAC.users.json" "$RUN_DIR/users.json"
     log "resetting every user to the shared staging password"
     sql_query "$SQL_SERVER" "$SQL_DB" "UPDATE app_users SET password_hash = N'$USER_HASH';" >/dev/null
+    log "shifting history dates by whole weeks so today's agenda is populated"
+    sql_file "$SQL_SERVER" "$SQL_DB" "$STAGING_DIR/sql/shift-loadtest-dates.sql" | tee -a "$RUN_DIR/import.log"
     ;;
 esac
 DATA_READY_UTC="$(date -u '+%Y-%m-%d %H:%M:%S')"
