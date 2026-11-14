@@ -1,6 +1,7 @@
 package com.cursorpoc.backend.service;
 
 import com.cursorpoc.backend.config.FemmeJwtProperties;
+import com.cursorpoc.backend.config.FrontendUrl;
 import com.cursorpoc.backend.domain.AppUser;
 import com.cursorpoc.backend.domain.AppUserActivationToken;
 import com.cursorpoc.backend.domain.PasswordResetToken;
@@ -61,7 +62,7 @@ public class AuthService {
   private static final Pattern PASSWORD_SPECIAL =
       Pattern.compile(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?].*");
 
-  @Value("${app.frontend.url}")
+  @Value(FrontendUrl.PRIMARY_EXPR)
   private String frontendUrl;
 
   private final AppUserRepository appUserRepository;

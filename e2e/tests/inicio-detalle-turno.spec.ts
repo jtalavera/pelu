@@ -37,6 +37,7 @@ test.describe("Inicio · detalle del turno en el lugar", () => {
   }) => {
     const { token, clientName, turnoId } = await seedTodayTurno(request);
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: new RegExp(clientName, "i") });
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.locator("button").first().click();
@@ -45,11 +46,11 @@ test.describe("Inicio · detalle del turno en el lugar", () => {
     await expect(dialog).toBeVisible();
     // Client names are stored in capitals.
     await expect(dialog).toContainText(new RegExp(clientName, "i"));
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
 
     await dialog.getByTestId("calendar-next-step").click(); // Confirmar
     await expect(dialog.getByTestId("calendar-next-step")).toHaveText("Start", { timeout: 15_000 });
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
     expect((await apiGetJson<{ status: string }>(request, token, `/api/appointments/${turnoId}`)).status).toBe(
       "CONFIRMED",
     );
@@ -62,6 +63,7 @@ test.describe("Inicio · detalle del turno en el lugar", () => {
   test("cancelar desde el detalle pide el motivo y el turno sale de la lista", async ({ page, request }) => {
     const { token, clientName, turnoId } = await seedTodayTurno(request);
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     const row = page.getByTestId("dashboard-appointment-row").filter({ hasText: new RegExp(clientName, "i") });
     await expect(row).toBeVisible({ timeout: 20_000 });
     await row.locator("button").first().click();
@@ -71,7 +73,7 @@ test.describe("Inicio · detalle del turno en el lugar", () => {
     await page.locator("#cancel-reason").fill("E2E motivo");
     await page.getByTestId("calendar-cancel-confirm").click();
 
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
     await expect
       .poll(async () => (await apiGetJson<{ status: string; cancelReason: string | null }>(request, token, `/api/appointments/${turnoId}`)).cancelReason)
       .toBe("E2E motivo");

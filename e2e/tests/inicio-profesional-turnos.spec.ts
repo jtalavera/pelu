@@ -88,6 +88,7 @@ test.describe("Inicio de la profesional · turnos de hoy", () => {
     await turnoFor(request, admin, seed, seed.professionalId, other.id);
 
     await loginAs(page, pro.email, PASSWORD);
+    await page.goto("/app/hoy");
     await expectFlow(page, request, admin, own, mine.fullName, other.fullName);
   });
 

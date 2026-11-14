@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Text } from "@design-system";
+import { Alert, Button, DataTable, Text } from "@design-system";
 import {
   activateSifenCsc,
   fetchSifenEnvironment,
@@ -23,8 +23,6 @@ import {
   sectionCardStyle,
   sectionTitleStyle,
   tableWrapStyle,
-  tdStyle,
-  thStyle,
 } from "./sifenFormStyles";
 
 /** The DNIT's CSC: exactly 32 alphanumeric characters (Manual Técnico V150 §13.8.1). */
@@ -272,46 +270,36 @@ export function SifenCscSection({
           </Text>
         ) : (
           <div style={tableWrapStyle}>
-            <div className="overflow-x-auto">
-              <table className="min-w-full" style={{ borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>{t("femme.sifenCsc.colId")}</th>
-                    <th style={thStyle}>{t("femme.sifenCsc.colStatus")}</th>
-                    <th style={thStyle}>{t("femme.sifenCsc.colUpdated")}</th>
-                    <th style={thStyle} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.idCsc} data-testid={`sifen-csc-row-${row.idCsc}`}>
-                      <td style={tdStyle}>{String(row.idCsc).padStart(4, "0")}</td>
-                      <td style={tdStyle}>
-                        <StatusBadge status={row.active ? "ACTIVE" : "INACTIVE"} />
-                      </td>
-                      <td style={tdStyle}>{fmtDate(row.updatedAt)}</td>
-                      <td style={{ ...tdStyle, textAlign: "right" }}>
-                        {row.active || !manage ? null : (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="min-h-11"
-                            disabled={activating === row.idCsc}
-                            data-testid={`sifen-csc-activate-${row.idCsc}`}
-                            onClick={() => void onActivate(row.idCsc)}
-                          >
-                            {activating === row.idCsc
-                              ? t("femme.sifenCsc.activating")
-                              : t("femme.sifenCsc.activate")}
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<(typeof rows)[number]>
+              className="px-2"
+              rows={rows}
+              getRowId={(row) => row.idCsc}
+              rowTestId={(row) => `sifen-csc-row-${row.idCsc}`}
+              columns={[
+                { id: "id", header: t("femme.sifenCsc.colId"), cell: (row) => String(row.idCsc).padStart(4, "0") },
+                {
+                  id: "status",
+                  header: t("femme.sifenCsc.colStatus"),
+                  cell: (row) => <StatusBadge status={row.active ? "ACTIVE" : "INACTIVE"} />,
+                },
+                { id: "updated", header: t("femme.sifenCsc.colUpdated"), cell: (row) => fmtDate(row.updatedAt) },
+              ]}
+              rowActions={(row) =>
+                row.active || !manage ? null : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="min-h-11"
+                    disabled={activating === row.idCsc}
+                    data-testid={`sifen-csc-activate-${row.idCsc}`}
+                    onClick={() => void onActivate(row.idCsc)}
+                  >
+                    {activating === row.idCsc ? t("femme.sifenCsc.activating") : t("femme.sifenCsc.activate")}
+                  </Button>
+                )
+              }
+            />
           </div>
         )}
       </div>

@@ -207,7 +207,7 @@ test.describe("Issue #310 · Impersonar un tenant admin", () => {
 
     // Admin-only navigation is there (a professional would not see Professionals / Settings).
     const nav = tab.getByRole("complementary", { name: "Main navigation" });
-    for (const item of ["Dashboard", "Agenda", "Clients", "Catalog", "Billing"]) {
+    for (const item of ["Overview", "Today", "Agenda", "Clients", "Catalog", "Billing"]) {
       await expect(nav.getByRole("link", { name: item, exact: true })).toBeVisible();
     }
     await expect(nav.getByRole("link", { name: "Settings", exact: true })).toBeVisible();

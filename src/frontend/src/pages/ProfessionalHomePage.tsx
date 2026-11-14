@@ -19,7 +19,7 @@ export default function ProfessionalHomePage() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4" data-testid="professional-home">
       <div>
         <Heading as="h1" className="text-2xl">
-          {t("femme.nav.dashboard")}
+          {t("femme.nav.today")}
         </Heading>
         <Text variant="muted">{t("femme.serviceRecords.today.proHint")}</Text>
       </div>

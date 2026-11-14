@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
@@ -12,7 +12,7 @@ import {
   Spinner,
   Text,
 } from "@design-system";
-import { listInvoicesPaged, type PagedInvoicesResponse } from "../../api/invoices";
+import { listInvoicesPaged, type InvoiceListItem, type PagedInvoicesResponse } from "../../api/invoices";
 import { listCashSessionsPaged, type CashSessionListItem } from "../../api/cashSessions";
 import type { PageResponse } from "../../api/pagination";
 import { downloadInvoiceHistoryReport } from "../../api/downloadInvoiceHistoryReport";
@@ -24,7 +24,7 @@ import { InvoiceStatePill, deriveInvoiceState } from "../../components/InvoiceSt
 import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../../hooks/useSifenStatusLiveRefresh";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatAmountDecimal } from "../../lib/formatMoney";
-import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
+import { formatParaguayDate, formatParaguayDateTime, formatParaguayTime } from "../../lib/paraguayDateTime";
 import {
   getDefaultInvoiceHistoryDateRange,
   invoiceHistoryRangeErrorKey,
@@ -191,7 +191,15 @@ function ListFooter({
   );
 }
 
-function InvoiceListView({ refreshTrigger, isActive }: { refreshTrigger: number; isActive: boolean }) {
+function InvoiceListView({
+  refreshTrigger,
+  isActive,
+  onTipsChanged,
+}: {
+  refreshTrigger: number;
+  isActive: boolean;
+  onTipsChanged?: () => void;
+}) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const [invoicePage, setInvoicePage] = useState<PagedInvoicesResponse | null>(null);
@@ -207,6 +215,32 @@ function InvoiceListView({ refreshTrigger, isActive }: { refreshTrigger: number;
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<number | null>(null);
   // Issue #175: "Corregir y reenviar" opened directly from a Rechazado row.
   const [correctionInvoiceId, setCorrectionInvoiceId] = useState<number | null>(null);
+
+  /** «09:04» when SIFEN got it the same day it was issued, the full date and time otherwise. */
+  function sifenSentLabel(issuedAt: string, sentAt: string): string {
+    return formatParaguayDate(sentAt, dateLocale) === formatParaguayDate(issuedAt, dateLocale)
+      ? formatParaguayTime(sentAt, dateLocale)
+      : formatParaguayDateTime(sentAt, dateLocale);
+  }
+
+  /** «Corregir y reenviar» for a comprobante that needs attention (table row and phone card). */
+  function correctResendButton(inv: InvoiceListItem): ReactNode {
+    if (deriveInvoiceState(inv) !== "attention" || inv.status !== "ISSUED") return null;
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        data-testid={`invoice-row-correct-resend-${inv.id}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          setCorrectionInvoiceId(inv.id);
+        }}
+      >
+        {t("femme.billing.history.detail.sifen.correctResendButton")}
+      </Button>
+    );
+  }
   const filterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Issue #174 AC-05: "Descargar reporte" dropdown (Excel / PDF) next to "Actualizar".
   const [reportMenuOpen, setReportMenuOpen] = useState(false);
@@ -558,7 +592,7 @@ function InvoiceListView({ refreshTrigger, isActive }: { refreshTrigger: number;
                         setSelectedInvoiceId(inv.id);
                       }
                     }}
-                    className="grid min-h-14 w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-left hover:bg-primary-lt"
+                    className="grid min-h-16 w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-left hover:bg-primary-lt"
                   >
                     <span
                       data-testid="invoice-row-client"
@@ -569,29 +603,16 @@ function InvoiceListView({ refreshTrigger, isActive }: { refreshTrigger: number;
                     <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end gap-1.5">
                       <span
                         data-testid="invoice-row-total"
-                        className="text-right font-bold tabular-nums text-ink"
+                        className="text-right font-heading font-bold tabular-nums text-ink"
                       >
                         {formatAmountDecimal(inv.total)}
                       </span>
-                      {deriveInvoiceState(inv) === "attention" && inv.status === "ISSUED" && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          data-testid={`invoice-row-correct-resend-${inv.id}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCorrectionInvoiceId(inv.id);
-                          }}
-                        >
-                          {t("femme.billing.history.detail.sifen.correctResendButton")}
-                        </Button>
-                      )}
+                      {correctResendButton(inv)}
                     </span>
                     <span className="col-start-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-3">
                       <InvoiceStatePill invoice={inv} />
                       <span data-testid="invoice-row-number" className="font-mono text-xs">
-                        {inv.invoiceNumberFormatted}
+                        {t("femme.billing.history.numberShort", { number: inv.invoiceNumberFormatted })}
                       </span>
                       <span data-testid="invoice-row-date">
                         {formatParaguayDateTime(inv.issuedAt, dateLocale)}
@@ -601,8 +622,8 @@ function InvoiceListView({ refreshTrigger, isActive }: { refreshTrigger: number;
                       </span>
                       {inv.sifenSubmittedAt && (
                         <span data-testid="invoice-row-sifen-sent">
-                          {t("femme.billing.history.colSifenSentAt")}:{" "}
-                          {formatParaguayDateTime(inv.sifenSubmittedAt, dateLocale)}
+                          {t("femme.billing.history.sifenShort")}{" "}
+                          {sifenSentLabel(inv.issuedAt, inv.sifenSubmittedAt)}
                         </span>
                       )}
                     </span>
@@ -627,6 +648,7 @@ function InvoiceListView({ refreshTrigger, isActive }: { refreshTrigger: number;
       {selectedInvoiceId !== null && (
         <InvoiceDetailModal
           invoiceId={selectedInvoiceId}
+          onTipsChanged={onTipsChanged}
           onClose={() => setSelectedInvoiceId(null)}
           onVoided={() => {
             setSelectedInvoiceId(null);
@@ -909,6 +931,7 @@ export function BillingHistory({
   invoicesRefresh,
   cashRefresh,
   isActive,
+  onTipsChanged,
 }: {
   view: HistoryView;
   onViewChange: (v: HistoryView) => void;
@@ -916,6 +939,8 @@ export function BillingHistory({
   invoicesRefresh: number;
   cashRefresh: number;
   isActive: boolean;
+  /** HU-73: tips registered/voided from an invoice detail (they move the cash register). */
+  onTipsChanged?: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -947,7 +972,7 @@ export function BillingHistory({
         ))}
       </div>
       {view === "invoices" ? (
-        <InvoiceListView refreshTrigger={invoicesRefresh} isActive={isActive} />
+        <InvoiceListView refreshTrigger={invoicesRefresh} isActive={isActive} onTipsChanged={onTipsChanged} />
       ) : (
         <CashListView refreshTrigger={cashRefresh} />
       )}

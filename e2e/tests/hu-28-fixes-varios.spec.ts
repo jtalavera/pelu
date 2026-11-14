@@ -262,7 +262,7 @@ test.describe("HU-28 · Fixes varios", () => {
     page,
   }) => {
     await loginAsDemo(page);
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     await expect(page.getByTestId("dashboard-summary")).toBeVisible({ timeout: 20_000 });
     await expect(page.locator("[data-tour='dashboard-mini-cal']")).toHaveCount(0);
     await page.getByRole("link", { name: "View agenda →" }).click();

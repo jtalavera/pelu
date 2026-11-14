@@ -1,13 +1,11 @@
 {
   "designSystem": {
-    "dataTable": {
-      "dragReorderColumn": "Drag to reorder column",
-      "columns": "Columns",
-      "visibleColumns": "Visible columns"
-    },
     "modal": {
       "closeDialog": "Close dialog",
       "close": "Close"
+    },
+    "alert": {
+      "close": "Close notice"
     },
     "theme": {
       "switchToLight": "Switch to light mode",
@@ -520,9 +518,10 @@
       "myCommissions": "My commissions",
       "mainLabel": "Main navigation",
       "catalog": "Catalog",
-      "dashboard": "Dashboard",
+      "dashboard": "Overview",
       "calendar": "Agenda",
-      "dashboards": "Summary",
+      "dashboards": "Reports",
+      "today": "Today",
       "services": "Services",
       "products": "Products",
       "professionals": "Professionals",
@@ -1011,24 +1010,12 @@
         "chargedTitle": "Charged",
         "chargedHint": "Already have a comprobante",
         "nowTag": "now",
-        "moreTitle": "More for today",
         "moreRecords": "Today's service records",
         "moreOccupancy": "Occupancy by professional",
-        "moreBirthdays": "Birthdays",
         "moreInactive": "Inactive clients",
         "moreNone": "Nothing right now"
       },
-      "birthdays": {
-        "title": "Birthdays",
-        "subtitle": "Active clients with a birthday today and in the next {{days}} days",
-        "loadError": "Could not load birthdays.",
-        "empty": "No birthdays in the next {{days}} days.",
-        "today": "Today",
-        "upcoming": "Next {{days}} days",
-        "turns": "turns {{count}}",
-        "turns_other": "turns {{count}}"
-      },
-      "title": "Dashboard",
+      "title": "Today",
       "loading": "Loading…",
       "error": "Could not load dashboard.",
       "appointmentsToday": "Appointments today",
@@ -1043,7 +1030,6 @@
       "collected": "Collected",
       "emptyDay": "No appointments yet today.",
       "fiscalAlerts": "Alerts",
-      "fiscalAlertDismiss": "Dismiss alert",
       "alerts": {
         "businessRucMissing": "Add a valid business RUC to issue invoices.",
         "fiscalExpiringSoon": "Your fiscal stamp (timbrado) expires in less than 30 days.",
@@ -1053,9 +1039,6 @@
         "sifenVoidingPending": "You have document numbers pending voiding (inutilización) with SIFEN. Check Settings → SIFEN.",
         "sifenVoidingOverdue": "There are document-number voidings past their SIFEN deadline. Report them under Settings → SIFEN."
       },
-      "greetingMorning": "Good morning",
-      "greetingAfternoon": "Good afternoon",
-      "greetingEvening": "Good evening",
       "newAppointment": "+ New appointment",
       "newServiceRecord": "+ New service record",
       "metricRevenueDay": "Revenue today",
@@ -1148,10 +1131,78 @@
       "noServices": "No services invoiced yet.",
       "paymentMethods": "Payment methods",
       "noPayments": "No payments yet.",
-      "appointmentsByDay": "Appointments by day of the week"
+      "appointmentsByDay": "Appointments by day of the week",
+      "todayOnly": "today's appointments"
+    },
+    "resumen": {
+      "loading": "Loading…",
+      "error": "The overview could not be loaded.",
+      "greeting": "Hello, team!",
+      "subtitle": "Here's how your salon is doing today · {{date}}",
+      "newAppointment": "+ New appointment",
+      "newInvoice": "+ New invoice",
+      "appointments": {
+        "title": "Today's appointments",
+        "pending_one": "{{count}} pending",
+        "pending_other": "{{count}} pending",
+        "confirmed_one": "{{count}} confirmed",
+        "confirmed_other": "{{count}} confirmed",
+        "empty": "No appointments today.",
+        "viewAgenda": "Open agenda →"
+      },
+      "cash": {
+        "title": "Daily cash",
+        "cash": "Cash",
+        "card": "Card",
+        "transfer": "Transfer",
+        "other": "Other",
+        "openedSince": "Open since {{time}}",
+        "openedSinceDate": "Open since {{date}} at {{time}}",
+        "viewCash": "Open cash →",
+        "closedTitle": "Cash register closed",
+        "closedBody": "Open the register to start charging.",
+        "goCash": "Go to Cash →"
+      },
+      "fichas": {
+        "title": "Today's service records",
+        "viewAll": "See all →",
+        "empty": "No service records yet today.",
+        "toCollectIn": "to collect in",
+        "openRecords_one": "{{count}} open record",
+        "openRecords_other": "{{count}} open records",
+        "barLabel": "Today's service records: paid, open and voided",
+        "paid_one": "paid",
+        "paid_other": "paid",
+        "open_one": "open",
+        "open_other": "open",
+        "voided_one": "voided",
+        "voided_other": "voided",
+        "collect": "Collect",
+        "collectFor": "Collect the record of {{client}}",
+        "moreOpen_one": "and {{count}} more open record",
+        "moreOpen_other": "and {{count}} more open records",
+        "olderOpen_one": "{{count}} open from a previous day",
+        "olderOpen_other": "{{count}} open from previous days"
+      },
+      "ago": {
+        "justNow": "just now",
+        "minutes": "{{m}} min ago",
+        "hours": "{{h}} h ago",
+        "hoursMinutes": "{{h}} h {{m}} min ago"
+      },
+      "invoices": {
+        "title": "Invoices",
+        "titleSifen": "Electronic invoices",
+        "emitted": "Issued today",
+        "emittedSifen": "Issued today",
+        "allUpToDate": "All up to date",
+        "needAttention_one": "{{count}} needs attention",
+        "needAttention_other": "{{count}} need attention",
+        "view": "See invoices →"
+      }
     },
     "dashboardsPage": {
-      "pageTitle": "Summary",
+      "pageTitle": "Reports",
       "pageSubtitle": "Business charts and trends at a glance."
     },
     "inactiveClients": {
@@ -1546,11 +1597,22 @@
         "viewHistory": "View full history",
         "refreshing": "Refreshing…",
         "updatedAt": "Updated at {{time}}",
+        "colIssuedAt": "Issued",
         "rowMenu": {
           "email": "Send by email",
-          "emailHint": "To the client's email",
+          "emailHint": "Check the email before sending",
           "viewDetail": "View details",
           "kudeUnavailable": "Not available: no approved KuDE"
+        },
+        "emailDialog": {
+          "title": "Send KuDE by email",
+          "invoiceLine": "Invoice {{number}} · {{date}}",
+          "loading": "Looking up the client's email…",
+          "hintOnFile": "This is the email on file for the client. You can change it for this send only: it does not modify the client.",
+          "hintNone": "This client has no email on file: type one for this send.",
+          "invalid": "Enter a valid email. Example: client@example.com",
+          "send": "Send",
+          "sending": "Sending…"
         },
         "viewHistoryShort": "View history",
         "closedTitle": "The cash register is closed"
@@ -1640,7 +1702,6 @@
         "pendingAsk": "Did the client leave a tip?",
         "none": "No tips",
         "registeredBadge": "{{amount}} registered",
-        "hint": "One per professional who served. They do not change the invoice or its payments: they are recorded in the open cash register.",
         "emptyOpen": "This invoice has no tips registered.",
         "add": "+ Add tip",
         "addAnother": "+ Add another tip",
@@ -1651,8 +1712,6 @@
         "amountLabel": "Tip amount",
         "amountInvalid": "The amount must be greater than 0. Example: 20.000",
         "methodLabel": "How was it paid?",
-        "total": "Total tips (not invoiced)",
-        "cashNote": "Recorded in the open cash register (opened {{date}}). What is collected in cash adds to the expected cash.",
         "noCashTitle": "No cash register is open",
         "noCashBody": "Tips are recorded in the cash register. Open the register to enter them.",
         "goToCash": "Go to Cash",
@@ -1660,10 +1719,12 @@
         "submitting": "Registering…",
         "saved": "Tips registered in the cash register",
         "nothingToSave": "Enter at least one tip.",
+        "cancel": "Cancel",
+        "submitWithTotal": "Register · {{amount}}",
+        "cashNoteShort": "Added to the open cash register.",
         "noServed": "No item has a professional assigned: choose one with «+ Another professional».",
         "atIssuance": "Collected when the invoice was issued",
         "voidedTag": "Voided",
-        "voidedBy": "Voided by {{name}}: «{{reason}}»",
         "void": "Void",
         "voidTitle": "Void tip",
         "voidLead": "The tip stops counting in the cash register and in the professional's balance. It stays visible in Movements as «Voided» and cannot be undone.",
@@ -1837,6 +1898,8 @@
         "colNumber": "Number",
         "colDate": "Invoice date",
         "colSifenSentAt": "Sent to SIFEN",
+        "numberShort": "No. {{number}}",
+        "sifenShort": "SIFEN",
         "colClient": "Client",
         "colTotal": "Total",
         "colStatus": "Status",
@@ -3472,7 +3535,7 @@
       },
       "nav": {
         "sidebar": { "title": "Navigation menu", "content": "This panel lets you move between all the sections of the app." },
-        "dashboard": { "title": "Dashboard", "content": "Your home base — view today's appointments, earnings, and activity at a glance." },
+        "dashboard": { "title": "Overview", "content": "Your starting point: how the salon is doing today at a glance (appointments, cash, service records and invoices)." },
         "calendar": { "title": "Agenda", "content": "Manage appointments by day or week. Book, reschedule, and cancel from here." },
         "catalog": { "title": "Catalog", "content": "Services, products and professionals in one place. Switch between them at the top." },
         "services": { "title": "Services", "content": "Manage the list of services and their prices offered by your salon." },
@@ -3496,7 +3559,6 @@
         "forgotPassword": { "title": "Forgot your password?", "content": "Click here if you can't remember your password — you'll receive instructions to reset it." }
       },
       "dashboard": {
-        "greeting": { "title": "Welcome greeting", "content": "This section shows your name and today's date at a glance." },
         "newAppointment": { "title": "New appointment", "content": "Tap this button to schedule a new appointment for a client right now." },
         "metrics": { "title": "Daily metrics", "content": "Key numbers for today: appointments scheduled, clients served, and revenue collected." },
         "apptList": { "title": "Today's appointments", "content": "The full list of appointments for today, sorted by time. Tap any row to see details." },
@@ -4064,7 +4126,10 @@
       "warningTitle": "Quota",
       "warningBody": "You are approaching the limit of your plan.",
       "destructiveTitle": "Payment failed",
-      "destructiveBody": "Update your billing method and try again."
+      "destructiveBody": "Update your billing method and try again.",
+      "closableTitle": "Closable alert",
+      "closableBody": "With onClose the alert shows a × to close it: it stays until the person closes it.",
+      "closableReset": "Show the alert again"
     },
     "badges": {
       "default": "Default",
@@ -4080,7 +4145,7 @@
       "sam": "Sam Taylor"
     },
     "table": {
-      "hint": "Sort by clicking headers, drag the grip to reorder columns, and use the columns control to show or hide fields (Name stays visible).",
+      "hint": "A single table for the whole product: small uppercase header, 44 px rows, the ⋮ menu in the last column and cards on a phone.",
       "columns": {
         "name": "Name",
         "team": "Team",

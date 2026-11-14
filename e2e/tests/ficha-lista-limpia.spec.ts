@@ -20,6 +20,7 @@ test.describe("Ficha de servicio · lista limpia", () => {
     });
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await page.getByTestId("dashboard-service-record-card").filter({ hasText: new RegExp(clientName, "i") }).first().click({ position: { x: 40, y: 20 } });
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByTestId("service-record-add-line")).toBeVisible({ timeout: 20_000 });
@@ -78,6 +79,7 @@ test.describe("Ficha de servicio · lista limpia", () => {
       tips: [],
     });
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await page.getByTestId("dashboard-service-record-card").filter({ hasText: new RegExp(clientName, "i") }).first().click({ position: { x: 40, y: 20 } });
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByTestId("service-record-more")).toBeVisible({ timeout: 20_000 });

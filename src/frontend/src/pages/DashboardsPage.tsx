@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Alert, Card, Heading, Spinner, Text } from "@design-system";
+import { Alert, Button, Card, DataTable, Heading, Spinner, Text } from "@design-system";
+import { listAppointments } from "../api/appointments";
 import { femmeJson } from "../api/femmeClient";
 import {
   PaymentStack,
@@ -25,6 +27,15 @@ type DashboardsResponse = {
   topServices: Array<{ serviceName: string; revenue: string | number }>;
   paymentMethodMix: Array<{ method: string; amount: string | number }>;
   appointmentsByDayOfWeek: Array<{ dayOfWeek: string; count: number | string }>;
+  /** Active clients with no completed appointment for `inactiveClientsThresholdDays`+ days (top N). */
+  inactiveClients?: Array<{
+    clientId: number;
+    fullName: string;
+    phone: string | null;
+    daysSinceLastVisit: number;
+    lastVisitAt: string;
+  }>;
+  inactiveClientsThresholdDays?: number;
 };
 
 const PERIODS = [7, 30, 90] as const;
@@ -39,20 +50,24 @@ const asNumber = (v: string | number): number => {
 };
 
 /**
- * Resumen (the "Dashboards" charts screen, redesigned): two figures that follow the period, ONE main chart
- * (invoicing, with a 7 / 30 / 90 day period) and everything else folded under "Ver más detalle" as
- * short ranked lists. Tips by professional live in the Propinas screen. Same `/api/dashboard`
- * aggregate as Inicio, asked for the chosen period (`?days=`).
+ * Reportes (the charts screen, redesigned): two figures that follow the period, ONE main chart
+ * (invoicing, with a 7 / 30 / 90 day period) and everything else under "Ver más detalle" (open by
+ * default) as short ranked lists, plus today's occupancy by professional and the inactive clients
+ * (HU-78). Tips by professional live in the Propinas screen. Same `/api/dashboard` aggregate as
+ * Inicio, asked for the chosen period (`?days=`).
  */
 export default function DashboardsPage() {
   const { t, i18n } = useTranslation();
   const locale = getDateLocale(i18n);
+  const navigate = useNavigate();
 
   const [days, setDays] = useState<Period>(30);
   const [data, setData] = useState<DashboardsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [moreOpen, setMoreOpen] = useState(false);
+  // The detail is open when the screen opens (HU-78).
+  const [moreOpen, setMoreOpen] = useState(true);
+  const [todayAppts, setTodayAppts] = useState<Array<{ professionalId: number; professionalName: string }>>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +89,38 @@ export default function DashboardsPage() {
       cancelled = true;
     };
   }, [days, t]);
+
+  // Today's appointments, for the occupancy by professional (it does not follow the period).
+  useEffect(() => {
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
+    const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+    let cancelled = false;
+    listAppointments(from, to)
+      .then((list) => {
+        if (!cancelled) setTodayAppts(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {
+        if (!cancelled) setTodayAppts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const occupancy = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; count: number }>();
+    for (const a of todayAppts) {
+      const e = map.get(a.professionalId);
+      if (e) e.count++;
+      else map.set(a.professionalId, { id: a.professionalId, name: a.professionalName, count: 1 });
+    }
+    return [...map.values()].sort((a, b) => b.count - a.count);
+  }, [todayAppts]);
+  const maxOccupancy = occupancy.length > 0 ? Math.max(...occupancy.map((o) => o.count)) : 1;
+
+  const inactiveClients = Array.isArray(data?.inactiveClients) ? data!.inactiveClients : [];
+  const inactiveThresholdDays = data?.inactiveClientsThresholdDays ?? 60;
 
   const trend = useMemo(() => (Array.isArray(data?.revenueTrend) ? data!.revenueTrend : []), [data]);
   const total = trendTotal(trend);
@@ -245,6 +292,76 @@ export default function DashboardsPage() {
                     </Card>
                   </>
                 )}
+                <Card className="flex flex-col gap-3 p-4 sm:p-6" data-testid="summary-occupancy">
+                  <Heading as="h3" className="text-base">
+                    {t("femme.dashboard.home.moreOccupancy")}{" "}
+                    <span className="text-sm font-semibold text-ink-3">· {t("femme.summary.todayOnly")}</span>
+                  </Heading>
+                  {occupancy.length === 0 ? (
+                    <p className="text-sm text-ink-3">{t("femme.dashboard.noAppts")}</p>
+                  ) : (
+                    occupancy.map((prof) => (
+                      <div
+                        key={prof.id}
+                        data-testid="summary-occupancy-row"
+                        className="flex min-h-9 items-center gap-3 text-sm"
+                      >
+                        <span className="w-32 shrink-0 truncate font-bold text-ink">{prof.name}</span>
+                        <span className="h-2.5 min-w-0 flex-1 rounded-full bg-line">
+                          <span
+                            className="block h-full rounded-full bg-primary"
+                            style={{ width: `${(prof.count / maxOccupancy) * 100}%` }}
+                          />
+                        </span>
+                        <span className="w-20 shrink-0 text-right text-ink-3">
+                          {prof.count} {t("femme.dashboard.occupancyUnit")}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </Card>
+                <Card className="flex flex-col gap-2 p-4 sm:p-6" data-testid="summary-inactive-clients">
+                  <Heading as="h3" className="text-base">
+                    {t("femme.dashboard.home.moreInactive")}
+                  </Heading>
+                  <p className="text-xs text-ink-3">
+                    {t("femme.dashboard.inactiveClientsSubtitle", { days: inactiveThresholdDays })}
+                  </p>
+                  {inactiveClients.length === 0 ? (
+                    <p className="text-sm text-ink-3">{t("femme.dashboard.inactiveClientsEmpty")}</p>
+                  ) : (
+                    <DataTable<(typeof inactiveClients)[number]>
+                      minWidthClassName="min-w-[22rem]"
+                      rows={inactiveClients}
+                      getRowId={(c) => c.clientId}
+                      rowTestId={() => "summary-inactive-client-row"}
+                      onRowClick={(c) => navigate(`/app/clients/${c.clientId}`)}
+                      rowLabel={(c) => c.fullName}
+                      columns={[
+                        { id: "client", header: t("femme.dashboard.inactiveClientsColClient"), cell: (c) => c.fullName },
+                        { id: "phone", header: t("femme.dashboard.inactiveClientsColPhone"), cell: (c) => c.phone ?? "—" },
+                        {
+                          id: "inactivity",
+                          header: t("femme.dashboard.inactiveClientsColInactivity"),
+                          align: "right",
+                          cell: (c) => t("femme.dashboard.inactiveClientsDaysValue", { days: c.daysSinceLastVisit }),
+                        },
+                      ]}
+                    />
+                  )}
+                  {inactiveClients.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-1 self-start"
+                      data-testid="summary-inactive-clients-view-all"
+                      onClick={() => navigate("/app/inactive-clients")}
+                    >
+                      {t("femme.dashboard.inactiveClientsViewAll")}
+                    </Button>
+                  )}
+                </Card>
               </div>
             )}
           </>

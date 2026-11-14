@@ -512,7 +512,7 @@ describe("PropinasPage", () => {
       expect(within(voidedRow).getByTestId("propinas-voided-tag")).toBeTruthy();
       // Simple table: the voided tip says only «Manual tip» + «Voided»; the reason is a tooltip.
       expect(voidedRow.textContent).not.toMatch(/Monto mal cargado/);
-      expect(voidedRow.querySelector("td[title]")?.getAttribute("title")).toMatch(/Monto mal cargado/);
+      expect(voidedRow.getAttribute("title")).toMatch(/Monto mal cargado/);
       // A voided tip has no actions left.
       expect(within(voidedRow).queryByRole("button")).toBeNull();
 
@@ -599,7 +599,7 @@ describe("PropinasPage", () => {
       const voidedRow = lateRows.find((r) => r.getAttribute("data-voided") === "true")!;
 
       // The detail (tooltip) says it was collected after issuing, how, the invoice and who entered it.
-      const tooltip = liveRow.querySelector("td[title]")?.getAttribute("title") ?? "";
+      const tooltip = liveRow.getAttribute("title") ?? "";
       expect(tooltip).toMatch(/Collected after issuing/);
       expect(tooltip).toMatch(/Debit card · Visa/);
       expect(tooltip).toMatch(/#0000126/);
@@ -607,7 +607,7 @@ describe("PropinasPage", () => {
 
       // A voided one is flagged, explained in its tooltip and has no actions left.
       expect(within(voidedRow).getByTestId("propinas-voided-tag")).toBeTruthy();
-      expect(voidedRow.querySelector("td[title]")?.getAttribute("title")).toMatch(/Monto mal cargado/);
+      expect(voidedRow.getAttribute("title")).toMatch(/Monto mal cargado/);
       expect(within(voidedRow).queryByRole("button")).toBeNull();
 
       // The live one only offers «Void»: it moved money in the cash register, so it is not editable.

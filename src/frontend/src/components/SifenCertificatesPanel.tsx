@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Spinner, Text } from "@design-system";
+import { Alert, Button, DataTable, Spinner, Text } from "@design-system";
 import {
   listSifenCertificates,
   uploadSifenCertificate,
@@ -20,8 +20,6 @@ import {
   sectionCardStyle,
   sectionTitleStyle,
   tableWrapStyle,
-  tdStyle,
-  thStyle,
 } from "./sifenFormStyles";
 
 function stripDataUrlPrefix(dataUrl: string): string {
@@ -282,28 +280,18 @@ export function SifenCertificatesPanel({ tenantId }: { tenantId?: number }) {
           </div>
         ) : (
           <div style={tableWrapStyle}>
-            <div className="overflow-x-auto">
-              <table className="min-w-full" style={{ borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>{t("femme.sifenCertificates.colUploadedAt")}</th>
-                    <th style={thStyle}>{t("femme.sifenCertificates.colNotBefore")}</th>
-                    <th style={thStyle}>{t("femme.sifenCertificates.colNotAfter")}</th>
-                    <th style={thStyle}>{t("femme.sifenCertificates.colStatus")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id} data-testid="sifen-certificate-row">
-                      <td style={tdStyle}>{fmtDate(row.uploadedAt)}</td>
-                      <td style={tdStyle}>{fmtDate(row.notBefore)}</td>
-                      <td style={tdStyle}>{fmtDate(row.notAfter)}</td>
-                      <td style={tdStyle}>{statusBadge(row.status)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <DataTable<(typeof rows)[number]>
+              className="px-2"
+              rows={rows}
+              getRowId={(row) => row.id}
+              rowTestId={() => "sifen-certificate-row"}
+              columns={[
+                { id: "uploadedAt", header: t("femme.sifenCertificates.colUploadedAt"), cell: (row) => fmtDate(row.uploadedAt) },
+                { id: "notBefore", header: t("femme.sifenCertificates.colNotBefore"), cell: (row) => fmtDate(row.notBefore) },
+                { id: "notAfter", header: t("femme.sifenCertificates.colNotAfter"), cell: (row) => fmtDate(row.notAfter) },
+                { id: "status", header: t("femme.sifenCertificates.colStatus"), cell: (row) => statusBadge(row.status) },
+              ]}
+            />
           </div>
         )}
       </section>

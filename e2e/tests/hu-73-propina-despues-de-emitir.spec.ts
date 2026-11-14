@@ -148,7 +148,8 @@ test("AC1-3 · «Comprobante emitido»: la solapa llega plegada y resaltada; las
   await page.getByTestId("invoice-tips-submit").click();
   await expect(extra.getByText("Select the card brand.")).toBeVisible();
   await extra.getByLabel("Card brand").selectOption("VISA");
-  await expect(page.getByTestId("invoice-tips-entered-total")).toHaveText("15.000");
+  // The total typed so far is on the submit button.
+  await expect(page.getByTestId("invoice-tips-submit")).toHaveText("Register · 15.000");
 
   await page.getByTestId("invoice-tips-submit").click();
 
@@ -205,6 +206,108 @@ test("AC3 · la caja muestra las propinas en «Cobros por método» y en «Movim
   await expect(tipRows.first()).toContainText(w.ana.name);
   await expect(tipRows.first().getByTestId("cash-late-tip-amount")).toHaveText("+Gs. 10.000");
   await expect(tipRows.nth(1).getByTestId("cash-late-tip-amount")).toHaveText("Gs. 5.000");
+});
+
+/** Opens the cash register panel (chip) and returns it; the figures are the ones it shows right now. */
+async function openCashPanel(page: Page) {
+  await page.getByTestId("billing-cash-chip").click();
+  const panel = page.getByTestId("billing-cash-panel");
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+test("AC3 · la caja se actualiza al instante con la propina registrada desde el detalle del comprobante de hoy", async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  const inv = await invoiceByAna(request);
+  await loginAdminUi(page, w);
+  await page.goto("/app/billing");
+  await goToBillingHome(page);
+
+  // The register is opened first (its figures get loaded), then closed again.
+  const before = Number((await cashDetail(request)).expectedCashAmount);
+  let panel = await openCashPanel(page);
+  await expect(panel.getByTestId("cash-summary-expected-cash")).toHaveText(new RegExp(`^Gs\\. ${before.toLocaleString("es-PY")}$`));
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+
+  // The tip is registered from the invoice detail, which stays open on top of the home.
+  await page.getByTestId(`billing-today-row-${inv.id}`).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await openTipsTab(page);
+  await page.getByTestId("invoice-tips-open-form").click();
+  const row = page.getByTestId("invoice-tips-row").first();
+  await row.getByLabel(/Tip amount/).fill("10000");
+  await row.getByLabel(/How was it paid/).selectOption("CASH");
+  await page.getByTestId("invoice-tips-submit").click();
+  await expect(page.getByTestId("invoice-tips-badge")).toHaveText("10.000 registered");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  // The register shows it right away, without reloading the page or doing anything else.
+  panel = await openCashPanel(page);
+  await expect(panel.getByTestId("cash-summary-expected-cash")).toHaveText(
+    new RegExp(`^Gs\\. ${(before + 10000).toLocaleString("es-PY")}$`),
+  );
+  await panel.getByTestId("cash-section-movements").click();
+  const tipRows = panel.getByTestId("cash-late-tip-row");
+  await expect(tipRows).toHaveCount(1);
+  await expect(tipRows.first()).toContainText("Tip collected");
+  await expect(tipRows.first().getByTestId("cash-late-tip-amount")).toHaveText("+Gs. 10.000");
+});
+
+test("AC3 · idem al registrar la propina desde «Comprobante emitido»: al volver al inicio la caja ya la tiene", async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(120_000);
+  await loginAdminUi(page, w);
+  await issueThroughUi(page);
+  await openTipsTab(page);
+  await page.getByTestId("invoice-tips-row").first().getByLabel(/Tip amount/).fill("10000");
+  await page.getByTestId("invoice-tips-submit").click();
+  await expect(page.getByTestId("invoice-tips-badge")).toHaveText("10.000 registered");
+
+  await page.getByTestId("billing-success-back").click();
+  await expect(page.getByTestId("billing-cash-chip")).toBeVisible();
+  const expected = Number((await cashDetail(request)).expectedCashAmount);
+  const panel = await openCashPanel(page);
+  await expect(panel.getByTestId("cash-summary-expected-cash")).toHaveText(new RegExp(`^Gs\\. ${expected.toLocaleString("es-PY")}$`));
+  await panel.getByTestId("cash-section-movements").click();
+  await expect(panel.getByTestId("cash-late-tip-row")).toHaveCount(1);
+});
+
+test("AC9 · la caja también se actualiza al anular la propina desde el detalle", async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const inv = await invoiceByAna(request);
+  await addTipApi(request, inv.id, [{ professionalId: w.ana.id, amount: 10000, paymentMethod: "CASH" }]);
+  const tipId = (await invoiceTips(request, inv.id)).items.find((i) => i.source === "LATE")!.id!;
+  await loginAdminUi(page, w);
+  await page.goto("/app/billing");
+  await goToBillingHome(page);
+
+  // The register is loaded with the tip counted…
+  let panel = await openCashPanel(page);
+  await expect(panel.getByTestId("cash-section-movements")).toContainText("1");
+  await page.keyboard.press("Escape");
+
+  // …and voiding it from the detail takes it out right away.
+  await page.getByTestId(`billing-today-row-${inv.id}`).click();
+  await openTipsTab(page);
+  await page.getByTestId(`invoice-tip-void-${tipId}`).click();
+  await page.getByTestId("late-tip-void-reason").fill("Monto mal cargado");
+  await page.getByTestId("late-tip-void-confirm").click();
+  await expect(page.getByTestId(`invoice-tip-${tipId}`)).toContainText("Voided");
+  await page.keyboard.press("Escape");
+
+  const expected = Number((await cashDetail(request)).expectedCashAmount);
+  panel = await openCashPanel(page);
+  await expect(panel.getByTestId("cash-summary-expected-cash")).toHaveText(new RegExp(`^Gs\\. ${expected.toLocaleString("es-PY")}$`));
+  await panel.getByTestId("cash-section-movements").click();
+  const voidedRow = panel.getByTestId("cash-late-tip-row");
+  await expect(voidedRow).toHaveAttribute("data-voided", "true");
 });
 
 test("AC4 · sin caja abierta se avisa, el formulario queda deshabilitado y «Ir a Caja» cierra el detalle", async ({
@@ -292,7 +395,7 @@ test("AC5-7 · el detalle muestra la misma solapa (neutra), se agrega desde ahí
     .first();
   await expect(movement).toBeVisible({ timeout: 20_000 });
   await expect(movement).toContainText("7.000");
-  const tooltip = (await movement.locator("[title]").first().getAttribute("title")) ?? "";
+  const tooltip = (await movement.getAttribute("title")) ?? "";
   expect(tooltip).toContain("Collected after issuing");
   expect(tooltip).toContain("Transfer");
 });
@@ -324,7 +427,8 @@ test("AC9 · el administrador anula desde el detalle con motivo: queda «Anulada
   await expect(page.getByTestId("late-tip-void-dialog")).toHaveCount(0);
   const tip = page.getByTestId(`invoice-tip-${tipId}`);
   await expect(tip).toContainText("Voided");
-  await expect(tip).toContainText("«Monto mal cargado»");
+  // The list only says «Voided»: no who and no reason (HU-75).
+  await expect(tip).not.toContainText("Monto mal cargado");
   await expect(page.getByTestId("invoice-tips-notice")).toContainText("Tip voided");
   await expect(page.getByTestId(`invoice-tip-void-${tipId}`)).toHaveCount(0);
   await expect(page.getByTestId("invoice-tips")).toHaveAttribute("data-state", "none");

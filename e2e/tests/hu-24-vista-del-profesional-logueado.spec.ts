@@ -85,6 +85,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await setupProfessionalWithAccess(base, `E2E Login ${Date.now()}`, email, "ValidPass1!");
 
     await loginAs(page, email, "ValidPass1!");
+    await page.goto("/app/hoy");
     // A professional lands on the Inicio (open fichas of the day); her calendar is in the menu.
     await expect(page).toHaveURL(/\/app\/?$/);
     await expect(page.getByTestId("professional-home")).toBeVisible();
@@ -177,6 +178,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     const profId = await setupProfessionalWithAccess(base, `E2E NoProf ${Date.now()}`, email, "ValidPass1!");
 
     await loginAs(page, email, "ValidPass1!");
+    await page.goto("/app/hoy");
     // She lands on the Inicio; open her calendar (AppShell rendered with the role loaded).
     await page.getByRole("link", { name: "Agenda" }).click();
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
@@ -210,12 +212,13 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
     await setupProfessionalWithAccess(base, `E2E NoAdmin ${Date.now()}`, email, "ValidPass1!");
 
     await loginAs(page, email, "ValidPass1!");
+    await page.goto("/app/hoy");
     // She lands on the Inicio; open her calendar (AppShell rendered with the role loaded).
     await page.getByRole("link", { name: "Agenda" }).click();
     await expect(page.getByRole("button", { name: /today/i })).toBeVisible();
-    // The Inicio (the "Dashboard" item) is hers; Summary, Settings and Billing are not.
-    await expect(page.getByRole("link", { name: /^dashboard$/i })).toBeVisible();
-    await expect(page.getByRole("link", { name: /^summary$/i })).toHaveCount(0);
+    // The Inicio (the "Today" item) is hers; Overview, Reports, Settings and Billing are not.
+    await expect(page.getByRole("link", { name: /^today$/i })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^(overview|reports)$/i })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /^(settings|business settings)$/i })).not.toBeVisible();
     await expect(page.getByRole("link", { name: /^billing$/i })).not.toBeVisible();
     // Issue #38 follow-up: no Stock for professionals.
@@ -228,7 +231,7 @@ test.describe("HU-24 · Vista del profesional logueado", () => {
       await expect(page).toHaveURL(/\/app\/?$/);
     }
     // /app itself is her Inicio (not the admin dashboard).
-    await page.goto("/app");
+    await page.goto("/app/hoy");
     await expect(page.getByTestId("professional-home")).toBeVisible();
     await expect(page.getByTestId("dashboard-more")).toHaveCount(0);
 

@@ -5,12 +5,6 @@ import { appShellSteps } from "./appShell";
 export const dashboardSteps: FemmeTourStepDef[] = [
   ...appShellSteps,
   {
-    target: "[data-tour='dashboard-greeting']",
-    titleKey: "femme.tour.dashboard.greeting.title",
-    contentKey: "femme.tour.dashboard.greeting.content",
-    placement: "bottom",
-  },
-  {
     target: "[data-tour='dashboard-new-appointment']",
     titleKey: "femme.tour.dashboard.newAppointment.title",
     contentKey: "femme.tour.dashboard.newAppointment.content",

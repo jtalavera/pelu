@@ -110,7 +110,7 @@ test.describe("Issue #198 · Ajustes mínimos", () => {
 
     // The "Ver" button was removed — the whole row is the affordance now.
     await expect(page.getByTestId(`billing-today-view-${inv.id}`)).toHaveCount(0);
-    await expect(row).toHaveAttribute("role", "button");
+    await expect(row).toHaveAttribute("tabindex", "0");
 
     await row.click();
     const dialog = page.getByRole("dialog");

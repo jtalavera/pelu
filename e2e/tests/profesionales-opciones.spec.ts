@@ -38,6 +38,7 @@ test.describe("Ficha de servicio · carga rápida de profesionales", () => {
     expect(created.ok(), await created.text()).toBeTruthy();
 
     await loginAsDemo(page);
+    await page.goto("/app/hoy");
     await expect(page.getByTestId("dashboard-service-record-card").first()).toBeVisible({ timeout: 20_000 });
     // Only what is requested from here on counts (Inicio's own load is already done).
     const starts: { record?: number; professionals?: number } = {};

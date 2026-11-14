@@ -68,7 +68,8 @@ export async function loginAsDemo(page: Page) {
   const loginResp = await loginPromise;
   expect(loginResp.ok(), `login failed (${loginResp.status()}): ${loginResp.statusText()}`).toBeTruthy();
   await expect(page).toHaveURL(/\/app/, { timeout: 25_000 });
-  await expect(page.getByTestId("dashboard-summary-appointments")).toBeVisible({
+  // The admin lands on «Resumen» (HU-77).
+  await expect(page.getByTestId("resumen-title")).toBeVisible({
     timeout: 20_000,
   });
 }

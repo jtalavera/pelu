@@ -33,6 +33,7 @@ test("detalle de la ficha: agregar servicio punteado al final y propinas una deb
   expect(ficha.id).toBeGreaterThan(0);
 
   await loginAsDemo(page);
+  await page.goto("/app/hoy");
   const card = page.getByTestId("dashboard-service-record-card").filter({ hasText: client.fullName });
   await expect(card).toBeVisible({ timeout: 20_000 });
   await card.click({ position: { x: 40, y: 20 } });
@@ -85,6 +86,7 @@ test("detalle de la ficha: ya no hay servicios frecuentes (ni se piden al abrir)
   });
 
   await loginAsDemo(page);
+  await page.goto("/app/hoy");
   const card = page.getByTestId("dashboard-service-record-card").filter({ hasText: client.fullName });
   await expect(card).toBeVisible({ timeout: 20_000 });
   const requested: string[] = [];
@@ -148,6 +150,7 @@ test("Inicio: los títulos «Turnos de hoy» y «Fichas de servicio de hoy» van
   await apiPostJson(request, admin, `/api/appointments/${turno.id}/service-record`, {});
 
   await loginAsDemo(page);
+  await page.goto("/app/hoy");
   const apptSection = page.locator('[data-tour="dashboard-appt-list"]');
   const apptTitle = apptSection.getByRole("heading", { name: "Today's appointments" });
   await expect(apptTitle).toBeVisible({ timeout: 20_000 });

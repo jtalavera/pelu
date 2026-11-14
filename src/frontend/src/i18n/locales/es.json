@@ -1,13 +1,11 @@
 {
   "designSystem": {
-    "dataTable": {
-      "dragReorderColumn": "Arrastrar para reordenar columna",
-      "columns": "Columnas",
-      "visibleColumns": "Columnas visibles"
-    },
     "modal": {
       "closeDialog": "Cerrar diálogo",
       "close": "Cerrar"
+    },
+    "alert": {
+      "close": "Cerrar aviso"
     },
     "theme": {
       "switchToLight": "Cambiar a modo claro",
@@ -520,9 +518,10 @@
       "myCommissions": "Mis comisiones",
       "mainLabel": "Navegación principal",
       "catalog": "Catálogo",
-      "dashboard": "Panel",
+      "dashboard": "Resumen",
       "calendar": "Agenda",
-      "dashboards": "Resumen",
+      "dashboards": "Reportes",
+      "today": "Hoy",
       "services": "Servicios",
       "products": "Productos",
       "professionals": "Profesionales",
@@ -1011,24 +1010,12 @@
         "chargedTitle": "Cobrados",
         "chargedHint": "Ya tienen comprobante",
         "nowTag": "ahora",
-        "moreTitle": "Más del día",
         "moreRecords": "Fichas de hoy",
         "moreOccupancy": "Ocupación por profesional",
-        "moreBirthdays": "Cumpleaños",
         "moreInactive": "Clientes inactivos",
         "moreNone": "Nada por ahora"
       },
-      "birthdays": {
-        "title": "Cumpleaños",
-        "subtitle": "Clientes activas que cumplen años hoy y en los próximos {{days}} días",
-        "loadError": "No se pudieron cargar los cumpleaños.",
-        "empty": "No hay cumpleaños en los próximos {{days}} días.",
-        "today": "Hoy",
-        "upcoming": "Próximos {{days}} días",
-        "turns": "cumple {{count}} año",
-        "turns_other": "cumple {{count}} años"
-      },
-      "title": "Panel",
+      "title": "Hoy",
       "loading": "Cargando…",
       "error": "No se pudo cargar el panel.",
       "appointmentsToday": "Turnos de hoy",
@@ -1043,7 +1030,6 @@
       "collected": "Cobrado",
       "emptyDay": "Aún no hay turnos hoy.",
       "fiscalAlerts": "Alertas",
-      "fiscalAlertDismiss": "Cerrar alerta",
       "alerts": {
         "businessRucMissing": "Agregá un RUC de negocio válido para emitir facturas.",
         "fiscalExpiringSoon": "El timbrado fiscal vence en menos de 30 días.",
@@ -1053,9 +1039,6 @@
         "sifenVoidingPending": "Tenés inutilizaciones de numeración pendientes de reportar a SIFEN. Revisá Configuración → SIFEN.",
         "sifenVoidingOverdue": "Hay inutilizaciones de numeración vencidas sin reportar a SIFEN. Reportalas en Configuración → SIFEN."
       },
-      "greetingMorning": "Buenos días",
-      "greetingAfternoon": "Buenas tardes",
-      "greetingEvening": "Buenas noches",
       "newAppointment": "+ Nuevo turno",
       "newServiceRecord": "+ Nueva ficha",
       "metricRevenueDay": "Ingresos del día",
@@ -1148,10 +1131,78 @@
       "noServices": "Todavía no hay servicios facturados.",
       "paymentMethods": "Medios de pago",
       "noPayments": "Todavía no hay cobros.",
-      "appointmentsByDay": "Turnos por día de la semana"
+      "appointmentsByDay": "Turnos por día de la semana",
+      "todayOnly": "turnos de hoy"
+    },
+    "resumen": {
+      "loading": "Cargando…",
+      "error": "No se pudo cargar el resumen.",
+      "greeting": "¡Hola, equipo!",
+      "subtitle": "Así va tu salón hoy · {{date}}",
+      "newAppointment": "+ Nuevo turno",
+      "newInvoice": "+ Nueva factura",
+      "appointments": {
+        "title": "Turnos de hoy",
+        "pending_one": "{{count}} pendiente",
+        "pending_other": "{{count}} pendientes",
+        "confirmed_one": "{{count}} confirmado",
+        "confirmed_other": "{{count}} confirmados",
+        "empty": "No hay turnos para hoy.",
+        "viewAgenda": "Ver agenda →"
+      },
+      "cash": {
+        "title": "Caja del día",
+        "cash": "Efectivo",
+        "card": "Tarjeta",
+        "transfer": "Transferencia",
+        "other": "Otros",
+        "openedSince": "Abierta desde las {{time}}",
+        "openedSinceDate": "Abierta desde el {{date}} a las {{time}}",
+        "viewCash": "Ver caja →",
+        "closedTitle": "Caja cerrada",
+        "closedBody": "Abrí la caja para empezar a cobrar.",
+        "goCash": "Ir a Caja →"
+      },
+      "fichas": {
+        "title": "Fichas de hoy",
+        "viewAll": "Ver todas →",
+        "empty": "Todavía no hay fichas hoy.",
+        "toCollectIn": "por cobrar en",
+        "openRecords_one": "{{count}} ficha abierta",
+        "openRecords_other": "{{count}} fichas abiertas",
+        "barLabel": "Fichas de hoy: cobradas, abiertas y anuladas",
+        "paid_one": "cobrada",
+        "paid_other": "cobradas",
+        "open_one": "abierta",
+        "open_other": "abiertas",
+        "voided_one": "anulada",
+        "voided_other": "anuladas",
+        "collect": "Cobrar",
+        "collectFor": "Cobrar la ficha de {{client}}",
+        "moreOpen_one": "y {{count}} ficha abierta más",
+        "moreOpen_other": "y {{count}} fichas abiertas más",
+        "olderOpen_one": "{{count}} abierta de un día anterior",
+        "olderOpen_other": "{{count}} abiertas de días anteriores"
+      },
+      "ago": {
+        "justNow": "hace un momento",
+        "minutes": "hace {{m}} min",
+        "hours": "hace {{h}} h",
+        "hoursMinutes": "hace {{h}} h {{m}} min"
+      },
+      "invoices": {
+        "title": "Comprobantes",
+        "titleSifen": "Factura electrónica",
+        "emitted": "Emitidos hoy",
+        "emittedSifen": "Emitidas hoy",
+        "allUpToDate": "Todas al día",
+        "needAttention_one": "{{count}} requiere atención",
+        "needAttention_other": "{{count}} requieren atención",
+        "view": "Ver comprobantes →"
+      }
     },
     "dashboardsPage": {
-      "pageTitle": "Resumen",
+      "pageTitle": "Reportes",
       "pageSubtitle": "Gráficos y tendencias del negocio de un vistazo."
     },
     "inactiveClients": {
@@ -1546,11 +1597,22 @@
         "viewHistory": "Ver historial completo",
         "refreshing": "Actualizando…",
         "updatedAt": "Actualizado a las {{time}}",
+        "colIssuedAt": "Emisión",
         "rowMenu": {
           "email": "Enviar por correo",
-          "emailHint": "Al correo del cliente",
+          "emailHint": "Revisá el correo antes de enviar",
           "viewDetail": "Ver detalle",
           "kudeUnavailable": "No disponible: sin KuDE aprobado"
+        },
+        "emailDialog": {
+          "title": "Enviar KuDE por correo",
+          "invoiceLine": "Comprobante {{number}} · {{date}}",
+          "loading": "Buscando el correo del cliente…",
+          "hintOnFile": "Es el correo cargado en el cliente. Podés cambiarlo solo para este envío: no modifica al cliente.",
+          "hintNone": "Este cliente no tiene correo cargado: escribilo para este envío.",
+          "invalid": "Ingresá un correo válido. Ejemplo: cliente@ejemplo.com",
+          "send": "Enviar",
+          "sending": "Enviando…"
         },
         "viewHistoryShort": "Ver historial",
         "closedTitle": "La caja está cerrada"
@@ -1640,7 +1702,6 @@
         "pendingAsk": "¿El cliente dejó propina?",
         "none": "Sin propinas",
         "registeredBadge": "{{amount}} registradas",
-        "hint": "Una por profesional que atendió. No modifican la factura ni sus pagos: se registran en la caja abierta.",
         "emptyOpen": "Este comprobante no tiene propinas registradas.",
         "add": "+ Agregar propina",
         "addAnother": "+ Agregar otra propina",
@@ -1651,8 +1712,6 @@
         "amountLabel": "Monto de la propina",
         "amountInvalid": "El monto debe ser mayor a 0. Ejemplo: 20.000",
         "methodLabel": "¿Cómo se pagó?",
-        "total": "Total de propinas (no facturable)",
-        "cashNote": "Se registran en la caja abierta (abierta el {{date}}). Lo cobrado en efectivo suma al efectivo esperado.",
         "noCashTitle": "No hay caja abierta",
         "noCashBody": "Las propinas se registran en la caja. Abrí la caja para poder cargarlas.",
         "goToCash": "Ir a Caja",
@@ -1660,10 +1719,12 @@
         "submitting": "Registrando…",
         "saved": "Propinas registradas en la caja",
         "nothingToSave": "Ingresá al menos una propina.",
+        "cancel": "Cancelar",
+        "submitWithTotal": "Registrar · {{amount}}",
+        "cashNoteShort": "Se suma a la caja abierta.",
         "noServed": "Ningún ítem tiene profesional asignada: elegí una con «+ Otra profesional».",
         "atIssuance": "Cobrada al emitir el comprobante",
         "voidedTag": "Anulada",
-        "voidedBy": "Anulada por {{name}}: «{{reason}}»",
         "void": "Anular",
         "voidTitle": "Anular propina",
         "voidLead": "La propina deja de contar en la caja y en el acumulado de la profesional. Queda visible en Movimientos como «Anulada» y no se puede deshacer.",
@@ -1837,6 +1898,8 @@
         "colNumber": "Número",
         "colDate": "Fecha factura",
         "colSifenSentAt": "Enviado a SIFEN",
+        "numberShort": "N.º {{number}}",
+        "sifenShort": "SIFEN",
         "colClient": "Cliente",
         "colTotal": "Total",
         "colStatus": "Estado",
@@ -3472,7 +3535,7 @@
       },
       "nav": {
         "sidebar": { "title": "Menú de navegación", "content": "Este panel te permite moverte entre todas las secciones de la app." },
-        "dashboard": { "title": "Panel de inicio", "content": "Tu punto de partida: ves los turnos de hoy, los ingresos y la actividad reciente de un vistazo." },
+        "dashboard": { "title": "Resumen", "content": "Tu punto de partida: cómo va el salón hoy, de un vistazo (turnos, caja, fichas y facturas)." },
         "calendar": { "title": "Agenda", "content": "Gestioná los turnos por día o semana. Reservá, reprogramá y cancelá desde aquí." },
         "catalog": { "title": "Catálogo", "content": "Servicios, productos y profesionales en un solo lugar. Cambiá de uno a otro arriba." },
         "services": { "title": "Servicios", "content": "Administrá el catálogo de servicios y precios que ofrece tu salón." },
@@ -3496,7 +3559,6 @@
         "forgotPassword": { "title": "¿Olvidaste tu contraseña?", "content": "Hacé clic aquí si no recordás tu contraseña — recibirás instrucciones para restablecerla." }
       },
       "dashboard": {
-        "greeting": { "title": "Saludo de bienvenida", "content": "Esta sección muestra tu nombre y la fecha de hoy de un vistazo." },
         "newAppointment": { "title": "Nuevo turno", "content": "Tocá este botón para reservar un nuevo turno para un cliente ahora mismo." },
         "metrics": { "title": "Métricas del día", "content": "Cifras clave de hoy: turnos programados, clientes atendidos e ingresos cobrados." },
         "apptList": { "title": "Turnos de hoy", "content": "La lista completa de turnos del día, ordenada por hora. Tocá cualquier fila para ver los detalles." },
@@ -4064,7 +4126,10 @@
       "warningTitle": "Cuota",
       "warningBody": "Te estás acercando al límite de tu plan.",
       "destructiveTitle": "Pago fallido",
-      "destructiveBody": "Actualiza tu método de facturación e inténtalo de nuevo."
+      "destructiveBody": "Actualiza tu método de facturación e inténtalo de nuevo.",
+      "closableTitle": "Aviso con ×",
+      "closableBody": "Con onClose el aviso muestra una × para cerrarlo: se queda hasta que la persona lo cierra.",
+      "closableReset": "Mostrar el aviso de nuevo"
     },
     "badges": {
       "default": "Predeterminado",
@@ -4080,7 +4145,7 @@
       "sam": "Sam Taylor"
     },
     "table": {
-      "hint": "Ordena haciendo clic en los encabezados, arrastra el asa para reordenar columnas y usa el control de columnas para mostrar u ocultar campos (Nombre permanece visible).",
+      "hint": "Una sola tabla para todo el producto: encabezado en mayúsculas pequeñas, filas de 44 px, menú ⋮ en la última columna y tarjetas en el celular.",
       "columns": {
         "name": "Nombre",
         "team": "Equipo",
