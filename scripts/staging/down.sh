@@ -82,7 +82,13 @@ if [[ -n "$KV_NAME" && -n "$(az keyvault list-deleted --query "[?name=='$KV_NAME
   warn "vault $KV_NAME is still soft-deleted (purge it: az keyvault purge --name $KV_NAME)"
   fail=1
 fi
-leftover="$(az sql db list -g "$PROD_RG" --subscription "$PROD_SUBSCRIPTION_ID" --query "[?starts_with(name, 'femme_app_db_stgcopy')].name" -o tsv 2>/dev/null || true)"
+PROD_SERVER="$(az sql server list -g "$PROD_RG" --subscription "$PROD_SUBSCRIPTION_ID" --query '[0].name' -o tsv 2>/dev/null || true)"
+leftover=""
+if [[ -n "$PROD_SERVER" ]]; then
+  leftover="$(az sql db list -g "$PROD_RG" -s "$PROD_SERVER" --subscription "$PROD_SUBSCRIPTION_ID" --query "[?starts_with(name, 'femme_app_db_stgcopy')].name" -o tsv)"
+else
+  warn "could not read the prod SQL server — check by hand that no femme_app_db_stgcopy_* copy is left in $PROD_RG"
+fi
 if [[ -n "$leftover" ]]; then
   warn "temporary prod PITR copy still exists: $leftover (scripts/staging/export-prod-snapshot.sh normally deletes it)"
   fail=1
