@@ -63,6 +63,30 @@ export default function MyCommissionsPage() {
         </span>
       </section>
 
+      {summary.aguinaldoEnabled && (
+        <section
+          className="flex flex-col gap-1 rounded-card border border-warning/35 bg-warning-lt p-4 shadow-sm sm:p-5"
+          data-testid="my-commissions-aguinaldo"
+        >
+          <span className="flex items-baseline justify-between gap-3 text-sm text-warning">
+            {t("femme.commissions.my.retained")}
+            <b className="tabular-nums" data-testid="my-commissions-retained">
+              {formatGuaraniesGs(summary.currentPeriodRetention)}
+            </b>
+          </span>
+          <span className="text-sm text-warning">{t("femme.commissions.my.aguinaldoBalance")}</span>
+          <b className="font-heading text-2xl tabular-nums text-warning" data-testid="my-commissions-aguinaldo-balance">
+            {formatGuaraniesGs(summary.aguinaldoBalance)}
+          </b>
+          <span className="text-xs text-warning">{t("femme.commissions.my.aguinaldoHelp")}</span>
+        </section>
+      )}
+      {summary.currentPeriodFixed !== 0 && (
+        <p className="px-0.5 text-sm text-ink-3" data-testid="my-commissions-product-cost">
+          {t("femme.commissions.my.productCost")}: <b className="tabular-nums text-ink">{formatGuaraniesGs(summary.currentPeriodFixed)}</b>
+        </p>
+      )}
+
       <h2 className={sectionTitle}>{t("femme.commissions.my.entriesTitle")}</h2>
       <div className="rounded-card border border-line bg-surface shadow-sm">
         {summary.currentPeriodEntries.length === 0 ? (
@@ -84,6 +108,12 @@ export default function MyCommissionsPage() {
                     {formatParaguayDateTime(e.accrualAt, dateLocale)} · {formatGuaraniesGs(e.baseAmount)} ×{" "}
                     {formatPercent(e.percentApplied)}
                     {e.baseType ? ` · ${t(`femme.commissions.baseShort.${e.baseType}`)}` : ""}
+                    {e.fixedToProfessional && e.fixedAmount !== 0
+                      ? ` · ${t("femme.commissions.my.includesProductCost", { amount: formatGuaraniesGs(e.fixedAmount) })}`
+                      : ""}
+                    {e.retentionAmount !== 0
+                      ? ` · ${t("femme.commissions.my.retentionLine", { amount: formatGuaraniesGs(e.retentionAmount) })}`
+                      : ""}
                   </div>
                 </div>
                 <span className="text-right font-heading font-extrabold tabular-nums text-ink">
@@ -162,6 +192,12 @@ export default function MyCommissionsPage() {
                     </span>
                     <span className="block text-ink-3">
                       {formatGuaraniesGs(e.baseAmount)} × {formatPercent(e.percentApplied)}
+                      {e.fixedToProfessional && e.fixedAmount !== 0
+                        ? ` · ${t("femme.commissions.my.includesProductCost", { amount: formatGuaraniesGs(e.fixedAmount) })}`
+                        : ""}
+                      {e.retentionAmount !== 0
+                        ? ` · ${t("femme.commissions.my.retentionLine", { amount: formatGuaraniesGs(e.retentionAmount) })}`
+                        : ""}
                     </span>
                   </span>
                   <b className="tabular-nums">{formatGuaraniesGs(e.commissionAmount)}</b>

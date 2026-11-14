@@ -2,6 +2,7 @@ package com.cursorpoc.backend.commission;
 
 import com.cursorpoc.backend.domain.CommissionEntry;
 import com.cursorpoc.backend.domain.CommissionSettlement;
+import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.enums.CommissionBaseType;
 import com.cursorpoc.backend.domain.enums.CommissionEntrySource;
 import com.cursorpoc.backend.domain.enums.CommissionSettlementStatus;
@@ -10,6 +11,7 @@ import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.repository.CommissionConfigVersionRepository;
 import com.cursorpoc.backend.repository.CommissionEntryRepository;
 import com.cursorpoc.backend.repository.CommissionSettlementRepository;
+import com.cursorpoc.backend.repository.SalonServiceRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -33,14 +35,17 @@ public class CommissionLedger {
   private final CommissionConfigVersionRepository versionRepository;
   private final CommissionEntryRepository entryRepository;
   private final CommissionSettlementRepository settlementRepository;
+  private final SalonServiceRepository serviceRepository;
 
   public CommissionLedger(
       CommissionConfigVersionRepository versionRepository,
       CommissionEntryRepository entryRepository,
-      CommissionSettlementRepository settlementRepository) {
+      CommissionSettlementRepository settlementRepository,
+      SalonServiceRepository serviceRepository) {
     this.versionRepository = versionRepository;
     this.entryRepository = entryRepository;
     this.settlementRepository = settlementRepository;
+    this.serviceRepository = serviceRepository;
   }
 
   /** The data of a commissionable line, either from an invoice line or a previous snapshot. */
@@ -71,6 +76,17 @@ public class CommissionLedger {
     }
   }
 
+  /** Commission group of each service of the tenant (only the grouped ones). */
+  public java.util.Map<Long, Long> groupByService(long tenantId) {
+    java.util.Map<Long, Long> map = new java.util.HashMap<>();
+    for (SalonService s : serviceRepository.findByTenant_IdOrderByNameAsc(tenantId)) {
+      if (s.getCommissionGroupId() != null) {
+        map.put(s.getId(), s.getCommissionGroupId());
+      }
+    }
+    return map;
+  }
+
   public CommissionConfigSnapshot snapshot(long tenantId) {
     return new CommissionConfigSnapshot(
         versionRepository.findByTenantIdAndStatus(tenantId, CommissionVersionStatus.ACTIVE));
@@ -79,13 +95,17 @@ public class CommissionLedger {
   /** Builds (without saving) the entry a line would produce with {@code snapshot} at {@code at}. */
   public CommissionEntry computeLineEntry(
       CommissionConfigSnapshot snapshot, LineInput line, Instant at, int revision) {
+    Long groupId =
+        serviceRepository
+            .findById(line.serviceId())
+            .map(SalonService::getCommissionGroupId)
+            .orElse(null);
     CommissionCalculator.Resolution resolution =
         CommissionCalculator.resolve(
-            snapshot, line.serviceId(), line.itemKind(), line.professionalId(), at);
+            snapshot, line.serviceId(), groupId, line.itemKind(), line.professionalId(), at);
     CommissionBaseType baseType = snapshot.baseAt(at);
-    CommissionCalculator.Amounts amounts =
-        CommissionCalculator.amounts(
-            line.lineTotal(), line.taxAmount(), baseType, resolution.percent());
+    CommissionCalculator.LineAmounts amounts =
+        CommissionCalculator.amounts(line.lineTotal(), line.taxAmount(), baseType, resolution);
     CommissionEntry e = new CommissionEntry();
     e.setTenantId(line.tenantId());
     e.setProfessionalId(line.professionalId());
@@ -104,6 +124,11 @@ public class CommissionLedger {
     e.setPercentApplied(resolution.percent());
     e.setRuleVersionId(resolution.ruleVersionId());
     e.setRuleOrigin(resolution.origin());
+    e.setFixedAmount(amounts.fixedAmount());
+    e.setFixedToProfessional(amounts.fixedToProfessional());
+    e.setRetentionPercent(
+        resolution.retentionPercent() == null ? BigDecimal.ZERO : resolution.retentionPercent());
+    e.setRetentionAmount(amounts.retentionAmount());
     e.setCommissionAmount(amounts.commissionAmount());
     e.setCurrency(CommissionCalculator.CURRENCY);
     e.setAccrualAt(at);
@@ -117,7 +142,10 @@ public class CommissionLedger {
         && a.getRuleOrigin() == b.getRuleOrigin()
         && java.util.Objects.equals(a.getRuleVersionId(), b.getRuleVersionId())
         && a.getPercentApplied().compareTo(b.getPercentApplied()) == 0
-        && a.getCommissionAmount().compareTo(b.getCommissionAmount()) == 0;
+        && a.getCommissionAmount().compareTo(b.getCommissionAmount()) == 0
+        && a.getRetentionAmount().compareTo(b.getRetentionAmount()) == 0
+        && a.getFixedAmount().compareTo(b.getFixedAmount()) == 0
+        && a.isFixedToProfessional() == b.isFixedToProfessional();
   }
 
   public CommissionEntry save(CommissionEntry entry, Long settlementId, String actorEmail) {
@@ -160,6 +188,10 @@ public class CommissionLedger {
     r.setPercentApplied(original.getPercentApplied());
     r.setRuleVersionId(original.getRuleVersionId());
     r.setRuleOrigin(original.getRuleOrigin());
+    r.setFixedAmount(original.getFixedAmount().negate());
+    r.setFixedToProfessional(original.isFixedToProfessional());
+    r.setRetentionPercent(original.getRetentionPercent());
+    r.setRetentionAmount(original.getRetentionAmount().negate());
     r.setCommissionAmount(original.getCommissionAmount().negate());
     r.setCurrency(original.getCurrency());
     r.setAccrualAt(accrualAt);

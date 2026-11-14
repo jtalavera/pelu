@@ -130,6 +130,29 @@ export default function CommissionSettlementPage() {
         <div className="font-heading text-3xl font-extrabold tabular-nums text-ink" data-testid="settlement-total">
           {formatGuaraniesGs(s.totalAmount)}
         </div>
+        {(s.retentionAmount !== 0 || s.fixedAmount !== 0) && (
+          <div className="flex flex-col gap-0.5 text-sm" data-testid="settlement-breakdown">
+            {s.fixedAmount !== 0 && (
+              <div className="flex justify-between gap-3 text-ink-2">
+                <span>{t("femme.commissions.settlement.productCost")}</span>
+                <b className="tabular-nums" data-testid="settlement-product-cost">
+                  {formatGuaraniesGs(s.fixedAmount)}
+                </b>
+              </div>
+            )}
+            {s.retentionAmount !== 0 && (
+              <>
+                <div className="flex justify-between gap-3 text-warning">
+                  <span>{t("femme.commissions.settlement.retained")}</span>
+                  <b className="tabular-nums" data-testid="settlement-retained">
+                    {formatGuaraniesGs(s.retentionAmount)}
+                  </b>
+                </div>
+                <span className="text-xs text-ink-3">{t("femme.commissions.settlement.retainedNote")}</span>
+              </>
+            )}
+          </div>
+        )}
         {s.paidAt && (
           <p className="text-sm text-ink-3" data-testid="settlement-paid-info">
             {t("femme.commissions.settlement.paidInfo", {
@@ -209,6 +232,18 @@ export default function CommissionSettlementPage() {
                 {e.baseType ? ` · ${t(`femme.commissions.baseShort.${e.baseType}`)}` : ""}
                 {entryLabel(e) ? ` · ${entryLabel(e)}` : ""}
               </div>
+              {(e.fixedAmount !== 0 || e.retentionAmount !== 0) && (
+                <div className="text-sm text-ink-3" data-testid="settlement-line-extra">
+                  {e.fixedAmount !== 0 &&
+                    t("femme.commissions.settlement.lineProductCost", { amount: formatGuaraniesGs(e.fixedAmount) })}
+                  {e.fixedAmount !== 0 && e.retentionAmount !== 0 ? " · " : ""}
+                  {e.retentionAmount !== 0 &&
+                    t("femme.commissions.settlement.lineRetention", {
+                      percent: formatPercent(e.retentionPercent),
+                      amount: formatGuaraniesGs(e.retentionAmount),
+                    })}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <span className="text-right font-heading font-extrabold tabular-nums text-ink">

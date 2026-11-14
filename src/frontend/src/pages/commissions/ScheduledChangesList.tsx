@@ -6,15 +6,34 @@ import { cancelScheduledChange, type ConfigScope, type VersionView } from "../..
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useDateLocale } from "../../i18n/dateLocale";
+import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { TableWrap, formatPercent, tdClass, thClass } from "./common";
 
+/** "45|5|3000|P" → "45 % + 5 % · monto fijo Gs. 3.000"; a plain percent stays "45 %". */
+export function describeRuleValue(t: TFunction, value: string): string {
+  const [p = "0", r = "0", f = "0", d = ""] = value.split("|");
+  const parts = [Number(r) ? `${formatPercent(p)} + ${formatPercent(r)}` : formatPercent(p)];
+  if (Number(f)) {
+    const who = d === "S" ? "SALON" : d === "P" ? "PROFESSIONAL" : null;
+    parts.push(
+      `${t("femme.commissions.byProfessional.colFixed")} ${formatGuaraniesGs(Number(f))}${
+        who ? ` (${t(`femme.commissions.byProfessional.destination.${who}`)})` : ""
+      }`,
+    );
+  }
+  return parts.join(" · ");
+}
+
 export function describeVersionValue(t: TFunction, scope: ConfigScope, value: string | null): string {
   if (value === null || value === undefined) {
-    return scope === "RULE" ? t("femme.commissions.rules.noRule") : "—";
+    return scope === "RULE" || scope === "GROUP_RULE" ? t("femme.commissions.rules.noRule") : "—";
   }
   if (scope === "BASE") return t(`femme.commissions.base.${value}`);
   if (scope === "PERIODICITY") return t(`femme.commissions.periodicity.${value}`);
+  if (scope === "FIXED_DESTINATION") return t(`femme.commissions.settings.fixedDestinationValue.${value}`);
+  if (scope === "AGUINALDO_ENABLED") return t(`femme.commissions.settings.aguinaldoValue.${value}`);
+  if (scope === "RULE" || scope === "GROUP_RULE") return describeRuleValue(t, value);
   return formatPercent(value);
 }
 
@@ -47,6 +66,7 @@ export function ScheduledChangesList({ versions, onChanged }: { versions: Versio
               <td className={tdClass}>
                 {t(`femme.commissions.scope.${v.scope}`)}
                 {v.serviceName ? ` · ${v.serviceName}` : ""}
+                {v.groupName ? ` · ${v.groupName}` : ""}
                 {v.professionalName ? ` · ${v.professionalName}` : ""}
               </td>
               <td className={tdClass}>{describeVersionValue(t, v.scope, v.previousValue)}</td>

@@ -51,6 +51,7 @@ public class CommissionQueryService {
   private final CommissionSettlementStatusChangeRepository changeRepository;
   private final CommissionConfigService configService;
   private final CommissionLedger ledger;
+  private final AguinaldoService aguinaldoService;
   private final EntityManager entityManager;
 
   public CommissionQueryService(
@@ -59,12 +60,14 @@ public class CommissionQueryService {
       CommissionSettlementStatusChangeRepository changeRepository,
       CommissionConfigService configService,
       CommissionLedger ledger,
+      AguinaldoService aguinaldoService,
       EntityManager entityManager) {
     this.entryRepository = entryRepository;
     this.settlementRepository = settlementRepository;
     this.changeRepository = changeRepository;
     this.configService = configService;
     this.ledger = ledger;
+    this.aguinaldoService = aguinaldoService;
     this.entityManager = entityManager;
   }
 
@@ -137,6 +140,9 @@ public class CommissionQueryService {
         services,
         products,
         adjustments,
+        entries.stream()
+            .map(CommissionEntry::getRetentionAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add),
         lines,
         entries.stream().map(e -> entryView(e, names, null, reversed)).toList(),
         drafts,
@@ -253,6 +259,20 @@ public class CommissionQueryService {
     return new ArrayList<>(map.values());
   }
 
+  private BigDecimal retentionOf(CommissionSettlement s) {
+    return entryRepository.findBySettlementIdOrderByAccrualAtAscIdAsc(s.getId()).stream()
+        .map(CommissionEntry::getRetentionAmount)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
+  /** Monto fijo (costo de producto) para la profesional dentro del total de la liquidación. */
+  private BigDecimal fixedOf(CommissionSettlement s) {
+    return entryRepository.findBySettlementIdOrderByAccrualAtAscIdAsc(s.getId()).stream()
+        .filter(CommissionEntry::isFixedToProfessional)
+        .map(CommissionEntry::getFixedAmount)
+        .reduce(BigDecimal.ZERO, BigDecimal::add);
+  }
+
   public SettlementView view(CommissionSettlement s, Map<Long, String> names) {
     return new SettlementView(
         s.getId(),
@@ -262,6 +282,8 @@ public class CommissionQueryService {
         s.getPeriodTo(),
         s.getStatus().name(),
         s.getTotalAmount(),
+        retentionOf(s),
+        fixedOf(s),
         s.getCreatedAt(),
         s.getApprovedAt(),
         s.getPaidAt(),
@@ -294,6 +316,10 @@ public class CommissionQueryService {
         e.getPercentApplied(),
         e.getRuleOrigin() == null ? null : e.getRuleOrigin().name(),
         e.getCommissionAmount(),
+        e.getFixedAmount(),
+        e.isFixedToProfessional(),
+        e.getRetentionPercent(),
+        e.getRetentionAmount(),
         e.getAccrualAt(),
         e.getReversesEntryId(),
         e.getSettlementId(),
@@ -508,7 +534,16 @@ public class CommissionQueryService {
         services,
         products,
         entries.stream().map(CommissionQueryService::myView).toList(),
-        settlements);
+        settlements,
+        entries.stream()
+            .map(CommissionEntry::getRetentionAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add),
+        entries.stream()
+            .filter(CommissionEntry::isFixedToProfessional)
+            .map(CommissionEntry::getFixedAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add),
+        aguinaldoService.enabled(tenantId),
+        aguinaldoService.balanceOf(tenantId, professionalId));
   }
 
   public MySettlementDetail mySettlement(long tenantId, long professionalId, long settlementId) {
@@ -550,6 +585,9 @@ public class CommissionQueryService {
         e.getBaseAmount(),
         e.getPercentApplied(),
         e.getCommissionAmount(),
+        e.getFixedAmount(),
+        e.isFixedToProfessional(),
+        e.getRetentionAmount(),
         e.getAccrualAt(),
         e.getNote());
   }

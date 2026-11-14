@@ -18,7 +18,18 @@ public final class CommissionDtos {
    * (default or rule; null closes a rule) or a periodicity.
    */
   public record ConfigChange(
-      String scope, Long serviceId, Long professionalId, String value, LocalDate validUntil) {}
+      String scope,
+      Long serviceId,
+      Long professionalId,
+      Long groupId,
+      String value,
+      LocalDate validUntil) {
+
+    public ConfigChange(
+        String scope, Long serviceId, Long professionalId, String value, LocalDate validUntil) {
+      this(scope, serviceId, professionalId, null, value, validUntil);
+    }
+  }
 
   public record ApplyChangesRequest(
       List<ConfigChange> changes, String applyMode, boolean replacePending, boolean preview) {}
@@ -55,6 +66,8 @@ public final class CommissionDtos {
       String itemKind,
       Long professionalId,
       String professionalName,
+      Long groupId,
+      String groupName,
       String value,
       String previousValue,
       Instant effectiveFrom,
@@ -71,7 +84,108 @@ public final class CommissionDtos {
       String periodicity,
       PeriodInfo currentPeriod,
       List<VersionView> scheduledChanges,
-      List<VersionView> history) {}
+      List<VersionView> history,
+      /* HU-COM-14 */
+      String fixedDestination,
+      boolean aguinaldoEnabled,
+      BigDecimal aguinaldoDefaultPercent,
+      List<RetentionProfile> retentionProfiles) {}
+
+  /** HU-COM-14: % retained for aguinaldo from a professional by default (null = she does not). */
+  public record RetentionProfile(
+      Long professionalId, String professionalName, boolean active, BigDecimal percent) {}
+
+  // ── Commission groups (HU-COM-14) ─────────────────────────────────────────────────────────
+
+  public record GroupView(
+      Long id,
+      String name,
+      int serviceCount,
+      List<String> serviceNames,
+      int professionalsWithRule) {}
+
+  public record GroupRequest(String name) {}
+
+  public record GroupAssignment(Long serviceId, Long groupId) {}
+
+  public record AssignGroupsRequest(List<GroupAssignment> assignments) {}
+
+  public record GroupSuggestion(Long groupId, String groupName, String reason) {}
+
+  public record UngroupedService(Long serviceId, String name, GroupSuggestion suggestion) {}
+
+  /** One group row of a professional's rules (null rule fields = she has no own rule for it). */
+  public record GroupRuleRow(
+      Long groupId,
+      String groupName,
+      int serviceCount,
+      boolean ownRule,
+      BigDecimal percent,
+      BigDecimal retentionPercent,
+      BigDecimal fixedAmount,
+      /** PROFESSIONAL / SALON when the rule sets it, null when it follows the salon default. */
+      String fixedDestination,
+      String effectiveFixedDestination,
+      Long versionId,
+      boolean scheduled) {}
+
+  public record ProfessionalRulesView(
+      Long professionalId,
+      String professionalName,
+      boolean active,
+      String baseType,
+      boolean aguinaldoEnabled,
+      BigDecimal retentionProfilePercent,
+      String defaultFixedDestination,
+      BigDecimal defaultPercentService,
+      List<GroupRuleRow> groups) {}
+
+  // ── Aguinaldo fund (HU-COM-14) ────────────────────────────────────────────────────────────
+
+  public record AguinaldoBalance(
+      Long professionalId,
+      String professionalName,
+      boolean active,
+      BigDecimal retained,
+      BigDecimal paid,
+      BigDecimal balance,
+      java.time.LocalDate lastPaymentOn) {}
+
+  public record AguinaldoSummary(
+      boolean enabled, BigDecimal totalBalance, List<AguinaldoBalance> balances) {}
+
+  public record AguinaldoMovementView(
+      /** ACCRUAL (from a settlement), PAYMENT or ADJUSTMENT. */
+      String kind,
+      java.time.LocalDate date,
+      String concept,
+      BigDecimal amount,
+      BigDecimal balance,
+      Long settlementId,
+      Long movementId,
+      String paymentMethod,
+      boolean closesFund,
+      String note) {}
+
+  public record AguinaldoDetail(
+      Long professionalId,
+      String professionalName,
+      BigDecimal balance,
+      List<AguinaldoMovementView> movements) {}
+
+  /** {@code amount} null = the whole balance. {@code closesFund}: payment on departure. */
+  public record AguinaldoPaymentRequest(
+      Long professionalId,
+      BigDecimal amount,
+      java.time.LocalDate paidOn,
+      String paymentMethod,
+      boolean closesFund,
+      String note) {}
+
+  public record AguinaldoBulkPaymentRequest(
+      java.time.LocalDate paidOn, String paymentMethod, String note) {}
+
+  public record AguinaldoAdjustmentRequest(Long professionalId, BigDecimal amount, String reason) {}
 
   // ── Rules (HU-COM-02) ─────────────────────────────────────────────────────────────────────
 
@@ -148,6 +262,11 @@ public final class CommissionDtos {
       BigDecimal percentApplied,
       String ruleOrigin,
       BigDecimal commissionAmount,
+      /* HU-COM-14 */
+      BigDecimal fixedAmount,
+      boolean fixedToProfessional,
+      BigDecimal retentionPercent,
+      BigDecimal retentionAmount,
       Instant accrualAt,
       Long reversesEntryId,
       Long settlementId,
@@ -182,6 +301,7 @@ public final class CommissionDtos {
       BigDecimal servicesTotal,
       BigDecimal productsTotal,
       BigDecimal adjustmentsTotal,
+      BigDecimal retentionTotal,
       int lines,
       List<EntryView> entries,
       List<SettlementView> draftSettlements,
@@ -241,6 +361,9 @@ public final class CommissionDtos {
       LocalDate periodTo,
       String status,
       BigDecimal totalAmount,
+      /* HU-COM-14: retenido para aguinaldo y monto fijo incluido en totalAmount */
+      BigDecimal retentionAmount,
+      BigDecimal fixedAmount,
       Instant createdAt,
       Instant approvedAt,
       Instant paidAt,
@@ -293,6 +416,9 @@ public final class CommissionDtos {
       BigDecimal baseAmount,
       BigDecimal percentApplied,
       BigDecimal commissionAmount,
+      BigDecimal fixedAmount,
+      boolean fixedToProfessional,
+      BigDecimal retentionAmount,
       Instant accrualAt,
       String note) {}
 
@@ -302,7 +428,12 @@ public final class CommissionDtos {
       BigDecimal servicesTotal,
       BigDecimal productsTotal,
       List<MyEntryView> currentPeriodEntries,
-      List<SettlementView> settlements) {}
+      List<SettlementView> settlements,
+      /* HU-COM-14 */
+      BigDecimal currentPeriodRetention,
+      BigDecimal currentPeriodFixed,
+      boolean aguinaldoEnabled,
+      BigDecimal aguinaldoBalance) {}
 
   public record MySettlementDetail(
       SettlementView settlement, List<MyEntryView> entries, List<Subtotal> byKind) {}

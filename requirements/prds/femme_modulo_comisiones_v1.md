@@ -364,6 +364,15 @@ Reglas:
 - [ ] La línea deja de figurar en «Líneas sin profesional». Si después se anula la factura, la comisión se revierte como cualquier otra (HU-COM-05).
 - [ ] Solo se pueden asignar líneas de ítems del catálogo, de comprobantes emitidos no anulados y sin profesional (`COMMISSION_LINE_NOT_ASSIGNABLE`); otros errores: `INVOICE_LINE_NOT_FOUND`, `PROFESSIONAL_NOT_FOUND`, `COMMISSION_PROFESSIONAL_INACTIVE`.
 
+### HU-COM-14 · Comisiones por grupo, retención de aguinaldo y monto fijo por servicio
+
+Historia completa y criterios: [HU-COM-14](../user_stories/HU-COM-14-grupos-retencion-aguinaldo-y-monto-fijo.md). Resumen:
+
+- **Grupos de comisión** (Brushing, Color, Manos…): cada servicio está en uno como máximo; las reglas se cargan por profesional y grupo (`GROUP_RULE`) y ganan sobre la regla general del servicio: profesional + servicio › profesional + grupo › servicio › grupo › % por defecto.
+- **Regla = pago | retención | monto fijo | destino.** La retención (`retention_amount`) no se paga con la liquidación: entra al **fondo de aguinaldo** de la profesional cuando la liquidación se **aprueba** y sale si se anula.
+- **Monto fijo** (costo de producto): se descuenta del precio (según la base con o sin IVA) antes de calcular los %, por servicio; es **para la profesional** (se le paga completo, sin retención) o **para el salón** (solo baja la base). Destino por defecto del salón en Configuración, cambiable por regla.
+- **Fondo de aguinaldo**: pagos parciales, completos, «por salida de la profesional» y «a todas», ajustes manuales con motivo; vista de la profesional con lo retenido y su saldo.
+
 ---
 
 ## 6. Modelo de datos conceptual
@@ -417,7 +426,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 
 ## 8. Códigos de error (backend → i18n `femme.apiErrors.*`)
 
-`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `COMMISSION_RECALCULATION_FAILED`, `INVOICE_LINE_PROFESSIONAL_INACTIVE`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`, `COMMISSION_ENTRY_NOT_FOUND`, `COMMISSION_ENTRY_NOT_REASSIGNABLE`, `COMMISSION_REASSIGN_REASON_REQUIRED`, `COMMISSION_REASSIGN_SAME_PROFESSIONAL`, `INVOICE_LINE_NOT_FOUND`, `COMMISSION_LINE_NOT_ASSIGNABLE`.
+`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `COMMISSION_RECALCULATION_FAILED`, `INVOICE_LINE_PROFESSIONAL_INACTIVE`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`, `COMMISSION_ENTRY_NOT_FOUND`, `COMMISSION_ENTRY_NOT_REASSIGNABLE`, `COMMISSION_REASSIGN_REASON_REQUIRED`, `COMMISSION_REASSIGN_SAME_PROFESSIONAL`, `INVOICE_LINE_NOT_FOUND`, `COMMISSION_LINE_NOT_ASSIGNABLE`, `COMMISSION_GROUP_NOT_FOUND`, `COMMISSION_GROUP_NAME_REQUIRED`, `COMMISSION_GROUP_NAME_TAKEN`, `COMMISSION_GROUP_HAS_RULES`, `COMMISSION_TOTAL_PERCENT_EXCEEDED`, `COMMISSION_FIXED_AMOUNT_INVALID`, `COMMISSION_FIXED_DESTINATION_INVALID`, `AGUINALDO_NOTHING_TO_PAY`, `AGUINALDO_AMOUNT_INVALID`, `AGUINALDO_AMOUNT_EXCEEDS_BALANCE`, `AGUINALDO_BALANCE_NEGATIVE`, `AGUINALDO_REASON_REQUIRED`, `AGUINALDO_PAYMENT_METHOD_INVALID`.
 
 ## 9. Requisitos transversales
 
@@ -444,6 +453,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-10 | Campo profesional por línea (servicio y producto); precarga desde registro de servicio; asignación manual en venta suelta; profesional inactivo rechazado; aviso de línea sin comisión; campo oculto con flag deshabilitada; **actualizar los specs existentes de HU-14**. |
 | HU-COM-12 | Reasignar desde Movimientos (validaciones, reversión + nueva comisión con las reglas del correcto); desde el detalle de un borrador; con liquidación aprobada: aviso, liquidación intacta, corrección en la próxima; códigos de error. |
 | HU-COM-13 | Asignar desde «Líneas sin profesional» (validación, comisión con las reglas del profesional a la fecha de la factura, sin liquidar, la línea deja de figurar, visible en Movimientos); anulación posterior revierte; errores con códigos; aislamiento entre tenants. |
+| HU-COM-14 | Grupos (crear/renombrar/eliminar, sugerencias por nombre, productos juntos); reglas por profesional con validaciones, ejemplo en vivo y copia; Configuración (retención, destino del monto fijo, quién retiene); cálculo con retención y monto fijo (profesional/salón) y precedencia; liquidación con costo de producto y retenido; fondo de aguinaldo (entra al aprobar, sale al anular, pagos parcial/salida/a todas, ajuste); vista de la profesional; historial y recálculo de reglas de grupo. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 

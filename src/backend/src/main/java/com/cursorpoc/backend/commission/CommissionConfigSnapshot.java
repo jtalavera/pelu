@@ -24,18 +24,33 @@ public final class CommissionConfigSnapshot {
   public static final CommissionPeriodicity DEFAULT_PERIODICITY = CommissionPeriodicity.MONTHLY;
 
   /** Identity of a timeline: scope plus, for RULE, item and (optional) professional. */
-  public record ScopeKey(CommissionConfigScope scope, Long serviceId, Long professionalId) {
+  public record ScopeKey(
+      CommissionConfigScope scope, Long serviceId, Long professionalId, Long groupId) {
+
+    public ScopeKey(CommissionConfigScope scope, Long serviceId, Long professionalId) {
+      this(scope, serviceId, professionalId, null);
+    }
 
     public static ScopeKey of(CommissionConfigVersion v) {
-      return new ScopeKey(v.getScope(), v.getServiceId(), v.getProfessionalId());
+      return new ScopeKey(v.getScope(), v.getServiceId(), v.getProfessionalId(), v.getGroupId());
     }
 
     public static ScopeKey of(CommissionConfigScope scope) {
-      return new ScopeKey(scope, null, null);
+      return new ScopeKey(scope, null, null, null);
     }
 
     public static ScopeKey rule(long serviceId, Long professionalId) {
-      return new ScopeKey(CommissionConfigScope.RULE, serviceId, professionalId);
+      return new ScopeKey(CommissionConfigScope.RULE, serviceId, professionalId, null);
+    }
+
+    /** HU-COM-14: rule of a commission group (professionalId null = whole team). */
+    public static ScopeKey group(long groupId, Long professionalId) {
+      return new ScopeKey(CommissionConfigScope.GROUP_RULE, null, professionalId, groupId);
+    }
+
+    /** HU-COM-14: retention % profile of one professional. */
+    public static ScopeKey retentionProfile(long professionalId) {
+      return new ScopeKey(CommissionConfigScope.RETENTION_PROFILE, null, professionalId, null);
     }
   }
 
@@ -100,6 +115,43 @@ public final class CommissionConfigSnapshot {
   public Optional<CommissionConfigVersion> ruleAt(long serviceId, Long professionalId, Instant at) {
     return versionAt(ScopeKey.rule(serviceId, professionalId), at)
         .filter(v -> v.getConfigValue() != null);
+  }
+
+  /** The group rule version in force (non-null value) for the group / professional, if any. */
+  public Optional<CommissionConfigVersion> groupRuleAt(
+      long groupId, Long professionalId, Instant at) {
+    return versionAt(ScopeKey.group(groupId, professionalId), at)
+        .filter(v -> v.getConfigValue() != null);
+  }
+
+  /** HU-COM-14: el salón retiene para aguinaldo (por defecto no). */
+  public boolean aguinaldoEnabledAt(Instant at) {
+    return versionAt(ScopeKey.of(CommissionConfigScope.AGUINALDO_ENABLED), at)
+        .map(v -> "true".equalsIgnoreCase(v.getConfigValue()))
+        .orElse(false);
+  }
+
+  public BigDecimal aguinaldoDefaultAt(Instant at) {
+    return versionAt(ScopeKey.of(CommissionConfigScope.AGUINALDO_DEFAULT), at)
+        .filter(v -> v.getConfigValue() != null)
+        .map(v -> new BigDecimal(v.getConfigValue()))
+        .orElse(BigDecimal.ZERO);
+  }
+
+  /** Destino por defecto del monto fijo (por defecto: la profesional). */
+  public CommissionRuleValue.FixedDestination fixedDestinationAt(Instant at) {
+    return versionAt(ScopeKey.of(CommissionConfigScope.FIXED_DESTINATION), at)
+        .filter(v -> v.getConfigValue() != null)
+        .map(v -> CommissionRuleValue.FixedDestination.valueOf(v.getConfigValue()))
+        .orElse(CommissionRuleValue.FixedDestination.PROFESSIONAL);
+  }
+
+  /** % of retention profile of a professional at {@code at} (null when she does not retain). */
+  public BigDecimal retentionProfileAt(long professionalId, Instant at) {
+    return versionAt(ScopeKey.retentionProfile(professionalId), at)
+        .filter(v -> v.getConfigValue() != null)
+        .map(v -> new BigDecimal(v.getConfigValue()))
+        .orElse(null);
   }
 
   /** True when any scope of this item has a timeline (used by matrix / catalog warnings). */

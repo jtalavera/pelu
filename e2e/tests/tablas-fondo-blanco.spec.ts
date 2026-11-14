@@ -81,6 +81,7 @@ test.describe("Tablas con fondo blanco", () => {
       await page.getByRole("tab", { name: "Movements", exact: true }).click();
       await expectWhiteSurface(page, page.getByTestId("movements-table"));
       await page.getByRole("tab", { name: "Rules", exact: true }).click();
+      await page.getByTestId("rules-kind-SERVICE").click(); // Rules opens on «By professional» (HU-COM-14)
       await expectWhiteSurface(page, page.getByTestId("rules-table"));
       // The reference list (inside a card) keeps its white background.
       await openCommissionsMore(page, "Settings");

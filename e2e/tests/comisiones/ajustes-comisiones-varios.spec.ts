@@ -243,6 +243,7 @@ test("Movimientos: filtro por varios profesionales y «Limpiar filtros»", async
 async function openItemPanel(page: Page) {
   await loginAdminUi(page, w);
   await openTab(page, "Rules");
+  await page.getByTestId("rules-kind-SERVICE").click(); // Rules opens on «By professional» (HU-COM-14)
   await page.getByTestId(`rules-row-${w.service.id}`).click();
   return page.getByTestId("rules-panel");
 }

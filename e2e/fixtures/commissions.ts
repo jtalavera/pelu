@@ -193,9 +193,21 @@ export async function voidInvoice(request: APIRequestContext, token: string, inv
 }
 
 export type Change = {
-  scope: "BASE" | "DEFAULT_SERVICE" | "DEFAULT_PRODUCT" | "PERIODICITY" | "RULE";
+  scope:
+    | "BASE"
+    | "DEFAULT_SERVICE"
+    | "DEFAULT_PRODUCT"
+    | "PERIODICITY"
+    | "RULE"
+    | "GROUP_RULE"
+    | "FIXED_DESTINATION"
+    | "AGUINALDO_ENABLED"
+    | "AGUINALDO_DEFAULT"
+    | "RETENTION_PROFILE";
   serviceId?: number | null;
   professionalId?: number | null;
+  /** HU-COM-14: commission group of a GROUP_RULE. */
+  groupId?: number | null;
   value: string | null;
 };
 
@@ -231,6 +243,10 @@ export type Entry = {
   percentApplied: number | null;
   ruleOrigin: string | null;
   commissionAmount: number;
+  fixedAmount: number;
+  fixedToProfessional: boolean;
+  retentionPercent: number;
+  retentionAmount: number;
   revision: number;
   settlementId: number | null;
   settlementStatus: string | null;
@@ -314,7 +330,7 @@ export async function professionalWithAccess(
 // ── Redesigned Comisiones screen (3 tabs + «⋯ More» menu) ────────────────────────────────────────
 
 /** Opens a section of the «More» menu (Preview / Reports / Settings) on the Comisiones screen. */
-export async function openCommissionsMore(page: Page, name: "Preview" | "Reports" | "Settings") {
+export async function openCommissionsMore(page: Page, name: "Preview" | "Reports" | "Settings" | "Aguinaldo") {
   await page.getByTestId("commissions-more-trigger").click();
   await page.getByRole("menuitem", { name }).click();
 }
@@ -335,4 +351,78 @@ export async function expandSection(page: Page, toggleTestId: string) {
 export async function rowMenuAction(page: Page, row: ReturnType<Page["locator"]>, action: string) {
   await row.getByRole("button", { name: /actions/i }).click();
   await page.getByRole("menuitem", { name: action }).click();
+}
+
+// ── HU-COM-14: groups, retention and aguinaldo ───────────────────────────────────────────────
+
+export async function createGroup(request: APIRequestContext, token: string, name: string) {
+  return apiPostJson<{ id: number; name: string }>(request, token, "/api/commissions/groups", { name });
+}
+
+export async function assignToGroup(
+  request: APIRequestContext,
+  token: string,
+  groupId: number,
+  serviceIds: number[],
+) {
+  return apiPostJson<{ changed: number }>(request, token, "/api/commissions/groups/assign", {
+    assignments: serviceIds.map((serviceId) => ({ serviceId, groupId })),
+  });
+}
+
+/** Creates a catalog item (IVA 10 %) in the world's tenant. */
+export async function createCatalogItem(
+  request: APIRequestContext,
+  token: string,
+  world: CommissionWorld,
+  name: string,
+  opts: { kind?: "SERVICE" | "PRODUCT"; price?: number } = {},
+): Promise<{ id: number; name: string }> {
+  const kind = opts.kind ?? "SERVICE";
+  const category = await apiPostJson<{ id: number }>(request, token, "/api/service-categories", {
+    name: `${kind === "PRODUCT" ? "Reventa" : "Cat"} ${name} ${Date.now()}${Math.floor(Math.random() * 1000)}`,
+    accentKey: "stone",
+    kind,
+  });
+  return apiPostJson<{ id: number; name: string }>(request, token, "/api/services", {
+    name,
+    categoryId: category.id,
+    taxId: world.taxId,
+    priceMinor: opts.price ?? 100000,
+    durationMinutes: 30,
+    kind,
+    sku: kind === "PRODUCT" ? `SKU-${Date.now()}${Math.floor(Math.random() * 1000)}` : null,
+  });
+}
+
+export async function createProfessional(
+  request: APIRequestContext,
+  token: string,
+  name: string,
+): Promise<{ id: number; name: string }> {
+  const created = await apiPostJson<{ id: number; fullName: string }>(request, token, "/api/professionals", {
+    fullName: name,
+    phone: null,
+    email: null,
+    photoDataUrl: null,
+  });
+  return { id: created.id, name: created.fullName };
+}
+
+export type AguinaldoSummary = {
+  enabled: boolean;
+  totalBalance: number;
+  balances: { professionalId: number; professionalName: string; balance: number; paid: number; retained: number }[];
+};
+
+export const aguinaldoSummary = (request: APIRequestContext, token: string) =>
+  apiGetJson<AguinaldoSummary>(request, token, "/api/commissions/aguinaldo");
+
+/** Approves a settlement through the API (its retention enters the aguinaldo fund). */
+export async function approveSettlementApi(request: APIRequestContext, token: string, id: number) {
+  const res = await request.post(`${API_BASE}/api/commissions/settlements/${id}/approve`, {
+    headers: authHeaders(token),
+    data: {},
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
 }

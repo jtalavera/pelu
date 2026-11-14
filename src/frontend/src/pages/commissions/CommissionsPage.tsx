@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Alert, KebabMenu, Spinner } from "@design-system";
 import { useFeatureFlag, useFeatureFlagsState } from "../../hooks/useFeatureFlags";
 import { useMe } from "../../hooks/useMe";
+import { AguinaldoTab } from "./AguinaldoTab";
 import { MovementsTab } from "./MovementsTab";
 import { PreviewTab } from "./PreviewTab";
 import { ReportsTab } from "./ReportsTab";
@@ -11,7 +12,7 @@ import { SettingsTab } from "./SettingsTab";
 import { SettlementsTab } from "./SettlementsTab";
 
 const MAIN_TABS = ["settlements", "movements", "rules"] as const;
-const MORE_TABS = ["preview", "reports", "settings"] as const;
+const MORE_TABS = ["preview", "aguinaldo", "reports", "settings"] as const;
 type Tab = (typeof MAIN_TABS)[number] | (typeof MORE_TABS)[number];
 
 /**
@@ -77,6 +78,7 @@ export default function CommissionsPage() {
       {tab === "movements" && <MovementsTab />}
       {tab === "rules" && <RulesTab />}
       {tab === "preview" && <PreviewTab />}
+      {tab === "aguinaldo" && <AguinaldoTab />}
       {tab === "reports" && <ReportsTab />}
       {tab === "settings" && <SettingsTab />}
     </div>

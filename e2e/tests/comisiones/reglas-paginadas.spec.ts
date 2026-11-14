@@ -48,6 +48,7 @@ test.beforeEach(async ({ request }) => {
 async function openRules(page: Page) {
   await page.getByRole("link", { name: "Commissions" }).click();
   await page.getByRole("tab", { name: "Rules", exact: true }).click();
+  await page.getByTestId("rules-kind-SERVICE").click(); // Rules opens on «By professional» (HU-COM-14)
   await expect(page.getByTestId("rules-table")).toBeVisible();
 }
 
