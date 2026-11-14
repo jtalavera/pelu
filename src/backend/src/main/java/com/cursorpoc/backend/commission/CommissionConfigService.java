@@ -64,6 +64,13 @@ public class CommissionConfigService {
 
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
+  /** Scopes that never change an amount already (or about to be) calculated. */
+  private static final Set<String> NO_CALCULATION_EFFECT =
+      Set.of(
+          CommissionConfigScope.PERIODICITY.name(),
+          CommissionConfigScope.AGUINALDO_DEFAULT.name(),
+          CommissionConfigScope.RETENTION_PROFILE.name());
+
   private final CommissionConfigVersionRepository versionRepository;
   private final SalonServiceRepository serviceRepository;
   private final ProfessionalRepository professionalRepository;
@@ -142,9 +149,9 @@ public class CommissionConfigService {
     }
     CommissionConfigSnapshot snapshot = ledger.snapshot(tenantId);
     Instant now = Instant.now();
+    // C13: periodicity and the retention defaults do not change any calculation → no question.
     boolean onlyPeriodicity =
-        request.changes().stream()
-            .allMatch(c -> CommissionConfigScope.PERIODICITY.name().equals(c.scope()));
+        request.changes().stream().allMatch(c -> NO_CALCULATION_EFFECT.contains(c.scope()));
 
     CommissionApplyMode mode;
     Instant effectiveFrom;

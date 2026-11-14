@@ -18,16 +18,18 @@ import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ApplyChangeDialog } from "./ApplyChangeDialog";
+import { GroupsPanel } from "./GroupsPanel";
+import { ProfessionalRulesPanel } from "./ProfessionalRulesPanel";
 import { describeVersionValue } from "./ScheduledChangesList";
 import { TableWrap, formatPercent, parsePercentInput, tdClass, thClass, todayYmd } from "./common";
 
-type SubTab = "SERVICE" | "PRODUCT";
+type SubTab = "PROFESSIONAL" | "SERVICE" | "PRODUCT" | "GROUPS";
 
 /** Unsaved changes, keyed by scope + item + professional ("Guardar cambios" applies them all). */
 type Pending = Record<string, ConfigChange>;
 
-const key = (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) =>
-  `${c.scope}|${c.serviceId ?? ""}|${c.professionalId ?? ""}`;
+const key = (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId" | "groupId">) =>
+  `${c.scope}|${c.serviceId ?? ""}|${c.professionalId ?? ""}|${c.groupId ?? ""}`;
 
 /** The item as it would look once the pending changes are saved. */
 /** Rows per page in the rules list (services / products). */
@@ -70,7 +72,9 @@ const normalize = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, 
 /** HU-COM-02 rules: general % → item % → professional + item exception (the most specific wins). */
 export function RulesTab() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<SubTab>("SERVICE");
+  const [tab, setTab] = useState<SubTab>("PROFESSIONAL");
+  /** Bumped after saving so the «Por profesional» view reads the saved rules again. */
+  const [reloadKey, setReloadKey] = useState(0);
   const [views, setViews] = useState<Partial<Record<ItemKind, RulesView>>>({});
   const [date, setDate] = useState(todayYmd());
   const [onlyExceptions, setOnlyExceptions] = useState(false);
@@ -101,7 +105,7 @@ export function RulesTab() {
     setPending((prev) => ({ ...prev, [key(change)]: change }));
   }
 
-  function unstage(change: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) {
+  function unstage(change: Pick<ConfigChange, "scope" | "serviceId" | "professionalId" | "groupId">) {
     setPending((prev) => {
       const next = { ...prev };
       delete next[key(change)];
@@ -121,7 +125,7 @@ export function RulesTab() {
       <p className="px-0.5 text-sm text-ink-3">{t("femme.commissions.rules.intro")}</p>
 
       <div className="flex gap-2" role="group" aria-label={t("femme.commissions.tabs.rules")}>
-        {(["SERVICE", "PRODUCT"] as const).map((k) => (
+        {(["PROFESSIONAL", "SERVICE", "PRODUCT", "GROUPS"] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -147,7 +151,12 @@ export function RulesTab() {
       )}
       {error && <Alert variant="destructive">{error}</Alert>}
 
-      {!views[tab] ? (
+      {tab === "PROFESSIONAL" && (
+        <ProfessionalRulesPanel pending={pending} stage={stage} unstage={unstage} reloadKey={reloadKey} />
+      )}
+      {tab === "GROUPS" && <GroupsPanel />}
+      {(tab === "SERVICE" || tab === "PRODUCT") &&
+        (!views[tab] ? (
         <Spinner />
       ) : (
         <KindRules
@@ -169,7 +178,7 @@ export function RulesTab() {
             setSaving(true);
           }}
         />
-      )}
+      ))}
 
       {pendingList.length > 0 && (
         <>
@@ -204,6 +213,7 @@ export function RulesTab() {
           setSaving(false);
           setPending({});
           setNotice(t("femme.commissions.applyDialog.applied"));
+          setReloadKey((k) => k + 1);
           void load();
         }}
       />

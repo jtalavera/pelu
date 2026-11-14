@@ -196,6 +196,15 @@ export function MovementsTab() {
                       {formatParaguayDateTime(e.accrualAt, dateLocale)}
                       {e.invoiceNumber ? ` · ${e.invoiceNumber}` : ""} · {movementLabel(e)}
                       {e.note && e.sourceType !== "ADJUSTMENT" ? ` · ${e.note}` : ""} · {formatPercent(e.percentApplied)}
+                      {e.fixedAmount !== 0 && e.fixedToProfessional
+                        ? ` · ${t("femme.commissions.settlement.lineProductCost", { amount: formatGuaraniesGs(e.fixedAmount) })}`
+                        : ""}
+                      {e.retentionAmount !== 0
+                        ? ` · ${t("femme.commissions.settlement.lineRetention", {
+                            percent: formatPercent(e.retentionPercent),
+                            amount: formatGuaraniesGs(e.retentionAmount),
+                          })}`
+                        : ""}
                     </span>
                     <SettlementStatusBadge status={e.settlementStatus} />
                   </div>

@@ -137,6 +137,14 @@ export function PreviewTab() {
                 {formatGuaraniesGs(preview.adjustmentsTotal)}
               </b>
             </span>
+            {preview.retentionTotal !== 0 && (
+              <span className="text-sm text-warning">
+                {t("femme.commissions.preview.retained")}{" "}
+                <b className="tabular-nums" data-testid="preview-retained">
+                  {formatGuaraniesGs(preview.retentionTotal)}
+                </b>
+              </span>
+            )}
           </section>
           {preview.draftSettlements.length > 0 && (
             <Alert variant="info">{t("femme.commissions.preview.draftExists", { count: preview.draftSettlements.length })}</Alert>
@@ -247,6 +255,15 @@ function EntryRow({
           {e.invoiceNumber ? ` · ${e.invoiceNumber}` : ""} · {formatGuaraniesGs(e.baseAmount)} ×{" "}
           {formatPercent(e.percentApplied)}
           {e.sourceType === "REVERSAL" ? ` · ${t(`femme.commissions.reason.${e.reasonCode ?? "VOID"}`)}` : ""}
+          {e.fixedAmount !== 0 && e.fixedToProfessional
+            ? ` · ${t("femme.commissions.settlement.lineProductCost", { amount: formatGuaraniesGs(e.fixedAmount) })}`
+            : ""}
+          {e.retentionAmount !== 0
+            ? ` · ${t("femme.commissions.settlement.lineRetention", {
+                percent: formatPercent(e.retentionPercent),
+                amount: formatGuaraniesGs(e.retentionAmount),
+              })}`
+            : ""}
         </div>
       </div>
       <span className="text-right font-heading font-extrabold tabular-nums text-ink">

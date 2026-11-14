@@ -64,6 +64,10 @@ const settings = {
   currentPeriod: { periodicity: "BIWEEKLY", from: "2026-10-16", to: "2026-10-31", nextFrom: "2026-11-01" },
   scheduledChanges: [],
   history: [],
+  fixedDestination: "PROFESSIONAL",
+  aguinaldoEnabled: false,
+  aguinaldoDefaultPercent: 0,
+  retentionProfiles: [],
 };
 const rulesView = (kind: string) => ({
   kind,
@@ -123,6 +127,19 @@ describe("CommissionsPage (redesigned)", () => {
       if (url.startsWith("/api/commissions/settlements")) return settlements;
       if (url.startsWith("/api/commissions/settings")) return settings;
       if (url.startsWith("/api/commissions/rules")) return rulesView(url.includes("PRODUCT") ? "PRODUCT" : "SERVICE");
+      if (url.startsWith("/api/commissions/professionals/"))
+        return {
+          professionalId: 1,
+          professionalName: "Laura Gómez",
+          active: true,
+          baseType: "NET_OF_TAX",
+          aguinaldoEnabled: false,
+          retentionProfilePercent: null,
+          defaultFixedDestination: "PROFESSIONAL",
+          defaultPercentService: 10,
+          groups: [],
+        };
+      if (url.startsWith("/api/commissions/aguinaldo")) return { enabled: false, totalBalance: 0, balances: [] };
       if (url.startsWith("/api/commissions/entries")) return [];
       if (url.startsWith("/api/professionals")) return [{ id: 1, fullName: "Laura Gómez", active: true }];
       return [];
@@ -161,6 +178,7 @@ describe("CommissionsPage (redesigned)", () => {
   it("lists rules as rows and stages an exception removal behind the pending bar", async () => {
     renderPage();
     await userEvent.click(screen.getByRole("tab", { name: "Rules" }));
+    await userEvent.click(await screen.findByTestId("rules-kind-SERVICE"));
     const row = await screen.findByTestId("rules-row-3");
     expect(within(row).getByText("Tintura pelo corto")).toBeTruthy();
     expect(screen.getByTestId("rules-standard-3").textContent).toContain("45");
@@ -178,7 +196,28 @@ describe("CommissionsPage (redesigned)", () => {
     expect(screen.queryByTestId("rules-pending-bar")).toBeNull();
   });
 
-  it("reaches Settings from the more menu and lists the four settings", async () => {
+  it("opens Rules on «By professional» and keeps Services, Products and Groups one tap away", async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole("tab", { name: "Rules" }));
+    expect(await screen.findByTestId("professional-rules")).toBeTruthy();
+    expect(screen.getByTestId("rules-kind-PROFESSIONAL").getAttribute("aria-pressed")).toBe("true");
+    for (const k of ["SERVICE", "PRODUCT", "GROUPS"]) {
+      expect(screen.getByTestId(`rules-kind-${k}`)).toBeTruthy();
+    }
+    expect(screen.getByTestId("rules-kind-PROFESSIONAL").textContent).toBe("By professional");
+    await userEvent.click(screen.getByTestId("rules-kind-GROUPS"));
+    expect(await screen.findByTestId("commission-groups")).toBeTruthy();
+  });
+
+  it("offers Aguinaldo in the more menu", async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Aguinaldo" }));
+    expect(await screen.findByTestId("commission-aguinaldo")).toBeTruthy();
+    expect(screen.getByTestId("commissions-more-title").textContent).toBe("Aguinaldo");
+  });
+
+  it("reaches Settings from the more menu and lists the settings, the new ones included", async () => {
     renderPage();
     await userEvent.click(screen.getByRole("button", { name: "More" }));
     await userEvent.click(await screen.findByRole("menuitem", { name: "Settings" }));
@@ -186,6 +225,11 @@ describe("CommissionsPage (redesigned)", () => {
     expect(screen.getByTestId("commission-setting-DEFAULT_SERVICE")).toBeTruthy();
     expect(screen.getByTestId("commission-setting-DEFAULT_PRODUCT")).toBeTruthy();
     expect(screen.getByTestId("commission-setting-PERIODICITY")).toBeTruthy();
+    expect(screen.getByTestId("commission-setting-FIXED_DESTINATION").textContent).toContain("For the professional");
+    expect(screen.getByTestId("commission-setting-AGUINALDO_ENABLED").textContent).toContain("Off");
+    // The default retention % only shows once the retention is on.
+    expect(screen.queryByTestId("commission-setting-AGUINALDO_DEFAULT")).toBeNull();
+    expect(screen.queryByTestId("commission-retention-profiles")).toBeNull();
     expect(screen.getByTestId("commissions-more-title").textContent).toBe("Settings");
   });
 });

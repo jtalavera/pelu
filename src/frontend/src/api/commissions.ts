@@ -1,11 +1,22 @@
-import { femmeJson, femmePostJson } from "./femmeClient";
+import { femmeJson, femmePostJson, femmePutJson } from "./femmeClient";
 import { authHeaders } from "./authHeaders";
 import { apiBaseUrl } from "./baseUrl";
 
 /** Módulo de comisiones API (requirements/prds/femme_modulo_comisiones_v1.md). */
 
 export type ApplyMode = "IMMEDIATE" | "NEXT_PERIOD" | "PERIOD_START";
-export type ConfigScope = "BASE" | "DEFAULT_SERVICE" | "DEFAULT_PRODUCT" | "PERIODICITY" | "RULE";
+export type ConfigScope =
+  | "BASE"
+  | "DEFAULT_SERVICE"
+  | "DEFAULT_PRODUCT"
+  | "PERIODICITY"
+  | "RULE"
+  | "GROUP_RULE"
+  | "FIXED_DESTINATION"
+  | "AGUINALDO_ENABLED"
+  | "AGUINALDO_DEFAULT"
+  | "RETENTION_PROFILE";
+export type FixedDestination = "PROFESSIONAL" | "SALON";
 export type BaseType = "NET_OF_TAX" | "TAX_INCLUDED";
 export type Periodicity = "WEEKLY" | "BIWEEKLY" | "MONTHLY" | "MANUAL";
 export type ItemKind = "SERVICE" | "PRODUCT";
@@ -14,6 +25,9 @@ export type ConfigChange = {
   scope: ConfigScope;
   serviceId?: number | null;
   professionalId?: number | null;
+  /** HU-COM-12: commission group of a GROUP_RULE. */
+  groupId?: number | null;
+  /** A percent, or for rules "pago|retención|montoFijo|destino" (e.g. "45|5|3000|P"). */
   value: string | null;
   validUntil?: string | null;
 };
@@ -50,6 +64,8 @@ export type VersionView = {
   itemKind: ItemKind | null;
   professionalId: number | null;
   professionalName: string | null;
+  groupId: number | null;
+  groupName: string | null;
   value: string | null;
   previousValue: string | null;
   effectiveFrom: string;
@@ -68,6 +84,86 @@ export type SettingsResponse = {
   currentPeriod: PeriodInfo;
   scheduledChanges: VersionView[];
   history: VersionView[];
+  fixedDestination: FixedDestination;
+  aguinaldoEnabled: boolean;
+  aguinaldoDefaultPercent: number;
+  retentionProfiles: RetentionProfile[];
+};
+
+/** % retained for aguinaldo from a professional by default (null = she does not retain). */
+export type RetentionProfile = {
+  professionalId: number;
+  professionalName: string | null;
+  active: boolean;
+  percent: number | null;
+};
+
+// ── Commission groups & rules by professional (HU-COM-12) ───────────────────────────────────
+
+export type GroupView = {
+  id: number;
+  name: string;
+  serviceCount: number;
+  serviceNames: string[];
+  professionalsWithRule: number;
+};
+export type GroupSuggestion = { groupId: number; groupName: string; reason: string };
+export type UngroupedService = { serviceId: number; name: string; suggestion: GroupSuggestion | null };
+export type GroupRuleRow = {
+  groupId: number;
+  groupName: string;
+  serviceCount: number;
+  ownRule: boolean;
+  percent: number | null;
+  retentionPercent: number | null;
+  fixedAmount: number | null;
+  /** Set by the rule; null = follows the salon default. */
+  fixedDestination: FixedDestination | null;
+  effectiveFixedDestination: FixedDestination;
+  versionId: number | null;
+  scheduled: boolean;
+};
+export type ProfessionalRulesView = {
+  professionalId: number;
+  professionalName: string;
+  active: boolean;
+  baseType: BaseType;
+  aguinaldoEnabled: boolean;
+  retentionProfilePercent: number | null;
+  defaultFixedDestination: FixedDestination;
+  defaultPercentService: number;
+  groups: GroupRuleRow[];
+};
+
+// ── Aguinaldo fund (HU-COM-12) ──────────────────────────────────────────────────────────────
+
+export type AguinaldoBalance = {
+  professionalId: number;
+  professionalName: string | null;
+  active: boolean;
+  retained: number;
+  paid: number;
+  balance: number;
+  lastPaymentOn: string | null;
+};
+export type AguinaldoSummary = { enabled: boolean; totalBalance: number; balances: AguinaldoBalance[] };
+export type AguinaldoMovementView = {
+  kind: "ACCRUAL" | "PAYMENT" | "ADJUSTMENT";
+  date: string;
+  concept: string | null;
+  amount: number;
+  balance: number;
+  settlementId: number | null;
+  movementId: number | null;
+  paymentMethod: string | null;
+  closesFund: boolean;
+  note: string | null;
+};
+export type AguinaldoDetail = {
+  professionalId: number;
+  professionalName: string;
+  balance: number;
+  movements: AguinaldoMovementView[];
 };
 
 export type ExceptionView = {
@@ -134,7 +230,13 @@ export type EntryView = {
   baseAmount: number | null;
   percentApplied: number | null;
   ruleOrigin: string | null;
+  /** What is paid for the line: the paid % plus the fixed amount when it is the professional's. */
   commissionAmount: number;
+  fixedAmount: number;
+  fixedToProfessional: boolean;
+  retentionPercent: number;
+  /** Retained for aguinaldo (not paid with the settlement). */
+  retentionAmount: number;
   accrualAt: string;
   reversesEntryId: number | null;
   settlementId: number | null;
@@ -153,6 +255,7 @@ export type SettlementPreview = {
   servicesTotal: number;
   productsTotal: number;
   adjustmentsTotal: number;
+  retentionTotal: number;
   lines: number;
   entries: EntryView[];
   draftSettlements: SettlementView[];
@@ -171,6 +274,10 @@ export type SettlementView = {
   periodTo: string;
   status: SettlementStatus;
   totalAmount: number;
+  /** Retained for aguinaldo in the settlement's lines (not included in totalAmount). */
+  retentionAmount: number;
+  /** Fixed amount (costo de producto) for the professional, included in totalAmount. */
+  fixedAmount: number;
   createdAt: string;
   approvedAt: string | null;
   paidAt: string | null;
@@ -225,6 +332,9 @@ export type MyEntryView = {
   baseAmount: number | null;
   percentApplied: number | null;
   commissionAmount: number;
+  fixedAmount: number;
+  fixedToProfessional: boolean;
+  retentionAmount: number;
   accrualAt: string;
   note: string | null;
 };
@@ -236,6 +346,10 @@ export type MySummary = {
   productsTotal: number;
   currentPeriodEntries: MyEntryView[];
   settlements: SettlementView[];
+  currentPeriodRetention: number;
+  currentPeriodFixed: number;
+  aguinaldoEnabled: boolean;
+  aguinaldoBalance: number;
 };
 
 export type MySettlementDetail = { settlement: SettlementView; entries: MyEntryView[]; byKind: Subtotal[] };
@@ -339,6 +453,37 @@ export const paySettlement = (id: number, paymentMethod: string, paidOn: string 
   femmePostJson<SettlementDetail>(`/api/commissions/settlements/${id}/pay`, { paymentMethod, paidOn, paymentReference });
 export const voidSettlement = (id: number, reason: string) =>
   femmePostJson<SettlementDetail>(`/api/commissions/settlements/${id}/void`, { reason });
+export const getGroups = () => femmeJson<GroupView[]>("/api/commissions/groups");
+export const createGroup = (name: string) => femmePostJson<GroupView>("/api/commissions/groups", { name });
+export const renameGroup = (id: number, name: string) =>
+  femmePutJson<void>(`/api/commissions/groups/${id}`, { name });
+export const deleteGroup = (id: number) => femmeJson<void>(`/api/commissions/groups/${id}`, { method: "DELETE" });
+export const getUngrouped = (kind: ItemKind = "SERVICE") =>
+  femmeJson<UngroupedService[]>(`/api/commissions/groups/ungrouped${qs({ kind })}`);
+export const assignGroups = (assignments: { serviceId: number; groupId: number | null }[]) =>
+  femmePostJson<{ changed: number }>("/api/commissions/groups/assign", { assignments });
+export const assignUngroupedToGroup = (groupId: number, kind: ItemKind) =>
+  femmePostJson<{ changed: number }>(`/api/commissions/groups/${groupId}/assign-ungrouped${qs({ kind })}`, {});
+export const getProfessionalRules = (professionalId: number, date?: string) =>
+  femmeJson<ProfessionalRulesView>(`/api/commissions/professionals/${professionalId}/rules${qs({ date })}`);
+
+export const getAguinaldo = () => femmeJson<AguinaldoSummary>("/api/commissions/aguinaldo");
+export const getAguinaldoDetail = (professionalId: number) =>
+  femmeJson<AguinaldoDetail>(`/api/commissions/aguinaldo/${professionalId}`);
+export const payAguinaldo = (body: {
+  professionalId: number;
+  /** null = the whole balance. */
+  amount: number | null;
+  paidOn: string | null;
+  paymentMethod: string;
+  closesFund: boolean;
+  note: string | null;
+}) => femmePostJson<AguinaldoDetail>("/api/commissions/aguinaldo/payments", body);
+export const payAguinaldoToAll = (body: { paidOn: string | null; paymentMethod: string; note: string | null }) =>
+  femmePostJson<{ paid: number }>("/api/commissions/aguinaldo/payments/all", body);
+export const adjustAguinaldo = (body: { professionalId: number; amount: number; reason: string }) =>
+  femmePostJson<AguinaldoDetail>("/api/commissions/aguinaldo/adjustments", body);
+
 export const getMySummary = () => femmeJson<MySummary>("/api/commissions/me");
 export const getMySettlement = (id: number) => femmeJson<MySettlementDetail>(`/api/commissions/me/settlements/${id}`);
 

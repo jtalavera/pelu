@@ -10,7 +10,15 @@ import { ApplyChangeDialog } from "./ApplyChangeDialog";
 import { ScheduledChangesList, describeVersionValue } from "./ScheduledChangesList";
 import { TableWrap, formatPercent, parsePercentInput, tdClass, thClass } from "./common";
 
-type Editing = "BASE" | "DEFAULT_SERVICE" | "DEFAULT_PRODUCT" | "PERIODICITY" | null;
+type Editing =
+  | "BASE"
+  | "DEFAULT_SERVICE"
+  | "DEFAULT_PRODUCT"
+  | "PERIODICITY"
+  | "FIXED_DESTINATION"
+  | "AGUINALDO_ENABLED"
+  | "AGUINALDO_DEFAULT"
+  | null;
 
 const FOLD =
   "flex min-h-12 w-full items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink";
@@ -32,6 +40,9 @@ export function SettingsTab() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [scheduledOpen, setScheduledOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  /** HU-COM-12: the professional whose usual retention % is being edited. */
+  const [retention, setRetention] = useState<{ professionalId: number; name: string; value: string } | null>(null);
+  const [retentionError, setRetentionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -62,6 +73,25 @@ export function SettingsTab() {
       current: formatPercent(settings.defaultPercentProduct),
     },
     {
+      scope: "FIXED_DESTINATION",
+      label: t("femme.commissions.settings.FIXED_DESTINATION"),
+      current: t(`femme.commissions.settings.fixedDestinationValue.${settings.fixedDestination}`),
+    },
+    {
+      scope: "AGUINALDO_ENABLED",
+      label: t("femme.commissions.settings.AGUINALDO_ENABLED"),
+      current: t(`femme.commissions.settings.aguinaldoValue.${settings.aguinaldoEnabled}`),
+    },
+    ...(settings.aguinaldoEnabled
+      ? [
+          {
+            scope: "AGUINALDO_DEFAULT" as const,
+            label: t("femme.commissions.settings.AGUINALDO_DEFAULT"),
+            current: formatPercent(settings.aguinaldoDefaultPercent),
+          },
+        ]
+      : []),
+    {
       scope: "PERIODICITY",
       label: t("femme.commissions.settings.periodicity"),
       current: t(`femme.commissions.periodicity.${settings.periodicity}`),
@@ -72,12 +102,21 @@ export function SettingsTab() {
     setFieldError(null);
     setSaveError(null);
     setNotice(null);
+    const percents = {
+      DEFAULT_SERVICE: settings!.defaultPercentService,
+      DEFAULT_PRODUCT: settings!.defaultPercentProduct,
+      AGUINALDO_DEFAULT: settings!.aguinaldoDefaultPercent,
+    } as const;
     setValue(
       scope === "BASE"
         ? settings!.base
         : scope === "PERIODICITY"
           ? settings!.periodicity
-          : String(scope === "DEFAULT_SERVICE" ? settings!.defaultPercentService : settings!.defaultPercentProduct).replace(".", ","),
+          : scope === "FIXED_DESTINATION"
+            ? settings!.fixedDestination
+            : scope === "AGUINALDO_ENABLED"
+              ? String(settings!.aguinaldoEnabled)
+              : String(percents[scope]).replace(".", ","),
     );
     setEditing(scope);
   }
@@ -112,9 +151,47 @@ export function SettingsTab() {
       });
       return setEditing(null);
     }
+    if (editing === "FIXED_DESTINATION") {
+      if (value === settings!.fixedDestination) return setEditing(null);
+      setApply({
+        change: { scope: "FIXED_DESTINATION", value },
+        summary: t("femme.commissions.settings.fixedDestinationSummary", {
+          value: t(`femme.commissions.settings.fixedDestinationValue.${value}`),
+        }),
+      });
+      return setEditing(null);
+    }
+    if (editing === "AGUINALDO_ENABLED") {
+      if (value === String(settings!.aguinaldoEnabled)) return setEditing(null);
+      setApply({
+        change: { scope: "AGUINALDO_ENABLED", value },
+        summary: t("femme.commissions.settings.aguinaldoEnabledSummary", {
+          value: t(`femme.commissions.settings.aguinaldoValue.${value}`),
+        }),
+      });
+      return setEditing(null);
+    }
     const parsed = parsePercentInput(value);
     if (parsed === null) {
       setFieldError(t("femme.commissions.validation.percent"));
+      return;
+    }
+    if (editing === "AGUINALDO_DEFAULT") {
+      if (Number(parsed) === Number(settings!.aguinaldoDefaultPercent)) return setEditing(null);
+      try {
+        // It only prefills new rules: no calculation changes, so no apply-mode question.
+        await applyChanges({
+          changes: [{ scope: "AGUINALDO_DEFAULT", value: parsed }],
+          applyMode: null,
+          replacePending: true,
+          preview: false,
+        });
+        setEditing(null);
+        setNotice(t("femme.commissions.applyDialog.applied"));
+        await load();
+      } catch (err) {
+        setFieldError(translateApiError(err, t));
+      }
       return;
     }
     const saved = editing === "DEFAULT_SERVICE" ? settings!.defaultPercentService : settings!.defaultPercentProduct;
@@ -162,6 +239,50 @@ export function SettingsTab() {
           </div>
         ))}
       </div>
+
+      {settings.aguinaldoEnabled && (
+        <section className="rounded-card border border-line bg-surface shadow-sm" data-testid="commission-retention-profiles">
+          <div className="px-4 pt-3">
+            <h3 className="font-heading font-extrabold text-ink">{t("femme.commissions.settings.retentionTitle")}</h3>
+            <p className="text-sm text-ink-3">{t("femme.commissions.settings.retentionHelp")}</p>
+          </div>
+          {settings.retentionProfiles
+            .filter((p) => p.active)
+            .map((p) => (
+              <div
+                key={p.professionalId}
+                data-testid="commission-retention-row"
+                className="grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-line px-4 py-2 first:border-t-0"
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold text-ink">{p.professionalName}</div>
+                  <div className="text-sm text-ink-3" data-testid="commission-retention-current">
+                    {p.percent
+                      ? t("femme.commissions.settings.retentionRetains", { percent: formatPercent(p.percent) })
+                      : t("femme.commissions.settings.retentionNone")}
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="min-h-11"
+                  data-testid="commission-retention-change"
+                  aria-label={`${t("femme.commissions.rules.change")}: ${p.professionalName}`}
+                  onClick={() => {
+                    setRetentionError(null);
+                    setRetention({
+                      professionalId: p.professionalId,
+                      name: p.professionalName ?? "",
+                      value: p.percent ? String(p.percent).replace(".", ",") : "",
+                    });
+                  }}
+                >
+                  {t("femme.commissions.rules.change")}
+                </Button>
+              </div>
+            ))}
+        </section>
+      )}
 
       <button
         type="button"
@@ -222,6 +343,7 @@ export function SettingsTab() {
                   <td className={tdClass}>
                     {t(`femme.commissions.scope.${v.scope}`)}
                     {v.serviceName ? ` · ${v.serviceName}` : ""}
+                    {v.groupName ? ` · ${v.groupName}` : ""}
                     {v.professionalName ? ` · ${v.professionalName}` : ""}
                   </td>
                   <td className={tdClass}>{describeVersionValue(t, v.scope, v.previousValue)}</td>
@@ -253,7 +375,9 @@ export function SettingsTab() {
               onClick={() => void submitEdit()}
               data-testid="commission-setting-save"
             >
-              {editing === "PERIODICITY" ? t("femme.commissions.common.save") : t("femme.commissions.rules.apply")}
+              {editing === "PERIODICITY" || editing === "AGUINALDO_DEFAULT"
+                ? t("femme.commissions.common.save")
+                : t("femme.commissions.rules.apply")}
             </Button>
           </>
         }
@@ -277,7 +401,40 @@ export function SettingsTab() {
               </Text>
             </>
           )}
-          {(editing === "DEFAULT_SERVICE" || editing === "DEFAULT_PRODUCT") && (
+          {editing === "FIXED_DESTINATION" && (
+            <>
+              <Text variant="small" className="text-ink-3">
+                {t("femme.commissions.settings.FIXED_DESTINATIONHelp")}
+              </Text>
+              <RadioGroup value={value} onChange={setValue} aria-label={t("femme.commissions.settings.FIXED_DESTINATION")}>
+                {(["PROFESSIONAL", "SALON"] as const).map((d) => (
+                  <label key={d} className="flex min-h-11 cursor-pointer items-start gap-2 text-sm">
+                    <Radio value={d} data-testid={`commission-fixed-${d}`} className="mt-1" />
+                    <span>
+                      <span className="font-medium">{t(`femme.commissions.settings.fixedDestinationValue.${d}`)}</span>
+                      <span className="block text-xs text-ink-3">{t(`femme.commissions.settings.fixedDestinationHelp.${d}`)}</span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </>
+          )}
+          {editing === "AGUINALDO_ENABLED" && (
+            <>
+              <Text variant="small" className="text-ink-3">
+                {t("femme.commissions.settings.AGUINALDO_ENABLEDHelp")}
+              </Text>
+              <RadioGroup value={value} onChange={setValue} aria-label={t("femme.commissions.settings.AGUINALDO_ENABLED")}>
+                {(["true", "false"] as const).map((v) => (
+                  <label key={v} className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+                    <Radio value={v} data-testid={`commission-aguinaldo-${v}`} />
+                    <span className="font-medium">{t(`femme.commissions.settings.aguinaldoValue.${v}`)}</span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </>
+          )}
+          {(editing === "DEFAULT_SERVICE" || editing === "DEFAULT_PRODUCT" || editing === "AGUINALDO_DEFAULT") && (
             <div className="flex flex-col gap-1">
               <Label htmlFor="commission-setting-percent">{editingLabel}</Label>
               <Input
@@ -311,6 +468,71 @@ export function SettingsTab() {
               {saveError && <Alert variant="destructive">{saveError}</Alert>}
             </div>
           )}
+        </div>
+      </Modal>
+
+      <Modal
+        open={retention !== null}
+        onClose={() => setRetention(null)}
+        title={t("femme.commissions.settings.retentionEditTitle", { name: retention?.name ?? "" })}
+        className="max-w-lg"
+        footer={
+          <>
+            <Button type="button" variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={() => setRetention(null)}>
+              {t("femme.commissions.common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              className="min-h-11 w-full sm:w-auto"
+              data-testid="commission-retention-save"
+              onClick={async () => {
+                if (!retention) return;
+                const raw = retention.value.trim();
+                const parsed = raw === "" ? null : parsePercentInput(raw);
+                if (raw !== "" && parsed === null) {
+                  setRetentionError(t("femme.commissions.validation.percent"));
+                  return;
+                }
+                try {
+                  // It only prefills the rules: no calculation changes, so no apply-mode question.
+                  await applyChanges({
+                    changes: [{ scope: "RETENTION_PROFILE", professionalId: retention.professionalId, value: parsed }],
+                    applyMode: null,
+                    replacePending: true,
+                    preview: false,
+                  });
+                  setRetention(null);
+                  setNotice(t("femme.commissions.applyDialog.applied"));
+                  await load();
+                } catch (err) {
+                  setRetentionError(translateApiError(err, t));
+                }
+              }}
+            >
+              {t("femme.commissions.common.save")}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="commission-retention-percent">{t("femme.commissions.settings.retentionInputLabel")}</Label>
+          <Input
+            id="commission-retention-percent"
+            inputMode="decimal"
+            value={retention?.value ?? ""}
+            invalid={!!retentionError}
+            aria-describedby={retentionError ? "commission-retention-error" : undefined}
+            className="max-w-[8rem]"
+            data-testid="commission-retention-percent"
+            onChange={(e) => {
+              setRetentionError(null);
+              setRetention((cur) => (cur ? { ...cur, value: e.target.value } : cur));
+            }}
+          />
+          <FieldValidationError id="commission-retention-error">{retentionError}</FieldValidationError>
+          <Text variant="small" className="text-ink-3">
+            {t("femme.commissions.settings.retentionInputHelp")}
+          </Text>
         </div>
       </Modal>
 
