@@ -371,7 +371,7 @@ test("AC3 · Equipo: lista ordenada con las reglas de cada persona, búsqueda, f
   const names = (await cards.evaluateAll((els) => els.map((e) => e.getAttribute("data-professional") ?? ""))).map((n) => n.toLowerCase());
   expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
   expect(names).toEqual(expect.arrayContaining([w.ana.name.toLowerCase(), "gaby", "jorgelina", "migue"]));
-  const card = (name: string) => cards.filter({ hasText: new RegExp(name, "i") });
+  const card = (name: string) => cards.filter({ hasText: name });
   await expect(card("gaby").getByTestId("team-card-rules")).toContainText("2 rules · retains 5 %");
   await expect(card("jorgelina").getByTestId("team-card-rules")).toContainText("1 rule");
   await expect(card("migue").getByTestId("team-card-rules")).toContainText("1 rule · retains 5 %");

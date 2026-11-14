@@ -356,7 +356,7 @@ export async function openCommissionsMore(page: Page, name: "Reports" | "Setting
 
 /** The row of a professional in «Liquidar» (names come uppercased from the backend). */
 export const liquidarRow = (page: Page, name: string) =>
-  page.getByTestId("liquidar-row").filter({ hasText: new RegExp(name, "i") });
+  page.getByTestId("liquidar-row").filter({ hasText: name });
 
 /** Liquidar › step N button (generate / approve / pay everything pending) and its confirmation. */
 export async function liquidarStep(page: Page, step: 1 | 2 | 3) {
@@ -367,7 +367,7 @@ export async function liquidarStep(page: Page, step: 1 | 2 | 3) {
 /** Opens a professional's page in Equipo, optionally on one of its tabs. */
 export async function openProfessional(page: Page, name: string, tab?: "summary" | "rules" | "aguinaldo" | "history") {
   await page.getByTestId("commissions-nav-team").click();
-  await page.getByTestId("team-card").filter({ hasText: new RegExp(name, "i") }).click();
+  await page.getByTestId("team-card").filter({ hasText: name }).click();
   await expect(page.getByTestId("commission-professional")).toBeVisible();
   if (tab && tab !== "summary") await page.getByTestId(`pro-tab-${tab}`).click();
 }
