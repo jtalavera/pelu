@@ -118,10 +118,6 @@ export function ProfessionalRulesPanel({ pending, stage, unstage, reloadKey }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
-  if (professionalId === null && professionals.length > 0 && active.length === 0) {
-    return <Text variant="muted">{t("femme.commissions.byProfessional.noProfessionals")}</Text>;
-  }
-
   const aguinaldoOn = view?.aguinaldoEnabled ?? false;
   const destLabel = (d: FixedDestination) => t(`femme.commissions.byProfessional.destination.${d}`);
   const defaultDestination = view?.defaultFixedDestination ?? "PROFESSIONAL";
@@ -208,6 +204,11 @@ export function ProfessionalRulesPanel({ pending, stage, unstage, reloadKey }: P
       retention: aguinaldoOn ? Number(retentionRaw) : 0,
     };
   }, [view, selectedDraft, price, aguinaldoOn]);
+
+  // Every hook is above this point: only now can the panel bail out.
+  if (professionalId === null && professionals.length > 0 && active.length === 0) {
+    return <Text variant="muted">{t("femme.commissions.byProfessional.noProfessionals")}</Text>;
+  }
 
   async function copyRules() {
     setCopyError(null);
