@@ -18,10 +18,10 @@ test.describe("HU-01 · Iniciar sesión", () => {
     await expect(page.getByText("Email or password is incorrect.")).toBeVisible();
   });
 
-  test("login exitoso redirige al panel", async ({ page }) => {
+  test("login exitoso redirige al Resumen", async ({ page }) => {
     await loginAsDemo(page);
-    await page.goto("/app/hoy");
-    await expect(page.getByTestId("dashboard-summary-appointments")).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page.getByTestId("resumen-title")).toBeVisible();
   });
 
   test("enlace a recuperación de contraseña", async ({ page }) => {

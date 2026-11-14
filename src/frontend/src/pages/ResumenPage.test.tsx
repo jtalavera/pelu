@@ -64,7 +64,9 @@ function setup(over: { cash?: boolean; attention?: boolean; fiscalAlert?: boolea
       if (over.failSummary) return Promise.reject(new Error("boom"));
       return Promise.resolve({
         appointmentsToday: { total: 18, pending: 3, confirmed: 15 },
-        fiscalAlerts: over.fiscalAlert ? [{ severity: "warning", messageKey: "x", message: "El certificado vence pronto" }] : [],
+        fiscalAlerts: over.fiscalAlert
+          ? [{ severity: "warning", messageKey: "sifenVoidingPending", message: "You have document-number voidings pending submission to SIFEN." }]
+          : [],
       });
     }
     return Promise.resolve(undefined);
@@ -237,13 +239,32 @@ describe("ResumenPage (HU-77)", () => {
     expect(navigate).toHaveBeenCalledWith("/app/billing", { state: { activeTab: "invoice" } });
   });
 
-  it("keeps showing a fiscal alert (closable) when the server sends one", async () => {
+  it("keeps showing a fiscal alert (closable), translated to the user's language", async () => {
     setup({ fiscalAlert: true });
+    await i18n.changeLanguage("es");
     await renderPage();
     const alert = screen.getByTestId("resumen-fiscal-alert");
-    expect(alert.textContent).toMatch(/El certificado vence pronto/);
+    // The server's English text is only a fallback: the message comes from the locale by its code.
+    expect(alert.textContent).toMatch(/Tenés inutilizaciones de numeración pendientes/);
+    expect(alert.textContent).not.toMatch(/You have document-number/);
     fireEvent.click(within(alert).getByRole("button"));
     expect(screen.queryByTestId("resumen-fiscal-alert")).toBeNull();
+  });
+
+  it("falls back to the server's text for an alert code it does not know", async () => {
+    setup({ fiscalAlert: true });
+    femmeJson.mockImplementation((url: string) =>
+      Promise.resolve(
+        url === "/api/dashboard"
+          ? {
+              appointmentsToday: { total: 0, pending: 0, confirmed: 0 },
+              fiscalAlerts: [{ severity: "warning", messageKey: "unknownCode", message: "Some new alert" }],
+            }
+          : undefined,
+      ),
+    );
+    await renderPage();
+    expect(screen.getByTestId("resumen-fiscal-alert").textContent).toMatch(/Some new alert/);
   });
 
   it("shows an error when the summary cannot be read", async () => {
@@ -259,4 +280,50 @@ describe("ResumenPage (HU-77)", () => {
     );
     expect(await screen.findByTestId("resumen-error")).toBeTruthy();
   });
+  it("everything the page says is in Spanish when the interface is in Spanish", async () => {
+    setup({ attention: true });
+    await i18n.changeLanguage("es");
+    await renderPage();
+    expect(screen.getByTestId("resumen-title").textContent).toBe("¡Hola, equipo!");
+    expect(screen.getByTestId("resumen-subtitle").textContent).toMatch(/^Así va tu salón hoy · /);
+    expect(screen.getByTestId("resumen-new-appointment").textContent).toBe("+ Nuevo turno");
+    expect(screen.getByTestId("resumen-new-invoice").textContent).toBe("+ Nueva factura");
+    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(["Turnos de hoy", "Caja del día", "Fichas de hoy", "Factura electrónica"]);
+    expect(screen.getByTestId("resumen-appointments-pending").textContent).toBe("3 pendientes");
+    expect(screen.getByTestId("resumen-appointments-confirmed").textContent).toBe("15 confirmados");
+    expect(screen.getByTestId("resumen-view-agenda").textContent).toBe("Ver agenda →");
+    expect(screen.getByTestId("resumen-view-cash").textContent).toMatch(/^Abierta desde las .* · Ver caja →$/);
+    expect(screen.getByTestId("resumen-fichas-open-count").textContent).toBe("4 fichas abiertas");
+    expect(screen.getByTestId("resumen-fichas-view-all").textContent).toBe("Ver todas →");
+    expect(screen.getByTestId("resumen-fichas-legend").textContent).toMatch(/cobradas.*abiertas.*anulada/);
+    expect(screen.getAllByTestId("resumen-ficha")[0].textContent).toMatch(/hace /);
+    expect(screen.getByTestId("resumen-fichas-more").textContent).toBe("y 1 ficha abierta más");
+    expect(screen.getByTestId("resumen-fichas-older").textContent).toBe("2 abiertas de días anteriores");
+    expect(screen.getByTestId("resumen-invoices-attention").textContent).toBe("1 requiere atención");
+    expect(screen.getByTestId("resumen-view-invoices").textContent).toBe("Ver comprobantes →");
+    // No English left on the page (the data itself — names, services — is the user's).
+    expect(screen.getByTestId("resumen-page").textContent).not.toMatch(
+      /\b(Hello|team|pending|confirmed|Open agenda|Collect|open records?|issued|attention|ago|All up to date)\b/i,
+    );
+  });
+
+  it("every fiscal alert code the server can send has a translation in both languages", () => {
+    // Keep in sync with `DashboardService` (the `messageKey` of each `FiscalAlert`).
+    const codes = [
+      "businessRucMissing",
+      "fiscalNoActiveStamp",
+      "fiscalExpiredOrExhausted",
+      "fiscalExpiringSoon",
+      "fiscalLowRange",
+      "sifenVoidingPending",
+      "sifenVoidingOverdue",
+    ];
+    for (const lng of ["es", "en"]) {
+      for (const code of codes) {
+        expect(i18n.exists(`femme.dashboard.alerts.${code}`, { lng }), `${lng}: ${code}`).toBe(true);
+      }
+    }
+  });
+
 });

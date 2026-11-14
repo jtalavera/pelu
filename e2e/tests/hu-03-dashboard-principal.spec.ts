@@ -25,13 +25,13 @@ test.describe("HU-03 · Dashboard principal", () => {
 
   test("HU-03 · 2 accesos rápidos a calendario y nueva cita (el formulario abre en Inicio)", async ({ page }) => {
     await loginAsDemo(page);
-    await page.getByRole("link", { name: "View agenda →" }).click();
+    await page.getByRole("link", { name: "Open agenda →" }).click();
     await expect(page).toHaveURL(/\/app\/calendar/);
     await page.goto("/app/hoy");
     await page.getByRole("button", { name: "+ New appointment" }).first().click();
     // The booking form opens right on Inicio: no navigation to the Agenda.
     await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
   });
 
   test("HU-03 · 4 estado vacío cuando no hay citas hoy", async ({ page }) => {
@@ -43,10 +43,10 @@ test.describe("HU-03 · Dashboard principal", () => {
     await expect(page.getByText("No appointments today", { exact: true }).first()).toBeVisible();
   });
 
-  test("HU-03 · 5 la facturación y los clientes del período se ven en Resumen", async ({ page }) => {
+  test("HU-03 · 5 la facturación y los clientes del período se ven en Reportes", async ({ page }) => {
     await loginAsDemo(page);
     await page.goto("/app/dashboards");
-    // Resumen: the indicators follow the selected period (30 days by default).
+    // Reportes: the indicators follow the selected period (30 days by default).
     await expect(page.getByTestId("summary-kpi-revenue")).toHaveText(/^Gs\. \d{1,3}(\.\d{3})*$/);
     await expect(page.getByTestId("summary-kpi-clients")).toHaveText(/^\d+$/);
   });

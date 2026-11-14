@@ -384,7 +384,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     const cards = page.getByTestId("dashboard-service-record-card").filter({ hasText: capMarker });
     await expect(cards).toHaveCount(15);
     await expect(page.getByTestId("dashboard-service-records-more")).toHaveCount(0);
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
   });
 
   test("AC8 · historial de fichas con filtros de búsqueda", async ({ page, request }) => {
@@ -445,7 +445,7 @@ test.describe("Issue #53 · Ficha de servicio", () => {
     await loginAs(page, email, password);
     await page.goto("/app/hoy");
     // She lands on the Inicio (open fichas of the day); the full "Service records" screen stays admin-only.
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
     await expect(page.getByRole("link", { name: "Service records" })).toHaveCount(0);
   });
 });

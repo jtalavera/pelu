@@ -94,7 +94,7 @@ test.describe("Inicio · fichas de hoy en lista", () => {
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
     await expect(dialog.getByRole("heading", { name: "New appointment" })).toBeVisible();
 
     // Save with the required fields empty → field errors, still on Inicio.
@@ -147,7 +147,7 @@ test.describe("Inicio · fichas de hoy en lista", () => {
     await expect(badge).toHaveText("Paid");
     await badge.click();
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 20_000 });
-    await expect(page).toHaveURL(/\/app\/?$/);
+    await expect(page).toHaveURL(/\/app\/hoy$/);
   });
 
   test("Nueva ficha para «Occasional client»: se guarda sin cliente registrado y se ve traducida en la lista", async ({

@@ -75,7 +75,8 @@ test.describe("Facturación rediseñada · inicio", () => {
 
     await expect(page.getByRole("heading", { name: "Billing", level: 1 })).toBeVisible();
     await expect(page.getByTestId("billing-cash-chip")).toContainText("Cash register is open");
-    await expect(page.getByText("Today", { exact: true })).toBeVisible();
+    // (the menu also has a «Today» item: the heading of the day is the last one)
+    await expect(page.getByText("Today", { exact: true }).last()).toBeVisible();
     await expect(page.getByTestId("billing-day-total")).toBeVisible();
     await expect(page.getByRole("button", { name: "+ New invoice" })).toBeVisible();
     // The old tab bar is gone.

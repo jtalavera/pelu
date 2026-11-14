@@ -285,7 +285,8 @@ export default function ResumenPage() {
       {fiscalAlert ? (
         <Alert
           variant="warning"
-          title={fiscalAlert.message}
+          // The server sends a code (`messageKey`) and an English fallback: show it in the user's language.
+          title={t(`femme.dashboard.alerts.${fiscalAlert.messageKey}`, { defaultValue: fiscalAlert.message })}
           data-testid="resumen-fiscal-alert"
           onClose={() => setAlertDismissed(true)}
         />
