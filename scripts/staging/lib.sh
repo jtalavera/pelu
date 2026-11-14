@@ -31,7 +31,8 @@ require_env() {
 # `az login` (ActiveDirectoryDefault); SQL is Entra-only, there is no SQL login.
 require_go_sqlcmd() {
   require_cmd sqlcmd
-  sqlcmd --version 2>/dev/null | grep -qi 'version' && sqlcmd --help 2>&1 | grep -q 'authentication-method' \
+  # go-sqlcmd v1 lists the classic flags (incl. --authentication-method) under `sqlcmd -?`.
+  sqlcmd --version 2>/dev/null | grep -qi 'version' && sqlcmd -? 2>&1 | grep -q 'authentication-method' \
     || die "sqlcmd must be go-sqlcmd (supports --authentication-method). Install: https://aka.ms/go-sqlcmd"
 }
 
