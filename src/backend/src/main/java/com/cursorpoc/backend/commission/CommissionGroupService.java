@@ -13,9 +13,12 @@ import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupAssignment;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupRuleRow;
+import com.cursorpoc.backend.web.dto.CommissionDtos.GroupServiceRow;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupSuggestion;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupView;
+import com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalRuleSummary;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalRulesView;
+import com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalsRuleSummary;
 import com.cursorpoc.backend.web.dto.CommissionDtos.UngroupedService;
 import java.math.BigDecimal;
 import java.text.Normalizer;
@@ -193,6 +196,55 @@ public class CommissionGroupService {
         .filter(s -> s.getKind() == kind && s.getCommissionGroupId() == null)
         .map(s -> new UngroupedService(s.getId(), s.getName(), suggest(s.getName(), groups)))
         .toList();
+  }
+
+  /** Every active item of {@code kind} with its group; ungrouped ones carry the name suggestion. */
+  @Transactional(readOnly = true)
+  public List<GroupServiceRow> services(long tenantId, ServiceKind kind) {
+    List<CommissionGroup> groups = groupRepository.findByTenantIdOrderByNameAsc(tenantId);
+    Map<Long, String> names = new HashMap<>();
+    groups.forEach(g -> names.put(g.getId(), g.getName()));
+    return serviceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(tenantId).stream()
+        .filter(s -> s.getKind() == kind)
+        .map(
+            s ->
+                new GroupServiceRow(
+                    s.getId(),
+                    s.getName(),
+                    s.getCategory() == null ? null : s.getCategory().getName(),
+                    s.getPriceMinor(),
+                    s.getCommissionGroupId(),
+                    s.getCommissionGroupId() == null ? null : names.get(s.getCommissionGroupId()),
+                    s.getCommissionGroupId() == null ? suggest(s.getName(), groups) : null))
+        .toList();
+  }
+
+  /** Active professionals (by name) with their number of group rules in force and retention %. */
+  @Transactional(readOnly = true)
+  public ProfessionalsRuleSummary professionalsSummary(long tenantId) {
+    CommissionConfigSnapshot snapshot = ledger.snapshot(tenantId);
+    Instant now = Instant.now();
+    Map<Long, Integer> counts = new HashMap<>();
+    for (ScopeKey key : snapshot.timelines().keySet()) {
+      if (key.scope() == CommissionConfigScope.GROUP_RULE
+          && key.professionalId() != null
+          && snapshot.groupRuleAt(key.groupId(), key.professionalId(), now).isPresent()) {
+        counts.merge(key.professionalId(), 1, Integer::sum);
+      }
+    }
+    List<ProfessionalRuleSummary> list =
+        professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
+            .filter(Professional::isActive)
+            .sorted(java.util.Comparator.comparing(p -> p.getDisplayName().toLowerCase()))
+            .map(
+                p ->
+                    new ProfessionalRuleSummary(
+                        p.getId(),
+                        p.getDisplayName(),
+                        counts.getOrDefault(p.getId(), 0),
+                        snapshot.retentionProfileAt(p.getId(), now)))
+            .toList();
+    return new ProfessionalsRuleSummary(snapshot.aguinaldoEnabledAt(now), list);
   }
 
   static GroupSuggestion suggest(String serviceName, List<CommissionGroup> groups) {

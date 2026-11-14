@@ -108,7 +108,24 @@ export type GroupView = {
   professionalsWithRule: number;
 };
 export type GroupSuggestion = { groupId: number; groupName: string; reason: string };
-export type UngroupedService = { serviceId: number; name: string; suggestion: GroupSuggestion | null };
+/** One active catalog item with its current commission group (null = none) and a name suggestion. */
+export type GroupServiceRow = {
+  serviceId: number;
+  name: string;
+  categoryName: string | null;
+  price: number | null;
+  groupId: number | null;
+  groupName: string | null;
+  suggestion: GroupSuggestion | null;
+};
+export type ProfessionalRuleSummary = {
+  professionalId: number;
+  name: string;
+  /** Group rules in force. */
+  ruleCount: number;
+  retentionPercent: number | null;
+};
+export type ProfessionalsRuleSummary = { aguinaldoEnabled: boolean; professionals: ProfessionalRuleSummary[] };
 export type GroupRuleRow = {
   groupId: number;
   groupName: string;
@@ -458,12 +475,12 @@ export const createGroup = (name: string) => femmePostJson<GroupView>("/api/comm
 export const renameGroup = (id: number, name: string) =>
   femmePutJson<void>(`/api/commissions/groups/${id}`, { name });
 export const deleteGroup = (id: number) => femmeJson<void>(`/api/commissions/groups/${id}`, { method: "DELETE" });
-export const getUngrouped = (kind: ItemKind = "SERVICE") =>
-  femmeJson<UngroupedService[]>(`/api/commissions/groups/ungrouped${qs({ kind })}`);
+export const getGroupServices = (kind: ItemKind = "SERVICE") =>
+  femmeJson<GroupServiceRow[]>(`/api/commissions/groups/services${qs({ kind })}`);
+export const getProfessionalsSummary = () =>
+  femmeJson<ProfessionalsRuleSummary>("/api/commissions/professionals/summary");
 export const assignGroups = (assignments: { serviceId: number; groupId: number | null }[]) =>
   femmePostJson<{ changed: number }>("/api/commissions/groups/assign", { assignments });
-export const assignUngroupedToGroup = (groupId: number, kind: ItemKind) =>
-  femmePostJson<{ changed: number }>(`/api/commissions/groups/${groupId}/assign-ungrouped${qs({ kind })}`, {});
 export const getProfessionalRules = (professionalId: number, date?: string) =>
   femmeJson<ProfessionalRulesView>(`/api/commissions/professionals/${professionalId}/rules${qs({ date })}`);
 

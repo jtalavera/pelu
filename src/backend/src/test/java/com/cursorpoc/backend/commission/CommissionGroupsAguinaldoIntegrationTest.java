@@ -470,4 +470,44 @@ class CommissionGroupsAguinaldoIntegrationTest {
     assertThat(aguinaldoService.balanceOf(tenant.getId(), gaby.getId()))
         .isEqualByComparingTo("6500");
   }
+
+  @Test
+  void theServicesListShowsEveryItemWithItsGroupOrTheNameSuggestion() {
+    long tenantId = tenant.getId();
+    long treatment = groupService.create(tenantId, "Tratamiento").id();
+    var rows = groupService.services(tenantId, ServiceKind.SERVICE);
+    assertThat(rows).hasSize(3);
+    var brushing =
+        rows.stream().filter(r -> r.name().equals("Brushing pelo largo")).findFirst().orElseThrow();
+    assertThat(brushing.groupName()).isEqualTo("Brushing");
+    assertThat(brushing.suggestion()).isNull();
+    assertThat(brushing.categoryName()).isNotBlank();
+    var bano =
+        rows.stream().filter(r -> r.name().equals("Baño de crema")).findFirst().orElseThrow();
+    assertThat(bano.groupId()).isNull();
+    assertThat(bano.suggestion().groupId()).isEqualTo(treatment);
+    assertThat(bano.suggestion().reason()).isEqualTo("bano de crema");
+    assertThat(groupService.services(tenantId, ServiceKind.PRODUCT)).isEmpty();
+  }
+
+  @Test
+  void theProfessionalsSummaryCountsGroupRulesAlphabetically() {
+    configureSalon();
+    var summary = groupService.professionalsSummary(tenant.getId());
+    assertThat(summary.aguinaldoEnabled()).isTrue();
+    assertThat(summary.professionals())
+        .extracting(p -> p.name().toLowerCase())
+        .containsExactly("gaby", "jorgelina");
+    assertThat(summary.professionals().get(0).ruleCount()).isEqualTo(2);
+    assertThat(summary.professionals().get(1).ruleCount()).isEqualTo(1);
+    assertThat(summary.professionals().get(0).retentionPercent()).isNull();
+    change("IMMEDIATE", new ConfigChange("RETENTION_PROFILE", null, gaby.getId(), null, "5", null));
+    assertThat(
+            groupService
+                .professionalsSummary(tenant.getId())
+                .professionals()
+                .get(0)
+                .retentionPercent())
+        .isEqualByComparingTo("5");
+  }
 }

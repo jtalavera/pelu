@@ -114,6 +114,23 @@ public final class CommissionDtos {
 
   public record UngroupedService(Long serviceId, String name, GroupSuggestion suggestion) {}
 
+  /** One active catalog item with its current commission group (null = none) and a suggestion. */
+  public record GroupServiceRow(
+      Long serviceId,
+      String name,
+      String categoryName,
+      BigDecimal price,
+      Long groupId,
+      String groupName,
+      GroupSuggestion suggestion) {}
+
+  /** A professional with how many group rules she has and her usual retention %. */
+  public record ProfessionalRuleSummary(
+      Long professionalId, String name, int ruleCount, BigDecimal retentionPercent) {}
+
+  public record ProfessionalsRuleSummary(
+      boolean aguinaldoEnabled, List<ProfessionalRuleSummary> professionals) {}
+
   /** One group row of a professional's rules (null rule fields = she has no own rule for it). */
   public record GroupRuleRow(
       Long groupId,
