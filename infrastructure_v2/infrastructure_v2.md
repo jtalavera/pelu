@@ -133,11 +133,12 @@ managed identity but cannot yet connect to SQL. Run this once per environment:
 CONTAINER_APP_NAME="femme-backend"   # matches name_prefix + "-backend" in main.tf
 SERVER_FQDN="<terraform output -raw sql_server_fqdn>"
 DB_NAME="<terraform output -raw sql_database_name>"
+MI_OBJECT_ID="<terraform output -raw container_app_principal_id>"
 
 sqlcmd -S "$SERVER_FQDN" -d "$DB_NAME" \
   --authentication-method=ActiveDirectoryInteractive \
   -Q "
-    CREATE USER [$CONTAINER_APP_NAME] FROM EXTERNAL PROVIDER;
+    CREATE USER [$CONTAINER_APP_NAME] FROM EXTERNAL PROVIDER WITH OBJECT_ID = '$MI_OBJECT_ID';
     ALTER ROLE db_datareader  ADD MEMBER [$CONTAINER_APP_NAME];
     ALTER ROLE db_datawriter  ADD MEMBER [$CONTAINER_APP_NAME];
     ALTER ROLE db_ddladmin    ADD MEMBER [$CONTAINER_APP_NAME];
@@ -145,6 +146,11 @@ sqlcmd -S "$SERVER_FQDN" -d "$DB_NAME" \
 ```
 
 `db_ddladmin` is required so Flyway can run migrations on startup.
+
+`WITH OBJECT_ID` is required. Dev, prod and staging all name their Container App
+`femme-backend`, so Entra has several managed identities with that display name. Without it,
+`FROM EXTERNAL PROVIDER` fails with *Msg 33131 … duplicate display name*. Existing users in
+dev/prod are unaffected; this only matters when the user is (re)created.
 
 ## Post-apply: seed the Key Vault JWT secret (RT-12/RT-18)
 

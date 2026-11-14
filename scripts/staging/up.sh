@@ -11,6 +11,9 @@
 #                      Its deploy-v2.yml must already offer the v2-staging option.
 #   --bacpac=<name>    blob name (without .bacpac) in the snapshots/ or loadtest/ container
 #   --recreate         run down.sh first if femme-staging-rg exists
+#   --resume           continue on an EXISTING femme-staging-rg after a failed run: re-applies
+#                      Terraform (no-op if unchanged) and skips the data import (step 3); the
+#                      prod-data sanitization check still runs. Same --data/--ref as before.
 #   --tf-var K=V       WHAT-IF sizing override (repeatable). Never committed; recorded in the run
 #                      report as an explicitly labeled deviation from prod.
 #   --yes              no interactive confirmations (terraform apply runs with -auto-approve)
@@ -26,13 +29,14 @@ set -euo pipefail
 # shellcheck source=lib.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-DATA="" REF="" BACPAC="" RECREATE=0 TF_OVERRIDES=()
+DATA="" REF="" BACPAC="" RECREATE=0 RESUME=0 TF_OVERRIDES=()
 for arg in "$@"; do
   case "$arg" in
     --data=*) DATA="${arg#*=}" ;;
     --ref=*) REF="${arg#*=}" ;;
     --bacpac=*) BACPAC="${arg#*=}"; BACPAC="${BACPAC%.bacpac}" ;;
     --recreate) RECREATE=1 ;;
+    --resume) RESUME=1 ;;
     --tf-var) die "use --tf-var=KEY=VALUE" ;;
     --tf-var=*) TF_OVERRIDES+=("${arg#*=}") ;;
     --yes) export ASSUME_YES=1 ;;
@@ -43,6 +47,7 @@ done
 [[ "$DATA" =~ ^(prod|loadtest|empty)$ ]] || die "--data must be prod, loadtest or empty"
 [[ -n "$REF" ]] || die "--ref=<branch or tag> is required"
 [[ "$DATA" != "loadtest" || -n "$BACPAC" ]] || die "--data=loadtest needs --bacpac=loadtest-V<v>-t<N>-s<M>"
+((RECREATE && RESUME)) && die "--recreate and --resume are mutually exclusive"
 
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 RUN_DIR="$WORK_DIR/runs/$RUN_ID"
@@ -84,8 +89,11 @@ REF_DEPLOY_WORKFLOW="$(git -C "$REPO_ROOT" show "$REF_COMMIT:.github/workflows/d
   || die "ref '$REF' predates the v2-staging deploy option (deploy-v2.yml) — merge develop into it first"
 EXPECTED_FLYWAY="$(expected_flyway_version "$REF_COMMIT")"
 
-if [[ "$(az group exists -n "$STAGING_RG")" == "true" ]]; then
-  ((RECREATE)) || die "$STAGING_RG already exists — run scripts/staging/down.sh or pass --recreate"
+if ((RESUME)); then
+  [[ "$(az group exists -n "$STAGING_RG")" == "true" ]] || die "--resume: $STAGING_RG does not exist (nothing to resume)"
+  warn "--resume: continuing on the existing $STAGING_RG; the data import (step 3) is skipped"
+elif [[ "$(az group exists -n "$STAGING_RG")" == "true" ]]; then
+  ((RECREATE)) || die "$STAGING_RG already exists — run scripts/staging/down.sh, or pass --recreate (start over) or --resume (continue)"
   log "--recreate: tearing down the existing staging environment first"
   "$STAGING_DIR/down.sh" ${ASSUME_YES:+--yes}
 fi
@@ -163,7 +171,15 @@ if [[ "$DATA" != "empty" ]]; then
 fi
 SANITIZE_VARS=("EmailDomain=$SANITIZED_EMAIL_DOMAIN" "Phone=$SANITIZED_PHONE" "PasswordHash=$USER_HASH")
 
-case "$DATA" in
+DATA_STEP="$DATA"
+if ((RESUME)); then
+  DATA_STEP="resume"
+  report "- **Resumed run** (--resume): data import skipped, assumed done by the earlier run"
+fi
+case "$DATA_STEP" in
+  resume)
+    log "3/8 --resume: skipping the data import"
+    ;;
   empty)
     log "3/8 --data=empty: Flyway will build the schema on first boot"
     ;;
@@ -205,6 +221,7 @@ fi
 # 3b. Load-test only: rebase SIFEN numbering and re-link certificates (T6)
 # =============================================================================================
 if [[ "$DATA" == "loadtest" ]]; then
+  [[ -f "$RUN_DIR/users.json" ]] || blob_download "$LOADTEST_CONTAINER" "$BACPAC.users.json" "$RUN_DIR/users.json"
   # shellcheck source=sifen-loadtest.sh
   source "$STAGING_DIR/sifen-loadtest.sh"
   sifen_rebase_and_relink "$RUN_DIR/users.json" "$SQL_SERVER" "$SQL_DB" "$KV_NAME"
@@ -214,7 +231,9 @@ fi
 # 4. Managed-identity DB user
 # =============================================================================================
 log "4/8 granting the Container App's managed identity on $SQL_DB"
-retry 10 30 sql_file "$SQL_SERVER" "$SQL_DB" "$STAGING_DIR/sql/grant-mi-user.sql" "AppName=$CONTAINER_APP_NAME" \
+MI_OBJECT_ID="$(tf_out container_app_principal_id)"
+retry 10 30 sql_file "$SQL_SERVER" "$SQL_DB" "$STAGING_DIR/sql/grant-mi-user.sql" \
+  "AppName=$CONTAINER_APP_NAME" "ObjectId=$MI_OBJECT_ID" \
   || die "could not create the managed-identity DB user"
 
 # =============================================================================================
