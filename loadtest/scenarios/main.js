@@ -158,7 +158,7 @@ export function salonDay(data) {
   const { tenant, token } = session(data, () => true);
   if (!token) return;
   const now = new Date();
-  const weekStart = addDays(now, -now.getUTCDay() + 1);
+  const weekStart = addDays(now, -((now.getUTCDay() + 6) % 7)); // Monday of this week (Sunday = 0)
 
   get(token, `/api/appointments?from=${weekStart.toISOString()}&to=${addDays(weekStart, 7).toISOString()}`, "appointments_list");
   sleep(1 + Math.random() * 2);
