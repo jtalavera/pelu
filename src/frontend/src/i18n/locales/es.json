@@ -438,7 +438,8 @@
         "productCost": "Costo de producto (para la profesional)",
         "lineProductCost": "Costo de producto {{amount}}",
         "lineRetention": "Retención {{percent}} · {{amount}}",
-        "toPay": "A pagar ahora"
+        "toPay": "A pagar ahora",
+        "voidDescriptionDraft": "Las comisiones vuelven a quedar sin liquidar. El motivo es opcional."
       },
       "reports": {
         "linesCount_one": "{{count}} línea",
@@ -863,7 +864,8 @@
           "GENERATE": "Generar",
           "APPROVE": "Aprobar",
           "PAY": "Pagar",
-          "VIEW": "Ver"
+          "VIEW": "Ver",
+          "VOID": "Anular"
         },
         "csv": "Descargar CSV",
         "done": {
@@ -872,7 +874,9 @@
           "PAY": "Se pagaron {{count}} liquidaciones.",
           "GENERATE_one": "Se generó {{count}} liquidación.",
           "APPROVE_one": "Se aprobó {{count}} liquidación.",
-          "PAY_one": "Se pagó {{count}} liquidación."
+          "PAY_one": "Se pagó {{count}} liquidación.",
+          "VOID": "{{count}} borradores anulados. Sus comisiones volvieron a «Sin liquidar».",
+          "VOID_one": "Borrador anulado. Sus comisiones volvieron a «Sin liquidar»."
         },
         "dialog": {
           "total": "Total: {{amount}}",
@@ -902,6 +906,23 @@
             "reference": "Referencia (opcional)",
             "title_one": "Pagar {{count}} liquidación",
             "confirm_one": "Registrar pago de {{count}}"
+          },
+          "VOID": {
+            "title": "Anular {{count}} borradores",
+            "title_one": "Anular el borrador",
+            "description": "Las comisiones vuelven a «Sin liquidar» y podés generar las liquidaciones de nuevo cuando quieras.",
+            "confirm": "Anular {{count}} borradores",
+            "confirm_one": "Anular borrador",
+            "reason": "Motivo (opcional)",
+            "reasonAll": "Motivo para todas (opcional)",
+            "placeholder": "Por ejemplo: se generó por equivocación",
+            "skipped": "Solo se anulan los borradores; las otras {{count}} marcadas no cambian.",
+            "skipped_one": "Solo se anulan los borradores; la otra marcada no cambia.",
+            "reasons": {
+              "mistake": "Se generó por equivocación",
+              "rule": "Cambió una regla",
+              "sale": "Falta una venta"
+            }
           }
         },
         "detail": "Ver detalle",
@@ -929,7 +950,15 @@
           "lines_other": "{{count}} movimientos",
           "paidOn": "Pagada el {{date}}",
           "settlement": "Liquidación #{{id}}"
-        }
+        },
+        "voidRowAria": "Anular el borrador de {{name}}",
+        "pickGroup": "Marcar a todas: {{group}}",
+        "selectionAria": "Profesionales seleccionadas",
+        "selectedCount": "{{count}} seleccionadas",
+        "selectedCount_one": "{{count}} seleccionada",
+        "bulkVoid": "Anular borradores",
+        "clearSelection": "Limpiar",
+        "regenerate": "Generar de nuevo"
       },
       "team": {
         "tabPeople": "Profesionales ({{count}})",

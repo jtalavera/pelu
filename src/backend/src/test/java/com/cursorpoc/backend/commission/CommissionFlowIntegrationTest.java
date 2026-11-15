@@ -375,6 +375,38 @@ class CommissionFlowIntegrationTest {
   }
 
   @Test
+  void aDraftCanBeVoidedWithoutAReasonButAnApprovedOneNeedsIt() {
+    change("IMMEDIATE", rule(corte, null, "40"));
+    accrue(invoice(corte, ana, "110000"));
+    LocalDate today = LocalDate.now(configService.zone());
+    CommissionSettlement draft =
+        settlementService
+            .generate(
+                tenant.getId(), "admin@test", new GenerateSettlementsRequest(today, today, null))
+            .get(0);
+
+    // HU-COM-19: the quick void of a draft does not ask why.
+    settlementService.voidSettlement(tenant.getId(), draft.getId(), "a", " ");
+    CommissionSettlement voided = settlementRepository.findById(draft.getId()).get();
+    assertThat(voided.getStatus()).isEqualTo(CommissionSettlementStatus.VOIDED);
+    assertThat(voided.getVoidReason()).isNull();
+
+    // Its commissions are free again; once approved, voiding it still needs a reason.
+    CommissionSettlement again =
+        settlementService
+            .generate(
+                tenant.getId(), "admin@test", new GenerateSettlementsRequest(today, today, null))
+            .get(0);
+    settlementService.approve(tenant.getId(), again.getId(), "a");
+    assertThatThrownBy(
+            () -> settlementService.voidSettlement(tenant.getId(), again.getId(), "a", null))
+        .hasMessageContaining("SETTLEMENT_VOID_REASON_REQUIRED");
+    settlementService.voidSettlement(tenant.getId(), again.getId(), "a", "Error de carga");
+    assertThat(settlementRepository.findById(again.getId()).get().getVoidReason())
+        .isEqualTo("Error de carga");
+  }
+
+  @Test
   void periodStartRecalculatesDraftButNotApprovedAndPreviewPersistsNothing() {
     change("IMMEDIATE", rule(corte, null, "40"));
     accrue(invoice(corte, ana, "110000"));

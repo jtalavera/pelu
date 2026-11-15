@@ -120,9 +120,7 @@ test("anular una liquidación Borrador libera sus entradas para volver a liquida
   await page.goto(`/app/commissions/settlements/${s.id}`);
   await page.getByTestId("settlement-more-trigger").click();
   await page.getByTestId("settlement-more-item-void").click();
-  await page.getByTestId("settlement-void-confirm").click();
-  await expect(page.locator("#void-error")).toContainText("required");
-  await page.locator("#void-reason").fill("Periodo mal elegido");
+  // HU-COM-19: a draft can be voided without a reason (it is only required once approved).
   await page.getByTestId("settlement-void-confirm").click();
   await expect(page.getByTestId("settlement-status")).toHaveText("Voided");
   const again = await generateSettlements(request, w.adminToken, [w.ana.id]);

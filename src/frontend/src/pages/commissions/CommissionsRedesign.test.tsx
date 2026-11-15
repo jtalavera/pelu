@@ -24,6 +24,7 @@ const api = vi.hoisted(() => ({
   generateSettlements: vi.fn(),
   approveSettlement: vi.fn(),
   paySettlement: vi.fn(),
+  voidSettlement: vi.fn(),
 }));
 vi.mock("../../api/commissions", async (orig) => ({ ...(await orig<typeof import("../../api/commissions")>()), ...api }));
 vi.mock("../../api/femmeClient", () => ({ femmeJson: vi.fn(async () => []), femmePostJson: vi.fn(), femmePutJson: vi.fn() }));
@@ -342,6 +343,90 @@ describe("HU-COM-15 · Liquidar", () => {
     await user.click(within(rows[0]).getByTestId("liquidar-row-approve"));
     await user.click(await screen.findByTestId("liquidar-confirm"));
     await waitFor(() => expect(api.approveSettlement).toHaveBeenCalledWith(7));
+  });
+});
+
+describe("HU-COM-19 · anular borradores", () => {
+  it("solo las filas en Borrador tienen «Anular», junto a «Aprobar»", async () => {
+    mount("/app/commissions/liquidar");
+    const rows = await screen.findAllByTestId("liquidar-row");
+    expect(screen.getAllByTestId("liquidar-row-void")).toHaveLength(1);
+    const migue = rows.find((r) => r.dataset.professional === "Migue")!;
+    expect(within(migue).getByTestId("liquidar-row-approve")).toBeTruthy();
+    expect(within(migue).getByTestId("liquidar-row-void")).toBeTruthy();
+    for (const r of rows.filter((r) => r !== migue)) expect(within(r).queryByTestId("liquidar-row-void")).toBeNull();
+  });
+
+  it("anular una fila pide confirmar, el motivo es opcional y ofrece generar de nuevo", async () => {
+    const user = userEvent.setup();
+    api.voidSettlement.mockResolvedValue({});
+    mount("/app/commissions/liquidar?state=DRAFT");
+    await user.click(await screen.findByTestId("liquidar-row-void"));
+    expect(await screen.findByTestId("liquidar-confirm")).toHaveProperty("textContent", "Anular borrador");
+    expect(screen.getByTestId("liquidar-dialog-summary").textContent).toContain("Migue");
+    // Without a reason it is valid: the field is empty and nothing is flagged.
+    api.getOverview.mockResolvedValue(
+      overview({ rows: [person(2, "Migue", { status: "UNSETTLED", amount: 80000 })], unsettled: 1, drafts: 0 }),
+    );
+    await user.click(screen.getByTestId("liquidar-confirm"));
+    await waitFor(() => expect(api.voidSettlement).toHaveBeenCalledWith(7, ""));
+    expect((await screen.findByTestId("liquidar-notice")).textContent).toContain("Borrador anulado");
+    expect(screen.getByTestId("liquidar-regenerate")).toBeTruthy();
+  });
+
+  it("un motivo frecuente se carga con un toque y se envía", async () => {
+    const user = userEvent.setup();
+    api.voidSettlement.mockResolvedValue({});
+    mount("/app/commissions/liquidar?state=DRAFT");
+    await user.click(await screen.findByTestId("liquidar-row-void"));
+    await user.click(await screen.findByTestId("liquidar-void-reason-rule"));
+    expect((screen.getByTestId("liquidar-void-reason") as HTMLInputElement).value).toBe("Cambió una regla");
+    await user.click(screen.getByTestId("liquidar-confirm"));
+    await waitFor(() => expect(api.voidSettlement).toHaveBeenCalledWith(7, "Cambió una regla"));
+  });
+
+  it("en lote: la barra de selección anula solo los borradores marcados y avisa de las demás", async () => {
+    const user = userEvent.setup();
+    api.voidSettlement.mockResolvedValue({});
+    const ov = overview({
+      rows: [
+        person(1, "Gaby", { status: "UNSETTLED", amount: 120000 }),
+        person(2, "Migue", { status: "DRAFT", amount: 80000, settlementId: 7 }),
+        person(3, "Nora", { status: "DRAFT", amount: 12000, settlementId: 8 }),
+      ],
+      drafts: 2,
+      unsettled: 1,
+      approved: 0,
+      paid: 0,
+    });
+    mount("/app/commissions/liquidar", ov);
+    await screen.findAllByTestId("liquidar-row");
+    expect(screen.queryByTestId("liquidar-selection")).toBeNull();
+    // The header checkbox of «Borrador» marks both drafts.
+    await user.click(screen.getByTestId("liquidar-group-check-DRAFT"));
+    expect(screen.getByTestId("liquidar-selection-count").textContent).toBe("2 seleccionadas");
+    // A non-draft in the selection is left alone.
+    await user.click(screen.getAllByTestId("liquidar-row-check")[0]);
+    await user.click(screen.getByTestId("liquidar-bulk-void"));
+    expect(await screen.findByTestId("liquidar-confirm")).toHaveProperty("textContent", "Anular 2 borradores");
+    expect(screen.getByTestId("liquidar-void-skipped").textContent).toContain("la otra marcada no cambia");
+    await user.type(screen.getByTestId("liquidar-void-reason"), "Cambió una regla");
+    await user.click(screen.getByTestId("liquidar-confirm"));
+    await waitFor(() => expect(api.voidSettlement).toHaveBeenCalledTimes(2));
+    expect(api.voidSettlement).toHaveBeenCalledWith(7, "Cambió una regla");
+    expect(api.voidSettlement).toHaveBeenCalledWith(8, "Cambió una regla");
+    await waitFor(() => expect(screen.queryByTestId("liquidar-selection")).toBeNull());
+  });
+
+  it("«Limpiar» deja la selección vacía y sin borradores marcados no aparece «Anular borradores»", async () => {
+    const user = userEvent.setup();
+    mount("/app/commissions/liquidar");
+    await screen.findAllByTestId("liquidar-row");
+    await user.click(screen.getByTestId("liquidar-group-check-UNSETTLED"));
+    expect(screen.getByTestId("liquidar-selection")).toBeTruthy();
+    expect(screen.queryByTestId("liquidar-bulk-void")).toBeNull();
+    await user.click(screen.getByTestId("liquidar-selection-clear"));
+    expect(screen.queryByTestId("liquidar-selection")).toBeNull();
   });
 });
 

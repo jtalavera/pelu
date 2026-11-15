@@ -485,7 +485,7 @@ export default function CommissionSettlementPage() {
         open={voidOpen}
         onClose={() => setVoidOpen(false)}
         title={t("femme.commissions.settlement.void")}
-        description={t("femme.commissions.settlement.voidDescription")}
+        description={t(isDraft ? "femme.commissions.settlement.voidDescriptionDraft" : "femme.commissions.settlement.voidDescription")}
         footer={
           <>
             <Button type="button" variant="secondary" onClick={() => setVoidOpen(false)}>
@@ -496,7 +496,8 @@ export default function CommissionSettlementPage() {
               variant="danger"
               data-testid="settlement-void-confirm"
               onClick={() => {
-                if (!voidReason.trim()) {
+                // HU-COM-19: the reason is optional for a draft, required once it was approved.
+                if (!isDraft && !voidReason.trim()) {
                   setVoidError(t("femme.apiErrors.SETTLEMENT_VOID_REASON_REQUIRED"));
                   return;
                 }
@@ -509,7 +510,7 @@ export default function CommissionSettlementPage() {
           </>
         }
       >
-        <Label htmlFor="void-reason" required>
+        <Label htmlFor="void-reason" required={!isDraft}>
           {t("femme.commissions.settlement.reason")}
         </Label>
         <Textarea
