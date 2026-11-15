@@ -9,6 +9,7 @@ import {
   getOverview,
   paySettlement,
   settlementsCsvPath,
+  voidSettlement,
   type Overview,
   type OverviewRow,
   type OverviewStatus,
@@ -27,7 +28,12 @@ import { todayYmd } from "./common";
 type Dialog =
   | { kind: "GENERATE"; rows: OverviewRow[] }
   | { kind: "APPROVE"; rows: OverviewRow[] }
-  | { kind: "PAY"; rows: OverviewRow[] };
+  | { kind: "PAY"; rows: OverviewRow[] }
+  /** HU-COM-19: quick void of drafts; `skipped` = selected rows that are not drafts and stay as they are. */
+  | { kind: "VOID"; rows: OverviewRow[]; skipped: number };
+
+/** Reasons offered with one touch when voiding (the field is optional). */
+const VOID_REASONS = ["mistake", "rule", "sale"] as const;
 
 const FILTERS: (OverviewStatus | "ALL")[] = ["ALL", "UNSETTLED", "DRAFT", "APPROVED", "PAID", "NONE"];
 /** What is left to do first, and the ones with nothing to settle last. */
@@ -61,6 +67,9 @@ export default function LiquidarPage() {
   const [method, setMethod] = useState("CASH");
   const [paidOn, setPaidOn] = useState(todayYmd());
   const [reference, setReference] = useState("");
+  const [voidReason, setVoidReason] = useState("");
+  /** Professionals whose draft was just voided: the notice offers to generate them again. */
+  const [regen, setRegen] = useState<number[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -86,13 +95,25 @@ export default function LiquidarPage() {
   const count = (s: OverviewStatus | "ALL") => (s === "ALL" ? rows.length : byStatus(s).length);
   const amountOf = (s: OverviewStatus) => byStatus(s).reduce((a, r) => a + r.amount, 0);
 
-  function open(kind: Dialog["kind"], list: OverviewRow[]) {
+  function open(kind: "GENERATE" | "APPROVE" | "PAY", list: OverviewRow[]) {
     setDialogError(null);
     setNotice(null);
+    setRegen(null);
     setMethod("CASH");
     setPaidOn(todayYmd());
     setReference("");
     setDialog({ kind, rows: list });
+  }
+
+  /** Voids only the drafts among `list`; anything else that was selected is left alone and said so. */
+  function openVoid(list: OverviewRow[]) {
+    const drafts = list.filter((r) => r.status === "DRAFT" && r.settlementId !== null);
+    if (drafts.length === 0) return;
+    setDialogError(null);
+    setNotice(null);
+    setRegen(null);
+    setVoidReason("");
+    setDialog({ kind: "VOID", rows: drafts, skipped: list.length - drafts.length });
   }
 
   /** Rows of the given state among the selected ones, or all of that state when none is selected. */
@@ -115,6 +136,9 @@ export default function LiquidarPage() {
         });
       } else if (dialog.kind === "APPROVE") {
         for (const r of dialog.rows) await approveSettlement(r.settlementId!);
+      } else if (dialog.kind === "VOID") {
+        for (const r of dialog.rows) await voidSettlement(r.settlementId!, voidReason.trim());
+        setRegen(dialog.rows.map((r) => r.professionalId));
       } else {
         for (const r of dialog.rows) await paySettlement(r.settlementId!, method, paidOn || null, reference.trim());
       }
@@ -147,6 +171,19 @@ export default function LiquidarPage() {
     const a = STATUS_META[r.status].action;
     if (!a) return null;
     const testId = `liquidar-row-${a.toLowerCase()}`;
+    const voidButton =
+      r.status === "DRAFT" && r.settlementId ? (
+        <Button
+          type="button"
+          variant="outline"
+          className={`${ACTION_BUTTON} min-w-20 !border-danger/40 !text-danger`}
+          data-testid="liquidar-row-void"
+          aria-label={t("femme.commissions.liquidar.voidRowAria", { name: r.professionalName })}
+          onClick={() => openVoid([r])}
+        >
+          {t("femme.commissions.liquidar.action.VOID")}
+        </Button>
+      ) : null;
     if (a === "VIEW") {
       return r.settlementId ? (
         <Link
@@ -159,9 +196,12 @@ export default function LiquidarPage() {
       ) : null;
     }
     return (
-      <Button type="button" className={`${ACTION_BUTTON} min-w-24`} variant={a === "GENERATE" ? "secondary" : "primary"} data-testid={testId} onClick={() => open(a, [r])}>
-        {t(`femme.commissions.liquidar.action.${a}`)}
-      </Button>
+      <>
+        <Button type="button" className={`${ACTION_BUTTON} min-w-24`} variant={a === "GENERATE" ? "secondary" : "primary"} data-testid={testId} onClick={() => open(a, [r])}>
+          {t(`femme.commissions.liquidar.action.${a}`)}
+        </Button>
+        {voidButton}
+      </>
     );
   }
 
@@ -175,6 +215,8 @@ export default function LiquidarPage() {
   ];
   const dialogTotal = dialog ? dialog.rows.reduce((a, r) => a + r.amount, 0) : 0;
   const dialogRetention = dialog ? dialog.rows.reduce((a, r) => a + r.retention, 0) : 0;
+  const regenRows = regen ? rows.filter((r) => regen.includes(r.professionalId) && r.status === "UNSETTLED") : [];
+  const selectedRows = rows.filter((r) => selected.has(r.professionalId));
   const names = (list: OverviewRow[]) => list.map((r) => r.professionalName).join(", ");
 
   return (
@@ -221,7 +263,14 @@ export default function LiquidarPage() {
 
       {notice && (
         <Alert variant="success" role="status" data-testid="liquidar-notice">
-          {notice}
+          <span className="flex flex-wrap items-center gap-3">
+            <span className="min-w-0 flex-1 basis-60">{notice}</span>
+            {regenRows.length > 0 && (
+              <Button type="button" className={ACTION_BUTTON} data-testid="liquidar-regenerate" onClick={() => open("GENERATE", regenRows)}>
+                {t("femme.commissions.liquidar.regenerate")}
+              </Button>
+            )}
+          </span>
         </Alert>
       )}
       {error && <Alert variant="destructive">{error}</Alert>}
@@ -287,14 +336,36 @@ export default function LiquidarPage() {
           ))}
         </div>
 
+        {selectedRows.length > 0 && (
+          <div role="region" aria-label={t("femme.commissions.liquidar.selectionAria")} data-testid="liquidar-selection" className="flex flex-wrap items-center gap-3 rounded-2xl bg-ink px-4 py-2.5 text-surface">
+            <span className="flex-1 basis-48 text-sm">
+              <b data-testid="liquidar-selection-count">{t("femme.commissions.liquidar.selectedCount", { count: selectedRows.length })}</b> ·{" "}
+              {formatGuaraniesGs(selectedRows.reduce((a, r) => a + r.amount, 0))}
+            </span>
+            {selectedRows.some((r) => r.status === "DRAFT") && (
+              <button
+                type="button"
+                data-testid="liquidar-bulk-void"
+                onClick={() => openVoid(selectedRows)}
+                className="inline-flex min-h-11 items-center rounded-full bg-surface px-5 text-sm font-extrabold text-danger"
+              >
+                {t("femme.commissions.liquidar.bulkVoid")}
+              </button>
+            )}
+            <button type="button" data-testid="liquidar-selection-clear" onClick={() => setSelected(new Set())} className="inline-flex min-h-11 items-center px-3 text-sm font-extrabold">
+              {t("femme.commissions.liquidar.clearSelection")}
+            </button>
+          </div>
+        )}
+
         {visible.length === 0 ? (
           <p className="text-ink-3" data-testid="liquidar-empty">
             {t("femme.commissions.liquidar.empty")}
           </p>
         ) : (
           <div className="w-full overflow-x-auto">
-            <div className="min-w-[40rem]">
-              <div className="grid grid-cols-[1.5rem_minmax(0,1fr)_8rem_8rem_9.5rem_6.5rem] gap-2 pb-1 pt-1 text-[11px] font-extrabold uppercase tracking-wide text-ink-3">
+            <div className="min-w-[48rem]">
+              <div className="grid grid-cols-[1.5rem_minmax(0,1fr)_8rem_8rem_9.5rem_13.5rem] gap-2 pb-1 pt-1 text-[11px] font-extrabold uppercase tracking-wide text-ink-3">
                 <span />
                 <span>{t("femme.commissions.liquidar.colProfessional")}</span>
                 <span className="text-right">{t("femme.commissions.liquidar.colAmount")}</span>
@@ -309,7 +380,24 @@ export default function LiquidarPage() {
                 return (
                   <div key={status} data-testid={`liquidar-group-${status}`} className="flex flex-col">
                     <div className={`mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl px-3.5 py-2 text-sm font-extrabold ${GROUP_TONE[status]}`}>
-                      <span>
+                      <span className="inline-flex items-center gap-2.5">
+                        {status !== "NONE" && status !== "PAID" && (
+                          <input
+                            type="checkbox"
+                            className="size-[18px] accent-[var(--color-primary)]"
+                            aria-label={t("femme.commissions.liquidar.pickGroup", { group: t(`femme.commissions.status.${status}`) })}
+                            checked={list.every((r) => selected.has(r.professionalId))}
+                            data-testid={`liquidar-group-check-${status}`}
+                            onChange={() =>
+                              setSelected((prev) => {
+                                const next = new Set(prev);
+                                const all = list.every((r) => next.has(r.professionalId));
+                                list.forEach((r) => (all ? next.delete(r.professionalId) : next.add(r.professionalId)));
+                                return next;
+                              })
+                            }
+                          />
+                        )}
                         {t(`femme.commissions.status.${status}`)} · {list.length}
                       </span>
                       <span className="text-[13px] font-bold" data-testid={`liquidar-group-${status}-subtotal`}>
@@ -323,7 +411,7 @@ export default function LiquidarPage() {
                           data-testid="liquidar-row"
                           data-professional={r.professionalName}
                           data-status={r.status}
-                          className="grid grid-cols-[1.5rem_minmax(0,1fr)_8rem_8rem_9.5rem_6.5rem] items-center gap-2 border-t border-line py-2 first:border-t-0"
+                          className="grid grid-cols-[1.5rem_minmax(0,1fr)_8rem_8rem_9.5rem_13.5rem] items-center gap-2 border-t border-line py-2 first:border-t-0"
                         >
                           {r.status === "NONE" ? (
                             <span aria-hidden />
@@ -367,7 +455,7 @@ export default function LiquidarPage() {
                             {data.aguinaldoEnabled && r.retention > 0 ? formatGuaraniesGs(r.retention) : "—"}
                           </span>
                           <StatusChip status={r.status} />
-                          {rowAction(r)}
+                          <span className="flex items-center justify-end gap-2">{rowAction(r)}</span>
                         </li>
                       ))}
                     </ul>
@@ -412,7 +500,14 @@ export default function LiquidarPage() {
             <Button type="button" variant="secondary" className={`${ACTION_BUTTON} w-full sm:w-auto`} onClick={() => setDialog(null)}>
               {t("femme.commissions.common.cancel")}
             </Button>
-            <Button type="button" className={`${ACTION_BUTTON} w-full sm:w-auto`} disabled={busy} data-testid="liquidar-confirm" onClick={() => void confirm()}>
+            <Button
+              type="button"
+              variant={dialog?.kind === "VOID" ? "danger" : "primary"}
+              className={`${ACTION_BUTTON} w-full sm:w-auto`}
+              disabled={busy}
+              data-testid="liquidar-confirm"
+              onClick={() => void confirm()}
+            >
               {dialog ? t(`femme.commissions.liquidar.dialog.${dialog.kind}.confirm`, { count: dialog.rows.length }) : ""}
             </Button>
           </>
@@ -420,6 +515,18 @@ export default function LiquidarPage() {
       >
         {dialog && (
           <div className="flex flex-col gap-3" data-testid="liquidar-dialog">
+            {dialog.kind === "VOID" ? (
+              <ul className="rounded-xl border border-line text-sm text-ink" data-testid="liquidar-dialog-summary">
+                {dialog.rows.map((r) => (
+                  <li key={r.professionalId} className="flex justify-between gap-3 border-t border-line px-3.5 py-2.5 first:border-t-0">
+                    <span>
+                      <b>{r.professionalName}</b> · {t("femme.commissions.liquidar.note.settlement", { id: r.settlementId })}
+                    </span>
+                    <b className="tabular-nums">{formatGuaraniesGs(r.amount)}</b>
+                  </li>
+                ))}
+              </ul>
+            ) : (
             <div className="rounded-xl bg-primary-lt p-3 text-sm text-ink" data-testid="liquidar-dialog-summary">
               <div>{names(dialog.rows)}</div>
               <b>{t("femme.commissions.liquidar.dialog.total", { amount: formatGuaraniesGs(dialogTotal) })}</b>
@@ -427,6 +534,45 @@ export default function LiquidarPage() {
                 <span className="ml-1">· {t("femme.commissions.liquidar.dialog.retained", { amount: formatGuaraniesGs(dialogRetention) })}</span>
               )}
             </div>
+            )}
+            {dialog.kind === "VOID" && (
+              <>
+                {dialog.skipped > 0 && (
+                  <p className="text-sm text-ink-2" data-testid="liquidar-void-skipped">
+                    {t("femme.commissions.liquidar.dialog.VOID.skipped", { count: dialog.skipped })}
+                  </p>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="liquidar-void-reason">
+                    {t(dialog.rows.length > 1 ? "femme.commissions.liquidar.dialog.VOID.reasonAll" : "femme.commissions.liquidar.dialog.VOID.reason")}
+                  </Label>
+                  <Input
+                    id="liquidar-void-reason"
+                    value={voidReason}
+                    maxLength={500}
+                    placeholder={t("femme.commissions.liquidar.dialog.VOID.placeholder")}
+                    data-testid="liquidar-void-reason"
+                    onChange={(e) => setVoidReason(e.target.value)}
+                  />
+                  <div className="flex flex-wrap gap-2 pt-0.5">
+                    {VOID_REASONS.map((k) => {
+                      const text = t(`femme.commissions.liquidar.dialog.VOID.reasons.${k}`);
+                      return (
+                        <button
+                          key={k}
+                          type="button"
+                          data-testid={`liquidar-void-reason-${k}`}
+                          onClick={() => setVoidReason(text)}
+                          className="min-h-9 rounded-full border border-line px-3.5 text-[13px] font-bold text-ink hover:bg-bg"
+                        >
+                          {text}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
             {dialog.kind === "GENERATE" && (
               <p className="text-sm text-ink-2">
                 {t("femme.commissions.liquidar.dialog.GENERATE.period", { period: periodLabel(t, data.period, dateLocale) })}
