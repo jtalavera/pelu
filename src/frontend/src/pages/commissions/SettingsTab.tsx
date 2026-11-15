@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Alert, Button, Input, Label, Modal, Radio, RadioGroup, Select, Spinner, Text } from "@design-system";
@@ -29,7 +29,14 @@ const FOLD =
  * HU-COM-01 / HU-COM-09: calculation base, default percentages and settlement periodicity (one row each,
  * changed from a small dialog), plus the scheduled changes and the change history, folded.
  */
-export function SettingsTab({ part = "setup" }: { part?: "setup" | "advanced" } = {}) {
+export function SettingsTab({
+  part = "setup",
+  slots,
+}: {
+  part?: "setup" | "advanced";
+  /** HU-COM-16: the hub shows richer cards for steps 2 and 3 and its own closing block. */
+  slots?: { step2?: ReactNode; step3?: ReactNode; after?: ReactNode };
+} = {}) {
   const { t } = useTranslation();
   const { refresh: refreshOverview } = useOverview();
   const firstLoad = useRef(true);
@@ -278,8 +285,8 @@ export function SettingsTab({ part = "setup" }: { part?: "setup" | "advanced" } 
         <>
           <p className="px-0.5 text-sm text-ink-3">{t("femme.commissions.settings.intro")}</p>
           {setupStep(1, ["BASE", "DEFAULT_SERVICE", "DEFAULT_PRODUCT", "PERIODICITY"])}
-          {linkStep(2, "/app/commissions/configurar/grupos")}
-          {linkStep(3, "/app/commissions/equipo")}
+          {slots?.step2 ?? linkStep(2, "/app/commissions/configurar/grupos")}
+          {slots?.step3 ?? linkStep(3, "/app/commissions/equipo")}
           {setupStep(4, ["AGUINALDO_ENABLED", "AGUINALDO_DEFAULT", "FIXED_DESTINATION"])}
       {settings.aguinaldoEnabled && (
         <section className="rounded-card border border-line bg-surface shadow-sm" data-testid="commission-retention-profiles">
@@ -325,13 +332,15 @@ export function SettingsTab({ part = "setup" }: { part?: "setup" | "advanced" } 
         </section>
       )}
 
-          <Link
-            to="/app/commissions/configurar/avanzado"
-            className="inline-flex min-h-11 items-center self-start font-bold text-primary"
-            data-testid="config-advanced-link"
-          >
-            {t("femme.commissions.config.advancedLink")} →
-          </Link>
+          {slots?.after ?? (
+            <Link
+              to="/app/commissions/configurar/avanzado"
+              className="inline-flex min-h-11 items-center self-start font-bold text-primary"
+              data-testid="config-advanced-link"
+            >
+              {t("femme.commissions.config.advancedLink")} →
+            </Link>
+          )}
         </>
       )}
 

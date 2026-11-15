@@ -177,7 +177,7 @@ test("AC3 · sin grupos Inicio muestra la guía de cuatro pasos y se retira al c
   await expect(page.getByTestId("setup-step-2")).toHaveAttribute("data-state", "current");
   await expect(page.getByTestId("setup-step-2")).toContainText("What is it for?");
   await page.getByTestId("setup-step-2-start").click();
-  await expect(page).toHaveURL(/\/configurar\/grupos$/);
+  await expect(page).toHaveURL(/\/configurar\/grupos\?group=none$/);
   await expect(page.getByTestId("commission-groups")).toBeVisible();
 
   await setUpGroupsAndRules(request, [w.ana.id, w.bea.id]);
@@ -397,18 +397,21 @@ test("AC13 · Configurar son cuatro pasos: cómo se calcula, grupos, reglas y ag
   await expect(page.getByTestId("team-list")).toBeVisible();
 });
 
-test("AC14 · Avanzado: qué regla gana, excepciones por servicio y producto, cambios programados e historial", async ({
-  page,
-}) => {
+test("AC14 · Excepciones por servicio y «Cambios programados e historial» salen de Configurar", async ({ page }) => {
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
-  await page.getByTestId("config-advanced-link").click();
+  // The exceptions are a visible tab of «Groups and services» (HU-COM-16), with the order in which rules apply.
+  await page.getByTestId("config-exceptions-link").click();
   const rules = page.getByTestId("advanced-precedence").getByRole("listitem");
   await expect(rules).toHaveCount(5);
   await expect(rules.first()).toHaveText("Professional + specific service");
   await expect(rules.last()).toHaveText("Default %");
   await expect(page.getByTestId("rules-kind-SERVICE")).toBeVisible();
   await expect(page.getByTestId("rules-kind-PRODUCT")).toBeVisible();
+  await page.getByTestId("config-back").click();
+  // Scheduled changes and the change history have their own page.
+  await page.getByTestId("config-advanced-link").click();
+  await expect(page.getByTestId("commissions-advanced")).toBeVisible();
   await expect(page.getByTestId("commission-scheduled-toggle")).toBeVisible();
   await expect(page.getByTestId("commission-history-toggle")).toBeVisible();
   await page.getByTestId("config-back").click();

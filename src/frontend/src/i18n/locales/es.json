@@ -954,18 +954,36 @@
           "help": "La base de cálculo, los % por defecto y cada cuánto se liquida."
         },
         "step2": {
-          "title": "Grupos de servicios",
-          "help": "Juntá los servicios que comisionan igual.",
-          "open": "Abrir grupos"
+          "title": "Grupos y servicios",
+          "help": "Juntá los servicios que comisionan igual para cargar una regla por grupo.",
+          "open": "Ordenar grupos y servicios",
+          "tileGroups_one": "grupo",
+          "tileGroups_other": "grupos",
+          "ofTotal": "{{done}} de {{total}}",
+          "tileGrouped": "servicios ya tienen grupo",
+          "tileUngrouped_one": "sin grupo: le falta regla",
+          "tileUngrouped_other": "sin grupo: les falta regla",
+          "yourGroups": "Tus grupos:"
         },
         "step3": {
           "title": "Reglas por profesional",
           "help": "Cuánto cobra cada profesional en cada grupo.",
-          "open": "Ir al equipo"
+          "open": "Ir al equipo",
+          "missing_one": "{{count}} profesional sin reglas",
+          "missing_other": "{{count}} profesionales sin reglas",
+          "allSet": "todas tienen reglas"
         },
         "step4": {
           "title": "Aguinaldo y costo de producto",
           "help": "Si tu salón retiene aguinaldo y a quién va el costo de producto."
+        },
+        "searchLabel": "Buscar un grupo o un servicio",
+        "searchPlaceholder": "Buscar un grupo o un servicio…",
+        "exceptions": {
+          "title": "Excepciones por servicio o producto",
+          "help": "Cuando un servicio puntual comisiona distinto del resto de su grupo.",
+          "see": "Ver excepciones",
+          "scheduled": "Cambios programados e historial"
         }
       },
       "advanced": {
@@ -975,6 +993,45 @@
         "precedence3": "Servicio puntual",
         "precedence4": "Grupo",
         "precedence5": "% por defecto"
+      },
+      "workspace": {
+        "title": "Grupos y servicios",
+        "tabGroups": "Grupos",
+        "tabExceptions": "Excepciones por servicio",
+        "product": "Producto",
+        "noGroupSub": "Les falta regla",
+        "allGroups": "Todos los grupos",
+        "createGroupInline": "+ Crear un grupo",
+        "rulesFor_one": "regla cargada para {{count}} profesional",
+        "rulesFor_other": "reglas cargadas para {{count}} profesionales",
+        "rulesHint": "Las reglas de este grupo se cargan por profesional.",
+        "rulesLink": "Ver las reglas por profesional",
+        "groupEmpty": "Este grupo todavía no tiene servicios. Agregalos con «Agregar servicios».",
+        "pick": "Elegí un grupo de la lista para ver sus servicios.",
+        "addItems": "Agregar servicios",
+        "searchLabel": "Buscar un grupo o un servicio",
+        "searchPlaceholder": "Buscar un grupo o un servicio…",
+        "resultsFor": "Resultados para «{{query}}»:",
+        "resultsGroups_one": "{{count}} grupo",
+        "resultsGroups_other": "{{count}} grupos",
+        "resultsItems_one": "{{count}} servicio o producto",
+        "resultsItems_other": "{{count}} servicios o productos",
+        "resultsGroupsTitle": "Grupos",
+        "resultsItemsTitle": "Servicios y productos",
+        "openGroup": "Abrir grupo",
+        "addTitle": "Agregar servicios a «{{name}}»",
+        "addDescription": "Elegí los que comisionan igual. Primero van los que no tienen grupo; un servicio solo puede estar en un grupo, así que si elegís uno que ya tiene, se mueve.",
+        "addSearch": "Buscar un servicio…",
+        "suggestedCount_one": "{{count}} sugerido para {{name}} por su nombre",
+        "suggestedCount_other": "{{count}} sugeridos para {{name}} por su nombre",
+        "markSuggested": "Marcar los sugeridos",
+        "suggestedChip": "Sugerido",
+        "addChosen_one": "{{count}} elegido",
+        "addChosen_other": "{{count}} elegidos",
+        "addMoving_one": "{{count}} ya tiene grupo y se mueve",
+        "addMoving_other": "{{count}} ya tienen grupo y se mueven",
+        "addConfirm_one": "Agregar {{count}} a {{name}}",
+        "addConfirm_other": "Agregar {{count}} a {{name}}"
       }
     },
     "appTitle": "Flowbit",

@@ -17,6 +17,7 @@ import {
   loginAdminUi,
   openCommissions,
   openCommissionsMore,
+  openExceptions,
   openProfessional,
   liquidarRow,
   professionalWithAccess,
@@ -70,13 +71,6 @@ async function openGroups(page: Page) {
   await openCommissions(page, "setup");
   await page.getByTestId("config-step-2-link").click();
   await expect(page.getByTestId("commission-groups")).toBeVisible();
-}
-
-async function openAdvanced(page: Page, kind: "SERVICE" | "PRODUCT" = "SERVICE") {
-  await loginAdminUi(page, w);
-  await openCommissions(page, "setup");
-  await page.getByTestId("config-advanced-link").click();
-  await page.getByTestId(`rules-kind-${kind}`).click();
 }
 
 /** Opens a professional's «Reglas» tab (Equipo › her page). */
@@ -138,8 +132,11 @@ test("AC1 · crear, renombrar y eliminar grupos: nombre obligatorio y sin repeti
   await page.getByTestId("groups-name").fill("Brushing");
   await page.getByTestId("groups-save").click();
   await expect(page.getByTestId("groups-notice")).toHaveText("The group was created.");
+  // HU-COM-16: the new group opens on the right and shows in the list on the left.
+  await expect(page.getByTestId("group-title")).toHaveText("Brushing");
   const row = page.getByTestId("group-row").filter({ hasText: "Brushing" });
-  await expect(row).toContainText("0 services");
+  await expect(row.getByTestId("group-row-count")).toHaveText("0");
+  await expect(page.getByTestId("group-empty-items")).toBeVisible();
 
   await groups.getByTestId("groups-new").click();
   await page.getByTestId("groups-name").fill(" brushing ");
@@ -148,16 +145,15 @@ test("AC1 · crear, renombrar y eliminar grupos: nombre obligatorio y sin repeti
   await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
 
   // Rename.
-  await row.getByRole("button", { name: "Actions for group Brushing" }).click();
-  await page.getByRole("menuitem", { name: "Rename" }).click();
+  await page.getByTestId("groups-rename").click();
   await page.getByTestId("groups-name").fill("Brushing y secado");
   await page.getByTestId("groups-save").click();
   await expect(page.getByTestId("groups-notice")).toHaveText("The group was renamed.");
-  const renamed = page.getByTestId("group-row").filter({ hasText: "Brushing y secado" });
-  await expect(renamed).toBeVisible();
+  await expect(page.getByTestId("group-title")).toHaveText("Brushing y secado");
+  await expect(page.getByTestId("group-row").filter({ hasText: "Brushing y secado" })).toBeVisible();
 
   // Delete an unused group.
-  await renamed.getByRole("button", { name: "Actions for group Brushing y secado" }).click();
+  await page.getByRole("button", { name: "Actions for group Brushing y secado" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
   await expect(page.getByTestId("groups-notice")).toHaveText("The group was deleted.");
@@ -173,17 +169,17 @@ test("AC1 · crear, renombrar y eliminar grupos: nombre obligatorio y sin repeti
   await page.reload();
   await expect(page.getByTestId("commission-groups")).toBeVisible();
   const withRules = page.getByTestId("group-row").filter({ hasText: "Con reglas" });
-  await expect(withRules).toContainText("1 service");
-  // The row menu opens under its button: bring the row to the middle of the screen first.
-  await withRules.evaluate((el) => el.scrollIntoView({ block: "center" }));
-  await withRules.getByRole("button", { name: "Actions for group Con reglas" }).click();
+  await expect(withRules.getByTestId("group-row-count")).toHaveText("1");
+  await withRules.click();
+  await expect(page.getByTestId("group-summary")).toContainText("1 service");
+  await page.getByRole("button", { name: "Actions for group Con reglas" }).click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "has rules and cannot be deleted" })).toBeVisible();
   await expect(withRules).toBeVisible();
 });
 
-test("AC2 · servicios sin grupo: sugerencia por nombre, aceptar una, aceptar todas, elegir a mano y productos en la misma pantalla", async ({
+test("AC2 · servicios sin grupo: sugerencia por nombre, aceptar una, aceptar todas, elegir a mano y productos en la misma lista", async ({
   page,
   request,
 }) => {
@@ -198,6 +194,8 @@ test("AC2 · servicios sin grupo: sugerencia por nombre, aceptar una, aceptar to
   await createCatalogItem(request, token, w, "Shampoo grande", { kind: "PRODUCT" });
   await openGroups(page);
 
+  // «No group» is the view it opens on, with its own counter, on top of the list of groups.
+  await expect(page.getByTestId("group-none")).toHaveAttribute("aria-current", "true");
   const rowOf = (name: string) => page.getByTestId("groups-row").and(page.locator(`[data-name="${name}"]`));
   await expect(rowOf("Brushing pelo largo").getByTestId("groups-suggestion")).toHaveText(
     "Suggested: Brushing · contains «brushing»",
@@ -210,16 +208,16 @@ test("AC2 · servicios sin grupo: sugerencia por nombre, aceptar una, aceptar to
   );
   await expect(rowOf("Maquillaje").getByTestId("groups-suggestion")).toHaveCount(0);
 
-  // Accept one.
+  // Accept one: the row is marked and then leaves «No group» by itself.
   await rowOf("Brushing pelo largo").getByTestId("groups-accept").click();
   await expect(page.getByTestId("groups-notice")).toHaveText("1 service assigned.");
-  await expect(rowOf("Brushing pelo largo")).toHaveCount(0); // «No group» view: it has one now
+  await expect(rowOf("Brushing pelo largo")).toHaveCount(0, { timeout: 5000 });
 
   // Accept all: only the ones with a suggestion.
   await expect(page.getByTestId("groups-accept-all")).toHaveText("Accept the 2 suggestions");
   await page.getByTestId("groups-accept-all").click();
   await expect(page.getByTestId("groups-notice")).toHaveText("2 services assigned.");
-  await expect(rowOf("Baño de crema")).toHaveCount(0);
+  await expect(rowOf("Baño de crema")).toHaveCount(0, { timeout: 5000 });
   await expect(rowOf("Aplicación de ampolla")).toHaveCount(0);
   await expect(rowOf("Maquillaje")).toBeVisible();
   await expect(page.getByTestId("groups-accept-all")).toHaveCount(0);
@@ -232,19 +230,20 @@ test("AC2 · servicios sin grupo: sugerencia por nombre, aceptar una, aceptar to
   expect(groups.find((g) => g.id === gTratamiento.id)?.serviceCount).toBe(2);
   expect(groups.find((g) => g.id === gOtros.id)?.serviceCount).toBe(1);
 
-  // Products are in the same screen and are assigned together.
-  await page.getByTestId("groups-kind-PRODUCT").click();
-  await expect(page.getByTestId("groups-kind-PRODUCT")).toHaveText("Products · 2");
-  await page.getByTestId("groups-select-all").check();
+  // Products are in the same list (marked as such) and are assigned together.
+  const products = page.locator('[data-testid="groups-row"][data-name^="Shampoo"]');
+  await expect(products).toHaveCount(2);
+  await expect(products.first()).toContainText("Product");
+  for (const check of await products.getByTestId("groups-row-check").all()) await check.check();
   await expect(page.getByTestId("groups-selected")).toHaveText("2 selected");
   await page.getByTestId("groups-bulk-select").selectOption({ label: "Otros" });
   await page.getByTestId("groups-bulk-assign").click();
   await expect(page.getByTestId("groups-notice")).toHaveText("2 products assigned.");
-  await expect(page.getByTestId("groups-no-matches")).toBeVisible(); // none left without a group
   await expect(page.getByTestId("groups-bulk-bar")).toHaveCount(0);
+  await expect(products).toHaveCount(0, { timeout: 5000 });
 });
 
-test("AC2 · buscar, filtrar y asignar en lote; crear un grupo al asignar; mover y quitar de un grupo", async ({ page, request }) => {
+test("AC2 · buscar, asignar en lote; crear un grupo al asignar; mover y quitar de un grupo", async ({ page, request }) => {
   const token = w.adminToken;
   const names = ["Pestañas pelo a pelo", "Pestañas volumen", "Lifting de pestañas", "Corte dama"];
   const items = [];
@@ -254,20 +253,22 @@ test("AC2 · buscar, filtrar y asignar en lote; crear un grupo al asignar; mover
   await openGroups(page);
   const rowOf = (name: string) => page.getByTestId("groups-row").and(page.locator(`[data-name="${name}"]`));
 
-  // «+ Nuevo grupo» is at the top; the scope chips count what is in each view.
+  // «+ Nuevo grupo» is at the top; the list on the left counts what each group has.
   await expect(page.getByTestId("groups-new")).toBeVisible();
-  await expect(page.getByTestId("groups-scope-GROUPED")).toHaveText("With group · 1");
+  await expect(page.getByTestId("group-row").filter({ hasText: "Corte" }).getByTestId("group-row-count")).toHaveText("1");
   await expect(rowOf("Corte dama")).toHaveCount(0); // «No group» is the starting view
-  await page.getByTestId("groups-scope-ALL").click();
-  await expect(rowOf("Corte dama")).toBeVisible();
-  await expect(rowOf("Corte dama").getByTestId("groups-row-chip")).toHaveText("Corte");
 
-  // Search by name (accents and case do not matter), select what matches and create the group on the spot.
-  await page.getByTestId("groups-scope-UNGROUPED").click();
+  // Search by name (accents and case do not matter): it finds services of any group and says where each one is.
   await page.getByTestId("groups-search").fill("PESTANAS");
+  await expect(page.getByTestId("groups-results")).toBeVisible();
   await expect(page.getByTestId("groups-row")).toHaveCount(3);
   await page.getByTestId("groups-search").press("Enter"); // Enter in the search field submits the form, nothing breaks
   await expect(page.getByTestId("groups-row")).toHaveCount(3);
+  await page.getByTestId("groups-search").fill("dama");
+  await expect(rowOf("Corte dama").getByTestId("groups-row-chip")).toHaveText("Corte");
+  await page.getByTestId("groups-search").fill("PESTANAS");
+
+  // Select what matches and create the group on the spot.
   await rowOf("Pestañas pelo a pelo").getByTestId("groups-row-check").check();
   await rowOf("Pestañas volumen").getByTestId("groups-row-check").check();
   await expect(page.getByTestId("groups-selected")).toHaveText("2 selected");
@@ -279,24 +280,20 @@ test("AC2 · buscar, filtrar y asignar en lote; crear un grupo al asignar; mover
   await page.getByTestId("groups-save").click();
   await expect(page.getByTestId("groups-notice")).toHaveText("The group was created and the selected items were assigned.");
   await expect(page.getByTestId("groups-bulk-bar")).toHaveCount(0);
-  await expect(page.getByTestId("groups-row")).toHaveCount(1); // only «Lifting de pestañas» is left without a group
-  await expect(rowOf("Lifting de pestañas")).toBeVisible();
+  // The new group opens with its two services.
+  await expect(page.getByTestId("group-title")).toHaveText("Pestañas");
+  await expect(page.getByTestId("groups-row")).toHaveCount(2);
   const lashes = (await apiGetJson<{ id: number; name: string; serviceCount: number }[]>(request, token, "/api/commissions/groups")).find(
     (g) => g.name === "Pestañas",
   )!;
   expect(lashes.serviceCount).toBe(2);
-
-  // Tapping a group in the list filters its services; the group filter does the same.
-  await page.getByTestId("groups-search").fill("");
-  await page.getByRole("button", { name: "Show the services of group Pestañas" }).click();
-  await expect(page.getByTestId("groups-group-filter")).toHaveValue(String(lashes.id));
-  await expect(page.getByTestId("groups-row")).toHaveCount(2);
-  await expect(page.getByTestId("groups-row-chip").first()).toHaveText("Pestañas");
+  // «Lifting de pestañas» plus the 3 catalog items of the test world are left without a group
+  await expect(page.getByTestId("group-none-count")).toHaveText("4");
 
   // Move one to another group and take another out of its group.
   await rowOf("Pestañas volumen").getByTestId("groups-row-select").selectOption({ label: "Corte" });
   await expect(page.getByTestId("groups-notice")).toHaveText("1 service assigned.");
-  await expect(rowOf("Pestañas volumen")).toHaveCount(0); // it left the filtered group
+  await expect(rowOf("Pestañas volumen")).toHaveCount(0, { timeout: 5000 }); // it left the open group
   await rowOf("Pestañas pelo a pelo").getByTestId("groups-row-select").selectOption({ label: "Remove from group" });
   await expect(page.getByTestId("groups-notice")).toHaveText("1 item removed from its group.");
   const after = await apiGetJson<{ name: string; serviceCount: number }[]>(request, token, "/api/commissions/groups");
@@ -304,12 +301,9 @@ test("AC2 · buscar, filtrar y asignar en lote; crear un grupo al asignar; mover
   expect(after.find((g) => g.name === "Pestañas")?.serviceCount).toBe(0);
 
   // A search with no results says so.
-  await page.getByTestId("groups-group-filter").selectOption("");
   await page.getByTestId("groups-search").fill("zzz");
   await expect(page.getByTestId("groups-no-matches")).toHaveText("No item matches the search and the filters.");
 });
-
-// ── AC3 · AC4 · AC5 · AC6 · AC7 · Reglas por profesional ──────────────────────────────────────
 
 test("AC2 · asignar es inmediato: la fila cambia al instante, queda marcada un momento y sale de «Sin grupo»; el lote de 40 se guarda rápido", async ({
   page,
@@ -321,7 +315,6 @@ test("AC2 · asignar es inmediato: la fila cambia al instante, queda marcada un 
   const extra = [];
   for (let i = 1; i <= 40; i++) extra.push(await createCatalogItem(request, token, w, `Servicio lote ${String(i).padStart(2, "0")}`));
   await openGroups(page);
-  await page.getByTestId("groups-scope-UNGROUPED").click();
   const row = page.getByTestId("groups-row").filter({ hasText: first.name });
 
   await row.getByTestId("groups-row-select").selectOption({ label: "Color" });
@@ -329,13 +322,13 @@ test("AC2 · asignar es inmediato: la fila cambia al instante, queda marcada un 
   await expect(row.getByTestId("groups-row-chip")).toContainText("Color");
   await expect(row).toHaveAttribute("data-state", /saving|assigned/);
   await expect(row).toHaveCount(0, { timeout: 5000 });
-  // The group card already counts it (no second read of the screen).
-  await expect(page.getByTestId("group-row").filter({ hasText: "Color" })).toContainText("1 service");
+  // The list on the left already counts it (no second read of the screen).
+  await expect(page.getByTestId("group-row").filter({ hasText: "Color" }).getByTestId("group-row-count")).toHaveText("1");
   expect((await apiGetJson<{ serviceId: number; groupId: number | null }[]>(request, token, "/api/commissions/groups/services?kind=SERVICE")).find((r) => r.serviceId === first.id)?.groupId).toBe(
     group.id,
   );
 
-  // A bulk of 40: «Select the N that match» and assign; it feels instant and nothing jumps around.
+  // A bulk of 40: search, «Select the N that match» and assign; it feels instant.
   await page.getByTestId("groups-search").fill("Servicio lote");
   await page.getByTestId("groups-select-all").check();
   await page.getByTestId("groups-bulk-select").selectOption({ label: "Color" });
@@ -343,8 +336,8 @@ test("AC2 · asignar es inmediato: la fila cambia al instante, queda marcada un 
   await page.getByTestId("groups-bulk-assign").click();
   await expect(page.getByTestId("groups-notice")).toContainText("40");
   expect(Date.now() - started).toBeLessThan(4000);
-  await expect(page.getByTestId("groups-row")).toHaveCount(0, { timeout: 5000 });
-  await expect(page.getByTestId("group-row").filter({ hasText: "Color" })).toContainText("41 services");
+  await page.getByTestId("groups-search-clear").click();
+  await expect(page.getByTestId("group-row").filter({ hasText: "Color" }).getByTestId("group-row-count")).toHaveText("41");
   expect(extra).toHaveLength(40);
 });
 
@@ -824,7 +817,8 @@ test("AC12 · AC13 · AC14 · el fondo entra al aprobar; pagos parcial / por sal
   await page.getByTestId("aguinaldo-adjust-confirm").click();
   await expect(page.getByTestId("aguinaldo-notice")).toHaveText("The adjustment was recorded.");
   await expect(gabyRow.getByTestId("aguinaldo-balance")).toContainText("3.500");
-  await expect(moves.first()).toContainText("Manual adjustment: factura anulada");
+  // Movements are ordered by day, and the sandbox clock (UTC) can be a day ahead of the salon (Paraguay): do not rely on the order.
+  await expect(moves.filter({ hasText: "Manual adjustment: factura anulada" })).toHaveCount(1);
 
   // Payment on departure: pays the whole balance and closes the fund.
   await migueRow.getByTestId("aguinaldo-pay").click();

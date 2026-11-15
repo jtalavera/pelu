@@ -354,6 +354,14 @@ export async function openCommissionsMore(page: Page, name: "Reports" | "Setting
   }
 }
 
+/** Setup › «Excepciones por servicio» (HU-COM-16), optionally on its Services or Products view. */
+export async function openExceptions(page: Page, kind?: "SERVICE" | "PRODUCT") {
+  await openCommissions(page, "setup");
+  await page.getByTestId("config-exceptions-link").click();
+  await expect(page.getByTestId("commissions-exceptions")).toBeVisible();
+  if (kind) await page.getByTestId(`rules-kind-${kind}`).click();
+}
+
 /** The row of a professional in «Liquidar» (names come uppercased from the backend). */
 export const liquidarRow = (page: Page, name: string) =>
   page.getByTestId("liquidar-row").filter({ hasText: name });
