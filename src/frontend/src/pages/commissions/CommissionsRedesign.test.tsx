@@ -68,6 +68,7 @@ const overview = (over: Partial<Overview> = {}): Overview => ({
   groupCount: 3,
   aguinaldoEnabled: false,
   aguinaldoBalance: 0,
+  professionalsRetaining: 0,
   ...over,
 });
 

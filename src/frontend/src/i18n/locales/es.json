@@ -1019,7 +1019,8 @@
         "advancedLink": "Opciones avanzadas (excepciones, cambios programados e historial)",
         "step1": {
           "title": "Cómo se calcula",
-          "help": "La base de cálculo, los % por defecto y cada cuánto se liquida."
+          "help": "La base de cálculo, los % por defecto y cada cuánto se liquida.",
+          "summary": "{{base}} · {{service}} servicios · {{product}} productos · {{periodicity}}"
         },
         "step2": {
           "title": "Grupos y servicios",
@@ -1031,7 +1032,16 @@
           "tileGrouped": "servicios ya tienen grupo",
           "tileUngrouped_one": "sin grupo: le falta regla",
           "tileUngrouped_other": "sin grupo: les falta regla",
-          "yourGroups": "Tus grupos:"
+          "yourGroups": "Tus grupos:",
+          "summary_one": "{{count}} grupo · {{done}} de {{total}} servicios ya tienen grupo",
+          "summary_other": "{{count}} grupos · {{done}} de {{total}} servicios ya tienen grupo",
+          "intro_one": "Juntá los servicios que comisionan igual para cargar una regla por grupo. El servicio que no tiene grupo usa el % por defecto.",
+          "intro_other": "Juntá los servicios que comisionan igual para cargar una regla por grupo. Los {{count}} que no tienen grupo usan el % por defecto.",
+          "missing_one": "{{count}} sin grupo",
+          "missing_other": "{{count}} sin grupo",
+          "noGroups": "Sin grupos todavía",
+          "seeUngrouped_one": "Ver el servicio sin grupo",
+          "seeUngrouped_other": "Ver los {{count}} sin grupo"
         },
         "step3": {
           "title": "Reglas por profesional",
@@ -1039,11 +1049,23 @@
           "open": "Ir al equipo",
           "missing_one": "{{count}} profesional sin reglas",
           "missing_other": "{{count}} profesionales sin reglas",
-          "allSet": "todas tienen reglas"
+          "allSet": "todas tienen reglas",
+          "pill_one": "{{count}} sin reglas",
+          "pill_other": "{{count}} sin reglas",
+          "pending": "Pendiente"
         },
         "step4": {
           "title": "Aguinaldo y costo de producto",
-          "help": "Si tu salón retiene aguinaldo y a quién va el costo de producto."
+          "help": "Si tu salón retiene aguinaldo y a quién va el costo de producto.",
+          "pill": "Nadie retiene todavía",
+          "summaryOff": "Aguinaldo desactivado · el costo de producto va para {{destination}}",
+          "summaryOn_one": "Retiene {{percent}} por defecto · {{count}} de {{total}} profesionales retiene · el costo de producto va para {{destination}}",
+          "summaryOn_other": "Retiene {{percent}} por defecto · {{count}} de {{total}} profesionales retienen · el costo de producto va para {{destination}}",
+          "summaryNobody": "Aguinaldo activado · ninguna profesional tiene retención cargada",
+          "destination": {
+            "PROFESSIONAL": "la profesional",
+            "SALON": "el salón"
+          }
         },
         "searchLabel": "Buscar un grupo o un servicio",
         "searchPlaceholder": "Buscar un grupo o un servicio…",
@@ -1051,8 +1073,12 @@
           "title": "Excepciones por servicio o producto",
           "help": "Cuando un servicio puntual comisiona distinto del resto de su grupo.",
           "see": "Ver excepciones",
-          "scheduled": "Cambios programados e historial"
-        }
+          "scheduled": "Cambios programados e historial",
+          "scheduledCount_one": "{{count}} cambio programado",
+          "scheduledCount_other": "{{count}} cambios programados"
+        },
+        "stepDone": "Al día",
+        "stepOptional": "Opcional"
       },
       "advanced": {
         "precedenceTitle": "Qué regla gana",
@@ -1100,6 +1126,12 @@
         "addMoving_other": "{{count}} ya tienen grupo y se mueven",
         "addConfirm_one": "Agregar {{count}} a {{name}}",
         "addConfirm_other": "Agregar {{count}} a {{name}}"
+      },
+      "periodicityShort": {
+        "WEEKLY": "liquidación semanal",
+        "BIWEEKLY": "liquidación quincenal",
+        "MONTHLY": "liquidación mensual",
+        "MANUAL": "liquidación manual"
       }
     },
     "appTitle": "Flowbit",

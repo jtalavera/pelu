@@ -198,7 +198,9 @@ public final class CommissionDtos {
       int groupCount,
       /* Aguinaldo */
       boolean aguinaldoEnabled,
-      BigDecimal aguinaldoBalance) {}
+      BigDecimal aguinaldoBalance,
+      /* HU-COM-18: active professionals with a retention % above zero (step 4 of «Configurar») */
+      int professionalsRetaining) {}
 
   // ── Aguinaldo fund (HU-COM-14) ────────────────────────────────────────────────────────────
 

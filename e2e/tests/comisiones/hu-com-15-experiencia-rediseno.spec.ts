@@ -13,6 +13,7 @@ import {
   loginAdminUi,
   loginApi,
   openCommissions,
+  openSetupStep,
   openProfessional,
   professionalWithAccess,
   provisionCommissionWorld,
@@ -364,6 +365,7 @@ test("AC13 · apagar Aguinaldo en Configurar actualiza la navegación sin recarg
   await expect(page.getByTestId("team-tab-aguinaldo")).toBeVisible();
 
   await page.getByTestId("commissions-nav-setup").click();
+  await openSetupStep(page, 4);
   await page.getByTestId("commission-setting-change-AGUINALDO_ENABLED").click();
   await page.getByTestId("commission-aguinaldo-false").check();
   await page.getByTestId("commission-setting-save").click();
@@ -384,15 +386,19 @@ test("AC13 · Configurar son cuatro pasos: cómo se calcula, grupos, reglas y ag
   await openCommissions(page, "setup");
   for (const n of [1, 2, 3, 4]) await expect(page.getByTestId(`config-step-${n}`)).toBeVisible();
   await expect(page.getByTestId("config-step-1")).toContainText("How it is calculated");
+  await openSetupStep(page, 1);
+  await openSetupStep(page, 4);
   for (const scope of ["BASE", "DEFAULT_SERVICE", "DEFAULT_PRODUCT", "PERIODICITY"]) {
     await expect(page.getByTestId("config-step-1").getByTestId(`commission-setting-${scope}`)).toBeVisible();
   }
   for (const scope of ["AGUINALDO_ENABLED", "FIXED_DESTINATION"]) {
     await expect(page.getByTestId("config-step-4").getByTestId(`commission-setting-${scope}`)).toBeVisible();
   }
+  await openSetupStep(page, 2);
   await page.getByTestId("config-step-2-link").click();
   await expect(page.getByTestId("commission-groups")).toBeVisible();
   await page.getByTestId("config-back").click();
+  await openSetupStep(page, 3);
   await page.getByTestId("config-step-3-link").click();
   await expect(page).toHaveURL(/\/app\/commissions\/equipo$/);
   await expect(page.getByTestId("team-list")).toBeVisible();
