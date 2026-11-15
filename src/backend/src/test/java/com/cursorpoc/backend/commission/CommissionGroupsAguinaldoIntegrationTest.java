@@ -566,6 +566,9 @@ class CommissionGroupsAguinaldoIntegrationTest {
     assertThat(ov.rows().get(0).amount()).isEqualByComparingTo("45000");
     assertThat(ov.rows().get(0).retention()).isEqualByComparingTo("5000");
     assertThat(ov.rows().get(0).ruleCount()).isEqualTo(2);
+    // Each row says how many movements are behind its amount; nothing is paid yet.
+    assertThat(ov.rows()).extracting(r -> r.lineCount()).containsExactly(1, 1);
+    assertThat(ov.rows()).extracting(r -> r.paidOn()).containsOnlyNulls();
     assertThat(ov.total()).isEqualByComparingTo("95000");
     assertThat(ov.retentionTotal()).isEqualByComparingTo("5000");
     assertThat(ov.unsettled()).isEqualTo(2);
@@ -598,7 +601,11 @@ class CommissionGroupsAguinaldoIntegrationTest {
 
     settlementService.pay(
         tenant.getId(), draft.getId(), "admin@test", new PayRequest("CASH", today, ""));
-    assertThat(overviewService.overview(tenant.getId(), 0).paid()).isEqualTo(1);
+    var paidView = overviewService.overview(tenant.getId(), 0);
+    assertThat(paidView.paid()).isEqualTo(1);
+    assertThat(paidView.rows().get(0).paidOn()).isNotNull();
+    assertThat(paidView.rows().get(0).lineCount()).isEqualTo(1);
+    assertThat(paidView.rows().get(1).paidOn()).isNull(); // the other one is still unsettled
 
     // The period before has nothing yet; offsets above 0 are treated as the current one.
     var before = overviewService.overview(tenant.getId(), -1);

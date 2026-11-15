@@ -49,3 +49,31 @@ export function setupProgress(o: Overview) {
     firstTime: o.groupCount === 0,
   };
 }
+
+
+/**
+ * What the period looks like in people and money (HU-COM-17): each state with its professionals and
+ * amount, how much is already paid and how much is left to pay, and who has nothing to settle.
+ */
+export function summarize(o: Overview) {
+  const by = <S extends OverviewStatus>(status: S) => {
+    const rows = o.rows.filter((r) => r.status === status);
+    return { status, rows, people: rows.length, amount: rows.reduce((a, r) => a + r.amount, 0) };
+  };
+  const steps = [by("UNSETTLED"), by("DRAFT"), by("APPROVED"), by("PAID")] as const;
+  const none = by("NONE");
+  const paid = steps[3].amount;
+  const pending = steps[0].amount + steps[1].amount + steps[2].amount;
+  const withMovements = o.rows.length - none.people;
+  return {
+    steps,
+    none,
+    paid,
+    pending,
+    paidPeople: steps[3].people,
+    pendingPeople: steps[0].people + steps[1].people + steps[2].people,
+    total: paid + pending,
+    active: o.rows.length,
+    withMovements,
+  };
+}

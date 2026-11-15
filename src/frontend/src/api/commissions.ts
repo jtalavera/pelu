@@ -163,6 +163,10 @@ export type OverviewRow = {
   retention: number;
   settlementId: number | null;
   ruleCount: number;
+  /** Movements behind the amount. */
+  lineCount: number;
+  /** Day the settlement was paid (PAID only), `YYYY-MM-DD`. */
+  paidOn: string | null;
 };
 export type Overview = {
   period: PeriodInfo;

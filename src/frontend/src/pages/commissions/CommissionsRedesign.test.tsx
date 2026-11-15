@@ -41,6 +41,8 @@ const person = (id: number, name: string, over: Partial<OverviewRow> = {}): Over
   retention: 0,
   settlementId: null,
   ruleCount: 2,
+  lineCount: 1,
+  paidOn: null,
   ...over,
 });
 
@@ -51,7 +53,8 @@ const overview = (over: Partial<Overview> = {}): Overview => ({
     person(1, "Gaby", { status: "UNSETTLED", amount: 120000 }),
     person(2, "Migue", { status: "DRAFT", amount: 80000, settlementId: 7 }),
     person(3, "Norma", { status: "APPROVED", amount: 50000, settlementId: 8, ruleCount: 0 }),
-    person(4, "Laura", { status: "PAID", amount: 30000, settlementId: 9 }),
+    person(4, "Laura", { status: "PAID", amount: 30000, settlementId: 9, paidOn: "2026-11-12" }),
+    person(5, "Rosa", { status: "NONE", amount: 0, lineCount: 0 }),
   ],
   total: 280000,
   retentionTotal: 0,
@@ -175,10 +178,43 @@ describe("HU-COM-15 · estructura", () => {
 });
 
 describe("HU-COM-15 · Inicio", () => {
-  it("cuenta cuánto hay para pagar y deja continuar con la liquidación", async () => {
+  it("separa lo pagado de lo que falta pagar y dice de cuántas profesionales es el total", async () => {
     mount("/app/commissions");
     expect((await screen.findByTestId("home-total")).textContent).toContain("280.000");
-    expect(screen.getByTestId("home-continue")).toBeTruthy();
+    expect(screen.getByTestId("home-progress-text").textContent).toContain("4 profesionales con comisiones");
+    // Laura is paid (30.000); the rest (120.000 + 80.000 + 50.000) is left to pay.
+    expect(screen.getByTestId("home-paid-amount").textContent).toContain("30.000");
+    expect(screen.getByTestId("home-pending-amount").textContent).toContain("250.000");
+  });
+
+  it("la barra se explica con una leyenda por estado y el monto de cada uno", async () => {
+    mount("/app/commissions");
+    await screen.findByTestId("home-bar");
+    expect(screen.getByTestId("home-legend-UNSETTLED").textContent).toContain("120.000");
+    expect(screen.getByTestId("home-legend-DRAFT").textContent).toContain("80.000");
+    expect(screen.getByTestId("home-legend-APPROVED").textContent).toContain("50.000");
+    expect(screen.getByTestId("home-legend-PAID").textContent).toContain("30.000");
+  });
+
+  it("«Qué falta hacer» muestra los 4 pasos con personas, plata y la acción siguiente", async () => {
+    mount("/app/commissions");
+    await screen.findByTestId("home-steps");
+    const unsettled = screen.getByTestId("home-step-UNSETTLED");
+    expect(within(unsettled).getByTestId("home-step-people").textContent).toBe("1 profesional");
+    expect(within(unsettled).getByTestId("home-step-amount").textContent).toBe("Gs. 120.000 por generar");
+    expect(within(screen.getByTestId("home-step-DRAFT")).getByTestId("home-step-amount").textContent).toContain("por aprobar");
+    expect(within(screen.getByTestId("home-step-APPROVED")).getByTestId("home-step-amount").textContent).toContain("por pagar");
+    expect(screen.getByTestId("home-step-PAID-action").textContent).toBe("Ver pagos");
+    expect(screen.getByTestId("home-step-DRAFT-action").getAttribute("href")).toBe("/app/commissions/liquidar?state=DRAFT");
+  });
+
+  it("«Tu equipo» cuenta las activas, las que tienen comisiones y nombra a las que no tienen movimientos", async () => {
+    mount("/app/commissions");
+    await screen.findByTestId("home-team");
+    expect(screen.getByTestId("home-team-counts").textContent).toBe("5 profesionales activas · 4 con comisiones · 1 sin movimientos");
+    expect(screen.getAllByTestId("home-team-row")).toHaveLength(4); // only the ones with movements are listed
+    expect(screen.getByTestId("home-team-none").textContent).toContain("Rosa");
+    expect(screen.getByTestId("home-team-none-link").getAttribute("href")).toBe("/app/commissions/liquidar?state=NONE");
   });
 
   it("lista solo lo que hay para revisar", async () => {
@@ -201,11 +237,28 @@ describe("HU-COM-15 · Equipo", () => {
   it("lista a cada profesional con su estado y filtra los que no tienen reglas", async () => {
     const user = userEvent.setup();
     mount("/app/commissions/equipo");
-    expect(await screen.findAllByTestId("team-card")).toHaveLength(4);
+    expect(await screen.findAllByTestId("team-card")).toHaveLength(5);
+    expect(screen.getByTestId("team-counts").textContent).toBe("5 profesionales activas · 4 con comisiones · 1 sin movimientos");
     await user.click(screen.getByTestId("team-filter-norules"));
     const cards = screen.getAllByTestId("team-card");
     expect(cards).toHaveLength(1);
     expect(cards[0].textContent).toContain("Norma");
+  });
+
+  it("las que no tienen movimientos se ven con su estado y se filtran aparte; las pagadas dicen cuándo", async () => {
+    const user = userEvent.setup();
+    mount("/app/commissions/equipo");
+    await screen.findAllByTestId("team-card");
+    const rosa = screen.getAllByTestId("team-card").find((c) => c.textContent?.includes("Rosa"))!;
+    expect(within(rosa).getByTestId("status-chip").textContent).toBe("Sin movimientos");
+    expect(within(rosa).getByTestId("team-card-amount").textContent).toBe("—");
+    expect(within(rosa).getByTestId("team-card-detail").textContent).toBe("No tiene ventas este período");
+    const laura = screen.getAllByTestId("team-card").find((c) => c.textContent?.includes("Laura"))!;
+    expect(within(laura).getByTestId("team-card-detail").textContent).toContain("Pagada el");
+    await user.click(screen.getByTestId("team-filter-none"));
+    expect(screen.getAllByTestId("team-card")).toHaveLength(1);
+    await user.click(screen.getByTestId("team-filter-paid"));
+    expect(screen.getAllByTestId("team-card")).toHaveLength(1);
   });
 
   it("busca por nombre sin importar mayúsculas ni tildes", async () => {
@@ -222,11 +275,45 @@ describe("HU-COM-15 · Liquidar", () => {
     const user = userEvent.setup();
     mount("/app/commissions/liquidar");
     await screen.findByTestId("liquidar-step-1");
-    expect(screen.getAllByTestId("liquidar-row")).toHaveLength(4);
+    expect(screen.getAllByTestId("liquidar-row")).toHaveLength(5);
     await user.click(screen.getByTestId("liquidar-filter-DRAFT"));
     const rows = screen.getAllByTestId("liquidar-row");
     expect(rows).toHaveLength(1);
     expect(rows[0].getAttribute("data-status")).toBe("DRAFT");
+  });
+
+  it("lista a todas las profesionales: primero lo que falta hacer, con subtotal por tramo, y al final «Sin movimientos»", async () => {
+    mount("/app/commissions/liquidar");
+    await screen.findByTestId("liquidar-scope");
+    expect(screen.getByTestId("liquidar-scope").textContent).toContain("Se muestran las 5 profesionales activas.");
+    expect(screen.getByTestId("liquidar-scope").textContent).toContain("la otra no tiene nada para liquidar");
+    const order = screen.getAllByTestId("liquidar-row").map((r) => r.getAttribute("data-status"));
+    expect(order).toEqual(["UNSETTLED", "DRAFT", "APPROVED", "PAID", "NONE"]);
+    expect(screen.getByTestId("liquidar-group-UNSETTLED-subtotal").textContent).toContain("120.000 por generar");
+    expect(screen.getByTestId("liquidar-group-PAID-subtotal").textContent).toContain("30.000 ya cobrado");
+    expect(screen.getByTestId("liquidar-paid-total").textContent).toContain("30.000");
+    // Each step also says how much money is in it.
+    expect(screen.getByTestId("liquidar-step-1-amount").textContent).toContain("120.000");
+    expect(screen.getByTestId("liquidar-step-3-amount").textContent).toContain("50.000");
+    // The row says what is behind the amount.
+    const notes = screen.getAllByTestId("liquidar-row-note").map((n) => n.textContent);
+    expect(notes[0]).toBe("1 movimiento");
+    expect(notes[1]).toBe("Liquidación #7");
+    expect(notes[3]).toContain("Pagada el");
+    expect(notes[4]).toBe("No tiene ventas este período");
+  });
+
+  it("«Sin movimientos» no tiene casilla ni acción y tiene su propio filtro", async () => {
+    const user = userEvent.setup();
+    mount("/app/commissions/liquidar");
+    await screen.findAllByTestId("liquidar-row");
+    const rosa = screen.getAllByTestId("liquidar-row").find((r) => r.getAttribute("data-status") === "NONE")!;
+    expect(within(rosa).queryByTestId("liquidar-row-check")).toBeNull();
+    expect(within(rosa).getByTestId("liquidar-row-amount").textContent).toBe("—");
+    expect(within(rosa).queryByRole("button")).toBeNull();
+    await user.click(screen.getByTestId("liquidar-filter-NONE"));
+    expect(screen.getAllByTestId("liquidar-row")).toHaveLength(1);
+    expect(screen.getByTestId("liquidar-filter-NONE").textContent).toContain("Sin movimientos · 1");
   });
 
   it("generar la liquidación de una profesional pide confirmar y no repite períodos ya liquidados", async () => {

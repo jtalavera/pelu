@@ -129,8 +129,10 @@ test("AC2 · Inicio: cuánto hay para pagar, avance por estado, «Para revisar»
 
   await expect(page.getByTestId("home-hero")).toBeVisible();
   await expect(page.getByTestId("home-total")).toContainText("80.000");
-  await expect(page.getByTestId("home-progress-text")).toContainText("2 professionals");
-  await expect(page.getByTestId("home-progress-text")).toContainText("2 to settle");
+  await expect(page.getByTestId("home-progress-text")).toContainText("from 2 professionals with commissions");
+  // HU-COM-17: the total is split in what is already paid and what is left to pay.
+  await expect(page.getByTestId("home-paid-amount")).toContainText("0");
+  await expect(page.getByTestId("home-pending-amount")).toContainText("80.000");
 
   // «Para revisar» lists only what exists: a line without professional, Bea without rules.
   await expect(page.getByTestId("home-review-lines")).toContainText("1 lines without a professional");
@@ -146,14 +148,11 @@ test("AC2 · Inicio: cuánto hay para pagar, avance por estado, «Para revisar»
   await expect(page).toHaveURL(/\/app\/commissions\/equipo\?filter=norules$/);
   await expect(page.getByTestId("team-card")).toHaveCount(1);
 
-  // «¿Cómo funciona?» and the way into the settlement.
+  // The steps lead into the settlement (HU-COM-17: «What is left to do»).
   await page.getByTestId("commissions-nav-home").click();
-  await expect(page.getByTestId("home-how")).toHaveCount(0);
-  await page.getByTestId("home-how-toggle").click();
-  await expect(page.getByTestId("home-how")).toBeVisible();
   await expect(page.getByTestId("home-team-row")).toHaveCount(2);
-  await page.getByTestId("home-continue").click();
-  await expect(page).toHaveURL(/\/app\/commissions\/liquidar$/);
+  await page.getByTestId("home-step-UNSETTLED-action").click();
+  await expect(page).toHaveURL(/\/app\/commissions\/liquidar\?state=UNSETTLED$/);
 });
 
 test("AC2 · Inicio: cuando no hay nada para revisar lo dice", async ({ page, request }) => {

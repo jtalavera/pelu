@@ -795,7 +795,40 @@
         "teamEmpty": "Todavía no hay profesionales activos.",
         "aguinaldoTitle": "Fondo de aguinaldo",
         "aguinaldoHelp": "Lo retenido hasta hoy, para pagar a fin de año.",
-        "aguinaldoLink": "Ver aguinaldo"
+        "aguinaldoLink": "Ver aguinaldo",
+        "heroTitle": "Comisiones · {{period}}",
+        "totalOf_one": "en total, de {{count}} profesional con comisiones",
+        "totalOf_other": "en total, de {{count}} profesionales con comisiones",
+        "paid": "Ya pagado",
+        "pending": "Falta pagar",
+        "people_one": "{{count}} profesional",
+        "people_other": "{{count}} profesionales",
+        "barAria": "Distribución del dinero del período por estado",
+        "stepsTitle": "Qué falta hacer",
+        "stepsHint": "Cada profesional pasa por estos 4 pasos",
+        "stepAmount": {
+          "UNSETTLED": "{{amount}} por generar",
+          "DRAFT": "{{amount}} por aprobar",
+          "APPROVED": "{{amount}} por pagar",
+          "PAID": "{{amount}} ya cobrado"
+        },
+        "stepAction": {
+          "GENERATE": "Generar",
+          "APPROVE": "Aprobar",
+          "PAY": "Pagar",
+          "VIEW": "Ver pagos"
+        },
+        "stepNothing": "Nada por hacer",
+        "teamActive_one": "{{count}} profesional activa",
+        "teamActive_other": "{{count}} profesionales activas",
+        "teamWith": "{{count}} con comisiones",
+        "teamWithout": "{{count}} sin movimientos",
+        "teamBarAria": "{{with}} con comisiones, {{without}} sin movimientos",
+        "noneTitle_one": "{{count}} profesional sin movimientos este período:",
+        "noneTitle_other": "{{count}} profesionales sin movimientos este período:",
+        "noneMore": " y {{count}} más",
+        "noneSee_one": "Ver a la profesional",
+        "noneSee_other": "Ver las {{count}}"
       },
       "liquidar": {
         "prevPeriod": "Período anterior",
@@ -871,7 +904,32 @@
             "confirm_one": "Registrar pago de {{count}}"
           }
         },
-        "detail": "Ver detalle"
+        "detail": "Ver detalle",
+        "scopeAll_one": "Se muestra a la profesional activa.",
+        "scopeAll_other": "Se muestran las {{count}} profesionales activas.",
+        "scopeAllWith": "Todas tienen comisiones este período.",
+        "scopeSome_one": "{{with}} tienen comisiones este período; la otra no tiene nada para liquidar (está al final).",
+        "scopeSome_other": "{{with}} tienen comisiones este período; las otras {{without}} no tienen nada para liquidar (están al final).",
+        "alreadyPaid": "ya pagado",
+        "colProfessional": "Profesional",
+        "colAmount": "Comisión",
+        "colRetained": "Retenido",
+        "colState": "Estado",
+        "subtotal": {
+          "UNSETTLED": "{{amount}} por generar",
+          "DRAFT": "{{amount}} por aprobar",
+          "APPROVED": "{{amount}} por pagar",
+          "PAID": "{{amount}} ya cobrado",
+          "NONE": "Nada para liquidar en este período"
+        },
+        "note": {
+          "noneNoRules": "No tiene ventas este período · sin reglas propias (usa el % por defecto)",
+          "none": "No tiene ventas este período",
+          "lines_one": "{{count}} movimiento",
+          "lines_other": "{{count}} movimientos",
+          "paidOn": "Pagada el {{date}}",
+          "settlement": "Liquidación #{{id}}"
+        }
       },
       "team": {
         "tabPeople": "Profesionales ({{count}})",
@@ -882,14 +940,24 @@
           "all": "Todas ({{count}})",
           "norules": "Sin reglas ({{count}})",
           "retain": "Retienen aguinaldo ({{count}})",
-          "pending": "Con comisión pendiente ({{count}})"
+          "pending": "Con comisión pendiente ({{count}})",
+          "paid": "Pagadas ({{count}})",
+          "none": "Sin movimientos ({{count}})"
         },
         "empty": "No hay profesionales que coincidan.",
         "noRulesYet": "Sin reglas: cobra el % por defecto",
         "missingRules": "Faltan reglas",
         "thisPeriod": "Este período",
         "aguinaldo": "Aguinaldo acumulado",
-        "footer": "Tocá una profesional para ver su resumen, sus reglas y su historial."
+        "footer": "Tocá una profesional para ver su resumen, sus reglas y su historial.",
+        "detail": {
+          "NONE": "No tiene ventas este período",
+          "UNSETTLED_one": "{{count}} movimiento · falta generar",
+          "UNSETTLED_other": "{{count}} movimientos · falta generar",
+          "DRAFT": "Borrador: falta aprobar",
+          "APPROVED": "Lista para pagar",
+          "PAID": "Pagada el {{date}}"
+        }
       },
       "pro": {
         "back": "Volver al equipo",

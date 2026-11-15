@@ -795,7 +795,40 @@
         "teamEmpty": "There are no active professionals yet.",
         "aguinaldoTitle": "Aguinaldo fund",
         "aguinaldoHelp": "What has been withheld so far, to pay at year end.",
-        "aguinaldoLink": "See aguinaldo"
+        "aguinaldoLink": "See aguinaldo",
+        "heroTitle": "Commissions · {{period}}",
+        "totalOf_one": "in total, from {{count}} professional with commissions",
+        "totalOf_other": "in total, from {{count}} professionals with commissions",
+        "paid": "Already paid",
+        "pending": "Left to pay",
+        "people_one": "{{count}} professional",
+        "people_other": "{{count}} professionals",
+        "barAria": "The period's money by state",
+        "stepsTitle": "What is left to do",
+        "stepsHint": "Every professional goes through these 4 steps",
+        "stepAmount": {
+          "UNSETTLED": "{{amount}} to generate",
+          "DRAFT": "{{amount}} to approve",
+          "APPROVED": "{{amount}} to pay",
+          "PAID": "{{amount}} already collected"
+        },
+        "stepAction": {
+          "GENERATE": "Generate",
+          "APPROVE": "Approve",
+          "PAY": "Pay",
+          "VIEW": "See payments"
+        },
+        "stepNothing": "Nothing to do",
+        "teamActive_one": "{{count}} active professional",
+        "teamActive_other": "{{count}} active professionals",
+        "teamWith": "{{count}} with commissions",
+        "teamWithout": "{{count}} without movements",
+        "teamBarAria": "{{with}} with commissions, {{without}} without movements",
+        "noneTitle_one": "{{count}} professional without movements this period:",
+        "noneTitle_other": "{{count}} professionals without movements this period:",
+        "noneMore": " and {{count}} more",
+        "noneSee_one": "See her",
+        "noneSee_other": "See the {{count}}"
       },
       "liquidar": {
         "prevPeriod": "Previous period",
@@ -871,7 +904,32 @@
             "confirm_one": "Record payment of {{count}}"
           }
         },
-        "detail": "See detail"
+        "detail": "See detail",
+        "scopeAll_one": "The active professional is shown.",
+        "scopeAll_other": "All {{count}} active professionals are shown.",
+        "scopeAllWith": "Everybody has commissions this period.",
+        "scopeSome_one": "{{with}} have commissions this period; the other one has nothing to settle (at the end).",
+        "scopeSome_other": "{{with}} have commissions this period; the other {{without}} have nothing to settle (at the end).",
+        "alreadyPaid": "already paid",
+        "colProfessional": "Professional",
+        "colAmount": "Commission",
+        "colRetained": "Withheld",
+        "colState": "Status",
+        "subtotal": {
+          "UNSETTLED": "{{amount}} to generate",
+          "DRAFT": "{{amount}} to approve",
+          "APPROVED": "{{amount}} to pay",
+          "PAID": "{{amount}} already collected",
+          "NONE": "Nothing to settle this period"
+        },
+        "note": {
+          "noneNoRules": "No sales this period · no rules of their own (the default % applies)",
+          "none": "No sales this period",
+          "lines_one": "{{count}} movement",
+          "lines_other": "{{count}} movements",
+          "paidOn": "Paid on {{date}}",
+          "settlement": "Settlement #{{id}}"
+        }
       },
       "team": {
         "tabPeople": "Professionals ({{count}})",
@@ -882,14 +940,24 @@
           "all": "All ({{count}})",
           "norules": "No rules ({{count}})",
           "retain": "Withhold aguinaldo ({{count}})",
-          "pending": "With pending commission ({{count}})"
+          "pending": "With pending commission ({{count}})",
+          "paid": "Paid ({{count}})",
+          "none": "No movements ({{count}})"
         },
         "empty": "No professionals match.",
         "noRulesYet": "No rules: earns the default %",
         "missingRules": "Rules missing",
         "thisPeriod": "This period",
         "aguinaldo": "Aguinaldo accrued",
-        "footer": "Tap a professional to see their summary, rules and history."
+        "footer": "Tap a professional to see their summary, rules and history.",
+        "detail": {
+          "NONE": "No sales this period",
+          "UNSETTLED_one": "{{count}} movement · to generate",
+          "UNSETTLED_other": "{{count}} movements · to generate",
+          "DRAFT": "Draft: to approve",
+          "APPROVED": "Ready to pay",
+          "PAID": "Paid on {{date}}"
+        }
       },
       "pro": {
         "back": "Back to the team",
