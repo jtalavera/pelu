@@ -196,6 +196,7 @@ function ExceptionsPane() {
     <div className="flex flex-col gap-4" data-testid="commissions-exceptions">
       <div className="rounded-card border border-line bg-surface p-4" data-testid="advanced-precedence">
         <h3 className="font-heading font-extrabold text-ink">{t("femme.commissions.advanced.precedenceTitle")}</h3>
+        <p className="text-sm text-ink-3">{t("femme.commissions.advanced.precedenceHelp")}</p>
         <ol className="mt-1 list-decimal pl-5 text-sm text-ink-2">
           {[1, 2, 3, 4, 5].map((n) => (
             <li key={n}>{t(`femme.commissions.advanced.precedence${n}`)}</li>

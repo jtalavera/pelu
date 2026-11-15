@@ -287,7 +287,6 @@
         "searchServicePlaceholder": "Nombre del servicio, por ejemplo Corte",
         "searchProductPlaceholder": "Nombre del producto, por ejemplo Shampoo",
         "noResults": "Ningún ítem coincide con la búsqueda.",
-        "intro": "Precedencia: 1) comisión general · 2) % estándar del servicio o producto (excepción) · 3) % de un profesional para ese servicio o producto (excepción individual). Gana la regla más específica.",
         "pendingCount_one": "{{count}} cambio sin guardar",
         "pendingCount_other": "{{count}} cambios sin guardar",
         "discard": "Descartar",
@@ -1111,6 +1110,7 @@
       },
       "advanced": {
         "precedenceTitle": "Qué regla gana",
+        "precedenceHelp": "Se usa la primera que corresponda, de arriba hacia abajo.",
         "precedence1": "Profesional + servicio puntual",
         "precedence2": "Profesional + grupo",
         "precedence3": "Servicio puntual",

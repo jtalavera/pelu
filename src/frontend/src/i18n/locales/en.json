@@ -287,7 +287,6 @@
         "searchServicePlaceholder": "Service name, e.g. Haircut",
         "searchProductPlaceholder": "Product name, e.g. Shampoo",
         "noResults": "No item matches the search.",
-        "intro": "Precedence: 1) general commission · 2) standard % of the service or product (exception) · 3) a professional's % for that service or product (individual exception). The most specific rule wins.",
         "pendingCount_one": "{{count}} unsaved change",
         "pendingCount_other": "{{count}} unsaved changes",
         "discard": "Discard",
@@ -1111,6 +1110,7 @@
       },
       "advanced": {
         "precedenceTitle": "Which rule wins",
+        "precedenceHelp": "The first one that applies is used, from top to bottom.",
         "precedence1": "Professional + specific service",
         "precedence2": "Professional + group",
         "precedence3": "Specific service",

@@ -178,6 +178,9 @@ describe("HU-COM-16 · Configurar", () => {
     expect(screen.getByTestId("where").textContent).toBe("/app/commissions/configurar/grupos?tab=exceptions");
     expect(await screen.findByTestId("commissions-exceptions")).toBeTruthy();
     expect(screen.getByTestId("advanced-precedence").querySelectorAll("li")).toHaveLength(5);
+    // Only one statement of the order: the list. The old sentence (without groups, in the opposite order) is gone.
+    expect(screen.getByTestId("advanced-precedence").textContent).toContain("Se usa la primera que corresponda");
+    expect(screen.getByTestId("commissions-exceptions").textContent).not.toContain("Precedencia: 1)");
   });
 
   it("el buscador de Configurar abre «Grupos y servicios» ya buscando", async () => {
