@@ -1019,7 +1019,8 @@
         "advancedLink": "Advanced options (exceptions, scheduled changes and history)",
         "step1": {
           "title": "How it is calculated",
-          "help": "The calculation base, the default % and how often you settle."
+          "help": "The calculation base, the default % and how often you settle.",
+          "summary": "{{base}} · {{service}} services · {{product}} products · {{periodicity}}"
         },
         "step2": {
           "title": "Groups and services",
@@ -1031,7 +1032,16 @@
           "tileGrouped": "services already have a group",
           "tileUngrouped_one": "without a group: it needs a rule",
           "tileUngrouped_other": "without a group: they need a rule",
-          "yourGroups": "Your groups:"
+          "yourGroups": "Your groups:",
+          "summary_one": "{{count}} group · {{done}} of {{total}} services already have a group",
+          "summary_other": "{{count}} groups · {{done}} of {{total}} services already have a group",
+          "intro_one": "Put together the services that commission the same way, to set one rule per group. The service without a group uses the default %.",
+          "intro_other": "Put together the services that commission the same way, to set one rule per group. The {{count}} without a group use the default %.",
+          "missing_one": "{{count}} without a group",
+          "missing_other": "{{count}} without a group",
+          "noGroups": "No groups yet",
+          "seeUngrouped_one": "See the service without a group",
+          "seeUngrouped_other": "See the {{count}} without a group"
         },
         "step3": {
           "title": "Rules per professional",
@@ -1039,11 +1049,23 @@
           "open": "Go to the team",
           "missing_one": "{{count}} professional without rules",
           "missing_other": "{{count}} professionals without rules",
-          "allSet": "everybody has rules"
+          "allSet": "everybody has rules",
+          "pill_one": "{{count}} without rules",
+          "pill_other": "{{count}} without rules",
+          "pending": "Pending"
         },
         "step4": {
           "title": "Aguinaldo and product cost",
-          "help": "Whether your salon withholds aguinaldo and who gets the product cost."
+          "help": "Whether your salon withholds aguinaldo and who gets the product cost.",
+          "pill": "Nobody retains yet",
+          "summaryOff": "Aguinaldo off · the product cost goes to {{destination}}",
+          "summaryOn_one": "Retains {{percent}} by default · {{count}} of {{total}} professionals retains · the product cost goes to {{destination}}",
+          "summaryOn_other": "Retains {{percent}} by default · {{count}} of {{total}} professionals retain · the product cost goes to {{destination}}",
+          "summaryNobody": "Aguinaldo on · no professional has a retention set",
+          "destination": {
+            "PROFESSIONAL": "the professional",
+            "SALON": "the salon"
+          }
         },
         "searchLabel": "Search a group or a service",
         "searchPlaceholder": "Search a group or a service…",
@@ -1051,8 +1073,12 @@
           "title": "Exceptions by service or product",
           "help": "When a specific service commissions differently from the rest of its group.",
           "see": "See exceptions",
-          "scheduled": "Scheduled changes and history"
-        }
+          "scheduled": "Scheduled changes and history",
+          "scheduledCount_one": "{{count}} scheduled change",
+          "scheduledCount_other": "{{count}} scheduled changes"
+        },
+        "stepDone": "Up to date",
+        "stepOptional": "Optional"
       },
       "advanced": {
         "precedenceTitle": "Which rule wins",
@@ -1100,6 +1126,12 @@
         "addMoving_other": "{{count}} already have a group and move",
         "addConfirm_one": "Add {{count}} to {{name}}",
         "addConfirm_other": "Add {{count}} to {{name}}"
+      },
+      "periodicityShort": {
+        "WEEKLY": "weekly settlement",
+        "BIWEEKLY": "biweekly settlement",
+        "MONTHLY": "monthly settlement",
+        "MANUAL": "manual settlement"
       }
     },
     "appTitle": "Flowbit",

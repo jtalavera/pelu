@@ -354,6 +354,19 @@ export async function openCommissionsMore(page: Page, name: "Reports" | "Setting
   }
 }
 
+/**
+ * Setup (HU-COM-18): the steps are folded and only the first pending one opens by itself, so this makes
+ * sure step N is open (opening it when it is not) before touching what is inside it.
+ */
+export async function openSetupStep(page: Page, n: 1 | 2 | 3 | 4) {
+  const toggle = page.getByTestId(`config-step-${n}-toggle`);
+  await expect(toggle).toBeVisible();
+  await expect(async () => {
+    if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true", { timeout: 1000 });
+  }).toPass();
+}
+
 /** Setup › «Excepciones por servicio» (HU-COM-16), optionally on its Services or Products view. */
 export async function openExceptions(page: Page, kind?: "SERVICE" | "PRODUCT") {
   await openCommissions(page, "setup");

@@ -18,18 +18,27 @@ const api = vi.hoisted(() => ({
 vi.mock("../../api/commissions", async (orig) => ({ ...(await orig<typeof import("../../api/commissions")>()), ...api }));
 vi.mock("../../api/femmeClient", () => ({ femmeJson: vi.fn(async () => []), femmePostJson: vi.fn(), femmePutJson: vi.fn() }));
 
-const overview = { professionalsWithoutRules: 2, groupCount: 2, ungroupedServices: 1 } as unknown as Overview;
+const overview = {
+  professionalsWithoutRules: 2,
+  groupCount: 2,
+  ungroupedServices: 1,
+  rows: [{}, {}],
+  aguinaldoEnabled: false,
+  professionalsRetaining: 0,
+} as unknown as Overview;
+/** Everything configured: only step 4 can still be pending. */
+const allSet = { ...overview, professionalsWithoutRules: 0, ungroupedServices: 0 } as Overview;
 
 function Where() {
   const l = useLocation();
   return <div data-testid="where">{l.pathname + l.search}</div>;
 }
 
-const mount = (initial: string) =>
+const mount = (initial: string, ov: Overview = overview) =>
   render(
     <I18nextProvider i18n={i18n}>
       <ThemeProvider>
-        <OverviewContext.Provider value={{ overview, error: null, refresh: async () => {} }}>
+        <OverviewContext.Provider value={{ overview: ov, error: null, refresh: async () => {} }}>
           <MemoryRouter initialEntries={[initial]}>
             <Where />
             <Routes>
@@ -82,19 +91,82 @@ describe("HU-COM-16 · Configurar", () => {
     vi.clearAllMocks();
   });
 
-  it("cada paso muestra su estado: grupos, servicios con grupo, sin grupo y profesionales sin reglas", async () => {
+  it("cada paso muestra su estado: ✓ o número, resumen de una línea y qué falta", async () => {
     mount("/app/commissions/configurar");
-    expect((await screen.findByTestId("config-tile-groups")).textContent).toContain("2");
-    expect(screen.getByTestId("config-tile-grouped").textContent).toContain("4 de 5");
-    expect(screen.getByTestId("config-tile-ungrouped").textContent).toContain("1");
+    await screen.findAllByTestId("config-group-chip");
+    const step = (n: number) => screen.getByTestId(`config-step-${n}`);
+    expect(step(1).dataset.tone).toBe("done");
+    expect(screen.getByTestId("config-step-1-badge").textContent).toBe("✓");
+    expect(screen.getByTestId("config-step-1-summary").textContent).toBe("Con IVA · 10 % servicios · 5 % productos · liquidación quincenal");
+    expect(screen.getByTestId("config-step-1-pill").textContent).toBe("Al día");
+    expect(step(2).dataset.tone).toBe("pending");
+    expect(screen.getByTestId("config-step-2-badge").textContent).toBe("2");
+    expect(screen.getByTestId("config-step-2-summary").textContent).toBe("2 grupos · 4 de 5 servicios ya tienen grupo");
+    expect(screen.getByTestId("config-step-2-pill").textContent).toBe("1 sin grupo");
+    expect(step(3).dataset.tone).toBe("pending");
+    expect(screen.getByTestId("config-step-3-pill").textContent).toBe("2 sin reglas");
+    expect(step(4).dataset.tone).toBe("optional");
+    expect(screen.getByTestId("config-step-4-badge").textContent).toBe("4");
+    expect(screen.getByTestId("config-step-4-pill").textContent).toBe("Opcional");
+    expect(screen.getByTestId("config-step-4-summary").textContent).toBe("Aguinaldo desactivado · el costo de producto va para la profesional");
     expect(screen.getAllByTestId("config-group-chip").map((c) => c.textContent)).toEqual(["Color 3", "Manos 1"]);
-    expect(screen.getByTestId("config-step-3-status").textContent).toContain("2 profesionales sin reglas");
+  });
+
+  it("se abre solo el primer paso pendiente y cada paso se abre y se cierra a mano", async () => {
+    mount("/app/commissions/configurar");
+    await screen.findAllByTestId("config-group-chip");
+    const open = (n: number) => screen.getByTestId(`config-step-${n}-toggle`).getAttribute("aria-expanded");
+    expect([1, 2, 3, 4].map(open)).toEqual(["false", "true", "false", "false"]);
+    expect(screen.queryByTestId("commission-setting-BASE")).toBeNull();
+    await userEvent.click(screen.getByTestId("config-step-1-toggle"));
     expect(screen.getByTestId("commission-setting-BASE")).toBeTruthy();
+    await userEvent.click(screen.getByTestId("config-step-3-toggle"));
+    expect(screen.getByTestId("config-step-3-status").textContent).toContain("2 profesionales sin reglas");
+    await userEvent.click(screen.getByTestId("config-step-2-toggle"));
+    expect(open(2)).toBe("false");
+    expect(screen.queryByTestId("config-group-chip")).toBeNull();
+  });
+
+  it("paso 4: gris si el aguinaldo está apagado, ámbar si nadie retiene y verde si alguien retiene", async () => {
+    const on = {
+      base: "TAX_INCLUDED",
+      defaultPercentService: 10,
+      defaultPercentProduct: 5,
+      periodicity: "BIWEEKLY",
+      currentPeriod: { periodicity: "BIWEEKLY", from: "2026-11-01", to: "2026-11-15", nextFrom: "2026-11-16" },
+      scheduledChanges: [],
+      history: [],
+      fixedDestination: "SALON",
+      aguinaldoEnabled: true,
+      aguinaldoDefaultPercent: 5,
+    };
+    const profile = (id: number, percent: number | null) => ({ professionalId: id, professionalName: `P${id}`, active: true, percent });
+    api.getSettings.mockResolvedValue({ ...on, retentionProfiles: [profile(1, null), profile(2, null)] });
+    mount("/app/commissions/configurar", allSet);
+    await screen.findByTestId("config-step-4-pill");
+    expect(screen.getByTestId("config-step-4").dataset.tone).toBe("pending");
+    expect(screen.getByTestId("config-step-4-badge").textContent).toBe("4");
+    expect(screen.getByTestId("config-step-4-pill").textContent).toBe("Nadie retiene todavía");
+    expect(screen.getByTestId("config-step-4-summary").textContent).toBe("Aguinaldo activado · ninguna profesional tiene retención cargada");
+    // It is the only pending step, so it opens by itself, with the retention list.
+    expect(screen.getByTestId("config-step-4-toggle").getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getAllByTestId("commission-retention-row")).toHaveLength(2);
+    cleanup();
+    api.getSettings.mockResolvedValue({ ...on, retentionProfiles: [profile(1, 5), profile(2, null)] });
+    mount("/app/commissions/configurar", allSet);
+    await screen.findByTestId("config-step-4-pill");
+    expect(screen.getByTestId("config-step-4").dataset.tone).toBe("done");
+    expect(screen.getByTestId("config-step-4-badge").textContent).toBe("✓");
+    expect(screen.getByTestId("config-step-4-pill").textContent).toBe("Al día");
+    expect(screen.getByTestId("config-step-4-summary").textContent).toBe("Retiene 5 % por defecto · 1 de 2 profesionales retiene · el costo de producto va para el salón".replace("0 %", "5 %"));
+    expect(screen.getByTestId("config-step-4-toggle").getAttribute("aria-expanded")).toBe("false");
+    // Nothing is pending: every step stays folded.
+    expect([1, 2, 3, 4].map((n) => screen.getByTestId(`config-step-${n}-toggle`).getAttribute("aria-expanded"))).toEqual(["false", "false", "false", "false"]);
   });
 
   it("los atajos llevan al grupo, a «Sin grupo» y a las excepciones", async () => {
     mount("/app/commissions/configurar");
-    await userEvent.click(await screen.findByTestId("config-tile-ungrouped"));
+    await userEvent.click(await screen.findByTestId("config-step-2-ungrouped-link"));
     expect(screen.getByTestId("where").textContent).toBe("/app/commissions/configurar/grupos?group=none");
     cleanup();
     mount("/app/commissions/configurar");
@@ -110,7 +182,7 @@ describe("HU-COM-16 · Configurar", () => {
 
   it("el buscador de Configurar abre «Grupos y servicios» ya buscando", async () => {
     mount("/app/commissions/configurar");
-    await screen.findByTestId("config-tile-groups");
+    await screen.findAllByTestId("config-group-chip");
     await userEvent.type(screen.getByTestId("config-search"), "pestañas{Enter}");
     expect(screen.getByTestId("where").textContent).toBe("/app/commissions/configurar/grupos?q=pesta%C3%B1as");
     expect(((await screen.findByTestId("groups-search")) as HTMLInputElement).value).toBe("pestañas");

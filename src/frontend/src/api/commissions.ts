@@ -184,6 +184,8 @@ export type Overview = {
   groupCount: number;
   aguinaldoEnabled: boolean;
   aguinaldoBalance: number;
+  /** Active professionals with a retention % above zero (step 4 of «Configurar»). */
+  professionalsRetaining: number;
 };
 
 // ── Aguinaldo fund (HU-COM-14) ──────────────────────────────────────────────────────────────

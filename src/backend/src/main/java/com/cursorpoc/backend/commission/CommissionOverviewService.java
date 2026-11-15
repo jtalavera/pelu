@@ -175,6 +175,11 @@ public class CommissionOverviewService {
 
     int withoutRules = (int) summary.stream().filter(s -> s.ruleCount() == 0).count();
     boolean aguinaldo = snapshot.aguinaldoEnabledAt(now);
+    int retaining =
+        (int)
+            summary.stream()
+                .filter(s -> s.retentionPercent() != null && s.retentionPercent().signum() > 0)
+                .count();
     return new Overview(
         shown,
         Math.min(0, offset),
@@ -190,7 +195,8 @@ public class CommissionOverviewService {
         withoutRules,
         groupRepository.findByTenantIdOrderByNameAsc(tenantId).size(),
         aguinaldo,
-        aguinaldo ? aguinaldoService.summary(tenantId).totalBalance() : BigDecimal.ZERO);
+        aguinaldo ? aguinaldoService.summary(tenantId).totalBalance() : BigDecimal.ZERO,
+        retaining);
   }
 
   private static BigDecimal sum(List<CommissionEntry> entries) {

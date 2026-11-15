@@ -8,6 +8,7 @@ import {
   setTenantFlag,
   type CommissionWorld,
   openCommissions,
+  openSetupStep,
 } from "../../fixtures/commissions";
 
 /** HU-COM-01 · Configurar el módulo de comisiones del negocio (base y comisión general en Reglas → Reglas generales). */
@@ -25,6 +26,7 @@ test.afterAll(async ({ request }) => {
 async function openSettings(page: import("@playwright/test").Page) {
   await openCommissions(page, "setup");
   await expect(page.getByTestId("commission-settings")).toBeVisible();
+  await openSetupStep(page, 1); // HU-COM-18: «Cómo se calcula» is folded until opened
 }
 
 async function applyImmediately(page: import("@playwright/test").Page) {

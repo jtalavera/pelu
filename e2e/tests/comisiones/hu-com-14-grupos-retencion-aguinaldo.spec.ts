@@ -18,6 +18,7 @@ import {
   openCommissions,
   openCommissionsMore,
   openExceptions,
+  openSetupStep,
   openProfessional,
   liquidarRow,
   professionalWithAccess,
@@ -69,6 +70,7 @@ const proRules = (request: Parameters<typeof apiGetJson>[0], id: number) =>
 async function openGroups(page: Page) {
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
+  await openSetupStep(page, 2);
   await page.getByTestId("config-step-2-link").click();
   await expect(page.getByTestId("commission-groups")).toBeVisible();
 }
@@ -519,6 +521,7 @@ test("AC8 · AC9 · Configuración: retención de aguinaldo, % por defecto, qui�
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
   const settings = page.getByTestId("commission-settings");
+  await openSetupStep(page, 4); // HU-COM-18: the aguinaldo step is folded until opened
 
   // Starts off: no retention, the fixed amount is the professional's, the default % row is hidden.
   await expect(settings.getByTestId("commission-setting-AGUINALDO_ENABLED")).toContainText("Off");

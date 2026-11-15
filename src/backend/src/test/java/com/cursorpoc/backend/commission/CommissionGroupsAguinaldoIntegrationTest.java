@@ -577,6 +577,11 @@ class CommissionGroupsAguinaldoIntegrationTest {
     assertThat(ov.professionalsWithoutRules()).isZero();
     assertThat(ov.aguinaldoEnabled()).isTrue();
     assertThat(ov.aguinaldoBalance()).isEqualByComparingTo("0");
+    // HU-COM-18: nobody has a usual retention yet; once Gaby has one, only she counts (the other
+    // professional legitimately does not retain, which is not a gap).
+    assertThat(ov.professionalsRetaining()).isZero();
+    change("IMMEDIATE", new ConfigChange("RETENTION_PROFILE", null, gaby.getId(), null, "5", null));
+    assertThat(overviewService.overview(tenant.getId(), 0).professionalsRetaining()).isEqualTo(1);
     assertThat(ov.period().from()).isNotNull();
 
     LocalDate today = LocalDate.now(configService.zone());
@@ -619,6 +624,7 @@ class CommissionGroupsAguinaldoIntegrationTest {
   void theOverviewCountsProfessionalsWithoutRules() {
     var ov = overviewService.overview(tenant.getId(), 0);
     assertThat(ov.professionalsWithoutRules()).isEqualTo(2);
+    assertThat(ov.professionalsRetaining()).isZero();
     assertThat(ov.rows()).extracting(r -> r.status()).containsOnly("NONE");
   }
 }
