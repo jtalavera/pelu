@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Spinner } from "@design-system";
@@ -6,7 +5,7 @@ import type { Overview } from "../../api/commissions";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
-import { STATUS_META, periodLabel, setupProgress, useOverview } from "./overview";
+import { STATUS_META, periodLabel, setupProgress, summarize, useOverview } from "./overview";
 import { StatusChip } from "./StatusChip";
 
 /** Avatar with the two first letters. */
@@ -104,82 +103,120 @@ function SetupGuide({ overview }: { overview: Overview }) {
   );
 }
 
-/** Comisiones › Inicio: how much is owed, who is where, and what is worth reviewing (HU-COM-15). */
+/** Comisiones › Inicio: the period's money split in what is paid and what is left, the 4 steps, and the team (HU-COM-17). */
 export default function HomePage() {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const navigate = useNavigate();
   const { overview: o } = useOverview();
-  const [showHow, setShowHow] = useState(false);
   if (!o) return <Spinner />;
   if (setupProgress(o).firstTime) return <SetupGuide overview={o} />;
 
-  const active = o.rows.filter((r) => r.status !== "NONE");
-  const liquidated = o.drafts + o.approved + o.paid;
+  const sum = summarize(o);
   const review = [
     { key: "lines", n: o.linesWithoutProfessional, to: "/app/commissions/actividad?tab=reports" },
     { key: "ungrouped", n: o.ungroupedServices, to: "/app/commissions/configurar/grupos?group=none" },
     { key: "noRules", n: o.professionalsWithoutRules, to: "/app/commissions/equipo?filter=norules" },
     { key: "drafts", n: o.drafts, to: "/app/commissions/liquidar?state=DRAFT" },
   ].filter((r) => r.n > 0);
-  const segments = [
-    { n: o.unsettled, cls: STATUS_META.UNSETTLED.dot },
-    { n: o.drafts, cls: STATUS_META.DRAFT.dot },
-    { n: o.approved, cls: STATUS_META.APPROVED.dot },
-    { n: o.paid, cls: STATUS_META.PAID.dot },
-  ];
+  const STEP_ACTION = { UNSETTLED: "GENERATE", DRAFT: "APPROVE", APPROVED: "PAY", PAID: "VIEW" } as const;
+  const STEP_TONE = {
+    UNSETTLED: "border-warning/50 bg-warning-lt",
+    DRAFT: "border-[#8FC1C5] bg-primary-lt/60",
+    APPROVED: "border-[#4FA97A] bg-success-lt/70",
+    PAID: "border-line bg-surface",
+  } as const;
+  const withMoves = sum.steps.flatMap((s) => s.rows);
+  const noneNames = sum.none.rows.map((r) => r.professionalName);
 
   return (
     <div className="flex flex-col gap-5" data-testid="commissions-home">
-      <section className="flex flex-col gap-3 rounded-[20px] bg-primary p-5 text-surface sm:p-6" data-testid="home-hero">
-        <div className="text-sm font-bold text-primary-lt">{t("femme.commissions.home.toPay", { period: periodLabel(t, o.period, dateLocale) })}</div>
-        <div className="font-heading text-4xl font-extrabold leading-tight sm:text-5xl" data-testid="home-total">
-          {formatGuaraniesGs(o.total)}
+      <section className="flex flex-col gap-4 rounded-[20px] bg-primary p-5 text-surface sm:p-6" data-testid="home-hero">
+        <div className="text-sm font-bold text-primary-lt">{t("femme.commissions.home.heroTitle", { period: periodLabel(t, o.period, dateLocale) })}</div>
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <div className="font-heading text-4xl font-extrabold leading-tight sm:text-5xl" data-testid="home-total">
+              {formatGuaraniesGs(sum.total)}
+            </div>
+            <div className="mt-1 text-sm text-primary-lt" data-testid="home-progress-text">
+              {sum.withMovements === 0
+                ? t("femme.commissions.home.nothingYet")
+                : t("femme.commissions.home.totalOf", { count: sum.withMovements })}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <div className="min-w-40 rounded-2xl bg-primary-dk/60 px-4 py-3" data-testid="home-paid">
+              <div className="text-xs font-extrabold text-primary-lt">{t("femme.commissions.home.paid")}</div>
+              <b className="font-heading text-xl tabular-nums" data-testid="home-paid-amount">
+                {formatGuaraniesGs(sum.paid)}
+              </b>
+              <div className="text-xs text-primary-lt">{t("femme.commissions.home.people", { count: sum.paidPeople })}</div>
+            </div>
+            <div className="min-w-40 rounded-2xl bg-surface px-4 py-3 text-ink" data-testid="home-pending">
+              <div className="text-xs font-extrabold text-ink-3">{t("femme.commissions.home.pending")}</div>
+              <b className="font-heading text-xl tabular-nums text-primary" data-testid="home-pending-amount">
+                {formatGuaraniesGs(sum.pending)}
+              </b>
+              <div className="text-xs text-ink-2">{t("femme.commissions.home.people", { count: sum.pendingPeople })}</div>
+            </div>
+          </div>
         </div>
-        <div className="text-primary-lt" data-testid="home-progress-text">
-          {active.length === 0
-            ? t("femme.commissions.home.nothingYet")
-            : t("femme.commissions.home.progress", { people: active.length, liquidated, missing: Math.max(0, active.length - liquidated) })}
+        {/* The width of each part is the money in that state. */}
+        <div
+          className="flex h-3.5 gap-[3px] overflow-hidden rounded-full bg-primary-dk"
+          role="img"
+          aria-label={t("femme.commissions.home.barAria")}
+          data-testid="home-bar"
+        >
+          {sum.steps.map((s) => (s.amount > 0 ? <div key={s.status} className={STATUS_META[s.status].dot} style={{ flex: s.amount }} /> : null))}
         </div>
-        <div className="flex h-3.5 gap-[3px] overflow-hidden rounded-full bg-primary-dk" aria-hidden>
-          {segments.map((s, i) => (s.n > 0 ? <div key={i} className={s.cls} style={{ flex: s.n }} /> : null))}
-        </div>
-        <div className="flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-primary-lt">
-          <span>{t("femme.commissions.home.legend.UNSETTLED", { count: o.unsettled })}</span>
-          <span>{t("femme.commissions.home.legend.DRAFT", { count: o.drafts })}</span>
-          <span>{t("femme.commissions.home.legend.APPROVED", { count: o.approved })}</span>
-          <span>{t("femme.commissions.home.legend.PAID", { count: o.paid })}</span>
-        </div>
-        <div className="mt-1 flex flex-wrap gap-2.5">
-          <Link
-            to="/app/commissions/liquidar"
-            data-testid="home-continue"
-            className="inline-flex min-h-12 items-center rounded-full bg-surface px-6 text-base font-extrabold text-primary"
-          >
-            {t("femme.commissions.home.continue")}
-          </Link>
-          <button
-            type="button"
-            aria-expanded={showHow}
-            data-testid="home-how-toggle"
-            onClick={() => setShowHow((v) => !v)}
-            className="inline-flex min-h-12 items-center rounded-full border border-primary-lt px-5 text-[15px] font-extrabold text-surface"
-          >
-            {t("femme.commissions.home.how")}
-          </button>
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-[13px] text-primary-lt">
+          {sum.steps.map((s) => (
+            <span key={s.status} className="inline-flex items-center gap-2" data-testid={`home-legend-${s.status}`}>
+              <span aria-hidden className={`size-3 rounded ${STATUS_META[s.status].dot}`} />
+              {t(`femme.commissions.status.${s.status}`)} <b className="text-surface">{formatGuaraniesGs(s.amount)}</b>
+            </span>
+          ))}
         </div>
       </section>
 
-      {showHow && (
-        <section className="rounded-card border border-line bg-surface p-4 shadow-sm" data-testid="home-how">
-          <h2 className="font-heading text-base font-extrabold text-ink">{t("femme.commissions.home.howTitle")}</h2>
-          <ol className="mt-2 flex list-decimal flex-col gap-1 pl-5 text-sm text-ink-2">
-            <li>{t("femme.commissions.home.how1")}</li>
-            <li>{t("femme.commissions.home.how2")}</li>
-            <li>{t("femme.commissions.home.how3")}</li>
-          </ol>
-        </section>
-      )}
+      <section className="flex flex-col gap-3" data-testid="home-steps">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-heading text-xl font-extrabold text-ink">{t("femme.commissions.home.stepsTitle")}</h2>
+          <span className="text-[13px] text-ink-3">{t("femme.commissions.home.stepsHint")}</span>
+        </div>
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          {sum.steps.map((s, i) => (
+            <div key={s.status} data-testid={`home-step-${s.status}`} className={`flex flex-col gap-1.5 rounded-[18px] border-2 p-3.5 ${STEP_TONE[s.status]}`}>
+              <div className="flex items-center gap-2">
+                <span aria-hidden className="inline-flex size-6 items-center justify-center rounded-full bg-ink-2 text-xs font-extrabold text-surface">
+                  {i + 1}
+                </span>
+                <b className="text-[15px] text-ink">{t(`femme.commissions.status.${s.status}`)}</b>
+              </div>
+              <div className="font-heading text-2xl font-extrabold leading-tight text-ink" data-testid="home-step-people">
+                {t("femme.commissions.home.people", { count: s.people })}
+              </div>
+              <div className="min-h-[18px] text-[13px] text-ink-2" data-testid="home-step-amount">
+                {s.people === 0 ? "—" : t(`femme.commissions.home.stepAmount.${s.status}`, { amount: formatGuaraniesGs(s.amount) })}
+              </div>
+              {s.people > 0 ? (
+                <Link
+                  to={`/app/commissions/liquidar?state=${s.status}`}
+                  data-testid={`home-step-${s.status}-action`}
+                  className={`mt-1 inline-flex min-h-11 items-center justify-center rounded-xl border px-3 text-sm font-extrabold ${
+                    s.status === "PAID" || s.status === "UNSETTLED" ? "border-line bg-surface text-primary" : "border-primary bg-primary text-surface"
+                  }`}
+                >
+                  {t(`femme.commissions.home.stepAction.${STEP_ACTION[s.status]}`)}
+                </Link>
+              ) : (
+                <span className="mt-1 inline-flex min-h-11 items-center text-[13px] text-ink-3">{t("femme.commissions.home.stepNothing")}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="flex flex-col gap-2.5" data-testid="home-review">
         <h2 className="font-heading text-xl font-extrabold text-ink">{t("femme.commissions.home.reviewTitle")}</h2>
@@ -207,18 +244,25 @@ export default function HomePage() {
         )}
       </section>
 
-      <section className="rounded-card border border-line bg-surface p-4 shadow-sm sm:p-5" data-testid="home-team">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <section className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4 shadow-sm sm:p-5" data-testid="home-team">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-heading text-xl font-extrabold text-ink">{t("femme.commissions.home.teamTitle")}</h2>
-          <Link to="/app/commissions/equipo" className="inline-flex min-h-11 items-center text-sm font-extrabold text-primary">
-            {t("femme.commissions.home.teamAll")}
-          </Link>
+          <span className="text-sm text-ink-2" data-testid="home-team-counts">
+            <b>{t("femme.commissions.home.teamActive", { count: sum.active })}</b> ·{" "}
+            {t("femme.commissions.home.teamWith", { count: sum.withMovements })} · {t("femme.commissions.home.teamWithout", { count: sum.none.people })}
+          </span>
         </div>
-        {active.length === 0 ? (
-          <p className="mt-2 text-ink-3">{t("femme.commissions.home.teamEmpty")}</p>
+        {sum.active > 0 && (
+          <div className="flex h-2.5 gap-[2px] overflow-hidden rounded-full bg-bg" role="img" aria-label={t("femme.commissions.home.teamBarAria", { with: sum.withMovements, without: sum.none.people })}>
+            {sum.withMovements > 0 && <div className="bg-primary" style={{ flex: sum.withMovements }} />}
+            {sum.none.people > 0 && <div className="bg-line" style={{ flex: sum.none.people }} />}
+          </div>
+        )}
+        {sum.active === 0 ? (
+          <p className="text-ink-3">{t("femme.commissions.home.teamEmpty")}</p>
         ) : (
-          <ul className="mt-2">
-            {active.slice(0, 6).map((r) => (
+          <ul>
+            {withMoves.slice(0, 7).map((r) => (
               <li key={r.professionalId} data-testid="home-team-row" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2">
                 <Avatar name={r.professionalName} />
                 <Link to={`/app/commissions/equipo/${r.professionalId}`} className="min-w-0 flex-1 basis-28 truncate font-extrabold text-ink">
@@ -232,6 +276,21 @@ export default function HomePage() {
             ))}
           </ul>
         )}
+        {sum.none.people > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-bg px-4 py-3" data-testid="home-team-none">
+            <span className="min-w-0 flex-1 basis-64 text-sm text-ink-2">
+              <b>{t("femme.commissions.home.noneTitle", { count: sum.none.people })}</b>{" "}
+              {noneNames.slice(0, 6).join(", ")}
+              {noneNames.length > 6 ? t("femme.commissions.home.noneMore", { count: noneNames.length - 6 }) : ""}
+            </span>
+            <Link to="/app/commissions/liquidar?state=NONE" data-testid="home-team-none-link" className="inline-flex min-h-11 items-center rounded-xl border border-line bg-surface px-4 text-sm font-extrabold text-primary">
+              {t("femme.commissions.home.noneSee", { count: sum.none.people })}
+            </Link>
+          </div>
+        )}
+        <Link to="/app/commissions/equipo" data-testid="home-team-all" className="inline-flex min-h-11 items-center self-start text-sm font-extrabold text-primary">
+          {t("femme.commissions.home.teamAll")}
+        </Link>
       </section>
 
       {o.aguinaldoEnabled && (

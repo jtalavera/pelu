@@ -125,6 +125,8 @@ public class CommissionOverviewService {
       BigDecimal amount;
       BigDecimal retention;
       Long settlementId = null;
+      int lineCount;
+      java.time.LocalDate paidOn = null;
       if (s != null) {
         List<CommissionEntry> entries =
             entryRepository.findBySettlementIdOrderByAccrualAtAscIdAsc(s.getId());
@@ -132,6 +134,10 @@ public class CommissionOverviewService {
         amount = s.getTotalAmount();
         retention = sum(entries);
         settlementId = s.getId();
+        lineCount = entries.size();
+        if (s.getStatus() == CommissionSettlementStatus.PAID && s.getPaidAt() != null) {
+          paidOn = LocalDate.ofInstant(s.getPaidAt(), zone);
+        }
       } else {
         List<CommissionEntry> entries = entryRepository.findUnsettled(tenantId, id, end);
         amount =
@@ -139,6 +145,7 @@ public class CommissionOverviewService {
                 .map(CommissionEntry::getCommissionAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         retention = sum(entries);
+        lineCount = entries.size();
         status = entries.isEmpty() ? "NONE" : "UNSETTLED";
       }
       switch (status) {
@@ -158,7 +165,9 @@ public class CommissionOverviewService {
               amount,
               retention,
               settlementId,
-              ruleCounts.getOrDefault(id, 0)));
+              ruleCounts.getOrDefault(id, 0),
+              lineCount,
+              paidOn));
     }
     rows.sort(
         Comparator.comparing(

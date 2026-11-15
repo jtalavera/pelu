@@ -391,6 +391,15 @@ Historia completa y criterios: [HU-COM-16](../user_stories/HU-COM-16-configurar-
 - Las **excepciones por servicio** son una solapa visible del mismo lugar; «Cambios programados e historial» tiene su pantalla.
 - Asignar es inmediato (una sola llamada que devuelve las filas afectadas). Sin cambios en el cálculo.
 
+### HU-COM-17 · Resumen claro de profesionales y liquidaciones
+
+Historia completa y criterios: [HU-COM-17](../user_stories/HU-COM-17-resumen-profesionales-liquidaciones.md). Resumen:
+
+- **Liquidar** lista a todas las profesionales activas (las «Sin movimientos» al final), agrupadas por estado con subtotal, y cada fila dice qué hay detrás de su monto; los pasos muestran personas y dinero.
+- **Inicio** separa «Ya pagado» de «Falta pagar», explica la barra (dinero por estado, con leyenda), muestra los 4 pasos con personas y plata y cuenta el equipo («N activas · X con comisiones · Y sin movimientos»).
+- **Equipo** muestra el estado de todas (también «Sin movimientos») y filtra Pagadas y Sin movimientos.
+- La API del resumen agrega `lineCount` y `paidOn` por fila. Sin cambios en el cálculo.
+
 ---
 
 ## 6. Modelo de datos conceptual
@@ -474,6 +483,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-14 | Grupos (crear/renombrar/eliminar, sugerencias por nombre, productos juntos); reglas por profesional con validaciones, ejemplo en vivo y copia; Configuración (retención, destino del monto fijo, quién retiene); cálculo con retención y monto fijo (profesional/salón) y precedencia; liquidación con costo de producto y retenido; fondo de aguinaldo (entra al aprobar, sale al anular, pagos parcial/salida/a todas, ajuste); vista de la profesional; historial y recálculo de reglas de grupo. |
 | HU-COM-15 | Cinco lugares y contadores; Inicio (resumen, «Para revisar», guía de primera vez); Liquidar (3 pasos, lote, estados, CSV, sin duplicar períodos); Equipo (lista, búsqueda, filtros); ficha de la profesional (Resumen, Reglas en frases, editor con ejemplo y validaciones, copiar, retención usual, Historial); Aguinaldo solo si está activo; Actividad; Configurar en pasos y Avanzado; endpoint `overview` por tenant. |
 | HU-COM-16 | Estado de cada paso y atajos en Configurar; buscador; lista de grupos + detalle con «Sin grupo» arriba; mover desde la fila, en lote y por sugerencia; buscar con resultados por grupo; agregar servicios; cambio inmediato y rechazo; crear/renombrar/eliminar; solapa de excepciones; celular. |
+| HU-COM-17 | Liquidar con todas las activas, tramos y subtotales, motivos por fila, «Sin movimientos» al final y su filtro; Inicio con pagado/por pagar, leyenda de la barra, 4 pasos y equipo; Equipo con estados y filtros; celular; `overview` con `lineCount` y `paidOn`. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 

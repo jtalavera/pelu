@@ -5,10 +5,12 @@ import { Alert, Button, Input, Label, Spinner, Text } from "@design-system";
 import { getAguinaldo, getProfessionalsSummary, type AguinaldoSummary, type ProfessionalsRuleSummary } from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
+import { formatParaguayDate } from "../../lib/paraguayDateTime";
+import { useDateLocale } from "../../i18n/dateLocale";
 import { Avatar } from "./HomePage";
 import { StatusChip } from "./StatusChip";
 import { formatPercent } from "./common";
-import { useOverview } from "./overview";
+import { summarize, useOverview } from "./overview";
 
 const normalize = (v: string) => v.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
@@ -53,11 +55,12 @@ export function AguinaldoGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-type Filter = "all" | "norules" | "retain" | "pending";
+type Filter = "all" | "pending" | "paid" | "none" | "norules" | "retain";
 
 /** One card per professional: what she earned in the period, her rules and her aguinaldo. */
 export function TeamList() {
   const { t } = useTranslation();
+  const dateLocale = useDateLocale();
   const { overview } = useOverview();
   const [params] = useSearchParams();
   const [summary, setSummary] = useState<ProfessionalsRuleSummary | null>(null);
@@ -66,7 +69,7 @@ export function TeamList() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>(() => {
     const f = params.get("filter");
-    return f === "norules" || f === "retain" || f === "pending" ? f : "all";
+    return f === "norules" || f === "retain" || f === "pending" || f === "paid" || f === "none" ? f : "all";
   });
   const enabled = overview?.aguinaldoEnabled ?? false;
 
@@ -92,12 +95,25 @@ export function TeamList() {
     f === "all" ||
     (f === "norules" && r.ruleCount === 0) ||
     (f === "retain" && !!retention.get(r.professionalId)) ||
-    (f === "pending" && ["UNSETTLED", "DRAFT", "APPROVED"].includes(r.status));
+    (f === "pending" && ["UNSETTLED", "DRAFT", "APPROVED"].includes(r.status)) ||
+    (f === "paid" && r.status === "PAID") ||
+    (f === "none" && r.status === "NONE");
   const visible = rows.filter((r) => matches(filter, r) && (!needle || normalize(r.professionalName).includes(needle)));
-  const chips: Filter[] = enabled ? ["all", "norules", "retain", "pending"] : ["all", "norules", "pending"];
+  const chips: Filter[] = enabled ? ["all", "pending", "paid", "none", "norules", "retain"] : ["all", "pending", "paid", "none", "norules"];
+  const sum = summarize(overview);
+  const detailOf = (r: (typeof rows)[number]) => {
+    if (r.status === "NONE") return t("femme.commissions.team.detail.NONE");
+    if (r.status === "UNSETTLED") return t("femme.commissions.team.detail.UNSETTLED", { count: r.lineCount });
+    if (r.status === "PAID" && r.paidOn) return t("femme.commissions.team.detail.PAID", { date: formatParaguayDate(`${r.paidOn}T12:00:00`, dateLocale) });
+    return t(`femme.commissions.team.detail.${r.status}`);
+  };
 
   return (
     <div className="flex flex-col gap-4" data-testid="team-list">
+      <p className="text-[15px] text-ink" data-testid="team-counts">
+        <b>{t("femme.commissions.home.teamActive", { count: sum.active })}</b> · {t("femme.commissions.home.teamWith", { count: sum.withMovements })} ·{" "}
+        {t("femme.commissions.home.teamWithout", { count: sum.none.people })}
+      </p>
       <div className="flex flex-wrap items-center gap-2">
         <form role="search" onSubmit={(e) => e.preventDefault()} className="flex min-w-0 flex-1 basis-64 items-center gap-1">
           <Label htmlFor="team-search" className="sr-only">
@@ -142,7 +158,9 @@ export function TeamList() {
                 to={`/app/commissions/equipo/${r.professionalId}`}
                 data-testid="team-card"
                 data-professional={r.professionalName}
-                className={`flex min-w-0 flex-col gap-2.5 rounded-card bg-surface p-4 hover:bg-bg ${noRules ? "border border-warning/40" : "border border-line"}`}
+                className={`flex min-w-0 flex-col gap-2.5 rounded-card bg-surface p-4 hover:bg-bg ${
+                  r.status === "NONE" ? "border border-dashed border-ink-3/40" : noRules ? "border border-warning/40" : "border border-line"
+                }`}
               >
                 <div className="flex items-center gap-3">
                   <Avatar name={r.professionalName} size={44} />
@@ -156,19 +174,23 @@ export function TeamList() {
                           : t("femme.commissions.byProfessional.ruleCount", { count: r.ruleCount })}
                     </span>
                   </div>
-                  {noRules ? (
-                    <span className="inline-flex min-h-7 items-center rounded-full bg-warning-lt px-2.5 text-[11px] font-extrabold text-warning" data-testid="team-card-missing">
-                      {t("femme.commissions.team.missingRules")}
-                    </span>
-                  ) : (
+                  <div className="flex flex-col items-end gap-1">
                     <StatusChip status={r.status} />
-                  )}
+                    {noRules && (
+                      <span className="inline-flex min-h-6 items-center rounded-full bg-warning-lt px-2.5 text-[11px] font-extrabold text-warning" data-testid="team-card-missing">
+                        {t("femme.commissions.team.missingRules")}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-baseline justify-between text-[13px] text-ink-3">
                   <span>{t("femme.commissions.team.thisPeriod")}</span>
-                  <b className="text-lg tabular-nums text-ink" data-testid="team-card-amount">
-                    {formatGuaraniesGs(r.amount)}
+                  <b className={`text-lg tabular-nums ${r.status === "NONE" ? "text-ink-3" : "text-ink"}`} data-testid="team-card-amount">
+                    {r.status === "NONE" ? "—" : formatGuaraniesGs(r.amount)}
                   </b>
+                </div>
+                <div className="-mt-1.5 text-xs text-ink-3" data-testid="team-card-detail">
+                  {detailOf(r)}
                 </div>
                 {enabled && (
                   <div className="flex items-baseline justify-between text-[13px] text-warning">

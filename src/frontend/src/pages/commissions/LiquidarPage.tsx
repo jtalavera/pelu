@@ -18,6 +18,7 @@ import { LocalizedDateInput } from "../../components/LocalizedDateInput";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
+import { formatParaguayDate } from "../../lib/paraguayDateTime";
 import { Avatar } from "./HomePage";
 import { StatusChip } from "./StatusChip";
 import { STATUS_META, periodLabel, useOverview } from "./overview";
@@ -28,7 +29,16 @@ type Dialog =
   | { kind: "APPROVE"; rows: OverviewRow[] }
   | { kind: "PAY"; rows: OverviewRow[] };
 
-const FILTERS: (OverviewStatus | "ALL")[] = ["ALL", "UNSETTLED", "DRAFT", "APPROVED", "PAID"];
+const FILTERS: (OverviewStatus | "ALL")[] = ["ALL", "UNSETTLED", "DRAFT", "APPROVED", "PAID", "NONE"];
+/** What is left to do first, and the ones with nothing to settle last. */
+const GROUP_ORDER: OverviewStatus[] = ["UNSETTLED", "DRAFT", "APPROVED", "PAID", "NONE"];
+const GROUP_TONE: Record<OverviewStatus, string> = {
+  UNSETTLED: "bg-warning-lt text-warning",
+  DRAFT: "bg-primary-lt text-primary-dk",
+  APPROVED: "bg-success-lt text-success",
+  PAID: "bg-bg text-ink-2",
+  NONE: "bg-bg text-ink-3",
+};
 const ACTION_STATUS = { GENERATE: "UNSETTLED", APPROVE: "DRAFT", PAY: "APPROVED" } as const;
 
 /**
@@ -69,10 +79,12 @@ export default function LiquidarPage() {
     void load();
   }, [load]);
 
-  const rows = useMemo(() => (data?.rows ?? []).filter((r) => r.status !== "NONE"), [data]);
+  // Every active professional is listed (also the ones with nothing to settle: «Sin movimientos»).
+  const rows = useMemo(() => data?.rows ?? [], [data]);
   const visible = rows.filter((r) => filter === "ALL" || r.status === filter);
   const byStatus = (s: OverviewStatus) => rows.filter((r) => r.status === s);
   const count = (s: OverviewStatus | "ALL") => (s === "ALL" ? rows.length : byStatus(s).length);
+  const amountOf = (s: OverviewStatus) => byStatus(s).reduce((a, r) => a + r.amount, 0);
 
   function open(kind: Dialog["kind"], list: OverviewRow[]) {
     setDialogError(null);
@@ -117,6 +129,18 @@ export default function LiquidarPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  /** One line under the name: what is behind the amount (movements, settlement, payment day) or why there is none. */
+  function rowNote(r: OverviewRow): string {
+    if (r.status === "NONE") {
+      return r.ruleCount === 0 ? t("femme.commissions.liquidar.note.noneNoRules") : t("femme.commissions.liquidar.note.none");
+    }
+    if (r.status === "UNSETTLED") return t("femme.commissions.liquidar.note.lines", { count: r.lineCount });
+    if (r.status === "PAID" && r.paidOn) {
+      return t("femme.commissions.liquidar.note.paidOn", { date: formatParaguayDate(`${r.paidOn}T12:00:00`, dateLocale) });
+    }
+    return r.settlementId ? t("femme.commissions.liquidar.note.settlement", { id: r.settlementId }) : "";
   }
 
   function rowAction(r: OverviewRow) {
@@ -186,6 +210,15 @@ export default function LiquidarPage() {
         <span className="text-[13px] text-ink-3">{t("femme.commissions.liquidar.periodicityNote")}</span>
       </div>
 
+      <p className="rounded-2xl bg-primary-lt px-4 py-2.5 text-sm text-ink" data-testid="liquidar-scope">
+        <b>{t("femme.commissions.liquidar.scopeAll", { count: data.rows.length })}</b>{" "}
+        <span className="text-ink-2">
+          {byStatus("NONE").length === 0
+            ? t("femme.commissions.liquidar.scopeAllWith")
+            : t("femme.commissions.liquidar.scopeSome", { count: byStatus("NONE").length, with: data.rows.length - byStatus("NONE").length, without: byStatus("NONE").length })}
+        </span>
+      </p>
+
       {notice && (
         <Alert variant="success" role="status" data-testid="liquidar-notice">
           {notice}
@@ -211,6 +244,9 @@ export default function LiquidarPage() {
             <div className="text-sm font-extrabold text-ink" data-testid={`liquidar-step-${s.n}-count`}>
               {t(`femme.commissions.liquidar.step${s.n}.count`, { count: s.pending, paid: data.paid })}
             </div>
+            <div className="text-[13px] text-ink-2" data-testid={`liquidar-step-${s.n}-amount`}>
+              {formatGuaraniesGs(amountOf(s.status))}
+            </div>
             <Button
               type="button"
               className={ACTION_BUTTON}
@@ -230,6 +266,8 @@ export default function LiquidarPage() {
           <h2 className="font-heading text-xl font-extrabold text-ink">{t("femme.commissions.liquidar.tableTitle")}</h2>
           <span className="text-[13px] text-ink-3">
             {t("femme.commissions.liquidar.total")}: <b className="text-ink" data-testid="liquidar-total">{formatGuaraniesGs(data.total)}</b>
+            {" · "}
+            {t("femme.commissions.liquidar.alreadyPaid")} <b className="text-ink" data-testid="liquidar-paid-total">{formatGuaraniesGs(amountOf("PAID"))}</b>
           </span>
         </div>
         <div className="flex flex-wrap gap-2" role="group" aria-label={t("femme.commissions.liquidar.filterAria")}>
@@ -255,58 +293,88 @@ export default function LiquidarPage() {
           </p>
         ) : (
           <div className="w-full overflow-x-auto">
-            <ul className="min-w-[40rem]">
-              {visible.map((r) => (
-                <li
-                  key={r.professionalId}
-                  data-testid="liquidar-row"
-                  data-professional={r.professionalName}
-                  data-status={r.status}
-                  className="grid grid-cols-[1.5rem_minmax(0,1fr)_8rem_8rem_9.5rem_6.5rem] items-center gap-2 border-t border-line py-2"
-                >
-                  <input
-                    type="checkbox"
-                    className="size-[18px] accent-[var(--color-primary)]"
-                    aria-label={t("femme.commissions.liquidar.pick", { name: r.professionalName })}
-                    checked={selected.has(r.professionalId)}
-                    data-testid="liquidar-row-check"
-                    onChange={() =>
-                      setSelected((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(r.professionalId)) next.delete(r.professionalId);
-                        else next.add(r.professionalId);
-                        return next;
-                      })
-                    }
-                  />
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    <Avatar name={r.professionalName} />
-                    <span className="flex min-w-0 flex-col">
-                      <Link to={`/app/commissions/equipo/${r.professionalId}`} className="min-w-0 truncate font-extrabold text-ink">
-                        {r.professionalName}
-                      </Link>
-                      {r.settlementId && r.status !== "PAID" && (
-                        <Link
-                          to={`/app/commissions/settlements/${r.settlementId}`}
-                          className="text-xs font-bold text-primary"
-                          data-testid="liquidar-row-detail"
+            <div className="min-w-[40rem]">
+              <div className="grid grid-cols-[1.5rem_minmax(0,1fr)_8rem_8rem_9.5rem_6.5rem] gap-2 pb-1 pt-1 text-[11px] font-extrabold uppercase tracking-wide text-ink-3">
+                <span />
+                <span>{t("femme.commissions.liquidar.colProfessional")}</span>
+                <span className="text-right">{t("femme.commissions.liquidar.colAmount")}</span>
+                <span className="text-right">{t("femme.commissions.liquidar.colRetained")}</span>
+                <span className="text-center">{t("femme.commissions.liquidar.colState")}</span>
+                <span />
+              </div>
+              {GROUP_ORDER.map((status) => {
+                const list = visible.filter((r) => r.status === status);
+                if (list.length === 0) return null;
+                const subtotal = list.reduce((a, r) => a + r.amount, 0);
+                return (
+                  <div key={status} data-testid={`liquidar-group-${status}`} className="flex flex-col">
+                    <div className={`mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl px-3.5 py-2 text-sm font-extrabold ${GROUP_TONE[status]}`}>
+                      <span>
+                        {t(`femme.commissions.status.${status}`)} · {list.length}
+                      </span>
+                      <span className="text-[13px] font-bold" data-testid={`liquidar-group-${status}-subtotal`}>
+                        {t(`femme.commissions.liquidar.subtotal.${status}`, { amount: formatGuaraniesGs(subtotal) })}
+                      </span>
+                    </div>
+                    <ul>
+                      {list.map((r) => (
+                        <li
+                          key={r.professionalId}
+                          data-testid="liquidar-row"
+                          data-professional={r.professionalName}
+                          data-status={r.status}
+                          className="grid grid-cols-[1.5rem_minmax(0,1fr)_8rem_8rem_9.5rem_6.5rem] items-center gap-2 border-t border-line py-2 first:border-t-0"
                         >
-                          {t("femme.commissions.liquidar.detail")}
-                        </Link>
-                      )}
-                    </span>
-                  </span>
-                  <b className="text-right tabular-nums" data-testid="liquidar-row-amount">
-                    {formatGuaraniesGs(r.amount)}
-                  </b>
-                  <span className="text-right text-sm font-bold tabular-nums text-warning" data-testid="liquidar-row-retention">
-                    {data.aguinaldoEnabled && r.retention > 0 ? formatGuaraniesGs(r.retention) : "—"}
-                  </span>
-                  <StatusChip status={r.status} />
-                  {rowAction(r)}
-                </li>
-              ))}
-            </ul>
+                          {r.status === "NONE" ? (
+                            <span aria-hidden />
+                          ) : (
+                            <input
+                              type="checkbox"
+                              className="size-[18px] accent-[var(--color-primary)]"
+                              aria-label={t("femme.commissions.liquidar.pick", { name: r.professionalName })}
+                              checked={selected.has(r.professionalId)}
+                              data-testid="liquidar-row-check"
+                              onChange={() =>
+                                setSelected((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(r.professionalId)) next.delete(r.professionalId);
+                                  else next.add(r.professionalId);
+                                  return next;
+                                })
+                              }
+                            />
+                          )}
+                          <span className="flex min-w-0 items-center gap-2.5">
+                            <Avatar name={r.professionalName} />
+                            <span className="flex min-w-0 flex-col">
+                              <Link to={`/app/commissions/equipo/${r.professionalId}`} className="min-w-0 truncate font-extrabold text-ink">
+                                {r.professionalName}
+                              </Link>
+                              <span className="truncate text-xs text-ink-3" data-testid="liquidar-row-note">
+                                {rowNote(r)}
+                              </span>
+                              {r.settlementId && r.status !== "PAID" && (
+                                <Link to={`/app/commissions/settlements/${r.settlementId}`} className="text-xs font-bold text-primary" data-testid="liquidar-row-detail">
+                                  {t("femme.commissions.liquidar.detail")}
+                                </Link>
+                              )}
+                            </span>
+                          </span>
+                          <b className={`text-right tabular-nums ${r.status === "NONE" ? "text-ink-3" : ""}`} data-testid="liquidar-row-amount">
+                            {r.status === "NONE" ? "—" : formatGuaraniesGs(r.amount)}
+                          </b>
+                          <span className="text-right text-sm font-bold tabular-nums text-warning" data-testid="liquidar-row-retention">
+                            {data.aguinaldoEnabled && r.retention > 0 ? formatGuaraniesGs(r.retention) : "—"}
+                          </span>
+                          <StatusChip status={r.status} />
+                          {rowAction(r)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 

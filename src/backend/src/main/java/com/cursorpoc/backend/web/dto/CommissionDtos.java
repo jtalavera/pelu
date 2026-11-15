@@ -173,7 +173,11 @@ public final class CommissionDtos {
       BigDecimal amount,
       BigDecimal retention,
       Long settlementId,
-      int ruleCount) {}
+      int ruleCount,
+      /** Movements behind the amount: the settlement's, or the unsettled ones of the period. */
+      int lineCount,
+      /** Day the settlement was paid (PAID only). */
+      java.time.LocalDate paidOn) {}
 
   public record Overview(
       PeriodInfo period,
