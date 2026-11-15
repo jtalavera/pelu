@@ -382,6 +382,15 @@ Historia completa y criterios: [HU-COM-15](../user_stories/HU-COM-15-comisiones-
 - **Aguinaldo** vive dentro de Equipo y solo se muestra si el salón activó la retención.
 - Funcionalmente no cambia: mismas reglas de cálculo, estados y permisos. Nuevo endpoint de lectura `GET /api/commissions/overview` con el resumen del período por profesional.
 
+### HU-COM-16 · Configurar: «Grupos y servicios» fácil de encontrar y ordenar
+
+Historia completa y criterios: [HU-COM-16](../user_stories/HU-COM-16-configurar-grupos-y-servicios.md). Resumen:
+
+- Configurar muestra el estado de cada paso (grupos, servicios con grupo, profesionales sin reglas) y tiene un buscador.
+- **Grupos y servicios**: lista de grupos con «Sin grupo» arriba y los servicios del grupo elegido al costado; buscar un servicio dice en qué grupo está y permite moverlo ahí; «Agregar servicios» con sugeridos por nombre.
+- Las **excepciones por servicio** son una solapa visible del mismo lugar; «Cambios programados e historial» tiene su pantalla.
+- Asignar es inmediato (una sola llamada que devuelve las filas afectadas). Sin cambios en el cálculo.
+
 ---
 
 ## 6. Modelo de datos conceptual
@@ -464,6 +473,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-13 | Asignar desde «Líneas sin profesional» (validación, comisión con las reglas del profesional a la fecha de la factura, sin liquidar, la línea deja de figurar, visible en Movimientos); anulación posterior revierte; errores con códigos; aislamiento entre tenants. |
 | HU-COM-14 | Grupos (crear/renombrar/eliminar, sugerencias por nombre, productos juntos); reglas por profesional con validaciones, ejemplo en vivo y copia; Configuración (retención, destino del monto fijo, quién retiene); cálculo con retención y monto fijo (profesional/salón) y precedencia; liquidación con costo de producto y retenido; fondo de aguinaldo (entra al aprobar, sale al anular, pagos parcial/salida/a todas, ajuste); vista de la profesional; historial y recálculo de reglas de grupo. |
 | HU-COM-15 | Cinco lugares y contadores; Inicio (resumen, «Para revisar», guía de primera vez); Liquidar (3 pasos, lote, estados, CSV, sin duplicar períodos); Equipo (lista, búsqueda, filtros); ficha de la profesional (Resumen, Reglas en frases, editor con ejemplo y validaciones, copiar, retención usual, Historial); Aguinaldo solo si está activo; Actividad; Configurar en pasos y Avanzado; endpoint `overview` por tenant. |
+| HU-COM-16 | Estado de cada paso y atajos en Configurar; buscador; lista de grupos + detalle con «Sin grupo» arriba; mover desde la fila, en lote y por sugerencia; buscar con resultados por grupo; agregar servicios; cambio inmediato y rechazo; crear/renombrar/eliminar; solapa de excepciones; celular. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 

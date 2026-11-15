@@ -81,10 +81,12 @@ test.describe("Tablas con fondo blanco", () => {
       await page.getByTestId("commissions-nav-activity").click();
       await expectWhiteSurface(page, page.getByTestId("movements-table"));
       await page.getByTestId("commissions-nav-setup").click();
-      await page.getByTestId("config-advanced-link").click();
+      await page.getByTestId("config-exceptions-link").click();
       await page.getByTestId("rules-kind-SERVICE").click();
       await expectWhiteSurface(page, page.getByTestId("rules-table"));
-      // The reference list (inside a card) keeps its white background.
+      // The reference list (inside a card) keeps its white background (Setup › scheduled changes and history).
+      await page.getByTestId("commissions-nav-setup").click();
+      await page.getByTestId("config-advanced-link").click();
       await page.getByTestId("commission-history-toggle").click();
       await expectWhiteTable(page, page.getByTestId("commission-settings-history").locator("table"));
     } finally {

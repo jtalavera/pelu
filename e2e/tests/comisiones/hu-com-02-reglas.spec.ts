@@ -6,7 +6,7 @@ import {
   entriesOfInvoice,
   issueInvoice,
   loginAdminUi,
-  openCommissions,
+  openExceptions,
   provisionCommissionWorld,
   restoreCommissionsGlobal,
   type CommissionWorld,
@@ -147,10 +147,8 @@ test("historial de cambios por regla (quién, valor anterior y nuevo, vigencia)"
 });
 
 async function openRules(page: Page) {
-  // HU-COM-15: the service and product exceptions live in Setup › Advanced.
-  await openCommissions(page, "setup");
-  await page.getByTestId("config-advanced-link").click();
-  await page.getByTestId("rules-kind-SERVICE").click();
+  // HU-COM-16: the service and product exceptions are the «Exceptions by service» tab of Setup.
+  await openExceptions(page, "SERVICE");
   await expect(page.getByTestId("rules-table")).toBeVisible();
 }
 

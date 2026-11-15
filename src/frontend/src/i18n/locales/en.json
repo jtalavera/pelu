@@ -954,18 +954,36 @@
           "help": "The calculation base, the default % and how often you settle."
         },
         "step2": {
-          "title": "Service groups",
-          "help": "Put together the services that commission the same way.",
-          "open": "Open groups"
+          "title": "Groups and services",
+          "help": "Put together the services that commission the same way, to set one rule per group.",
+          "open": "Organize groups and services",
+          "tileGroups_one": "group",
+          "tileGroups_other": "groups",
+          "ofTotal": "{{done}} of {{total}}",
+          "tileGrouped": "services already have a group",
+          "tileUngrouped_one": "without a group: it needs a rule",
+          "tileUngrouped_other": "without a group: they need a rule",
+          "yourGroups": "Your groups:"
         },
         "step3": {
           "title": "Rules per professional",
           "help": "How much each professional earns in each group.",
-          "open": "Go to the team"
+          "open": "Go to the team",
+          "missing_one": "{{count}} professional without rules",
+          "missing_other": "{{count}} professionals without rules",
+          "allSet": "everybody has rules"
         },
         "step4": {
           "title": "Aguinaldo and product cost",
           "help": "Whether your salon withholds aguinaldo and who gets the product cost."
+        },
+        "searchLabel": "Search a group or a service",
+        "searchPlaceholder": "Search a group or a service…",
+        "exceptions": {
+          "title": "Exceptions by service or product",
+          "help": "When a specific service commissions differently from the rest of its group.",
+          "see": "See exceptions",
+          "scheduled": "Scheduled changes and history"
         }
       },
       "advanced": {
@@ -975,6 +993,45 @@
         "precedence3": "Specific service",
         "precedence4": "Group",
         "precedence5": "Default %"
+      },
+      "workspace": {
+        "title": "Groups and services",
+        "tabGroups": "Groups",
+        "tabExceptions": "Exceptions by service",
+        "product": "Product",
+        "noGroupSub": "They need a rule",
+        "allGroups": "All groups",
+        "createGroupInline": "+ Create a group",
+        "rulesFor_one": "rule set for {{count}} professional",
+        "rulesFor_other": "rules set for {{count}} professionals",
+        "rulesHint": "This group's rules are set per professional.",
+        "rulesLink": "See the rules per professional",
+        "groupEmpty": "This group has no services yet. Add them with «Add services».",
+        "pick": "Choose a group from the list to see its services.",
+        "addItems": "Add services",
+        "searchLabel": "Search a group or a service",
+        "searchPlaceholder": "Search a group or a service…",
+        "resultsFor": "Results for «{{query}}»:",
+        "resultsGroups_one": "{{count}} group",
+        "resultsGroups_other": "{{count}} groups",
+        "resultsItems_one": "{{count}} service or product",
+        "resultsItems_other": "{{count}} services or products",
+        "resultsGroupsTitle": "Groups",
+        "resultsItemsTitle": "Services and products",
+        "openGroup": "Open group",
+        "addTitle": "Add services to «{{name}}»",
+        "addDescription": "Choose the ones that commission the same way. The ones without a group come first; a service can only be in one group, so if you pick one that already has a group, it moves.",
+        "addSearch": "Search a service…",
+        "suggestedCount_one": "{{count}} suggested for {{name}} by its name",
+        "suggestedCount_other": "{{count}} suggested for {{name}} by their names",
+        "markSuggested": "Select the suggested ones",
+        "suggestedChip": "Suggested",
+        "addChosen_one": "{{count}} chosen",
+        "addChosen_other": "{{count}} chosen",
+        "addMoving_one": "{{count}} already has a group and moves",
+        "addMoving_other": "{{count}} already have a group and move",
+        "addConfirm_one": "Add {{count}} to {{name}}",
+        "addConfirm_other": "Add {{count}} to {{name}}"
       }
     },
     "appTitle": "Flowbit",

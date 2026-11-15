@@ -96,7 +96,7 @@ function SetupGuide({ overview }: { overview: Overview }) {
         </div>
       </section>
       {step(1, true, "/app/commissions/configurar")}
-      {step(2, p.groupsDone, "/app/commissions/configurar/grupos")}
+      {step(2, p.groupsDone, "/app/commissions/configurar/grupos?group=none")}
       {step(3, p.rulesDone, "/app/commissions/equipo")}
       {step(4, p.aguinaldoDone, "/app/commissions/configurar", true)}
       <p className="px-1 text-sm text-ink-3">{t("femme.commissions.guide.footer")}</p>
@@ -118,7 +118,7 @@ export default function HomePage() {
   const liquidated = o.drafts + o.approved + o.paid;
   const review = [
     { key: "lines", n: o.linesWithoutProfessional, to: "/app/commissions/actividad?tab=reports" },
-    { key: "ungrouped", n: o.ungroupedServices, to: "/app/commissions/configurar/grupos" },
+    { key: "ungrouped", n: o.ungroupedServices, to: "/app/commissions/configurar/grupos?group=none" },
     { key: "noRules", n: o.professionalsWithoutRules, to: "/app/commissions/equipo?filter=norules" },
     { key: "drafts", n: o.drafts, to: "/app/commissions/liquidar?state=DRAFT" },
   ].filter((r) => r.n > 0);

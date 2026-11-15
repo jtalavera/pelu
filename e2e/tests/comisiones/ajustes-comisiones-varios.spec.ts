@@ -13,6 +13,7 @@ import {
   type CommissionWorld,
   liquidarRow,
   openCommissions,
+  openExceptions,
   openCommissionsMore,
 } from "../../fixtures/commissions";
 
@@ -44,11 +45,9 @@ async function accrue(request: Parameters<typeof issueInvoice>[0], professionalI
   await entriesOfInvoice(request, w.adminToken, inv.id, 1);
 }
 
-/** Opens an exceptions screen (HU-COM-15: Setup › Advanced holds the service and product rules). */
+/** Opens the exceptions by service or product (HU-COM-16: a tab of Setup › Groups and services). */
 async function openAdvanced(page: Page) {
-  await openCommissions(page, "setup");
-  await page.getByTestId("config-advanced-link").click();
-  await expect(page.getByTestId("commissions-advanced")).toBeVisible();
+  await openExceptions(page);
 }
 
 /** Picks options of a design-system MultiSelect (checkbox dropdown) by their visible label. */
