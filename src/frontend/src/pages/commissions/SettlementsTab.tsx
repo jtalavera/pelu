@@ -47,7 +47,7 @@ export function SettlementsTab({ actionSlot }: { actionSlot: HTMLElement | null 
   const [filterProfessionals, setFilterProfessionals] = useState<number[]>([]);
   const [filterStatus, setFilterStatus] = useState("");
   const [page, setPage] = useState(0);
-  const [size, setSize] = useState(20);
+  const [size, setSize] = useState(10);
   const [data, setData] = useState<PagedSettlements | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);

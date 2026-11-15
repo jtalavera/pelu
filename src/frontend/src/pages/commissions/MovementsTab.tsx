@@ -34,7 +34,7 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
   const [notice, setNotice] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(0);
-  const [size, setSize] = useState(20);
+  const [size, setSize] = useState(10);
 
   const load = useCallback(
     async (filters?: EntryFilters) => {
