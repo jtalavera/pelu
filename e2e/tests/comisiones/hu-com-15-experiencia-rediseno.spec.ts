@@ -262,7 +262,9 @@ test("AC4 · Liquidar: filtros por estado con contador, período anterior y el s
   const current = await page.getByTestId("liquidar-period").innerText();
   await page.getByTestId("liquidar-prev").click();
   await expect(page.getByTestId("liquidar-period")).not.toHaveText(current);
-  await expect(page.getByTestId("liquidar-empty")).toBeVisible();
+  // HU-COM-17: nothing was accrued before, so everybody is listed as «No movements».
+  for (const row of await page.getByTestId("liquidar-row").all()) await expect(row).toHaveAttribute("data-status", "NONE");
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
   await expect(page.getByTestId("liquidar-next")).toBeEnabled();
   await page.getByTestId("liquidar-next").click();
   await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
