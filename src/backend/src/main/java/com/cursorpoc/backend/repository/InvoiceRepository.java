@@ -349,17 +349,56 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
    * Rows of [appointmentId, invoiceId]: the latest issued invoice of each turno, whether linked to
    * the turno itself or to the ficha that was charged (a ficha may serve several turnos, all
    * charged by one invoice).
+   *
+   * <p>Two index-backed lookups merged here, not one query joined on {@code appointment_id = … OR
+   * service_record_id = …}: the OR kept SQL Server from using either index, so every agenda load
+   * scanned all of the tenant's invoices (≈4,800 page reads, the top SQL CPU consumer in the
+   * staging load test, 2026-11-15).
+   */
+  default List<Object[]> findInvoiceIdsByAppointmentIds(
+      Long tenantId, java.util.Collection<Long> appointmentIds, InvoiceStatus status) {
+    if (appointmentIds.isEmpty()) {
+      return List.of();
+    }
+    java.util.Map<Long, Long> latest = new java.util.HashMap<>();
+    for (List<Object[]> rows :
+        List.of(
+            findInvoiceIdsLinkedToAppointments(tenantId, appointmentIds, status),
+            findInvoiceIdsLinkedThroughServiceRecords(tenantId, appointmentIds, status))) {
+      for (Object[] row : rows) {
+        latest.merge((Long) row[0], (Long) row[1], Math::max);
+      }
+    }
+    return latest.entrySet().stream().map(e -> new Object[] {e.getKey(), e.getValue()}).toList();
+  }
+
+  /**
+   * [appointmentId, latest invoiceId] for invoices linked to the turno itself
+   * (ix_invoices_appointment).
    */
   @Query(
       """
-      SELECT a.id, MAX(i.id) FROM Appointment a, Invoice i
+      SELECT i.appointment.id, MAX(i.id) FROM Invoice i
+      WHERE i.tenant.id = :tenantId AND i.status = :status AND i.appointment.id IN :appointmentIds
+      GROUP BY i.appointment.id
+      """)
+  List<Object[]> findInvoiceIdsLinkedToAppointments(
+      @Param("tenantId") Long tenantId,
+      @Param("appointmentIds") java.util.Collection<Long> appointmentIds,
+      @Param("status") InvoiceStatus status);
+
+  /**
+   * [appointmentId, latest invoiceId] for invoices of the turno's ficha
+   * (uq_invoices_service_record).
+   */
+  @Query(
+      """
+      SELECT a.id, MAX(i.id) FROM Appointment a JOIN Invoice i ON i.serviceRecord.id = a.serviceRecord.id
       WHERE a.tenant.id = :tenantId AND i.tenant.id = :tenantId AND i.status = :status
       AND a.id IN :appointmentIds
-      AND (i.appointment.id = a.id
-           OR (a.serviceRecord IS NOT NULL AND i.serviceRecord.id = a.serviceRecord.id))
       GROUP BY a.id
       """)
-  List<Object[]> findInvoiceIdsByAppointmentIds(
+  List<Object[]> findInvoiceIdsLinkedThroughServiceRecords(
       @Param("tenantId") Long tenantId,
       @Param("appointmentIds") java.util.Collection<Long> appointmentIds,
       @Param("status") InvoiceStatus status);
