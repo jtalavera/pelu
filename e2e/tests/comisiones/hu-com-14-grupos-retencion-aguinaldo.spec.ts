@@ -817,7 +817,8 @@ test("AC12 · AC13 · AC14 · el fondo entra al aprobar; pagos parcial / por sal
   await page.getByTestId("aguinaldo-adjust-confirm").click();
   await expect(page.getByTestId("aguinaldo-notice")).toHaveText("The adjustment was recorded.");
   await expect(gabyRow.getByTestId("aguinaldo-balance")).toContainText("3.500");
-  await expect(moves.first()).toContainText("Manual adjustment: factura anulada");
+  // Movements are ordered by day, and the sandbox clock (UTC) can be a day ahead of the salon (Paraguay): do not rely on the order.
+  await expect(moves.filter({ hasText: "Manual adjustment: factura anulada" })).toHaveCount(1);
 
   // Payment on departure: pays the whole balance and closes the fund.
   await migueRow.getByTestId("aguinaldo-pay").click();

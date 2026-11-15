@@ -122,10 +122,11 @@ test("AC4 · AC5 · la lista de grupos con «Sin grupo» arriba y sus servicios 
   // 4 services plus the world's product: «No group» counts services and products together.
   await expect(page.getByTestId("group-none-count")).toHaveText("5");
   await expect(page.getByTestId("group-row")).toHaveCount(2);
-  await expect(page.getByTestId("group-row").filter({ hasText: "Color" }).getByTestId("group-row-count")).toHaveText("2");
+  await expect(page.locator('[data-testid="group-row"][data-group-name="Color"]').getByTestId("group-row-count")).toHaveText("2");
 
   // Tapping a group shows its services and its summary.
-  await page.getByTestId("group-row").filter({ hasText: "Color" }).click();
+  const groupRow = (name: string) => page.locator(`[data-testid="group-row"][data-group-name="${name}"]`);
+  await groupRow("Color").click();
   await expect(page.getByTestId("group-title")).toHaveText("Color");
   await expect(page.getByTestId("group-summary")).toContainText("2 services");
   await expect(page.getByTestId("groups-row")).toHaveCount(2);
@@ -134,8 +135,8 @@ test("AC4 · AC5 · la lista de grupos con «Sin grupo» arriba y sus servicios 
   // Move one to the other group from its row: the lists change at once.
   const row = page.getByTestId("groups-row").filter({ hasText: "Color global" });
   await row.getByTestId("groups-row-select").selectOption({ label: "Manos y pies" });
-  await expect(page.getByTestId("group-row").filter({ hasText: "Color" }).getByTestId("group-row-count")).toHaveText("1");
-  await expect(page.getByTestId("group-row").filter({ hasText: "Manos y pies" }).getByTestId("group-row-count")).toHaveText("2");
+  await expect(groupRow("Color").getByTestId("group-row-count")).toHaveText("1");
+  await expect(groupRow("Manos y pies").getByTestId("group-row-count")).toHaveText("2");
   const rows = await apiGetJson<{ serviceId: number; groupId: number | null }[]>(request, w.adminToken, "/api/commissions/groups/services?kind=SERVICE");
   expect(rows.find((r) => r.serviceId === s.global.id)?.groupId).toBe(s.gManos.id);
 });
