@@ -411,10 +411,11 @@ test("AC14 · Excepciones por servicio y «Cambios programados e historial» sal
   await page.getByTestId("config-exceptions-link").click();
   const rules = page.getByTestId("advanced-precedence").getByRole("listitem");
   await expect(rules).toHaveCount(5);
-  await expect(rules.first()).toHaveText("Professional + specific service");
-  await expect(rules.last()).toHaveText("Default %");
+  // From the most general to the most specific: the last one that applies wins.
+  await expect(rules.first()).toHaveText("Default %");
+  await expect(rules.last()).toHaveText("Professional + specific service");
   // The order is stated once (no second, outdated sentence below the list).
-  await expect(page.getByTestId("advanced-precedence")).toContainText("The first one that applies is used, from top to bottom.");
+  await expect(page.getByTestId("advanced-precedence")).toContainText("From the most general to the most specific: the last one that applies wins.");
   await expect(page.getByTestId("commissions-exceptions")).not.toContainText("Precedence: 1)");
   await expect(page.getByTestId("rules-kind-SERVICE")).toBeVisible();
   await expect(page.getByTestId("rules-kind-PRODUCT")).toBeVisible();

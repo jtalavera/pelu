@@ -1110,12 +1110,12 @@
       },
       "advanced": {
         "precedenceTitle": "Qué regla gana",
-        "precedenceHelp": "Se usa la primera que corresponda, de arriba hacia abajo.",
-        "precedence1": "Profesional + servicio puntual",
-        "precedence2": "Profesional + grupo",
+        "precedenceHelp": "De lo general a lo específico: gana la última que corresponda.",
+        "precedence1": "% por defecto",
+        "precedence2": "Grupo",
         "precedence3": "Servicio puntual",
-        "precedence4": "Grupo",
-        "precedence5": "% por defecto"
+        "precedence4": "Profesional + grupo",
+        "precedence5": "Profesional + servicio puntual"
       },
       "workspace": {
         "title": "Grupos y servicios",

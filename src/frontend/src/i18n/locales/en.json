@@ -1110,12 +1110,12 @@
       },
       "advanced": {
         "precedenceTitle": "Which rule wins",
-        "precedenceHelp": "The first one that applies is used, from top to bottom.",
-        "precedence1": "Professional + specific service",
-        "precedence2": "Professional + group",
+        "precedenceHelp": "From the most general to the most specific: the last one that applies wins.",
+        "precedence1": "Default %",
+        "precedence2": "Group",
         "precedence3": "Specific service",
-        "precedence4": "Group",
-        "precedence5": "Default %"
+        "precedence4": "Professional + group",
+        "precedence5": "Professional + specific service"
       },
       "workspace": {
         "title": "Groups and services",
