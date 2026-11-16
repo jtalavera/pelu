@@ -17,6 +17,7 @@ import {
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { LocalizedDateInput } from "../../components/LocalizedDateInput";
 import { ACTION_BUTTON } from "../../components/actionButtons";
+import { FieldValidationError } from "../../components/FieldValidationError";
 import { MoreActionsMenu } from "../../components/MoreActionsMenu";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
@@ -31,6 +32,27 @@ type Dialog =
   | { kind: "PAY"; rows: OverviewRow[] }
   /** HU-COM-19: quick void of drafts; `skipped` = selected rows that are not drafts and stay as they are. */
   | { kind: "VOID"; rows: OverviewRow[]; skipped: number };
+
+const addDaysYmd = (ymd: string, days: number) => {
+  const d = new Date(`${ymd}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+const addMonthsYmd = (ymd: string, months: number) => {
+  const d = new Date(`${ymd}T12:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return d.toISOString().slice(0, 10);
+};
+
+function DownloadIcon() {
+  return (
+    <svg aria-hidden width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 4v11" />
+      <path d="m7 11 5 5 5-5" />
+      <path d="M5 20h14" />
+    </svg>
+  );
+}
 
 /** Reasons offered with one touch when voiding (the field is optional). */
 const VOID_REASONS = ["mistake", "rule", "sale"] as const;
@@ -62,6 +84,12 @@ export default function LiquidarPage() {
   const [showNone, setShowNone] = useState(() => params.get("state") === "NONE");
   const [infoOpen, setInfoOpen] = useState(false);
   const [menuFor, setMenuFor] = useState<number | null>(null);
+  /** HU-COM-30: the download menu, and the dialog that asks for the range of earlier periods. */
+  const [csvMenuOpen, setCsvMenuOpen] = useState(false);
+  const [csvDialog, setCsvDialog] = useState(false);
+  const [csvFrom, setCsvFrom] = useState("");
+  const [csvTo, setCsvTo] = useState("");
+  const [csvError, setCsvError] = useState<string | null>(null);
   /** After an action, a tab that ran out of rows gives way to the stage that is next to do. */
   const bounce = useRef(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -222,6 +250,33 @@ export default function LiquidarPage() {
     );
   }
 
+  /** Downloads the settlements CSV: of a range (HU-COM-30), or all of them when there is none. */
+  async function downloadCsv(from: string | null, to: string | null) {
+    try {
+      await downloadCommissionFile(settlementsCsvPath({ from, to }, i18n.language), "liquidaciones.csv");
+    } catch (err) {
+      setError(translateApiError(err, t));
+    }
+  }
+
+  /** The earlier periods: from three months before the one on screen up to the day before it starts. */
+  function openCsvDialog() {
+    const start = data?.period.from;
+    setCsvTo(start ? addDaysYmd(start, -1) : todayYmd());
+    setCsvFrom(start ? addMonthsYmd(start, -3) : addMonthsYmd(todayYmd(), -3));
+    setCsvError(null);
+    setCsvDialog(true);
+  }
+
+  async function confirmCsvDialog() {
+    if (!csvFrom || !csvTo || csvFrom > csvTo) {
+      setCsvError(t("femme.commissions.liquidar.csvDialog.errorOrder"));
+      return;
+    }
+    setCsvDialog(false);
+    await downloadCsv(csvFrom, csvTo);
+  }
+
   if (!data) return error ? <Alert variant="destructive">{error}</Alert> : <Spinner />;
 
   const currentStep = data.unsettled > 0 ? 1 : data.drafts > 0 ? 2 : data.approved > 0 ? 3 : 0;
@@ -282,10 +337,41 @@ export default function LiquidarPage() {
             <span aria-hidden>ⓘ</span>
           </button>
         </div>
-        <span className="text-sm text-ink-3">
-          {t("femme.commissions.liquidar.total")}: <b className="text-ink" data-testid="liquidar-total">{formatGuaraniesGs(data.total)}</b>
-          {" · "}
-          {t("femme.commissions.liquidar.alreadyPaid")} <b className="text-ink" data-testid="liquidar-paid-total">{formatGuaraniesGs(amountOf("PAID"))}</b>
+        <span className="inline-flex items-center gap-2.5">
+          <span className="text-sm text-ink-3">
+            {t("femme.commissions.liquidar.total")}: <b className="text-ink" data-testid="liquidar-total">{formatGuaraniesGs(data.total)}</b>
+            {" · "}
+            {t("femme.commissions.liquidar.alreadyPaid")} <b className="text-ink" data-testid="liquidar-paid-total">{formatGuaraniesGs(amountOf("PAID"))}</b>
+          </span>
+          <MoreActionsMenu
+            compact
+            triggerIcon={<DownloadIcon />}
+            label={t("femme.commissions.liquidar.csvAria")}
+            open={csvMenuOpen}
+            onOpenChange={setCsvMenuOpen}
+            triggerTestId="liquidar-csv"
+            menuTestId="liquidar-csv-menu"
+            items={[
+              {
+                id: "csv-period",
+                label: t("femme.commissions.liquidar.csvPeriod"),
+                hint:
+                  data.period.from && data.period.to
+                    ? `${formatParaguayDate(`${data.period.from}T12:00:00`, dateLocale)} – ${formatParaguayDate(`${data.period.to}T12:00:00`, dateLocale)}`
+                    : undefined,
+                testId: "liquidar-csv-period",
+                disabled: !data.period.from || !data.period.to,
+                onSelect: () => void downloadCsv(data.period.from, data.period.to),
+              },
+              {
+                id: "csv-previous",
+                label: t("femme.commissions.liquidar.csvPrevious"),
+                hint: t("femme.commissions.liquidar.csvPreviousHint"),
+                testId: "liquidar-csv-previous",
+                onSelect: openCsvDialog,
+              },
+            ]}
+          />
         </span>
       </div>
 
@@ -470,8 +556,8 @@ export default function LiquidarPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-bg/60 px-4 py-1 sm:px-5">
-          {noneRows.length > 0 ? (
+        {noneRows.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-bg/60 px-4 py-1 sm:px-5">
             <button
               type="button"
               aria-expanded={showNone}
@@ -482,21 +568,8 @@ export default function LiquidarPage() {
               {t("femme.commissions.liquidar.noneToggle", { count: noneRows.length })}
               <span aria-hidden>{showNone ? "⌃" : "⌄"}</span>
             </button>
-          ) : (
-            <span />
-          )}
-          <Button
-            type="button"
-            variant="secondary"
-            className={ACTION_BUTTON}
-            data-testid="liquidar-csv"
-            onClick={() =>
-              void downloadCommissionFile(settlementsCsvPath({}, i18n.language), "liquidaciones.csv").catch((err) => setError(translateApiError(err, t)))
-            }
-          >
-            {t("femme.commissions.liquidar.csv")}
-          </Button>
-        </div>
+          </div>
+        )}
         {showNone && noneRows.length > 0 && (
           <p className="border-t border-line px-4 py-3 text-sm text-ink-2 sm:px-5" data-testid="liquidar-none-list">
             {noneRows.map((r, i) => (
@@ -510,6 +583,37 @@ export default function LiquidarPage() {
           </p>
         )}
       </section>
+
+      <Modal
+        open={csvDialog}
+        onClose={() => setCsvDialog(false)}
+        title={t("femme.commissions.liquidar.csvDialog.title")}
+        description={t("femme.commissions.liquidar.csvDialog.description")}
+        footer={
+          <>
+            <Button type="button" variant="secondary" className={`${ACTION_BUTTON} w-full sm:w-auto`} onClick={() => setCsvDialog(false)}>
+              {t("femme.commissions.common.cancel")}
+            </Button>
+            <Button type="button" className={`${ACTION_BUTTON} w-full sm:w-auto`} data-testid="liquidar-csv-confirm" onClick={() => void confirmCsvDialog()}>
+              {t("femme.commissions.liquidar.csvDialog.confirm")}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3" data-testid="liquidar-csv-dialog">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="liquidar-csv-from">{t("femme.commissions.liquidar.csvDialog.from")}</Label>
+              <LocalizedDateInput id="liquidar-csv-from" value={csvFrom} onChange={setCsvFrom} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="liquidar-csv-to">{t("femme.commissions.liquidar.csvDialog.to")}</Label>
+              <LocalizedDateInput id="liquidar-csv-to" value={csvTo} onChange={setCsvTo} />
+            </div>
+          </div>
+          <FieldValidationError id="liquidar-csv-error">{csvError}</FieldValidationError>
+        </div>
+      </Modal>
 
       <Modal
         open={dialog !== null}

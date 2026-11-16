@@ -592,6 +592,7 @@ export async function downloadCommissionFile(path: string, fallbackName: string)
 
 /** `lang` = the UI language, so the export's column headers and labels match what the user reads. */
 export const entriesCsvPath = (f: EntryFilters, lang: string) => `/api/commissions/entries.csv${qs({ ...f, lang })}`;
-export const settlementsCsvPath = (f: { status?: string; professionalIds?: number[] }, lang: string) =>
-  `/api/commissions/settlements.csv${qs({ status: f.status, professionalIds: f.professionalIds, lang })}`;
+/** `from`/`to` (YYYY-MM-DD): only the settlements whose period touches that range; none = every settlement. */
+export const settlementsCsvPath = (f: { status?: string; professionalIds?: number[]; from?: string | null; to?: string | null }, lang: string) =>
+  `/api/commissions/settlements.csv${qs({ status: f.status, professionalIds: f.professionalIds, from: f.from ?? undefined, to: f.to ?? undefined, lang })}`;
 export const settlementPdfPath = (id: number, lang: string) => `/api/commissions/settlements/${id}/pdf${qs({ lang })}`;

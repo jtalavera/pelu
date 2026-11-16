@@ -49,6 +49,7 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.SettlementView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.UngroupedService;
 import com.cursorpoc.backend.web.dto.CommissionDtos.VoidSettlementRequest;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -541,32 +542,44 @@ public class CommissionController {
                 size));
   }
 
+  /**
+   * Settlements as CSV. {@code from}/{@code to} (HU-COM-30) keep the settlements whose period
+   * touches that range; without them it is everything. All the pages are read, not just the first.
+   */
   @GetMapping(value = "/settlements.csv", produces = "text/csv")
   public ResponseEntity<byte[]> settlementsCsv(
       @AuthenticationPrincipal FemmeUserPrincipal p,
       @RequestParam(required = false) Long professionalId,
       @RequestParam(required = false) List<Long> professionalIds,
       @RequestParam(required = false) String status,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
       @RequestParam(required = false) String lang) {
     return admin(
         p,
         "GET",
         "/api/commissions/settlements.csv",
-        () ->
-            csv(
-                "liquidaciones.csv",
-                exportService.settlementsCsv(
-                    queryService
-                        .listSettlements(
-                            p.getTenantId(),
-                            ids(professionalId, professionalIds),
-                            status,
-                            null,
-                            null,
-                            0,
-                            100)
-                        .items(),
-                    lang)));
+        () -> {
+          List<SettlementView> all = new ArrayList<>();
+          for (int page = 0; ; page++) {
+            PagedSettlements res =
+                queryService.listSettlements(
+                    p.getTenantId(),
+                    ids(professionalId, professionalIds),
+                    status,
+                    from,
+                    to,
+                    page,
+                    100);
+            all.addAll(res.items());
+            if (res.items().isEmpty() || all.size() >= res.total()) break;
+          }
+          String name =
+              from != null && to != null
+                  ? "liquidaciones_" + from + "_" + to + ".csv"
+                  : "liquidaciones.csv";
+          return csv(name, exportService.settlementsCsv(all, lang));
+        });
   }
 
   @PostMapping("/settlements/generate")

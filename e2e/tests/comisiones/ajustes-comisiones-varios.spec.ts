@@ -107,9 +107,10 @@ test("exportaciones: columnas y valores del CSV y del PDF en el idioma elegido p
   // The UI (English in e2e) asks for its own language on every export.
   await loginAdminUi(page, w);
   await openCommissions(page, "settle");
+  await page.getByTestId("liquidar-csv").click();
   const [settlementsCsv] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByTestId("liquidar-csv").click(),
+    page.getByTestId("liquidar-csv-period").click(),
   ]);
   const settlementsText = await (await settlementsCsv.createReadStream()).toArray();
   expect(Buffer.concat(settlementsText).toString("utf8")).toContain("Settlement ID,Professional,Period from");

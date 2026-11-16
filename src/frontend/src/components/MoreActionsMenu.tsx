@@ -35,6 +35,8 @@ export type MoreActionsMenuProps = {
   className?: string;
   /** Icon-only trigger («⋯», 44 px round) for crowded rows; `label` stays as its accessible name. */
   compact?: boolean;
+  /** With `compact`: the icon the trigger shows instead of «⋯» (e.g. a download arrow). */
+  triggerIcon?: ReactNode;
 };
 
 const MENU_WIDTH = 264;
@@ -74,6 +76,7 @@ export function MoreActionsMenu({
   disabled,
   className,
   compact = false,
+  triggerIcon,
 }: MoreActionsMenuProps) {
   const menuId = useId();
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -182,7 +185,7 @@ export function MoreActionsMenu({
       >
         {compact ? (
           <span aria-hidden className="text-xl leading-none">
-            ⋯
+            {triggerIcon ?? "⋯"}
           </span>
         ) : (
           <>

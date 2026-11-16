@@ -919,7 +919,6 @@
           "VIEW": "View",
           "VOID": "Void"
         },
-        "csv": "Download CSV",
         "done": {
           "GENERATE": "{{count}} settlements were generated.",
           "APPROVE": "{{count}} settlements were approved.",
@@ -1024,7 +1023,19 @@
         "noneToggle_other": "{{count}} with no movements",
         "periodInfoAria": "How periods are defined",
         "moreAria": "More actions for {{name}}",
-        "pickGroup": "Select all: {{group}}"
+        "pickGroup": "Select all: {{group}}",
+        "csvAria": "Download settlements CSV",
+        "csvPeriod": "Download CSV of this period",
+        "csvPrevious": "Download CSV of earlier periods…",
+        "csvPreviousHint": "Choose the date range",
+        "csvDialog": {
+          "title": "CSV of earlier periods",
+          "description": "It includes the settlements whose period touches that date range.",
+          "from": "From",
+          "to": "To",
+          "confirm": "Download",
+          "errorOrder": "«From» cannot be later than «To». Example: from 08/01/2026 to 10/31/2026."
+        }
       },
       "team": {
         "tabPeople": "Professionals ({{count}})",

@@ -919,7 +919,6 @@
           "VIEW": "Ver",
           "VOID": "Anular"
         },
-        "csv": "Descargar CSV",
         "done": {
           "GENERATE": "Se generaron {{count}} liquidaciones.",
           "APPROVE": "Se aprobaron {{count}} liquidaciones.",
@@ -1024,7 +1023,19 @@
         "noneToggle_other": "{{count}} sin movimientos",
         "periodInfoAria": "Cómo se definen los períodos",
         "moreAria": "Más acciones de {{name}}",
-        "pickGroup": "Marcar a todas: {{group}}"
+        "pickGroup": "Marcar a todas: {{group}}",
+        "csvAria": "Descargar CSV de liquidaciones",
+        "csvPeriod": "Descargar CSV de este período",
+        "csvPrevious": "Descargar CSV de períodos anteriores…",
+        "csvPreviousHint": "Elegí desde y hasta qué fecha",
+        "csvDialog": {
+          "title": "CSV de períodos anteriores",
+          "description": "Se incluyen las liquidaciones cuyo período toca ese rango de fechas.",
+          "from": "Desde",
+          "to": "Hasta",
+          "confirm": "Descargar",
+          "errorOrder": "«Desde» no puede ser posterior a «Hasta». Ejemplo: desde 01/08/2026 hasta 31/10/2026."
+        }
       },
       "team": {
         "tabPeople": "Profesionales ({{count}})",
