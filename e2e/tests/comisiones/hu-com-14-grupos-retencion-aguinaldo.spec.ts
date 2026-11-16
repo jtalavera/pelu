@@ -617,7 +617,7 @@ test("AC12 · AC13 · AC14 · el fondo entra al aprobar; pagos parcial / por sal
   await page.getByTestId("aguinaldo-amount").fill("2500");
   await expect(page.getByTestId("aguinaldo-balance-after")).toContainText("4.000");
   await page.getByTestId("aguinaldo-pay-confirm").click();
-  await expect(page.getByTestId("aguinaldo-notice")).toHaveText("The aguinaldo payment was recorded.");
+  await expect(page.getByTestId("aguinaldo-notice")).toHaveText("The retention payment was recorded.");
   await expect(gabyRow.getByTestId("aguinaldo-balance")).toContainText("4.000");
   await expect(gabyRow).not.toContainText("No payments yet");
   await expect(moves.first()).toContainText("Retention payment");
@@ -647,7 +647,7 @@ test("AC12 · AC13 · AC14 · el fondo entra al aprobar; pagos parcial / por sal
   await page.getByTestId("aguinaldo-closes").check();
   await expect(page.getByTestId("aguinaldo-amount")).toHaveCount(0);
   await page.getByTestId("aguinaldo-pay-confirm").click();
-  await expect(page.getByTestId("aguinaldo-notice")).toHaveText("The aguinaldo payment was recorded.");
+  await expect(page.getByTestId("aguinaldo-notice")).toHaveText("The retention payment was recorded.");
   await expect(migueRow.getByTestId("aguinaldo-balance")).toContainText("0");
   await expect(migueRow.getByTestId("aguinaldo-pay")).toHaveCount(0);
 
