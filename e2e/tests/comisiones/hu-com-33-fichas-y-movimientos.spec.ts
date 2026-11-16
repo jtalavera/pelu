@@ -106,7 +106,7 @@ test("AC1 · AC2 · todas las filas miden lo mismo; la flecha de la izquierda ab
   const changed = rows(page).filter({ hasText: "Recalculated" });
   const plain = rows(page).filter({ hasNotText: "Recalculated" });
   await expect(changed).toHaveCount(1);
-  expect(await height(changed)).toBe(await height(plain));
+  expect(Math.abs((await height(changed)) - (await height(plain)))).toBeLessThanOrEqual(2); // (the first row has no top border)
 
   // The tag sits in the TYPE column and «before 45 %» in the CALCULATION one.
   await expect(changed.getByTestId("movement-type").getByTestId("movement-tag")).toHaveText("Recalculated");
@@ -264,17 +264,19 @@ test("AC9 · Equipo: la tarjeta empieza por el nombre (sin iniciales) y solo dic
 });
 
 test("AC9 · tampoco hay iniciales en Liquidar, Inicio ni en el encabezado de la ficha", async ({ page, request }) => {
-  await plainSales(request);
+  await recalculatedNoRetention(request); // with a group set up, Inicio shows the team list
   await loginAdminUi(page, w);
   const initials = w.ana.name.slice(0, 2).toUpperCase();
   const lines = async (loc: ReturnType<Page["locator"]>) => (await loc.innerText()).split("\n").map((l) => l.trim()).filter(Boolean);
 
   await openCommissions(page, "settle");
   const row = page.getByTestId("liquidar-row").filter({ hasText: w.ana.name });
+  await expect(row).toBeVisible();
   expect(await lines(row)).not.toContain(initials);
 
-  await openCommissions(page, "home");
+  await page.getByTestId("commissions-nav-home").click();
   const home = page.getByTestId("home-team-row").filter({ hasText: w.ana.name });
+  await expect(home).toBeVisible();
   expect((await lines(home))[0].toUpperCase()).toBe(w.ana.name.toUpperCase());
 
   await openCommissions(page);
