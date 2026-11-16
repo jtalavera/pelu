@@ -84,6 +84,12 @@ test("AC2 · los atajos de Configurar llevan a poner los %, a ordenar los grupos
   await page.getByTestId("config-group-chip").filter({ hasText: "Manos y pies" }).click();
   await expect(page).toHaveURL(/\/configurar\/comisiones\?q=Manos%20y%20pies$/);
   await expect(page.getByTestId("rates-group")).toHaveAttribute("data-group-name", "Manos y pies");
+  // Searching a group by its name shows ALL its services (not «this group has no services»), and «Sin grupo» stays out
+  // because nothing without a group matches.
+  await expect(page.getByTestId("rates-group-items")).not.toContainText("has no services");
+  await expect(page.getByTestId("rates-item")).toHaveCount(1);
+  await expect(page.getByTestId("rates-item")).toHaveAttribute("data-item-name", "Manicura");
+  await expect(page.getByTestId("rates-ungrouped")).toHaveCount(0);
 
   await page.getByTestId("rates-back").click();
   await openSetupStep(page, 2);
@@ -250,7 +256,7 @@ test("AC8 · las excepciones por servicio son una solapa visible de «Grupos y s
   await openExceptions(page, "SERVICE");
 
   await expect(page.getByTestId("workspace-tab-exceptions")).toHaveAttribute("aria-current", "page");
-  await expect(page.getByTestId("advanced-precedence").getByRole("listitem")).toHaveCount(5);
+  await expect(page.getByTestId("advanced-precedence").getByRole("listitem")).toHaveCount(4); // HU-COM-20: four layers
   await expect(page.getByTestId(`rules-row-${w.service.id}`)).toBeVisible();
   await expect(page.getByTestId(`rules-standard-${w.service.id}`)).toContainText("30 %");
   // Back to the groups tab and forward again.
