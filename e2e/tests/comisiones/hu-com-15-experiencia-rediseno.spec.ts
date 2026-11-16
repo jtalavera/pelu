@@ -320,7 +320,7 @@ test("AC7 · la ficha tiene Resumen, Reglas e Historial; el Historial es solo de
 
 // ── AC10 · AC11 · Retención usual y Aguinaldo ────────────────────────────────────────────────
 
-test("AC10 · AC11 · con Aguinaldo activo: pestaña en Equipo y en la ficha, y la retención usual se cambia desde la ficha", async ({
+test("AC10 · AC11 · con la retención activa: solapa en Equipo, y en la ficha su resumen y sus movimientos; la retención usual se cambia desde la ficha", async ({
   page,
   request,
 }) => {
@@ -334,7 +334,7 @@ test("AC10 · AC11 · con Aguinaldo activo: pestaña en Equipo y en la ficha, y 
   await page.getByTestId("team-tab-people").click();
 
   await openProfessional(page, w.ana.name, "rules");
-  await expect(page.getByTestId("pro-retention-current")).toHaveText("Does not retain for aguinaldo");
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("Does not retain");
   await page.getByTestId("pro-retention-edit").click();
   await page.getByTestId("pro-retention-percent").fill("abc");
   await page.getByTestId("pro-retention-save").click();
@@ -344,7 +344,7 @@ test("AC10 · AC11 · con Aguinaldo activo: pestaña en Equipo y en la ficha, y 
   // HU-COM-20: her retention comes out of what she is paid, so it asks since when it applies.
   await page.getByTestId("commission-apply-mode-IMMEDIATE").check();
   await page.getByTestId("commission-apply-confirm").click();
-  await expect(page.getByTestId("pro-retention-current")).toHaveText("Aguinaldo retention: 5 %");
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("Retention: 5 %");
   const stored = await apiGetJson<{ retentionProfiles: { professionalId: number; percent: number | null }[] }>(
     request,
     w.adminToken,
@@ -352,10 +352,12 @@ test("AC10 · AC11 · con Aguinaldo activo: pestaña en Equipo y en la ficha, y 
   );
   expect(stored.retentionProfiles.find((r) => r.professionalId === w.ana.id)?.percent).toBe(5);
 
-  // Her Aguinaldo tab shows only her fund.
-  await page.getByTestId("pro-tab-aguinaldo").click();
+  // HU-COM-24: there is no «Aguinaldo» tab in her page: her retention is in the Summary and in Movimientos.
+  await expect(page.getByTestId("pro-tab-aguinaldo")).toHaveCount(0);
+  await page.getByTestId("pro-tab-history").click();
+  await page.getByTestId("pro-movements-view-retention").click();
   await expect(page.getByTestId("commission-aguinaldo")).toBeVisible();
-  await expect(page.getByTestId("aguinaldo-pay-all")).toHaveCount(0);
+  await expect(page.getByTestId("aguinaldo-pay-all")).toHaveCount(0); // only her own balance
 });
 
 test("AC13 · apagar Aguinaldo en Configurar actualiza la navegación sin recargar", async ({ page, request }) => {

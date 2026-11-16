@@ -332,7 +332,7 @@ test("AC7 · la retención se ve en la ficha solo con aguinaldo activo, se cambi
   await loginAdminUi(page, w);
   await openCommissions(page);
   await openProfessional(page, "gaby", "rules");
-  await expect(page.getByTestId("pro-retention-current")).toHaveText("Aguinaldo retention: 5 %");
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("Retention: 5 %");
 
   // The example takes her retention out of the commission: 45 % of 100.000 → 40.000 paid, 5.000 to the fund.
   await page.getByTestId("pro-rates-add").click();
@@ -347,7 +347,7 @@ test("AC7 · la retención se ve en la ficha solo con aguinaldo activo, se cambi
   await page.getByTestId("pro-retention-percent").fill("7");
   await page.getByTestId("pro-retention-save").click();
   await confirmImmediate(page);
-  await expect(page.getByTestId("pro-retention-current")).toHaveText("Aguinaldo retention: 7 %");
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("Retention: 7 %");
 });
 
 // ── AC10 · Grupos y servicios ──────────────────────────────────────────────────────────────────

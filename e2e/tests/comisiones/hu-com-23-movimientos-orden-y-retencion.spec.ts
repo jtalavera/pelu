@@ -96,7 +96,7 @@ test("AC1 · AC2 · AC3 · Movimientos sale por defecto de lo más reciente a lo
 
 // ── AC4 · AC5 · AC6 · la retención explicada ─────────────────────────────────────────────────────
 
-test("AC4 · AC5 · con retención la línea dice «Servicio 50 % → se paga 45 % · aguinaldo 5 % (Gs. 5.000)»; al recalcular, la reversión queda arriba de la línea que reversa", async ({
+test("AC4 · AC5 · con retención la línea dice «Servicio 50 % → se paga 45 % · retention 5 % (Gs. 5.000)»; al recalcular, la reversión queda arriba de la línea que reversa", async ({
   page,
   request,
 }) => {
@@ -111,7 +111,7 @@ test("AC4 · AC5 · con retención la línea dice «Servicio 50 % → se paga 45
   await openMovements(page);
 
   await expect(rows(page)).toHaveCount(1);
-  await expect(rows(page).first()).toContainText("Commission · Service 50 % → paid 45 % · aguinaldo 5 % (Gs. 5.000)");
+  await expect(rows(page).first()).toContainText("Commission · Service 50 % → paid 45 % · retention 5 % (Gs. 5.000)");
   await expect(rows(page).first()).toContainText("Gs. 45.000");
   // It no longer shows the paid % on its own, nor the old «Retention 5 %» wording.
   await expect(rows(page).first()).not.toContainText("Retention");
@@ -123,11 +123,11 @@ test("AC4 · AC5 · con retención la línea dice «Servicio 50 % → se paga 45
   await page.getByTestId("activity-tab-movements").click();
   await expect(rows(page)).toHaveCount(3);
   // Newest first: the new line (60 % → 55 % paid + 5 % retained), the reversal and the original line.
-  await expect(rows(page).nth(0)).toContainText("Service 60 % → paid 55 % · aguinaldo 5 % (Gs. 5.000)");
+  await expect(rows(page).nth(0)).toContainText("Service 60 % → paid 55 % · retention 5 % (Gs. 5.000)");
   await expect(rows(page).nth(0)).toContainText("Gs. 55.000");
-  await expect(rows(page).nth(1)).toContainText("Service 50 % → paid 45 % · aguinaldo 5 % (Gs. -5.000)");
+  await expect(rows(page).nth(1)).toContainText("Service 50 % → paid 45 % · retention 5 % (Gs. -5.000)");
   await expect(rows(page).nth(1)).toContainText("Gs. -45.000");
-  await expect(rows(page).nth(2)).toContainText("Service 50 % → paid 45 % · aguinaldo 5 % (Gs. 5.000)");
+  await expect(rows(page).nth(2)).toContainText("Service 50 % → paid 45 % · retention 5 % (Gs. 5.000)");
   await expect(rows(page).nth(2)).toContainText("Gs. 45.000");
 
   // The oldest first reads the other way round.
@@ -138,8 +138,8 @@ test("AC4 · AC5 · con retención la línea dice «Servicio 50 % → se paga 45
   // The «History» tab of the professional is the same list: same order and same wording.
   await openProfessional(page, w.ana.name, "history");
   await expect(rows(page)).toHaveCount(3);
-  await expect(rows(page).first()).toContainText("Service 60 % → paid 55 % · aguinaldo 5 % (Gs. 5.000)");
-  await expect(rows(page).last()).toContainText("Service 50 % → paid 45 % · aguinaldo 5 % (Gs. 5.000)");
+  await expect(rows(page).first()).toContainText("Service 60 % → paid 55 % · retention 5 % (Gs. 5.000)");
+  await expect(rows(page).last()).toContainText("Service 50 % → paid 45 % · retention 5 % (Gs. 5.000)");
 });
 
 test("AC6 · sin retención la línea sigue diciendo solo la comisión y su %", async ({ page, request }) => {
@@ -149,6 +149,6 @@ test("AC6 · sin retención la línea sigue diciendo solo la comisión y su %", 
   await expect(rows(page)).toHaveCount(1);
   await expect(rows(page).first()).toContainText("Commission · 40 %");
   await expect(rows(page).first()).not.toContainText("→");
-  await expect(rows(page).first()).not.toContainText("aguinaldo");
+  await expect(rows(page).first()).not.toContainText("retention");
   await expect(rows(page).first()).toContainText("Gs. 40.000");
 });

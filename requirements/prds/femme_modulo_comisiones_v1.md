@@ -424,6 +424,10 @@ Historia completa y criterios: [HU-COM-22](../user_stories/HU-COM-22-para-revisa
 
 Historia completa y criterios: [HU-COM-23](../user_stories/HU-COM-23-movimientos-orden-y-retencion.md). Resumen: la lista de Movimientos sale de lo más reciente a lo más antiguo por defecto, con una lista desplegable «Ordenar» para invertirla; y las líneas con retención dicen «Servicio 50 % → se paga 45 % · aguinaldo 5 % (Gs. 5.000)». Sin cambios de cálculo ni de API.
 
+### HU-COM-24 · «Retención» en toda la aplicación y en la ficha de la profesional
+
+Historia completa y criterios: [HU-COM-24](../user_stories/HU-COM-24-retencion-en-la-ficha.md). Resumen: «Aguinaldo» pasa a llamarse «Retención» en todos los textos; la ficha de la profesional queda con Resumen · Reglas · Movimientos (sin la solapa «Aguinaldo»); el Resumen muestra dos tarjetas (lo que se paga y lo retenido, con el saldo, el último pago y las acciones de pagar y ajustar) y Movimientos tiene el interruptor Comisiones | Retención. Sin cambios de cálculo ni de API.
+
 ### HU-COM-19 · Anular borradores rápido desde Liquidar
 
 Historia completa y criterios: [HU-COM-19](../user_stories/HU-COM-19-anular-borradores-rapido.md). Resumen:
@@ -530,6 +534,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-21 | «Para revisar» en tarjetas (etiqueta, número una vez, % general real, solo la primera con botón relleno, plurales); «Sin grupo» neutral con «Pagan el % general», píldora 1.247, cabecera con conteos, filtro por tipo, filas sin etiqueta repetida y asignación en lote. |
 | HU-COM-22 | «Para revisar» como panel de filas de ancho completo (ícono por tipo, número una vez, consecuencia, un solo botón relleno); «Hoy no pagan comisión» cuando el % general es 0 %; reemplaza los criterios 1 a 5 de HU-COM-21. |
 | HU-COM-23 | Movimientos de lo más reciente a lo más antiguo (desempate por el último registrado), «Ordenar» para invertir (toda la lista, vuelve a la página 1); la línea con retención dice servicio · se paga · aguinaldo con su monto. |
+| HU-COM-24 | «Retención» en lugar de «Aguinaldo» en toda la interfaz; ficha con Resumen · Reglas · Movimientos; Resumen en dos tarjetas (pagar / retenido, saldo, último pago, pagar y ajustar); Movimientos con el interruptor Comisiones \| Retención; sin retención no aparece nada de esto. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 

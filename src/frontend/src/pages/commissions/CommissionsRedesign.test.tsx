@@ -19,6 +19,7 @@ const api = vi.hoisted(() => ({
   getProfessionalsSummary: vi.fn(),
   getAguinaldo: vi.fn(),
   getAguinaldoDetail: vi.fn(),
+  getEntries: vi.fn(),
   getSettlementPreview: vi.fn(),
   getApplyModeOptions: vi.fn(),
   applyChanges: vi.fn(),
@@ -531,6 +532,124 @@ describe("HU-COM-15 · ficha de la profesional", () => {
     expect(screen.getByTestId("pro-summary-lines").textContent).toContain("3 líneas");
   });
 
+  const previewOf = (over: Record<string, unknown> = {}) => ({
+    professionalId: 1,
+    professionalName: "Gaby",
+    periodFrom: "2026-11-01",
+    periodTo: "2026-11-15",
+    total: 45000,
+    servicesTotal: 45000,
+    productsTotal: 0,
+    adjustmentsTotal: 0,
+    retentionTotal: 5000,
+    lines: 2,
+    entries: [],
+    draftSettlements: [],
+    carriedAmount: 0,
+    carriedEntryIds: [],
+    ...over,
+  });
+  const fundOf = (over: Record<string, unknown> = {}) => ({
+    professionalId: 1,
+    professionalName: "Gaby",
+    active: true,
+    retained: 37000,
+    paid: 5000,
+    balance: 32000,
+    lastPaymentOn: null,
+    ...over,
+  });
+
+  it("HU-COM-24 · la ficha tiene tres solapas (Resumen, Reglas y Movimientos): ya no hay «Aguinaldo» ni «Historial»", async () => {
+    api.getSettlementPreview.mockResolvedValue(previewOf());
+    api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 32000, balances: [fundOf()] });
+    mount("/app/commissions/equipo/1", overview({ aguinaldoEnabled: true }));
+    await screen.findByTestId("pro-summary-total");
+    const tabs = screen.getByRole("navigation", { name: /solapas|secciones|ficha/i }).querySelectorAll("a");
+    expect([...tabs].map((a) => a.textContent)).toEqual(["Resumen", "Reglas", "Movimientos"]);
+    expect(screen.queryByTestId("pro-tab-aguinaldo")).toBeNull();
+    expect(screen.getByTestId("pro-tab-history").textContent).toBe("Movimientos");
+  });
+
+  it("HU-COM-24 · el Resumen muestra lo que se paga y lo retenido, con el saldo, el último pago y las acciones", async () => {
+    api.getSettlementPreview.mockResolvedValue(previewOf());
+    api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 32000, balances: [fundOf({ lastPaymentOn: "2026-09-30" })] });
+    mount("/app/commissions/equipo/1", overview({ aguinaldoEnabled: true }));
+    // What is paid comes from the overview row (Gaby: 120.000 unsettled); the lines and the split, from her preview.
+    expect((await screen.findByTestId("pro-summary-total")).textContent).toContain("120.000");
+    expect(screen.getByTestId("pro-summary-lines").textContent).toContain("2 líneas");
+    expect(screen.getByTestId("pro-summary-services").textContent).toContain("45.000");
+    // The retention card: what was retained this period, her % and her balance.
+    const card = screen.getByTestId("pro-retention-card");
+    expect(within(card).getByTestId("pro-summary-retained").textContent).toContain("5.000");
+    expect((await within(card).findByTestId("pro-retention-pill")).textContent).toBe("5 % de cada comisión");
+    expect((await within(card).findByTestId("pro-retention-balance")).textContent).toContain("32.000");
+    expect(within(card).getByTestId("pro-retention-last-payment").textContent).toMatch(/30\/09\/2026|2026/);
+    expect(card.textContent).toContain("Se suma al saldo cuando se aprueba la liquidación");
+    // Actions: pay and adjust the balance, and the link to its movements.
+    expect(screen.getByTestId("pro-summary-go-settle")).toBeTruthy();
+    expect((await screen.findByTestId("pro-retention-pay")).textContent).toBe("Pagar retención");
+    expect(screen.getByTestId("pro-retention-adjust").textContent).toBe("Ajustar el saldo");
+    expect(screen.getByTestId("pro-retention-movements-link").getAttribute("href")).toBe("/app/commissions/equipo/1?tab=history&view=retention");
+  });
+
+  it("HU-COM-24 · sin retención activada el Resumen no muestra la tarjeta ni las acciones de retención", async () => {
+    api.getSettlementPreview.mockResolvedValue(previewOf({ retentionTotal: 0 }));
+    mount("/app/commissions/equipo/1", overview({ aguinaldoEnabled: false }));
+    await screen.findByTestId("pro-summary-total");
+    expect(screen.queryByTestId("pro-retention-card")).toBeNull();
+    expect(screen.queryByTestId("pro-retention-pay")).toBeNull();
+    expect(screen.queryByTestId("pro-retention-movements-link")).toBeNull();
+  });
+
+  it("HU-COM-24 · «Pagar retención» desde el Resumen abre el pago con el saldo", async () => {
+    const user = userEvent.setup();
+    api.getSettlementPreview.mockResolvedValue(previewOf());
+    api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 32000, balances: [fundOf()] });
+    mount("/app/commissions/equipo/1", overview({ aguinaldoEnabled: true }));
+    await user.click(await screen.findByTestId("pro-retention-pay"));
+    const dialog = await screen.findByTestId("aguinaldo-pay-dialog");
+    expect(dialog.closest('[role="dialog"]')?.textContent).toContain("Pagar retención · Gaby");
+    expect(dialog.closest('[role="dialog"]')?.textContent).toContain("32.000");
+  });
+
+  it("HU-COM-24 · Movimientos tiene el interruptor Comisiones | Retención (solo si el salón retiene); Retención muestra el saldo y sus movimientos", async () => {
+    const user = userEvent.setup();
+    api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 32000, balances: [fundOf()] });
+    api.getAguinaldoDetail.mockResolvedValue({
+      professionalId: 1,
+      professionalName: "Gaby",
+      balance: 32000,
+      movements: [
+        { kind: "PAYMENT", date: "2026-09-30", amount: -20000, balance: 12000, note: null, closesFund: false, settlementId: null, movementId: 2 },
+        { kind: "ACCRUAL", date: "2026-09-15", amount: 32000, balance: 32000, note: "1 al 15", closesFund: false, settlementId: 7, movementId: null },
+      ],
+    });
+    api.getEntries.mockResolvedValue([]);
+    mount("/app/commissions/equipo/1?tab=history", overview({ aguinaldoEnabled: true }));
+    expect((await screen.findByTestId("pro-movements-view-commissions")).getAttribute("aria-pressed")).toBe("true");
+    await screen.findByTestId("commission-movements");
+    await user.click(screen.getByTestId("pro-movements-view-retention"));
+    expect((await screen.findByTestId("aguinaldo-balance")).textContent).toContain("32.000");
+    const moves = await screen.findAllByTestId("aguinaldo-movement");
+    expect(moves).toHaveLength(2);
+    expect(moves[0].textContent).toContain("Pago de retención");
+    expect(screen.getByTestId("aguinaldo-pay").textContent).toBe("Pagar retención");
+    expect(screen.getByTestId("aguinaldo-adjust").textContent).toBe("Ajustar el saldo");
+  });
+
+  it("HU-COM-24 · la dirección vieja ?tab=aguinaldo abre la lista de Retención de Movimientos; y sin retención no hay interruptor", async () => {
+    api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 0, balances: [fundOf({ balance: 0 })] });
+    api.getAguinaldoDetail.mockResolvedValue({ professionalId: 1, professionalName: "Gaby", balance: 0, movements: [] });
+    api.getEntries.mockResolvedValue([]);
+    mount("/app/commissions/equipo/1?tab=aguinaldo", overview({ aguinaldoEnabled: true }));
+    expect((await screen.findByTestId("pro-movements-view-retention")).getAttribute("aria-pressed")).toBe("true");
+    cleanup();
+    mount("/app/commissions/equipo/1?tab=history", overview({ aguinaldoEnabled: false }));
+    await screen.findByTestId("commission-movements");
+    expect(screen.queryByTestId("pro-movements-view-retention")).toBeNull();
+  });
+
   it("«Comisiones» dice que cobra lo normal y lista solo donde cobra distinto, juntando el grupo", async () => {
     mount("/app/commissions/equipo/1?tab=rules");
     expect(await screen.findByTestId("pro-rates-usual")).toBeTruthy();
@@ -613,7 +732,7 @@ describe("HU-COM-15 · ficha de la profesional", () => {
       professionals: [{ professionalId: 1, name: "Gaby", ruleCount: 2, retentionPercent: 5 }],
     });
     mount("/app/commissions/equipo/1?tab=rules", overview({ aguinaldoEnabled: true }));
-    expect((await screen.findByTestId("pro-retention-current")).textContent).toBe("Retención para aguinaldo: 5 %");
+    expect((await screen.findByTestId("pro-retention-current")).textContent).toBe("Retención: 5 %");
     await user.click(screen.getByTestId("pro-retention-edit"));
     const input = await screen.findByTestId("pro-retention-percent");
     await user.clear(input);
