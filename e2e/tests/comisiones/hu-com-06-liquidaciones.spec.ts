@@ -181,6 +181,8 @@ test("listado paginado y filtrable por profesional, estado y periodo; exportaci�
   await expect(page.getByTestId("liquidar-row")).toHaveCount(1);
   await liquidarTab(page, "DRAFT");
   await expect(page.getByTestId("liquidar-row")).toHaveCount(1);
-  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("liquidar-csv").click()]);
+  // HU-COM-30: the download icon opens a menu; «this period» downloads straight away.
+  await page.getByTestId("liquidar-csv").click();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("liquidar-csv-period").click()]);
   expect(download.suggestedFilename()).toBe("liquidaciones.csv");
 });

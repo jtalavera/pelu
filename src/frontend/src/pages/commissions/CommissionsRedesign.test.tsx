@@ -27,6 +27,7 @@ const api = vi.hoisted(() => ({
   approveSettlement: vi.fn(),
   paySettlement: vi.fn(),
   voidSettlement: vi.fn(),
+  downloadCommissionFile: vi.fn(),
 }));
 vi.mock("../../api/commissions", async (orig) => ({ ...(await orig<typeof import("../../api/commissions")>()), ...api }));
 vi.mock("../../api/femmeClient", () => ({ femmeJson: vi.fn(async () => []), femmePostJson: vi.fn(), femmePutJson: vi.fn() }));
@@ -449,6 +450,57 @@ describe("HU-COM-15 · Liquidar", () => {
     await user.click(within(rows[0]).getByTestId("liquidar-row-approve"));
     await user.click(await screen.findByTestId("liquidar-confirm"));
     await waitFor(() => expect(api.approveSettlement).toHaveBeenCalledWith(7));
+  });
+});
+
+describe("HU-COM-30 · descargar CSV", () => {
+  it("el ícono junto al total abre un menú con «este período» (con sus fechas) y «períodos anteriores»", async () => {
+    const user = userEvent.setup();
+    mount("/app/commissions/liquidar");
+    await screen.findByTestId("liquidar-tabs");
+    expect(screen.getByTestId("liquidar-csv").getAttribute("aria-label")).toBe("Descargar CSV de liquidaciones");
+    await user.click(screen.getByTestId("liquidar-csv"));
+    expect(screen.getByTestId("liquidar-csv-period").textContent).toContain("Descargar CSV de este período");
+    expect(screen.getByTestId("liquidar-csv-period").textContent).toContain("01/11/2026");
+    expect(screen.getByTestId("liquidar-csv-period").textContent).toContain("15/11/2026");
+    expect(screen.getByTestId("liquidar-csv-previous").textContent).toContain("períodos anteriores");
+  });
+
+  it("«este período» descarga el CSV con las fechas del período", async () => {
+    const user = userEvent.setup();
+    api.downloadCommissionFile.mockResolvedValue(undefined);
+    mount("/app/commissions/liquidar");
+    await screen.findByTestId("liquidar-tabs");
+    await user.click(screen.getByTestId("liquidar-csv"));
+    await user.click(screen.getByTestId("liquidar-csv-period"));
+    await waitFor(() => expect(api.downloadCommissionFile).toHaveBeenCalledTimes(1));
+    const path = api.downloadCommissionFile.mock.calls[0][0] as string;
+    expect(path).toContain("/api/commissions/settlements.csv");
+    expect(path).toContain("from=2026-11-01");
+    expect(path).toContain("to=2026-11-15");
+  });
+
+  it("«períodos anteriores» pide el rango (tres meses antes hasta el día anterior al período) y descarga ese rango", async () => {
+    const user = userEvent.setup();
+    api.downloadCommissionFile.mockResolvedValue(undefined);
+    mount("/app/commissions/liquidar");
+    await screen.findByTestId("liquidar-tabs");
+    await user.click(screen.getByTestId("liquidar-csv"));
+    await user.click(screen.getByTestId("liquidar-csv-previous"));
+    expect((await screen.findByTestId("liquidar-csv-dialog")).textContent).toContain("Desde");
+    expect((document.getElementById("liquidar-csv-from") as HTMLInputElement).value).toBe("01/08/2026");
+    expect((document.getElementById("liquidar-csv-to") as HTMLInputElement).value).toBe("31/10/2026");
+    await user.click(screen.getByTestId("liquidar-csv-confirm"));
+    await waitFor(() => expect(api.downloadCommissionFile).toHaveBeenCalledTimes(1));
+    const path = api.downloadCommissionFile.mock.calls[0][0] as string;
+    expect(path).toContain("from=2026-08-01");
+    expect(path).toContain("to=2026-10-31");
+  });
+
+  it("ya no hay un botón «Descargar CSV» en una franja al pie", async () => {
+    mount("/app/commissions/liquidar", overview({ rows: [person(1, "Gaby", { status: "UNSETTLED", amount: 120000 })], unsettled: 1, drafts: 0, approved: 0, paid: 0 }));
+    await screen.findByTestId("liquidar-tabs");
+    expect(within(screen.getByTestId("liquidar-table")).queryByTestId("liquidar-csv")).toBeNull();
   });
 });
 

@@ -448,6 +448,10 @@ Historia completa y criterios: [HU-COM-28](../user_stories/HU-COM-28-liquidar-pe
 
 Historia completa y criterios: [HU-COM-29](../user_stories/HU-COM-29-movimientos-lineas-revertidas.md). Resumen: una venta recalculada, reasignada, corregida o anulada se muestra como una sola fila (la comisión vigente, con su etiqueta y «antes …») y un «Ver cambios» abre el recorrido original → reversión → vigente con el neto; un interruptor abre todos. Sin cambios de importes; la fila expone `invoiceLineId`.
 
+### HU-COM-30 · Liquidar: descargar el CSV de este período o de períodos anteriores
+
+Historia completa y criterios: [HU-COM-30](../user_stories/HU-COM-30-liquidar-descargar-csv.md). Resumen: «Descargar CSV» pasa a ser un ícono junto al total de Liquidar que abre un menú con «este período» y «períodos anteriores» (desde / hasta); la API acepta `from`/`to` en `settlements.csv` y lee todas las páginas.
+
 ### HU-COM-19 · Anular borradores rápido desde Liquidar
 
 Historia completa y criterios: [HU-COM-19](../user_stories/HU-COM-19-anular-borradores-rapido.md). Resumen:
@@ -560,6 +564,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-27 | Conteo de líneas facturadas / movimientos sin contar la fila anulada ni la reversión de una línea recalculada. |
 | HU-COM-28 | Liquidar con pestañas por etapa, botón principal por etapa, sin carteles repetidos, «sin movimientos» al pie. |
 | HU-COM-29 | Movimientos: una fila por venta con su etiqueta, «Ver cambios» con el recorrido original → reversión → vigente, interruptor para ver todas; expone `invoiceLineId`. |
+| HU-COM-30 | Liquidar: «Descargar CSV» como ícono junto al total con menú (este período / períodos anteriores); `settlements.csv` acepta `from`/`to`. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 
