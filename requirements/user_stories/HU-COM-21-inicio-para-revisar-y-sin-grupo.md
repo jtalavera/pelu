@@ -31,6 +31,8 @@ No cambia ningún cálculo ni ninguna API: solo cómo se muestra.
 
 ---
 
+> **Actualización:** los criterios 1 a 5 (tarjetas de «Para revisar») fueron reemplazados por [HU-COM-22](HU-COM-22-para-revisar-panel-de-filas.md) (panel de filas). Se conservan abajo como historial; los criterios 6 a 11 («Sin grupo») siguen vigentes.
+
 ## Criterios de aceptación
 
 1. **Tarjetas de «Para revisar»** — En Inicio, cada aviso es una tarjeta con una franja de color arriba, una **etiqueta** con la consecuencia, **el número una sola vez, grande**, seguido de la frase («20 líneas de venta sin profesional»), una línea de ayuda y un botón con verbo + objeto («Asignar profesional», «Poner los %», «Revisar borradores»). Solo aparecen los avisos que existen; si no hay ninguno dice «Todo en orden».

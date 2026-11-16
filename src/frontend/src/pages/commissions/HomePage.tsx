@@ -105,12 +105,40 @@ function SetupGuide({ overview }: { overview: Overview }) {
   );
 }
 
-/** How each notice of «Para revisar» looks: the stripe, the tag and the number say the kind (money lost / to set up / paperwork). */
+/** How each row of «Para revisar» looks: the icon tile and the number say the kind (money lost / to set up / paperwork). */
 const REVIEW_TONE = {
-  lines: { name: "money", border: "border-t-warning", tag: "bg-warning-lt text-warning", count: "text-warning" },
-  noPercent: { name: "setup", border: "border-t-primary", tag: "bg-primary-lt text-primary", count: "text-primary" },
-  drafts: { name: "paperwork", border: "border-t-ink-3", tag: "bg-bg text-ink-2", count: "text-ink-2" },
+  money: { tile: "bg-warning-lt text-warning", count: "text-warning" },
+  setup: { tile: "bg-primary-lt text-primary", count: "text-primary" },
+  paperwork: { tile: "bg-bg text-ink-2", count: "text-ink-2" },
 } as const;
+
+/** The icon of each notice (decorative: the text says everything). */
+function ReviewIcon({ kind }: { kind: "lines" | "noPercent" | "drafts" }) {
+  const common = { width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
+  if (kind === "lines")
+    return (
+      <svg {...common}>
+        <circle cx="9" cy="8" r="4" />
+        <path d="M2 21v-1a6 6 0 0 1 6-6h2" />
+        <path d="M16 16l5 5M21 16l-5 5" />
+      </svg>
+    );
+  if (kind === "noPercent")
+    return (
+      <svg {...common}>
+        <path d="M19 5L5 19" />
+        <circle cx="7" cy="7" r="2.5" />
+        <circle cx="17" cy="17" r="2.5" />
+      </svg>
+    );
+  return (
+    <svg {...common}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6M9 17h4" />
+    </svg>
+  );
+}
 
 /** Comisiones › Inicio: the period's money split in what is paid and what is left, the 4 steps, and the team (HU-COM-17). */
 export default function HomePage() {
@@ -241,53 +269,53 @@ export default function HomePage() {
       </section>
 
       <section className="flex flex-col gap-3" data-testid="home-review">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-heading text-xl font-extrabold text-ink">{t("femme.commissions.home.reviewTitle")}</h2>
-          {review.length > 0 && <span className="text-[13px] text-ink-3">{t("femme.commissions.home.reviewCount", { count: review.length })}</span>}
-        </div>
+        <h2 className="font-heading text-xl font-extrabold text-ink">{t("femme.commissions.home.reviewTitle")}</h2>
         {review.length === 0 ? (
           <p className="rounded-card border border-line bg-surface p-4 text-ink-2" data-testid="home-review-empty">
             {t("femme.commissions.home.allGood")}
           </p>
         ) : (
-          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="m-0 list-none divide-y divide-line overflow-hidden rounded-card border border-line bg-surface p-0">
             {review.map((r, i) => {
-              const tone = REVIEW_TONE[r.key];
+              // A group without its % is paid the general %: when that is 0 %, it is paid nothing (and that is what to fix).
+              const unpaid = r.key === "noPercent" && generalService === 0;
+              const tone = r.key === "lines" || unpaid ? "money" : r.key === "noPercent" ? "setup" : "paperwork";
+              const style = REVIEW_TONE[tone];
+              const percent = generalService === null ? "" : formatPercent(generalService).replace(/\s/g, "\u00a0");
+              const help =
+                r.key !== "noPercent" || generalService === null
+                  ? t(`femme.commissions.home.review.${r.key}.help`, { count: r.n })
+                  : t(`femme.commissions.home.review.noPercent.${unpaid ? "helpZero" : "helpPercent"}`, { percent });
               return (
-                <article
-                  key={r.key}
-                  data-testid={`home-review-${r.key}`}
-                  data-tone={tone.name}
-                  className={`flex flex-col gap-2.5 rounded-card border border-line border-t-[6px] bg-surface p-4 ${tone.border}`}
-                >
-                  <span data-testid="home-review-tag" className={`self-start rounded-full px-2.5 py-0.5 text-xs font-extrabold uppercase tracking-wide ${tone.tag}`}>
-                    {t(`femme.commissions.home.review.${r.key}.tag`)}
+                <li key={r.key} data-testid={`home-review-${r.key}`} data-tone={tone} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 sm:px-5">
+                  <span aria-hidden className={`inline-flex size-12 shrink-0 items-center justify-center rounded-2xl ${style.tile}`}>
+                    <ReviewIcon kind={r.key} />
                   </span>
-                  <div className="flex items-baseline gap-2" data-testid="home-review-title">
-                    <b className={`font-heading text-4xl leading-none ${tone.count}`} data-testid="home-review-count">
-                      {r.n}
-                    </b>{" "}
-                    <span className="font-extrabold leading-tight text-ink">{t(`femme.commissions.home.review.${r.key}.title`, { count: r.n })}</span>
+                  <div className="flex min-w-0 flex-1 basis-72 flex-col gap-0.5">
+                    <div className="leading-snug text-ink" data-testid="home-review-title">
+                      <b className={`font-heading text-xl ${style.count}`} data-testid="home-review-count">
+                        {r.n}
+                      </b>{" "}
+                      <span className="font-extrabold">{t(`femme.commissions.home.review.${r.key}.title`, { count: r.n })}</span>
+                    </div>
+                    <p className={`text-sm ${unpaid ? "font-bold text-warning" : "text-ink-2"}`} data-testid="home-review-help">
+                      {help}
+                    </p>
                   </div>
-                  <p className="flex-1 text-sm text-ink-2" data-testid="home-review-help">
-                    {r.key === "noPercent" && generalService !== null
-                      ? t("femme.commissions.home.review.noPercent.helpPercent", { percent: formatPercent(generalService) })
-                      : t(`femme.commissions.home.review.${r.key}.help`, { count: r.n })}
-                  </p>
-                  {/* Only the first notice carries the filled button: it is the one to do first. */}
+                  {/* Only the first row carries the filled button: it is the one to do first. */}
                   <Button
                     type="button"
                     variant={i === 0 ? "primary" : "outline"}
-                    className={`${ACTION_BUTTON} w-full`}
+                    className={`${ACTION_BUTTON} shrink-0`}
                     onClick={() => navigate(r.to)}
                     data-testid={`home-review-${r.key}-action`}
                   >
                     {t(`femme.commissions.home.review.${r.key}.action`)}
                   </Button>
-                </article>
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
       </section>
 
