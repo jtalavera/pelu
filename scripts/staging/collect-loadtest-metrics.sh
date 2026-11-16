@@ -36,9 +36,17 @@ DB_ID="$(az sql db show -g "$STAGING_RG" -s "$SQL_SERVER_NAME" -n "$SQL_DB_NAME"
 AI_APP="$(az resource list -g "$STAGING_RG" --resource-type microsoft.insights/components --query '[0].name' -o tsv)"
 
 metric_table() { # metric_table <resource id> <metric> <aggregation> <label> <scale-expr>
-  az monitor metrics list --resource "$1" --metrics "$2" --aggregation "$3" --interval PT1M \
-    --start-time "$START" --end-time "$END" -o json \
-    | jq -r --arg agg "$(tr '[:upper:]' '[:lower:]' <<<"$3")" --arg label "$4" --argjson scale "$5" '
+  # Azure Monitor intermittently answers "Failed to find metric configuration" (BadRequest) for a
+  # valid metric right after a resource was recreated: retry, and degrade to "n/a" instead of
+  # aborting the whole report.
+  local json="" attempt
+  for attempt in 1 2 3 4 5; do
+    json="$(az monitor metrics list --resource "$1" --metrics "$2" --aggregation "$3" --interval PT1M \
+      --start-time "$START" --end-time "$END" -o json 2>/dev/null)" && break
+    json=""; sleep 15
+  done
+  if [[ -z "$json" ]]; then echo "| $4 | n/a | n/a |"; return 0; fi
+  jq -r <<<"$json" --arg agg "$(tr '[:upper:]' '[:lower:]' <<<"$3")" --arg label "$4" --argjson scale "$5" '
         [.value[0].timeseries[0].data[]? | .[$agg] | select(. != null) | . * $scale] as $v
         | if ($v | length) == 0 then "| \($label) | — | — |"
           else "| \($label) | \(($v | add / length * 100 | round) / 100) | \(($v | max * 100 | round) / 100) |" end'
