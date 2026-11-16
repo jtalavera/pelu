@@ -2130,10 +2130,17 @@
         "titleSifen": "Electronic invoices",
         "emitted": "Issued today",
         "emittedSifen": "Issued today",
-        "allUpToDate": "All up to date",
         "needAttention_one": "{{count}} needs attention",
         "needAttention_other": "{{count}} need attention",
-        "view": "See invoices →"
+        "viewAll": "See all →",
+        "invoiced": "invoiced",
+        "approved_one": "{{count}} approved",
+        "approved_other": "{{count}} approved",
+        "processing_one": "{{count}} processing",
+        "processing_other": "{{count}} processing",
+        "more_one": "and {{count}} more",
+        "more_other": "and {{count}} more",
+        "empty": "You have not issued any invoices today. When you charge a ficha or make an invoice, it shows up here."
       }
     },
     "dashboardsPage": {

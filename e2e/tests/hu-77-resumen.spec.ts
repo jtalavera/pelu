@@ -151,15 +151,58 @@ test("AC5 · «Fichas de hoy» muestra lo que falta cobrar y «Cobrar» abre la 
   await expect(page).toHaveURL(/\/app\/service-records/);
 });
 
-test("AC6 · «Factura electrónica» cuenta los comprobantes emitidos hoy", async ({ page, request }) => {
+test("AC6 · «Factura electrónica» cuenta los comprobantes emitidos hoy, dice cuánto suman y lista los últimos", async ({ page, request }) => {
   test.setTimeout(90_000);
   for (let i = 0; i < 2; i++) {
-    await issueInvoice(request, w.adminToken, [{ serviceId: w.service.id, name: w.service.name, professionalId: w.ana.id }]);
+    await issueInvoice(request, w.adminToken, [{ serviceId: w.service.id, name: w.service.name, price: 50_000, professionalId: w.ana.id }]);
   }
   await loginAdminUi(page, w);
   await expect(page.getByTestId("resumen-invoices-total")).toHaveText("2", { timeout: 20_000 });
   await expect(page.getByTestId("resumen-invoices").getByRole("heading")).toHaveText(/Electronic invoices|Invoices/);
+  await expect(page.getByTestId("resumen-invoices-amount")).toContainText("100.000");
+  // HU-77 (Comprobantes): the card lists the latest invoices, newest first, with time, client, number and amount.
+  const rows = page.getByTestId("resumen-invoice");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.first()).toContainText(/\d{2}:\d{2}/);
+  await expect(rows.first()).toContainText(/\d{7}/); // the invoice number
+  await expect(rows.first()).toContainText("50.000");
+  await expect(page.getByTestId("resumen-invoices-more")).toHaveCount(0);
+  // The payment method is shown in the user's language (the server sends «CASH»), without electronic invoicing.
+  if ((await page.getByTestId("resumen-invoice-payment").count()) > 0) {
+    await expect(page.getByTestId("resumen-invoice-payment").first()).toHaveText("Cash");
+  }
+  // A row opens the invoice's detail (and it closes).
+  await rows.first().getByRole("button").click();
+  await expect(page.getByRole("dialog")).toBeVisible({ timeout: 20_000 });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
   await page.getByTestId("resumen-view-invoices").click();
+  await expect(page).toHaveURL(/\/app\/billing/);
+});
+
+test("AC6 · con más de cuatro comprobantes lista los cuatro últimos y dice «and N more»", async ({ page, request }) => {
+  test.setTimeout(120_000);
+  for (let i = 0; i < 5; i++) {
+    await issueInvoice(request, w.adminToken, [{ serviceId: w.service.id, name: w.service.name, price: 10_000, professionalId: w.ana.id }]);
+  }
+  await loginAdminUi(page, w);
+  await expect(page.getByTestId("resumen-invoices-total")).toHaveText("5", { timeout: 20_000 });
+  await expect(page.getByTestId("resumen-invoice")).toHaveCount(4);
+  await expect(page.getByTestId("resumen-invoices-more")).toHaveText("and 1 more");
+  // Each row is a button of at least 44 px.
+  const box = (await page.getByTestId("resumen-invoice").first().getByRole("button").boundingBox())!;
+  expect(box.height).toBeGreaterThanOrEqual(44);
+});
+
+test("AC6 · sin comprobantes hoy dice que no hay y ofrece «+ New invoice»", async ({ page }) => {
+  test.setTimeout(60_000);
+  await loginAdminUi(page, w);
+  await expect(page.getByTestId("resumen-invoices-total")).toHaveText("0", { timeout: 20_000 });
+  await expect(page.getByTestId("resumen-invoices-empty")).toContainText("You have not issued any invoices today");
+  await expect(page.getByTestId("resumen-invoice")).toHaveCount(0);
+  await expect(page.getByTestId("resumen-invoices-amount")).toHaveCount(0);
+  await page.getByTestId("resumen-invoices-new").click();
   await expect(page).toHaveURL(/\/app\/billing/);
 });
 
