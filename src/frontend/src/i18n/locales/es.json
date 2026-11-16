@@ -2100,10 +2100,17 @@
         "titleSifen": "Factura electrónica",
         "emitted": "Emitidos hoy",
         "emittedSifen": "Emitidas hoy",
-        "allUpToDate": "Todas al día",
         "needAttention_one": "{{count}} requiere atención",
         "needAttention_other": "{{count}} requieren atención",
-        "view": "Ver comprobantes →"
+        "viewAll": "Ver todos →",
+        "invoiced": "facturado",
+        "approved_one": "{{count}} aprobado",
+        "approved_other": "{{count}} aprobados",
+        "processing_one": "{{count}} en proceso",
+        "processing_other": "{{count}} en proceso",
+        "more_one": "y {{count}} más",
+        "more_other": "y {{count}} más",
+        "empty": "Todavía no emitiste comprobantes hoy. Cuando cobres una ficha o hagas una factura, aparece acá."
       }
     },
     "dashboardsPage": {
