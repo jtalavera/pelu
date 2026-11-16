@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Input, KebabMenu, Label, MultiSelect, PageSizeSelect, Pagination, Select, Text } from "@design-system";
+import { Alert, Button, Input, KebabMenu, Label, MultiSelect, PageSizeSelect, Pagination, Text } from "@design-system";
 import { getEntries, type EntryFilters, type EntryView } from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { LocalizedDateInput } from "../../components/LocalizedDateInput";
@@ -9,14 +9,6 @@ import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ReassignDialog } from "./ReassignDialog";
 import { SettlementStatusBadge, oneMonthAgoYmd, formatPercent, todayYmd, useProfessionals } from "./common";
-
-const initials = (name: string | null) =>
-  (name ?? "?")
-    .split(/\s+/)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
 
 /** Every commission movement, with «Cambiar profesional» on the live ones. */
 export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: number } = {}) {
@@ -37,6 +29,8 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
   const [size, setSize] = useState(10);
   /** Newest first by default (the list used to come oldest first, so the latest sat on the last page). */
   const [order, setOrder] = useState<"desc" | "asc">("desc");
+  /** Paid = already paid in a settlement; unpaid = everything else (not settled, draft, approved). */
+  const [pay, setPay] = useState<"all" | "unpaid" | "paid">("all");
 
   const load = useCallback(
     async (filters?: EntryFilters) => {
@@ -67,32 +61,45 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const visible = useMemo(() => {
+  // The text search first (the payment filter shows how many each option would show), then payment and order.
+  const matching = useMemo(() => {
     const q = appliedQuery.trim().toLowerCase();
-    const list = (entries ?? []).filter(
-      (e) => !q || (e.invoiceNumber ?? "").toLowerCase().includes(q) || (e.itemName ?? "").toLowerCase().includes(q),
-    );
+    return (entries ?? []).filter((e) => !q || (e.invoiceNumber ?? "").toLowerCase().includes(q) || (e.itemName ?? "").toLowerCase().includes(q));
+  }, [entries, appliedQuery]);
+  const counts = useMemo(() => {
+    const paid = matching.filter((e) => e.settlementStatus === "PAID").length;
+    return { all: matching.length, paid, unpaid: matching.length - paid };
+  }, [matching]);
+  const visible = useMemo(() => {
     // By date and time; at the same moment the last one registered goes first (so a reversal sits above its line).
     const sign = order === "desc" ? -1 : 1;
-    return list.slice().sort((a, b) => {
-      const byDate = Date.parse(a.accrualAt) - Date.parse(b.accrualAt);
-      return sign * (byDate !== 0 ? byDate : a.id - b.id);
-    });
-  }, [entries, appliedQuery, order]);
+    return matching
+      .filter((e) => pay === "all" || (pay === "paid") === (e.settlementStatus === "PAID"))
+      .sort((a, b) => {
+        const byDate = Date.parse(a.accrualAt) - Date.parse(b.accrualAt);
+        return sign * (byDate !== 0 ? byDate : a.id - b.id);
+      });
+  }, [matching, order, pay]);
+  /** What the lines on screen add up to (all the pages, not just the one shown). */
+  const totals = useMemo(
+    () => ({ amount: visible.reduce((s, e) => s + e.commissionAmount, 0), retained: visible.reduce((s, e) => s + e.retentionAmount, 0) }),
+    [visible],
+  );
 
-  /** «Service 50 % → paid 45 % · aguinaldo 5 % (Gs. 5.000)»: what the rule was and how it was split. */
-  function retentionText(e: EntryView): string {
-    if (e.percentApplied === null) {
-      return t("femme.commissions.settlement.lineRetention", { percent: formatPercent(e.retentionPercent), amount: formatGuaraniesGs(e.retentionAmount) });
-    }
+  /** The «calculation» cell: the rule and how it was split (with a retention) or just the %, and the product cost. */
+  function calc(e: EntryView): { main: string; extra: string } {
+    const cost = e.fixedAmount !== 0 && e.fixedToProfessional ? t("femme.commissions.settlement.lineProductCost", { amount: formatGuaraniesGs(e.fixedAmount) }) : "";
+    if (e.retentionAmount === 0 || e.percentApplied === null) return { main: formatPercent(e.percentApplied), extra: cost };
     const total = Number((e.percentApplied + e.retentionPercent).toFixed(2));
-    return t("femme.commissions.movements.retentionBreakdown", {
-      kind: t(`femme.commissions.movements.ruleKind.${e.itemKind ?? "OTHER"}`),
-      total: formatPercent(total),
-      paid: formatPercent(e.percentApplied),
-      retention: formatPercent(e.retentionPercent),
-      amount: formatGuaraniesGs(e.retentionAmount),
-    });
+    const retention = t("femme.commissions.movements.calc.retention", { percent: formatPercent(e.retentionPercent), amount: formatGuaraniesGs(e.retentionAmount) });
+    return {
+      main: t("femme.commissions.movements.calc.ruleToPaid", {
+        kind: t(`femme.commissions.movements.ruleKind.${e.itemKind ?? "OTHER"}`),
+        total: formatPercent(total),
+        paid: formatPercent(e.percentApplied),
+      }),
+      extra: cost ? `${retention} · ${cost}` : retention,
+    };
   }
 
   function movementLabel(e: EntryView): string {
@@ -133,40 +140,19 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
             {t("femme.commissions.common.search")}
           </Button>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            aria-expanded={filtersOpen}
-            aria-controls="movements-filters"
-            data-testid="movements-filters-toggle"
-            onClick={() => setFiltersOpen((o) => !o)}
-            className="flex min-h-12 min-w-0 flex-1 basis-64 items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink"
-          >
-            {t("femme.commissions.movements.filtersToggle")}
-            <span aria-hidden className={`text-ink-3 transition-transform ${filtersOpen ? "rotate-180" : ""}`}>
-              ⌄
-            </span>
-          </button>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="mov-sort" className="whitespace-nowrap font-bold text-ink-2">
-              {t("femme.commissions.movements.sort.label")}
-            </Label>
-            <Select
-              id="mov-sort"
-              value={order}
-              className="h-12 min-h-12 w-52 sm:h-12"
-              data-testid="movements-sort"
-              aria-label={t("femme.commissions.movements.sort.aria")}
-              onChange={(e) => {
-                setOrder(e.target.value === "asc" ? "asc" : "desc");
-                setPage(0);
-              }}
-            >
-              <option value="desc">{t("femme.commissions.movements.sort.desc")}</option>
-              <option value="asc">{t("femme.commissions.movements.sort.asc")}</option>
-            </Select>
-          </div>
-        </div>
+        <button
+          type="button"
+          aria-expanded={filtersOpen}
+          aria-controls="movements-filters"
+          data-testid="movements-filters-toggle"
+          onClick={() => setFiltersOpen((o) => !o)}
+          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink"
+        >
+          {t("femme.commissions.movements.filtersToggle")}
+          <span aria-hidden className={`text-ink-3 transition-transform ${filtersOpen ? "rotate-180" : ""}`}>
+            ⌄
+          </span>
+        </button>
         {filtersOpen && (
           <div id="movements-filters" className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -203,6 +189,43 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
           </div>
         )}
       </form>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="text-sm font-extrabold text-ink-2">{t("femme.commissions.movements.pay.label")}</span>
+        <div role="group" aria-label={t("femme.commissions.movements.pay.aria")} className="inline-flex rounded-full bg-primary-lt p-1">
+          {(["all", "unpaid", "paid"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={pay === v}
+              data-testid={`movements-pay-${v}`}
+              onClick={() => {
+                setPay(v);
+                setPage(0);
+              }}
+              className={`min-h-11 rounded-full px-4 text-sm font-extrabold ${pay === v ? "bg-primary text-primary-fg" : "text-ink-2"}`}
+            >
+              {t(`femme.commissions.movements.pay.${v}`)} · {counts[v]}
+            </button>
+          ))}
+        </div>
+        <span className="text-[13px] text-ink-3" data-testid="movements-pay-hint">
+          {t("femme.commissions.movements.pay.hint")}
+        </span>
+        <button
+          type="button"
+          data-testid="movements-sort-mobile"
+          data-order={order}
+          aria-label={t(order === "desc" ? "femme.commissions.movements.sort.ariaDesc" : "femme.commissions.movements.sort.ariaAsc")}
+          onClick={() => {
+            setOrder(order === "desc" ? "asc" : "desc");
+            setPage(0);
+          }}
+          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-full border border-line bg-surface px-4 text-left text-sm font-extrabold text-primary md:hidden"
+        >
+          {t("femme.commissions.movements.sort.mobile", { order: t(order === "desc" ? "femme.commissions.movements.sort.desc" : "femme.commissions.movements.sort.asc").toLowerCase() })}
+          <span aria-hidden>{order === "desc" ? "↓" : "↑"}</span>
+        </button>
+      </div>
       <Text variant="small" className="text-ink-3">
         {t("femme.commissions.movements.hint")}
       </Text>
@@ -218,63 +241,121 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
             {t("femme.commissions.movements.empty")}
           </Text>
         ) : (
-          <ul>
-            {pageItems.map((e) => (
-              <li
-                key={e.id}
-                data-testid="movement-row"
-                className="grid min-h-14 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-x-3 border-t border-line px-3 py-2 first:border-t-0"
+          <>
+            <div className="hidden items-center gap-x-2 border-b border-line bg-primary-lt/40 px-4 py-1 text-xs font-extrabold uppercase tracking-wide text-ink-2 md:grid md:grid-cols-[5.5rem_minmax(0,1.4fr)_6rem_6.5rem_minmax(0,1.3fr)_5.5rem_8.5rem]" data-testid="movements-head">
+              <button
+                type="button"
+                data-testid="movements-sort"
+                data-order={order}
+                aria-label={t(order === "desc" ? "femme.commissions.movements.sort.ariaDesc" : "femme.commissions.movements.sort.ariaAsc")}
+                onClick={() => {
+                  setOrder(order === "desc" ? "asc" : "desc");
+                  setPage(0);
+                }}
+                className="inline-flex min-h-11 items-center gap-1 self-center text-left font-extrabold uppercase tracking-wide text-primary underline underline-offset-4"
               >
-                <span
-                  aria-hidden="true"
-                  className="flex size-9 items-center justify-center rounded-full bg-primary-lt text-xs font-heading font-extrabold text-primary"
-                >
-                  {initials(e.professionalName)}
+                {t("femme.commissions.movements.col.date")}
+                <span aria-hidden className="text-sm">
+                  {order === "desc" ? "↓" : "↑"}
                 </span>
-                <div className="min-w-0">
-                  <div className="truncate font-semibold text-ink">
-                    {e.itemName ?? e.note} · {e.professionalName}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-2 text-sm text-ink-3">
-                    <span>
-                      {formatParaguayDateTime(e.accrualAt, dateLocale)}
-                      {e.invoiceNumber ? ` · ${e.invoiceNumber}` : ""} · {movementLabel(e)}
-                      {e.note && e.sourceType !== "ADJUSTMENT" ? ` · ${e.note}` : ""}
-                      {/* With a retention the breakdown below already says the paid %, so it is not repeated. */}
-                      {e.retentionAmount === 0 || e.percentApplied === null ? ` · ${formatPercent(e.percentApplied)}` : ""}
-                      {e.fixedAmount !== 0 && e.fixedToProfessional
-                        ? ` · ${t("femme.commissions.settlement.lineProductCost", { amount: formatGuaraniesGs(e.fixedAmount) })}`
-                        : ""}
-                      {e.retentionAmount !== 0 ? ` · ${retentionText(e)}` : ""}
-                    </span>
-                    <SettlementStatusBadge status={e.settlementStatus} />
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span
-                    className={`text-right font-heading font-extrabold tabular-nums ${e.commissionAmount < 0 ? "text-danger" : "text-ink"}`}
+              </button>
+              <span>{t("femme.commissions.movements.col.item")}</span>
+              <span>{t("femme.commissions.movements.col.professional")}</span>
+              <span>{t("femme.commissions.movements.col.type")}</span>
+              <span>{t("femme.commissions.movements.col.calc")}</span>
+              <span>{t("femme.commissions.movements.col.status")}</span>
+              <span className="text-right">{t("femme.commissions.movements.col.amount")}</span>
+            </div>
+            <ul>
+              {pageItems.map((e) => {
+                const c = calc(e);
+                const [datePart, ...timeParts] = formatParaguayDateTime(e.accrualAt, dateLocale).split(", ");
+                return (
+                  <li
+                    key={e.id}
+                    data-testid="movement-row"
+                    data-status={e.settlementStatus ?? ""}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-t border-line px-4 py-3 text-[13px] first:border-t-0 md:gap-x-2 md:gap-y-0 md:grid-cols-[5.5rem_minmax(0,1.4fr)_6rem_6.5rem_minmax(0,1.3fr)_5.5rem_8.5rem]"
                   >
-                    {formatGuaraniesGs(e.commissionAmount)}
-                  </span>
-                  {e.reassignable ? (
-                    <KebabMenu
-                      id={`movement-${e.id}`}
-                      triggerAriaLabel={t("femme.commissions.movements.rowActions")}
-                      items={[
-                        {
-                          id: "reassign",
-                          label: t("femme.commissions.reassign.action"),
-                          onSelect: () => setToReassign(e),
-                        },
-                      ]}
-                    />
-                  ) : (
-                    <span className="w-11" aria-hidden />
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+                    <div data-testid="movement-date" className="order-4 col-span-2 text-ink-3 md:order-none md:col-span-1 md:text-ink">
+                      <span className="font-bold md:block">{datePart}</span> <span className="text-ink-3">{timeParts.join(", ")}</span>
+                    </div>
+                    <div className="order-1 min-w-0 md:order-none">
+                      <div data-testid="movement-item" className="break-words text-[15px] font-bold text-ink md:text-[13px]">
+                        {e.itemName ?? e.note}
+                      </div>
+                      {e.invoiceNumber && (
+                        <div data-testid="movement-invoice" className="text-ink-3">
+                          {e.invoiceNumber}
+                        </div>
+                      )}
+                    </div>
+                    <div data-testid="movement-professional" className="order-3 col-span-2 font-bold text-ink md:order-none md:col-span-1">
+                      {e.professionalName}
+                    </div>
+                    <div data-testid="movement-type" className="order-5 col-span-2 text-ink-2 md:order-none md:col-span-1">
+                      {movementLabel(e)}
+                      {e.note && e.sourceType !== "ADJUSTMENT" && <div className="text-ink-3">{e.note}</div>}
+                    </div>
+                    <div data-testid="movement-calc" className="order-7 col-span-2 min-w-0 md:order-none md:col-span-1">
+                      <div data-testid="movement-calc-main" className="font-bold text-ink">
+                        {c.main}
+                      </div>
+                      {c.extra && (
+                        <div data-testid="movement-calc-extra" className="text-ink-3">
+                          {c.extra}
+                        </div>
+                      )}
+                    </div>
+                    <div data-testid="movement-status" className="order-6 col-span-2 md:order-none md:col-span-1">
+                      <SettlementStatusBadge status={e.settlementStatus} />
+                    </div>
+                    <div className="order-2 flex items-center justify-end gap-1 md:order-none">
+                      <span
+                        data-testid="movement-amount"
+                        className={`text-right font-heading text-base font-extrabold tabular-nums ${e.commissionAmount < 0 ? "text-danger" : "text-ink"}`}
+                      >
+                        {formatGuaraniesGs(e.commissionAmount)}
+                      </span>
+                      {e.reassignable ? (
+                        <KebabMenu
+                          id={`movement-${e.id}`}
+                          triggerAriaLabel={t("femme.commissions.movements.rowActions")}
+                          items={[
+                            {
+                              id: "reassign",
+                              label: t("femme.commissions.reassign.action"),
+                              onSelect: () => setToReassign(e),
+                            },
+                          ]}
+                        />
+                      ) : (
+                        <span className="w-11" aria-hidden />
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+        {visible.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-line bg-bg/60 px-4 py-3 text-sm text-ink-2" data-testid="movements-totals">
+            <span>
+              {t("femme.commissions.movements.totals.total")}{" "}
+              <b className="tabular-nums text-ink" data-testid="movements-total-amount">
+                {formatGuaraniesGs(totals.amount)}
+              </b>
+            </span>
+            {totals.retained !== 0 && (
+              <span>
+                {t("femme.commissions.movements.totals.retained")}{" "}
+                <b className="tabular-nums text-warning" data-testid="movements-total-retained">
+                  {formatGuaraniesGs(totals.retained)}
+                </b>
+              </span>
+            )}
+          </div>
         )}
         {visible.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-3 py-3">

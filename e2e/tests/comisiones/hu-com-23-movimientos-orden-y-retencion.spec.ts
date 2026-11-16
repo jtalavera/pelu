@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   applyChanges,
   assignToGroup,
@@ -52,6 +52,8 @@ async function openMovements(page: Page) {
 }
 
 const rows = (page: Page) => page.getByTestId("movement-row");
+const calcMain = (row: Locator) => row.getByTestId("movement-calc-main");
+const calcExtra = (row: Locator) => row.getByTestId("movement-calc-extra");
 
 // ── AC1 · AC2 · AC3 · orden por fecha ────────────────────────────────────────────────────────────
 
@@ -64,8 +66,9 @@ test("AC1 · AC2 · AC3 · Movimientos sale por defecto de lo más reciente a lo
   await openMovements(page);
 
   // The default is newest first: the last sale (the biggest) is the first row of the first page.
-  await expect(page.getByTestId("movements-sort")).toHaveValue("desc");
-  await expect(page.getByTestId("movements-sort").locator("option")).toHaveText(["Newest first", "Oldest first"]);
+  // HU-COM-25: there is no «Sort» list: the FECHA column header sorts (↓ newest first).
+  await expect(page.getByTestId("movements-sort")).toHaveAttribute("data-order", "desc");
+  await expect(page.getByTestId("movements-sort")).toContainText("Date");
   await expect(rows(page)).toHaveCount(10);
   await expect(rows(page).first()).toContainText("84.000"); // 40 % of 210.000
   await expect(rows(page).last()).toContainText("48.000"); // the 10th newest (40 % of 120.000)
@@ -77,16 +80,17 @@ test("AC1 · AC2 · AC3 · Movimientos sale por defecto de lo más reciente a lo
   await expect(rows(page).last()).toContainText("40.000");
 
   // Reversing it goes back to the first page and starts with the oldest sale.
-  await page.getByTestId("movements-sort").selectOption("asc");
+  await page.getByTestId("movements-sort").click();
+  await expect(page.getByTestId("movements-sort")).toHaveAttribute("data-order", "asc");
   await expect(page.getByText("1–10 of 12")).toBeVisible();
   await expect(rows(page).first()).toContainText("40.000");
   await expect(rows(page).last()).toContainText("76.000"); // the 10th oldest (40 % of 190.000)
 
   // The order is kept when searching, and back to «Newest first» puts the biggest on top again.
   await page.getByTestId("movements-search").click();
-  await expect(page.getByTestId("movements-sort")).toHaveValue("asc");
+  await expect(page.getByTestId("movements-sort")).toHaveAttribute("data-order", "asc");
   await expect(rows(page).first()).toContainText("40.000");
-  await page.getByTestId("movements-sort").selectOption("desc");
+  await page.getByTestId("movements-sort").click();
   await expect(rows(page).first()).toContainText("84.000");
 
   // Touch target of at least 44 px.
@@ -96,7 +100,7 @@ test("AC1 · AC2 · AC3 · Movimientos sale por defecto de lo más reciente a lo
 
 // ── AC4 · AC5 · AC6 · la retención explicada ─────────────────────────────────────────────────────
 
-test("AC4 · AC5 · con retención la línea dice «Servicio 50 % → se paga 45 % · retention 5 % (Gs. 5.000)»; al recalcular, la reversión queda arriba de la línea que reversa", async ({
+test("AC4 · AC5 · con retención el cálculo dice «Servicio 50 % → 45 %» y debajo «Retención 5 % · Gs. 5.000»; al recalcular, la reversión queda arriba de la línea que reversa", async ({
   page,
   request,
 }) => {
@@ -111,11 +115,10 @@ test("AC4 · AC5 · con retención la línea dice «Servicio 50 % → se paga 45
   await openMovements(page);
 
   await expect(rows(page)).toHaveCount(1);
-  await expect(rows(page).first()).toContainText("Commission · Service 50 % → paid 45 % · retention 5 % (Gs. 5.000)");
+  await expect(calcMain(rows(page).first())).toHaveText("Service 50 % → 45 %");
+  await expect(calcExtra(rows(page).first())).toHaveText("Retention 5 % · Gs. 5.000");
   await expect(rows(page).first()).toContainText("Gs. 45.000");
-  // It no longer shows the paid % on its own, nor the old «Retention 5 %» wording.
-  await expect(rows(page).first()).not.toContainText("Retention");
-  await expect(rows(page).first()).not.toContainText("Commission · 45 %");
+  await expect(rows(page).first().getByTestId("movement-type")).toHaveText("Commission");
 
   // The salon changes the group to 60 %, from the start of the period: the open line is recalculated.
   await applyChanges(request, w.adminToken, [{ scope: "GROUP_RULE", groupId: g.id, value: "60" }], "PERIOD_START");
@@ -123,23 +126,26 @@ test("AC4 · AC5 · con retención la línea dice «Servicio 50 % → se paga 45
   await page.getByTestId("activity-tab-movements").click();
   await expect(rows(page)).toHaveCount(3);
   // Newest first: the new line (60 % → 55 % paid + 5 % retained), the reversal and the original line.
-  await expect(rows(page).nth(0)).toContainText("Service 60 % → paid 55 % · retention 5 % (Gs. 5.000)");
+  await expect(calcMain(rows(page).nth(0))).toHaveText("Service 60 % → 55 %");
+  await expect(calcExtra(rows(page).nth(0))).toHaveText("Retention 5 % · Gs. 5.000");
   await expect(rows(page).nth(0)).toContainText("Gs. 55.000");
-  await expect(rows(page).nth(1)).toContainText("Service 50 % → paid 45 % · retention 5 % (Gs. -5.000)");
+  await expect(calcMain(rows(page).nth(1))).toHaveText("Service 50 % → 45 %");
+  await expect(calcExtra(rows(page).nth(1))).toHaveText("Retention 5 % · Gs. -5.000");
   await expect(rows(page).nth(1)).toContainText("Gs. -45.000");
-  await expect(rows(page).nth(2)).toContainText("Service 50 % → paid 45 % · retention 5 % (Gs. 5.000)");
+  await expect(calcMain(rows(page).nth(2))).toHaveText("Service 50 % → 45 %");
+  await expect(calcExtra(rows(page).nth(2))).toHaveText("Retention 5 % · Gs. 5.000");
   await expect(rows(page).nth(2)).toContainText("Gs. 45.000");
 
   // The oldest first reads the other way round.
-  await page.getByTestId("movements-sort").selectOption("asc");
+  await page.getByTestId("movements-sort").click();
   await expect(rows(page).nth(0)).toContainText("Gs. 45.000");
   await expect(rows(page).nth(2)).toContainText("Gs. 55.000");
 
   // The «History» tab of the professional is the same list: same order and same wording.
   await openProfessional(page, w.ana.name, "history");
   await expect(rows(page)).toHaveCount(3);
-  await expect(rows(page).first()).toContainText("Service 60 % → paid 55 % · retention 5 % (Gs. 5.000)");
-  await expect(rows(page).last()).toContainText("Service 50 % → paid 45 % · retention 5 % (Gs. 5.000)");
+  await expect(calcMain(rows(page).first())).toHaveText("Service 60 % → 55 %");
+  await expect(calcMain(rows(page).last())).toHaveText("Service 50 % → 45 %");
 });
 
 test("AC6 · sin retención la línea sigue diciendo solo la comisión y su %", async ({ page, request }) => {
@@ -147,8 +153,9 @@ test("AC6 · sin retención la línea sigue diciendo solo la comisión y su %", 
   await openMovements(page);
 
   await expect(rows(page)).toHaveCount(1);
-  await expect(rows(page).first()).toContainText("Commission · 40 %");
+  await expect(rows(page).first().getByTestId("movement-type")).toHaveText("Commission");
+  await expect(calcMain(rows(page).first())).toHaveText("40 %");
+  await expect(rows(page).first().getByTestId("movement-calc-extra")).toHaveCount(0);
   await expect(rows(page).first()).not.toContainText("→");
-  await expect(rows(page).first()).not.toContainText("retention");
   await expect(rows(page).first()).toContainText("Gs. 40.000");
 });
