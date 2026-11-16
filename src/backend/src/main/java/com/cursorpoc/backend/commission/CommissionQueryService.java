@@ -120,7 +120,10 @@ public class CommissionQueryService {
       } else {
         services = services.add(e.getCommissionAmount());
       }
-      if (e.getSourceType() == CommissionEntrySource.INVOICE_LINE) {
+      // A line that was recalculated or reassigned leaves its original entry (already reversed) in
+      // the list: it is the same sale, so it is not counted again.
+      if (e.getSourceType() == CommissionEntrySource.INVOICE_LINE
+          && !reversed.contains(e.getId())) {
         lines++;
       }
     }

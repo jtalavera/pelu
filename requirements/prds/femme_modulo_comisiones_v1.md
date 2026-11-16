@@ -436,6 +436,10 @@ Historia completa y criterios: [HU-COM-25](../user_stories/HU-COM-25-movimientos
 
 Historia completa y criterios: [HU-COM-26](../user_stories/HU-COM-26-retencion-pendiente-y-acciones.md). Resumen: «Movimientos › Retención» muestra lo retenido que espera aprobación como una línea gris «Pendiente» y, sin nada, un mensaje en lugar de la caja vacía; el Resumen de la ficha siempre ofrece «Pagar retención» (deshabilitado sin saldo) y «Ajustar el saldo», y el subtítulo dice «Retiene 5 %». Sin cambios de cálculo ni de API.
 
+### HU-COM-27 · Una línea recalculada se cuenta una sola vez
+
+Historia completa y criterios: [HU-COM-27](../user_stories/HU-COM-27-conteo-de-lineas-recalculadas.md). Resumen: «N líneas facturadas» (ficha) y «N movimientos» (Liquidar y Equipo) no cuentan la fila original anulada ni la reversión de una línea recalculada o reasignada. Sin cambios de importes.
+
 ### HU-COM-19 · Anular borradores rápido desde Liquidar
 
 Historia completa y criterios: [HU-COM-19](../user_stories/HU-COM-19-anular-borradores-rapido.md). Resumen:
@@ -545,6 +549,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-24 | «Retención» en lugar de «Aguinaldo» en toda la interfaz; ficha con Resumen · Reglas · Movimientos; Resumen en dos tarjetas (pagar / retenido, saldo, último pago, pagar y ajustar); Movimientos con el interruptor Comisiones \| Retención; sin retención no aparece nada de esto. |
 | HU-COM-25 | Movimientos en siete columnas (tarjetas en el celular); orden desde el encabezado FECHA (sin lista «Ordenar»); filtro de pago Todas · Sin pagar · Pagadas con cantidades; pie con total y retenido; el cálculo explica la retención. |
 | HU-COM-26 | Retención pendiente (sin liquidar / en borrador) como línea gris en Movimientos › Retención; mensaje cuando no hay nada; Pagar retención (deshabilitado sin saldo) y Ajustar el saldo siempre visibles; subtítulo «Retiene N %». |
+| HU-COM-27 | Conteo de líneas facturadas / movimientos sin contar la fila anulada ni la reversión de una línea recalculada. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 
