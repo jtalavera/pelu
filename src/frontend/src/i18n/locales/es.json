@@ -722,7 +722,11 @@
           "exceeds": "El monto no puede superar el saldo ({{balance}}).",
           "adjustAmount": "Ingresá un monto entero distinto de 0, por ejemplo -2.350 o 5.000.",
           "reason": "Indicá el motivo del ajuste, por ejemplo «factura anulada»."
-        }
+        },
+        "pendingTag": "Pendiente",
+        "pendingUnsettled": "Retención de este período · sin liquidar",
+        "pendingDraft": "Retención de este período · en un borrador, pendiente de aprobar",
+        "emptyMovements": "Todavía no hay movimientos de retención. Lo retenido se suma al saldo cuando se aprueba la liquidación."
       },
       "nav": {
         "home": "Inicio",
@@ -1130,7 +1134,9 @@
         "retentionMovements": "Ver movimientos de la retención →",
         "movementsSwitchAria": "Qué movimientos ver",
         "movementsCommissions": "Comisiones",
-        "movementsRetention": "Retención"
+        "movementsRetention": "Retención",
+        "subtitleRetains": "Retiene {{percent}}",
+        "retentionNothingToPay": "Todavía no hay saldo para pagar: la retención se suma cuando se aprueba la liquidación."
       },
       "activity": {
         "intro": "Todo lo que pasó con las comisiones: cada movimiento y los reportes.",

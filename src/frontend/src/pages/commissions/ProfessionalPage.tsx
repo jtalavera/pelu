@@ -41,6 +41,14 @@ export default function ProfessionalPage() {
   const tab: TabId = requested === "rules" ? "rules" : requested === "history" || requested === "aguinaldo" ? "history" : "summary";
   const view: "commissions" | "retention" = retention && (requested === "aguinaldo" || params.get("view") === "retention") ? "retention" : "commissions";
   const row = overview?.rows.find((r) => r.professionalId === professionalId) ?? null;
+  /** Her retention % (the subtitle and the Summary card use it). */
+  const [retentionPercent, setRetentionPercent] = useState<number | null>(null);
+  useEffect(() => {
+    if (!retention) return;
+    getProfessionalsSummary()
+      .then((s) => setRetentionPercent(s.professionals.find((x) => x.professionalId === professionalId)?.retentionPercent ?? null))
+      .catch(() => setRetentionPercent(null));
+  }, [retention, professionalId]);
 
   const tabs: { id: TabId; label: string }[] = [
     { id: "summary", label: t("femme.commissions.pro.tabSummary") },
@@ -62,6 +70,7 @@ export default function ProfessionalPage() {
             </h2>
             <div className="text-sm text-ink-3" data-testid="pro-subtitle">
               {row.ruleCount === 0 ? t("femme.commissions.team.usualPay") : t("femme.commissions.team.differentIn", { count: row.ruleCount })}
+              {retention && retentionPercent !== null && retentionPercent > 0 && ` · ${t("femme.commissions.pro.subtitleRetains", { percent: formatPercent(retentionPercent) })}`}
             </div>
           </div>
         </header>
@@ -82,7 +91,7 @@ export default function ProfessionalPage() {
           </NavLink>
         ))}
       </nav>
-      {tab === "summary" && <SummaryPane professionalId={professionalId} />}
+      {tab === "summary" && <SummaryPane professionalId={professionalId} retentionPercent={retentionPercent} />}
       {tab === "rules" && <ProfessionalRates professionalId={professionalId} />}
       {tab === "history" && <ProfessionalMovements professionalId={professionalId} retention={retention} view={view} />}
     </div>
@@ -92,6 +101,10 @@ export default function ProfessionalPage() {
 /** «Movimientos» of one professional: her commissions, and (if the salon retains) the movements of her retention balance. */
 function ProfessionalMovements({ professionalId, retention, view }: { professionalId: number; retention: boolean; view: "commissions" | "retention" }) {
   const { t } = useTranslation();
+  const { overview } = useOverview();
+  const row = overview?.rows.find((r) => r.professionalId === professionalId) ?? null;
+  // What she retained that still waits for the settlement to be approved (not settled yet, or in a draft).
+  const pending = row && row.retention !== 0 && (row.status === "UNSETTLED" || row.status === "DRAFT") ? { amount: row.retention, status: row.status } : null;
   const [, setParams] = useSearchParams();
   const pick = (next: "commissions" | "retention") =>
     setParams((prev) => {
@@ -121,19 +134,18 @@ function ProfessionalMovements({ professionalId, retention, view }: { profession
           {chip("retention", t("femme.commissions.pro.movementsRetention"))}
         </div>
       )}
-      {view === "retention" ? <AguinaldoTab professionalId={professionalId} part="movements" /> : <MovementsTab fixedProfessionalId={professionalId} />}
+      {view === "retention" ? <AguinaldoTab professionalId={professionalId} part="movements" pending={pending} /> : <MovementsTab fixedProfessionalId={professionalId} />}
     </div>
   );
 }
 
 /** What she earned in the current period: what is paid and, if the salon retains, what was retained and her balance. */
-function SummaryPane({ professionalId }: { professionalId: number }) {
+function SummaryPane({ professionalId, retentionPercent }: { professionalId: number; retentionPercent: number | null }) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const { overview } = useOverview();
   const [preview, setPreview] = useState<SettlementPreview | null>(null);
   const [balance, setBalance] = useState<AguinaldoBalance | null>(null);
-  const [retentionPercent, setRetentionPercent] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const row = overview?.rows.find((r) => r.professionalId === professionalId) ?? null;
   const from = overview?.period.from ?? undefined;
@@ -160,9 +172,6 @@ function SummaryPane({ professionalId }: { professionalId: number }) {
   useEffect(() => {
     if (!retention) return;
     void loadBalance();
-    getProfessionalsSummary()
-      .then((s) => setRetentionPercent(s.professionals.find((p) => p.professionalId === professionalId)?.retentionPercent ?? null))
-      .catch(() => setRetentionPercent(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retention, professionalId]);
 
@@ -176,6 +185,16 @@ function SummaryPane({ professionalId }: { professionalId: number }) {
       </b>
     </div>
   );
+  // Without any movement she has no row in the fund yet: her balance is 0 and she can still be adjusted.
+  const fundTarget: AguinaldoBalance = balance ?? {
+    professionalId,
+    professionalName: row.professionalName,
+    active: true,
+    retained: 0,
+    paid: 0,
+    balance: 0,
+    lastPaymentOn: null,
+  };
   const lastPayment = balance?.lastPaymentOn ? formatParaguayDate(balance.lastPaymentOn + "T12:00:00", dateLocale) : "—";
   return (
     <section className="flex flex-col gap-4" data-testid="pro-summary">
@@ -250,13 +269,21 @@ function SummaryPane({ professionalId }: { professionalId: number }) {
             {t("femme.commissions.pro.goSettle")}
           </Link>
         )}
-        {retention && balance && balance.balance > 0 && (
-          <Button type="button" variant="outline" className={ACTION_BUTTON} data-testid="pro-retention-pay" onClick={() => fund.openPay(balance)}>
+        {retention && (
+          <Button
+            type="button"
+            variant="outline"
+            className={ACTION_BUTTON}
+            data-testid="pro-retention-pay"
+            disabled={fundTarget.balance <= 0}
+            title={fundTarget.balance <= 0 ? t("femme.commissions.pro.retentionNothingToPay") : undefined}
+            onClick={() => fund.openPay(fundTarget)}
+          >
             {t("femme.commissions.pro.retentionPay")}
           </Button>
         )}
-        {retention && balance && (
-          <Button type="button" variant="tertiary" className={ACTION_BUTTON} data-testid="pro-retention-adjust" onClick={() => fund.openAdjust(balance)}>
+        {retention && (
+          <Button type="button" variant="tertiary" className={ACTION_BUTTON} data-testid="pro-retention-adjust" onClick={() => fund.openAdjust(fundTarget)}>
             {t("femme.commissions.pro.retentionAdjust")}
           </Button>
         )}
@@ -266,6 +293,11 @@ function SummaryPane({ professionalId }: { professionalId: number }) {
           </Link>
         )}
       </div>
+      {retention && fundTarget.balance <= 0 && (
+        <Text variant="small" className="-mt-2 text-ink-3" data-testid="pro-retention-nothing-to-pay">
+          {t("femme.commissions.pro.retentionNothingToPay")}
+        </Text>
+      )}
       {fund.notice && (
         <Alert variant="success" role="status" data-testid="pro-retention-notice">
           {fund.notice}
