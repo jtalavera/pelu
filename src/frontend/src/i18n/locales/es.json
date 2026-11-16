@@ -87,6 +87,36 @@
         "totals": {
           "total": "Total",
           "retained": "Retenido"
+        },
+        "group": {
+          "showReversed": "Mostrar también las líneas revertidas",
+          "show": "Ver cambios · {{count}} filas",
+          "hide": "Ocultar cambios",
+          "title": "Cómo llegó a este monto",
+          "tag": {
+            "RECALCULATION": "Recalculada",
+            "REASSIGNMENT": "Reasignada",
+            "VOID": "Anulada",
+            "CORRECTION": "Corregida",
+            "OTHER": "Con cambios"
+          },
+          "before": "antes {{value}}",
+          "voided": "comprobante anulado",
+          "step": {
+            "initial": "Comisión inicial",
+            "previous": "Comisión anterior",
+            "current": "Comisión actual"
+          },
+          "stepTag": {
+            "reverted": "Revertida",
+            "reversal": "Reversión",
+            "current": "Vigente"
+          },
+          "reverses": "anula el paso {{n}}",
+          "net": "Neto de esta venta: {{amount}}.",
+          "noCurrent": "No hay comisión vigente.",
+          "changedCount_one": "{{count}} con cambios",
+          "changedCount_other": "{{count}} con cambios"
         }
       },
       "preview": {

@@ -100,7 +100,7 @@ test("AC1 · AC2 · AC3 · Movimientos sale por defecto de lo más reciente a lo
 
 // ── AC4 · AC5 · AC6 · la retención explicada ─────────────────────────────────────────────────────
 
-test("AC4 · AC5 · con retención el cálculo dice «Servicio 50 % → 45 %» y debajo «Retención 5 % · Gs. 5.000»; al recalcular, la reversión queda arriba de la línea que reversa", async ({
+test("AC4 · AC5 · con retención el cálculo dice «Servicio 50 % → 45 %» y debajo «Retención 5 % · Gs. 5.000»; al recalcular es una sola fila con su historial (HU-COM-29)", async ({
   page,
   request,
 }) => {
@@ -124,28 +124,28 @@ test("AC4 · AC5 · con retención el cálculo dice «Servicio 50 % → 45 %» y
   await applyChanges(request, w.adminToken, [{ scope: "GROUP_RULE", groupId: g.id, value: "60" }], "PERIOD_START");
   await page.reload();
   await page.getByTestId("activity-tab-movements").click();
-  await expect(rows(page)).toHaveCount(3);
-  // Newest first: the new line (60 % → 55 % paid + 5 % retained), the reversal and the original line.
-  await expect(calcMain(rows(page).nth(0))).toHaveText("Service 60 % → 55 %");
-  await expect(calcExtra(rows(page).nth(0))).toHaveText("Retention 5 % · Gs. 5.000");
-  await expect(rows(page).nth(0)).toContainText("Gs. 55.000");
-  await expect(calcMain(rows(page).nth(1))).toHaveText("Service 50 % → 45 %");
-  await expect(calcExtra(rows(page).nth(1))).toHaveText("Retention 5 % · Gs. -5.000");
-  await expect(rows(page).nth(1)).toContainText("Gs. -45.000");
-  await expect(calcMain(rows(page).nth(2))).toHaveText("Service 50 % → 45 %");
-  await expect(calcExtra(rows(page).nth(2))).toHaveText("Retention 5 % · Gs. 5.000");
-  await expect(rows(page).nth(2)).toContainText("Gs. 45.000");
-
-  // The oldest first reads the other way round.
-  await page.getByTestId("movements-sort").click();
-  await expect(rows(page).nth(0)).toContainText("Gs. 45.000");
-  await expect(rows(page).nth(2)).toContainText("Gs. 55.000");
-
-  // The «History» tab of the professional is the same list: same order and same wording.
-  await openProfessional(page, w.ana.name, "history");
-  await expect(rows(page)).toHaveCount(3);
+  // One sale, one row: the line in force (60 % → 55 % paid + 5 % retained), tagged as recalculated.
+  await expect(rows(page)).toHaveCount(1);
   await expect(calcMain(rows(page).first())).toHaveText("Service 60 % → 55 %");
-  await expect(calcMain(rows(page).last())).toHaveText("Service 50 % → 45 %");
+  await expect(calcExtra(rows(page).first())).toHaveText("Retention 5 % · Gs. 5.000");
+  await expect(rows(page).first()).toContainText("Gs. 55.000");
+  await expect(rows(page).first().getByTestId("movement-tag")).toHaveText("Recalculated");
+  await expect(rows(page).first().getByTestId("movement-calc-note")).toHaveText("before 45 %");
+  // Its history, oldest first: the original line (reversed), the reversal and the line in force.
+  await rows(page).first().getByTestId("movement-changes-toggle").click();
+  const steps = rows(page).first().getByTestId("movement-step");
+  await expect(steps).toHaveCount(3);
+  await expect(steps.nth(0)).toContainText("Initial commission");
+  await expect(steps.nth(0).getByTestId("movement-step-amount")).toHaveText("Gs. 45.000");
+  await expect(steps.nth(1)).toContainText("Reversal: recalculation");
+  await expect(steps.nth(1).getByTestId("movement-step-amount")).toHaveText("Gs. -45.000");
+  await expect(steps.nth(2)).toContainText("Current commission");
+  await expect(steps.nth(2).getByTestId("movement-step-amount")).toHaveText("Gs. 55.000");
+
+  // The «Movements» tab of the professional is the same list: same wording.
+  await openProfessional(page, w.ana.name, "history");
+  await expect(rows(page)).toHaveCount(1);
+  await expect(calcMain(rows(page).first())).toHaveText("Service 60 % → 55 %");
 });
 
 test("AC6 · sin retención la línea sigue diciendo solo la comisión y su %", async ({ page, request }) => {

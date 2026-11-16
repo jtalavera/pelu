@@ -21,6 +21,7 @@ const entry = (id: number, accrualAt: string, over: Partial<EntryView> = {}): En
     revision: 1,
     reasonCode: null,
     invoiceId: 10,
+    invoiceLineId: null,
     invoiceNumber: "0001160",
     serviceId: 5,
     itemName: "BRUSHING PELO CORTO",
@@ -165,5 +166,104 @@ describe("HU-COM-23 / HU-COM-25 · Movimientos", () => {
     await user.click(screen.getByTestId("movements-pay-paid"));
     expect(screen.getByTestId("movements-total-amount").textContent).toBe("Gs. 20.000");
     expect(screen.queryByTestId("movements-total-retained")).toBeNull();
+  });
+});
+
+/** HU-COM-29: one sale, recalculated (40 % → 50 %): the original, its reversal and the new commission. */
+const sale = (over: Partial<EntryView> = {}) => entry(0, "2026-11-16T13:48:00Z", { invoiceLineId: 77, retentionPercent: 0, retentionAmount: 0, ...over });
+const recalculated = [
+  sale({ id: 11, percentApplied: 40, commissionAmount: 32727 }),
+  sale({ id: 12, sourceType: "REVERSAL", reasonCode: "RECALCULATION", reversesEntryId: 11, percentApplied: 40, commissionAmount: -32727 }),
+  sale({ id: 13, percentApplied: 50, commissionAmount: 40909, reassignable: true }),
+  // Another sale with nothing special, and a voided one (its commission was reversed, nothing replaced it).
+  entry(20, "2026-11-16T13:30:00Z", { invoiceLineId: 78, itemName: "CORTE", percentApplied: 50, commissionAmount: 15000, retentionPercent: 0, retentionAmount: 0, reassignable: true }),
+  entry(30, "2026-11-16T12:10:00Z", { invoiceLineId: 79, itemName: "PEINADO", percentApplied: 50, commissionAmount: 12000, retentionPercent: 0, retentionAmount: 0 }),
+  entry(31, "2026-11-16T12:11:00Z", { invoiceLineId: 79, itemName: "PEINADO", sourceType: "REVERSAL", reasonCode: "VOID", reversesEntryId: 30, percentApplied: 50, commissionAmount: -12000, retentionPercent: 0, retentionAmount: 0 }),
+];
+
+describe("HU-COM-29 · líneas revertidas", () => {
+  beforeEach(async () => {
+    await i18n.changeLanguage("es");
+    api.getEntries.mockResolvedValue(recalculated);
+    api.getProfessionals.mockResolvedValue([]);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+  const rows = () => screen.getAllByTestId("movement-row");
+
+  it("una venta recalculada es UNA fila: la comisión vigente, su etiqueta y «antes 40 %»", async () => {
+    mount();
+    await screen.findAllByTestId("movement-row");
+    expect(rows()).toHaveLength(3); // the recalculated sale, the plain one and the voided one
+    const r = rows().find((x) => within(x).queryByText("BRUSHING PELO CORTO"))!;
+    expect(within(r).getByTestId("movement-amount").textContent).toBe("Gs. 40.909");
+    expect(within(r).getByTestId("movement-tag").textContent).toBe("Recalculada");
+    expect(within(r).getByTestId("movement-calc-main").textContent).toContain("50 %");
+    expect(within(r).getByTestId("movement-calc-note").textContent).toBe("antes 40 %");
+    expect(within(r).queryByTestId("movement-changes")).toBeNull();
+  });
+
+  it("«Ver cambios» abre el recorrido: original (revertida) → reversión → vigente, con el neto", async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findAllByTestId("movement-row");
+    const r = rows().find((x) => within(x).queryByText("BRUSHING PELO CORTO"))!;
+    const toggle = within(r).getByTestId("movement-changes-toggle");
+    expect(toggle.textContent).toContain("Ver cambios · 3 filas");
+    await user.click(toggle);
+    const steps = within(r).getAllByTestId("movement-step");
+    expect(steps.map((x) => x.getAttribute("data-kind"))).toEqual(["reverted", "reversal", "current"]);
+    expect(steps[0].textContent).toContain("Comisión inicial");
+    expect(steps[1].textContent).toContain("Reversión por recálculo");
+    expect(steps[1].textContent).toContain("anula el paso 1");
+    expect(steps[2].textContent).toContain("Comisión actual");
+    expect(within(r).getAllByTestId("movement-step-amount").map((x) => x.textContent)).toEqual(["Gs. 32.727", "Gs. -32.727", "Gs. 40.909"]);
+    expect(within(r).getByTestId("movement-changes-net").textContent).toBe("Neto de esta venta: Gs. 40.909.");
+    await user.click(within(r).getByTestId("movement-changes-toggle"));
+    expect(within(r).queryByTestId("movement-changes")).toBeNull();
+  });
+
+  it("una venta cuyo comprobante se anuló queda en Gs. 0, «Anulada» y sin comisión vigente", async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findAllByTestId("movement-row");
+    const r = rows().find((x) => within(x).queryByText("PEINADO"))!;
+    expect(within(r).getByTestId("movement-tag").textContent).toBe("Anulada");
+    expect(within(r).getByTestId("movement-amount").textContent).toBe("Gs. 0");
+    expect(within(r).getByTestId("movement-calc-note").textContent).toBe("comprobante anulado");
+    await user.click(within(r).getByTestId("movement-changes-toggle"));
+    expect(within(r).getByTestId("movement-changes-net").textContent).toContain("No hay comisión vigente");
+  });
+
+  it("una venta sin cambios no tiene etiqueta ni «Ver cambios»", async () => {
+    mount();
+    await screen.findAllByTestId("movement-row");
+    const r = rows().find((x) => within(x).queryByText("CORTE"))!;
+    expect(within(r).queryByTestId("movement-tag")).toBeNull();
+    expect(within(r).queryByTestId("movement-changes-toggle")).toBeNull();
+  });
+
+  it("el interruptor «Mostrar también las líneas revertidas» abre el recorrido de todas a la vez", async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findAllByTestId("movement-row");
+    expect(screen.queryAllByTestId("movement-changes")).toHaveLength(0);
+    const sw = screen.getByTestId("movements-show-reversed");
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    await user.click(sw);
+    expect(sw.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getAllByTestId("movement-changes")).toHaveLength(2);
+    await user.click(sw);
+    expect(screen.queryAllByTestId("movement-changes")).toHaveLength(0);
+  });
+
+  it("el pie suma el neto (la reversión resta lo anulado) y dice cuántas tuvieron cambios", async () => {
+    mount();
+    await screen.findAllByTestId("movement-row");
+    expect(screen.getByTestId("movements-total-amount").textContent).toBe("Gs. 55.909"); // 40.909 + 15.000 + 0
+    expect(screen.getByTestId("movements-changed-count").textContent).toBe("2 con cambios");
+    expect(screen.getByTestId("movements-pay-all").textContent).toBe("Todas · 3");
   });
 });

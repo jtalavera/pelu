@@ -343,6 +343,8 @@ public final class CommissionDtos {
       int revision,
       String reasonCode,
       Long invoiceId,
+      /** HU-COM-29: the invoice line an entry, its reversal and its new revision all share. */
+      Long invoiceLineId,
       String invoiceNumber,
       Long serviceId,
       String itemName,

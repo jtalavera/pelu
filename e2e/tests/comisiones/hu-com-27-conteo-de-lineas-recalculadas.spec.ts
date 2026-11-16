@@ -67,11 +67,13 @@ test("AC2 · Liquidar dice «1 movement» (no 3) para la venta recalculada", asy
   await expect(liquidarRow(page, w.ana.name).getByTestId("liquidar-row-note")).toHaveText("1 movement");
 });
 
-test("AC4 · Movimientos sigue mostrando las tres filas (comisión original, reversión y comisión nueva)", async ({ page, request }) => {
+test("AC4 · Movimientos sigue guardando las tres filas (comisión original, reversión y comisión nueva): se ven como una venta con su historial (HU-COM-29)", async ({ page, request }) => {
   await recalculatedSale(request);
   await loginAdminUi(page, w);
   await openCommissions(page);
   await openProfessional(page, w.ana.name, "history");
 
-  await expect(page.getByTestId("movement-row")).toHaveCount(3);
+  await expect(page.getByTestId("movement-row")).toHaveCount(1);
+  await page.getByTestId("movement-changes-toggle").click();
+  await expect(page.getByTestId("movement-step")).toHaveCount(3);
 });

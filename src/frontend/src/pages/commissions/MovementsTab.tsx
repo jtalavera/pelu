@@ -9,6 +9,7 @@ import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ReassignDialog } from "./ReassignDialog";
 import { SettlementStatusBadge, oneMonthAgoYmd, formatPercent, todayYmd, useProfessionals } from "./common";
+import { groupMovements, type MovementGroup } from "./movementGroups";
 
 /** Every commission movement, with «Cambiar profesional» on the live ones. */
 export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: number } = {}) {
@@ -31,6 +32,9 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
   const [order, setOrder] = useState<"desc" | "asc">("desc");
   /** Paid = already paid in a settlement; unpaid = everything else (not settled, draft, approved). */
   const [pay, setPay] = useState<"all" | "unpaid" | "paid">("all");
+  /** HU-COM-29: «Mostrar también las líneas revertidas» opens the history of every sale; each one also opens on its own. */
+  const [showReversed, setShowReversed] = useState(false);
+  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
 
   const load = useCallback(
     async (filters?: EntryFilters) => {
@@ -61,30 +65,36 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The text search first (the payment filter shows how many each option would show), then payment and order.
+  // One movement per sale (HU-COM-29); then the text search (the payment filter shows how many each option would show),
+  // then payment and order.
+  const groups = useMemo(() => groupMovements(entries ?? []), [entries]);
   const matching = useMemo(() => {
     const q = appliedQuery.trim().toLowerCase();
-    return (entries ?? []).filter((e) => !q || (e.invoiceNumber ?? "").toLowerCase().includes(q) || (e.itemName ?? "").toLowerCase().includes(q));
-  }, [entries, appliedQuery]);
+    return groups.filter(
+      (g) => !q || g.entries.some((e) => (e.invoiceNumber ?? "").toLowerCase().includes(q) || (e.itemName ?? "").toLowerCase().includes(q)),
+    );
+  }, [groups, appliedQuery]);
+  const isPaid = (g: MovementGroup) => g.rep.settlementStatus === "PAID";
   const counts = useMemo(() => {
-    const paid = matching.filter((e) => e.settlementStatus === "PAID").length;
+    const paid = matching.filter(isPaid).length;
     return { all: matching.length, paid, unpaid: matching.length - paid };
   }, [matching]);
   const visible = useMemo(() => {
-    // By date and time; at the same moment the last one registered goes first (so a reversal sits above its line).
+    // By date and time; at the same moment the last one registered goes first.
     const sign = order === "desc" ? -1 : 1;
     return matching
-      .filter((e) => pay === "all" || (pay === "paid") === (e.settlementStatus === "PAID"))
+      .filter((g) => pay === "all" || (pay === "paid") === isPaid(g))
       .sort((a, b) => {
-        const byDate = Date.parse(a.accrualAt) - Date.parse(b.accrualAt);
-        return sign * (byDate !== 0 ? byDate : a.id - b.id);
+        const byDate = Date.parse(a.rep.accrualAt) - Date.parse(b.rep.accrualAt);
+        return sign * (byDate !== 0 ? byDate : a.rep.id - b.rep.id);
       });
   }, [matching, order, pay]);
   /** What the lines on screen add up to (all the pages, not just the one shown). */
   const totals = useMemo(
-    () => ({ amount: visible.reduce((s, e) => s + e.commissionAmount, 0), retained: visible.reduce((s, e) => s + e.retentionAmount, 0) }),
+    () => ({ amount: visible.reduce((s, g) => s + g.net, 0), retained: visible.reduce((s, g) => s + g.retained, 0) }),
     [visible],
   );
+  const changedCount = visible.filter((g) => g.changed).length;
 
   /** The «calculation» cell: the rule and how it was split (with a retention) or just the %, and the product cost. */
   function calc(e: EntryView): { main: string; extra: string } {
@@ -106,6 +116,29 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
     if (e.sourceType === "INVOICE_LINE") return t("femme.commissions.movements.type.LINE");
     if (e.sourceType === "REVERSAL") return t(`femme.commissions.reason.${e.reasonCode ?? "VOID"}`);
     return t(`femme.commissions.reason.${e.reasonCode ?? "MANUAL_ADJUSTMENT"}`);
+  }
+
+  /** The tag next to the item of a sale that has a history: why it changed. */
+  function changeTag(g: MovementGroup): string {
+    const known = ["RECALCULATION", "REASSIGNMENT", "VOID", "CORRECTION"];
+    return t(`femme.commissions.movements.group.tag.${g.reason && known.includes(g.reason) ? g.reason : "OTHER"}`);
+  }
+
+  /** «antes 40 %» / «antes Ana» / «comprobante anulado»: what the commission was before, in a few words. */
+  function changeNote(g: MovementGroup): string {
+    if (!g.changed) return "";
+    if (!g.current) return g.reason === "VOID" ? t("femme.commissions.movements.group.voided") : "";
+    const before = [...g.entries].reverse().find((e) => e.sourceType === "INVOICE_LINE" && e.id !== g.current!.id);
+    if (!before) return "";
+    if (g.reason === "REASSIGNMENT") {
+      return before.professionalName && before.professionalId !== g.current.professionalId
+        ? t("femme.commissions.movements.group.before", { value: before.professionalName })
+        : "";
+    }
+    if (g.reason === "RECALCULATION" && before.percentApplied !== null && before.percentApplied !== g.current.percentApplied) {
+      return t("femme.commissions.movements.group.before", { value: formatPercent(before.percentApplied) });
+    }
+    return "";
   }
 
   const pageItems = visible.slice(page * size, (page + 1) * size);
@@ -213,6 +246,19 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
         </span>
         <button
           type="button"
+          role="switch"
+          aria-checked={showReversed}
+          data-testid="movements-show-reversed"
+          onClick={() => setShowReversed((v) => !v)}
+          className="inline-flex min-h-11 items-center gap-2.5 text-sm font-bold text-ink"
+        >
+          <span aria-hidden className={`inline-flex h-6 w-10 shrink-0 items-center rounded-full p-0.5 ${showReversed ? "justify-end bg-primary" : "justify-start bg-line"}`}>
+            <span className="size-5 rounded-full bg-surface" />
+          </span>
+          {t("femme.commissions.movements.group.showReversed")}
+        </button>
+        <button
+          type="button"
           data-testid="movements-sort-mobile"
           data-order={order}
           aria-label={t(order === "desc" ? "femme.commissions.movements.sort.ariaDesc" : "femme.commissions.movements.sort.ariaAsc")}
@@ -267,72 +313,169 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
               <span className="text-right">{t("femme.commissions.movements.col.amount")}</span>
             </div>
             <ul>
-              {pageItems.map((e) => {
+              {pageItems.map((g) => {
+                const e = g.rep;
                 const c = calc(e);
+                const note = changeNote(g);
+                const open = g.changed && (showReversed || openKeys.has(g.key));
                 const [datePart, ...timeParts] = formatParaguayDateTime(e.accrualAt, dateLocale).split(", ");
                 return (
-                  <li
-                    key={e.id}
-                    data-testid="movement-row"
-                    data-status={e.settlementStatus ?? ""}
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-t border-line px-4 py-3 text-[13px] first:border-t-0 md:gap-x-2 md:gap-y-0 md:grid-cols-[5.5rem_minmax(0,1.4fr)_6rem_6.5rem_minmax(0,1.3fr)_5.5rem_8.5rem]"
-                  >
-                    <div data-testid="movement-date" className="order-4 col-span-2 text-ink-3 md:order-none md:col-span-1 md:text-ink">
-                      <span className="font-bold md:block">{datePart}</span> <span className="text-ink-3">{timeParts.join(", ")}</span>
-                    </div>
-                    <div className="order-1 min-w-0 md:order-none">
-                      <div data-testid="movement-item" className="break-words text-[15px] font-bold text-ink md:text-[13px]">
-                        {e.itemName ?? e.note}
+                  <li key={g.key} data-testid="movement-row" data-status={e.settlementStatus ?? ""} data-changed={g.changed} className="border-t border-line first:border-t-0">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-[13px] md:gap-x-2 md:gap-y-0 md:grid-cols-[5.5rem_minmax(0,1.4fr)_6rem_6.5rem_minmax(0,1.3fr)_5.5rem_8.5rem]">
+                      <div data-testid="movement-date" className="order-4 col-span-2 text-ink-3 md:order-none md:col-span-1 md:text-ink">
+                        <span className="font-bold md:block">{datePart}</span> <span className="text-ink-3">{timeParts.join(", ")}</span>
                       </div>
-                      {e.invoiceNumber && (
-                        <div data-testid="movement-invoice" className="text-ink-3">
-                          {e.invoiceNumber}
+                      <div className="order-1 min-w-0 md:order-none">
+                        <div data-testid="movement-item" className="break-words text-[15px] font-bold text-ink md:text-[13px]">
+                          {e.itemName ?? e.note}
                         </div>
-                      )}
-                    </div>
-                    <div data-testid="movement-professional" className="order-3 col-span-2 font-bold text-ink md:order-none md:col-span-1">
-                      {e.professionalName}
-                    </div>
-                    <div data-testid="movement-type" className="order-5 col-span-2 text-ink-2 md:order-none md:col-span-1">
-                      {movementLabel(e)}
-                      {e.note && e.sourceType !== "ADJUSTMENT" && <div className="text-ink-3">{e.note}</div>}
-                    </div>
-                    <div data-testid="movement-calc" className="order-7 col-span-2 min-w-0 md:order-none md:col-span-1">
-                      <div data-testid="movement-calc-main" className="font-bold text-ink">
-                        {c.main}
+                        {e.invoiceNumber && (
+                          <div data-testid="movement-invoice" className="text-ink-3">
+                            {e.invoiceNumber}
+                          </div>
+                        )}
+                        {g.changed && (
+                          <span
+                            data-testid="movement-tag"
+                            className={`mt-0.5 inline-flex rounded-full px-2.5 py-0.5 text-xs font-extrabold ${g.reason === "VOID" ? "bg-bg text-ink-2" : "bg-primary-lt text-primary-dk"}`}
+                          >
+                            {changeTag(g)}
+                          </span>
+                        )}
                       </div>
-                      {c.extra && (
-                        <div data-testid="movement-calc-extra" className="text-ink-3">
-                          {c.extra}
+                      <div data-testid="movement-professional" className="order-3 col-span-2 font-bold text-ink md:order-none md:col-span-1">
+                        {e.professionalName}
+                      </div>
+                      <div data-testid="movement-type" className="order-5 col-span-2 text-ink-2 md:order-none md:col-span-1">
+                        {movementLabel(e)}
+                        {e.note && e.sourceType !== "ADJUSTMENT" && <div className="text-ink-3">{e.note}</div>}
+                      </div>
+                      <div data-testid="movement-calc" className="order-7 col-span-2 min-w-0 md:order-none md:col-span-1">
+                        <div data-testid="movement-calc-main" className="font-bold text-ink">
+                          {g.current || !g.changed ? c.main : "—"}
                         </div>
-                      )}
+                        {(g.current || !g.changed) && c.extra && (
+                          <div data-testid="movement-calc-extra" className="text-ink-3">
+                            {c.extra}
+                          </div>
+                        )}
+                        {note && (
+                          <div data-testid="movement-calc-note" className="text-ink-3">
+                            {note}
+                          </div>
+                        )}
+                      </div>
+                      <div data-testid="movement-status" className="order-6 col-span-2 md:order-none md:col-span-1">
+                        <SettlementStatusBadge status={e.settlementStatus} />
+                      </div>
+                      <div className="order-2 flex items-center justify-end gap-1 md:order-none">
+                        <span
+                          data-testid="movement-amount"
+                          className={`text-right font-heading text-base font-extrabold tabular-nums ${g.net < 0 ? "text-danger" : g.changed && g.net === 0 ? "text-ink-3" : "text-ink"}`}
+                        >
+                          {formatGuaraniesGs(g.net)}
+                        </span>
+                        {e.reassignable ? (
+                          <KebabMenu
+                            id={`movement-${e.id}`}
+                            triggerAriaLabel={t("femme.commissions.movements.rowActions")}
+                            items={[
+                              {
+                                id: "reassign",
+                                label: t("femme.commissions.reassign.action"),
+                                onSelect: () => setToReassign(e),
+                              },
+                            ]}
+                          />
+                        ) : (
+                          <span className="w-11" aria-hidden />
+                        )}
+                      </div>
                     </div>
-                    <div data-testid="movement-status" className="order-6 col-span-2 md:order-none md:col-span-1">
-                      <SettlementStatusBadge status={e.settlementStatus} />
-                    </div>
-                    <div className="order-2 flex items-center justify-end gap-1 md:order-none">
-                      <span
-                        data-testid="movement-amount"
-                        className={`text-right font-heading text-base font-extrabold tabular-nums ${e.commissionAmount < 0 ? "text-danger" : "text-ink"}`}
-                      >
-                        {formatGuaraniesGs(e.commissionAmount)}
-                      </span>
-                      {e.reassignable ? (
-                        <KebabMenu
-                          id={`movement-${e.id}`}
-                          triggerAriaLabel={t("femme.commissions.movements.rowActions")}
-                          items={[
-                            {
-                              id: "reassign",
-                              label: t("femme.commissions.reassign.action"),
-                              onSelect: () => setToReassign(e),
-                            },
-                          ]}
-                        />
-                      ) : (
-                        <span className="w-11" aria-hidden />
-                      )}
-                    </div>
+                    {g.changed && (
+                      <div className="px-4 md:pl-[6.5rem]">
+                        <button
+                          type="button"
+                          aria-expanded={open}
+                          data-testid="movement-changes-toggle"
+                          onClick={() =>
+                            setOpenKeys((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(g.key)) next.delete(g.key);
+                              else next.add(g.key);
+                              return next;
+                            })
+                          }
+                          className="inline-flex min-h-11 items-center gap-1 text-[13px] font-extrabold text-primary-dk underline underline-offset-4"
+                        >
+                          {open ? t("femme.commissions.movements.group.hide") : t("femme.commissions.movements.group.show", { count: g.entries.length })}
+                          <span aria-hidden>{open ? "⌃" : "⌄"}</span>
+                        </button>
+                      </div>
+                    )}
+                    {open && (
+                      <div data-testid="movement-changes" className="mx-4 mb-3 mt-1 rounded-2xl border border-line bg-bg/60 px-4 py-3">
+                        <div className="mb-1 text-xs font-extrabold uppercase tracking-wide text-ink-3">{t("femme.commissions.movements.group.title")}</div>
+                        <ol className="flex flex-col">
+                          {g.entries.map((x, i) => {
+                            const kind = x.sourceType === "REVERSAL" ? "reversal" : g.current && x.id === g.current.id ? "current" : "reverted";
+                            const firstLine = g.entries.findIndex((y) => y.sourceType === "INVOICE_LINE") === i;
+                            const reversedAt = x.reversesEntryId ? g.entries.findIndex((y) => y.id === x.reversesEntryId) : -1;
+                            const [, ...stepTime] = formatParaguayDateTime(x.accrualAt, dateLocale).split(", ");
+                            const label =
+                              kind === "reversal"
+                                ? t(`femme.commissions.reason.${x.reasonCode ?? "VOID"}`)
+                                : t(`femme.commissions.movements.group.step.${kind === "current" ? "current" : firstLine ? "initial" : "previous"}`);
+                            const sub = [
+                              stepTime.join(", "),
+                              new Set(g.entries.map((y) => y.professionalId)).size > 1 ? x.professionalName : null,
+                              kind === "reversal" && reversedAt >= 0 ? t("femme.commissions.movements.group.reverses", { n: reversedAt + 1 }) : null,
+                              kind === "reversal" ? x.note : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ");
+                            return (
+                              <li key={x.id} data-testid="movement-step" data-kind={kind} className="grid min-h-11 grid-cols-[1.5rem_minmax(0,1fr)_auto] items-start gap-x-2.5 py-1.5">
+                                <span
+                                  aria-hidden
+                                  className={`mt-0.5 inline-flex size-5 items-center justify-center rounded-full text-[11px] font-extrabold ${
+                                    kind === "reversal" ? "bg-danger-lt text-danger" : kind === "current" ? "bg-success-lt text-success" : "bg-line text-ink-2"
+                                  }`}
+                                >
+                                  {kind === "reversal" ? "↩" : kind === "current" ? "✓" : i + 1}
+                                </span>
+                                <span className="flex min-w-0 flex-col">
+                                  <b className="text-[13px] text-ink">
+                                    {label}
+                                    {x.percentApplied !== null && <span className="font-semibold text-ink-2"> · {formatPercent(x.percentApplied)}</span>}
+                                  </b>
+                                  <span className="text-xs text-ink-3">{sub}</span>
+                                </span>
+                                <span className="flex flex-col items-end gap-0.5">
+                                  <b
+                                    data-testid="movement-step-amount"
+                                    className={`tabular-nums text-sm ${kind === "reversal" ? "text-danger" : kind === "reverted" ? "text-ink-3 line-through" : "text-ink"}`}
+                                  >
+                                    {formatGuaraniesGs(x.commissionAmount)}
+                                  </b>
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ${
+                                      kind === "reversal" ? "bg-danger-lt text-danger" : kind === "current" ? "bg-success-lt text-success" : "bg-bg text-ink-2"
+                                    }`}
+                                  >
+                                    {t(`femme.commissions.movements.group.stepTag.${kind}`)}
+                                  </span>
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                        <div className="mt-1 border-t border-dashed border-line pt-2 text-[13px] text-ink-2" data-testid="movement-changes-net">
+                          {t("femme.commissions.movements.group.net", { amount: formatGuaraniesGs(g.net) })}
+                          {!g.current && ` ${t("femme.commissions.movements.group.noCurrent")}`}
+                        </div>
+                      </div>
+                    )}
                   </li>
                 );
               })}
@@ -347,6 +490,11 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
                 {formatGuaraniesGs(totals.amount)}
               </b>
             </span>
+            {changedCount > 0 && (
+              <span className="text-ink-3" data-testid="movements-changed-count">
+                {t("femme.commissions.movements.group.changedCount", { count: changedCount })}
+              </span>
+            )}
             {totals.retained !== 0 && (
               <span>
                 {t("femme.commissions.movements.totals.retained")}{" "}
