@@ -345,6 +345,7 @@ export default function LiquidarPage() {
           </span>
           <MoreActionsMenu
             compact
+            bare
             triggerIcon={<DownloadIcon />}
             label={t("femme.commissions.liquidar.csvAria")}
             open={csvMenuOpen}

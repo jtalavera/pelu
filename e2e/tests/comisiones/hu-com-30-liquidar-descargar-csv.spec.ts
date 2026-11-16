@@ -38,6 +38,9 @@ test.beforeEach(async ({ request }) => {
   const inv = await issueInvoice(request, w.adminToken, [{ serviceId: w.service.id, name: w.service.name, professionalId: w.ana.id }]);
   await entriesOfInvoice(request, w.adminToken, inv.id, 1);
   await generateSettlements(request, w.adminToken, [w.ana.id]); // a draft in the current period
+  // Bea has a sale too, but her settlement is not generated yet («To generate»).
+  const invBea = await issueInvoice(request, w.adminToken, [{ serviceId: w.service.id, name: w.service.name, professionalId: w.bea.id }]);
+  await entriesOfInvoice(request, w.adminToken, invBea.id, 1);
 });
 
 type Overview = { period: { from: string | null; to: string | null } };
@@ -79,6 +82,8 @@ test("AC1 · «Descargar CSV» es un ícono de 44 px junto al total (arriba), ya
   const trigger = page.getByTestId("liquidar-csv");
   await expect(trigger).toBeVisible();
   await expect(trigger).toHaveAttribute("aria-label", "Download settlements CSV");
+  // HU-COM-31: just the icon, without the round outline.
+  await expect(trigger).toHaveCSS("border-top-width", "0px");
   const box = (await trigger.boundingBox())!;
   expect(box.width).toBeGreaterThanOrEqual(44);
   expect(box.height).toBeGreaterThanOrEqual(44);
@@ -122,6 +127,30 @@ test("AC3 · «este período» descarga al instante un CSV con las liquidaciones
   expect(text).toContain(w.ana.name);
 });
 
+// ── AC3b · lo que está «Por generar» también va (HU-COM-31) ──────────────────────────────────────
+
+test("AC3b · el CSV del período incluye también a quien está «Por generar»: sin id, «Unsettled» y lo pendiente como total", async ({ page }) => {
+  await openLiquidar(page);
+  // «To generate» is Bea only (Ana already has her draft).
+  await expect(page.getByTestId("liquidar-tab-UNSETTLED-count")).toHaveText("1");
+  await page.getByTestId("liquidar-csv").click();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("liquidar-csv-period").click()]);
+  const lines = (await csvText(download)).split("\n");
+
+  const bea = lines.find((l) => l.includes(w.bea.name));
+  expect(bea, "a row for the professional still to be generated").toBeTruthy();
+  const cols = bea!.split(",");
+  expect(cols[0]).toBe(""); // no settlement id yet
+  expect(cols[4]).toBe("Unsettled");
+  expect(Number(cols[5])).toBeGreaterThan(0);
+  expect(cols[6]).toBe(""); // nothing paid
+  // «To generate» comes first, then the settlements (Ana's draft has its id).
+  const ana = lines.find((l) => l.includes(w.ana.name))!;
+  expect(lines.indexOf(bea!)).toBeLessThan(lines.indexOf(ana));
+  expect(ana.split(",")[0]).toMatch(/^\d+$/);
+  expect(ana.split(",")[4]).toBe("Draft");
+});
+
 // ── AC4 · períodos anteriores ────────────────────────────────────────────────────────────────────
 
 test("AC4 · «períodos anteriores» pide desde y hasta (con los tres meses anteriores ya puestos) y descarga ese rango", async ({ page, request }) => {
@@ -141,6 +170,7 @@ test("AC4 · «períodos anteriores» pide desde y hasta (con los tres meses ant
   // The draft belongs to the current period, which is outside that range: only the header comes.
   expect(text).toContain("Settlement ID,Professional,Period from");
   expect(text).not.toContain(w.ana.name);
+  expect(text).not.toContain(w.bea.name); // her sale is of this period, not of those ones
   await expect(dialog).toHaveCount(0);
 });
 

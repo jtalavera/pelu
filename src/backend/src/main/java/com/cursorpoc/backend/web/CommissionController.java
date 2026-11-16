@@ -578,7 +578,15 @@ public class CommissionController {
               from != null && to != null
                   ? "liquidaciones_" + from + "_" + to + ".csv"
                   : "liquidaciones.csv";
-          return csv(name, exportService.settlementsCsv(all, lang));
+          // HU-COM-31: with a range, who is still to be generated is part of it (a settlement is
+          // only
+          // there once it is generated, so a period nobody generated yet used to come out empty).
+          var pending =
+              from != null && to != null && (status == null || "UNSETTLED".equals(status))
+                  ? queryService.pendingToSettle(
+                      p.getTenantId(), from, to, ids(professionalId, professionalIds))
+                  : List.<CommissionExportService.PendingRow>of();
+          return csv(name, exportService.settlementsCsv(pending, all, lang));
         });
   }
 

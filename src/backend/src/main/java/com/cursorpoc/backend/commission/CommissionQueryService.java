@@ -185,6 +185,45 @@ public class CommissionQueryService {
     return new PagedSettlements(items, Math.max(0, page), safeSize, all.size());
   }
 
+  /**
+   * HU-COM-31: the professionals with commissions still to be settled as of the end of {@code
+   * [from, to]} and no settlement of their own in that range (the same rule «Liquidar» uses to list
+   * them under «To generate»). Empty {@code professionalIds} = everybody.
+   */
+  public List<CommissionExportService.PendingRow> pendingToSettle(
+      long tenantId, LocalDate from, LocalDate to, List<Long> professionalIds) {
+    ZoneId zone = configService.zone();
+    Map<Long, String> names = configService.professionalNames(tenantId);
+    java.util.Set<Long> withSettlement = new java.util.HashSet<>();
+    for (CommissionSettlement s :
+        settlementRepository.findByTenantIdOrderByPeriodFromDescIdDesc(tenantId)) {
+      if (s.getStatus() != CommissionSettlementStatus.VOIDED
+          && !s.getPeriodFrom().isAfter(to)
+          && !s.getPeriodTo().isBefore(from)) {
+        withSettlement.add(s.getProfessionalId());
+      }
+    }
+    Instant end = to.plusDays(1).atStartOfDay(zone).toInstant();
+    List<CommissionExportService.PendingRow> rows = new ArrayList<>();
+    for (Long id : configService.activeProfessionalIds(tenantId)) {
+      if (withSettlement.contains(id)) continue;
+      if (professionalIds != null && !professionalIds.isEmpty() && !professionalIds.contains(id)) {
+        continue;
+      }
+      List<CommissionEntry> entries = entryRepository.findUnsettled(tenantId, id, end);
+      if (entries.isEmpty()) continue;
+      BigDecimal total =
+          entries.stream()
+              .map(CommissionEntry::getCommissionAmount)
+              .reduce(BigDecimal.ZERO, BigDecimal::add);
+      rows.add(new CommissionExportService.PendingRow(names.get(id), from, to, total));
+    }
+    rows.sort(
+        Comparator.comparing(
+            r -> r.professionalName() == null ? "" : r.professionalName().toLowerCase()));
+    return rows;
+  }
+
   public SettlementDetail settlementDetail(long tenantId, long settlementId) {
     CommissionSettlement s =
         settlementRepository

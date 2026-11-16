@@ -1030,7 +1030,7 @@
         "csvPreviousHint": "Elegí desde y hasta qué fecha",
         "csvDialog": {
           "title": "CSV de períodos anteriores",
-          "description": "Se incluyen las liquidaciones cuyo período toca ese rango de fechas.",
+          "description": "Incluye las liquidaciones cuyo período toca ese rango de fechas y lo que en esas fechas todavía está por generar.",
           "from": "Desde",
           "to": "Hasta",
           "confirm": "Descargar",

@@ -37,6 +37,8 @@ export type MoreActionsMenuProps = {
   compact?: boolean;
   /** With `compact`: the icon the trigger shows instead of «⋯» (e.g. a download arrow). */
   triggerIcon?: ReactNode;
+  /** With `compact`: just the icon, without the round outline (it still has a 44 px touch target). */
+  bare?: boolean;
 };
 
 const MENU_WIDTH = 264;
@@ -77,6 +79,7 @@ export function MoreActionsMenu({
   className,
   compact = false,
   triggerIcon,
+  bare = false,
 }: MoreActionsMenuProps) {
   const menuId = useId();
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -172,7 +175,7 @@ export function MoreActionsMenu({
       <Button
         ref={triggerRef}
         type="button"
-        variant="outline"
+        variant={compact && bare ? "ghost" : "outline"}
         size="md"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -181,7 +184,7 @@ export function MoreActionsMenu({
         data-testid={triggerTestId}
         aria-label={compact ? label : undefined}
         onClick={onTriggerClick ?? (() => onOpenChange(!open))}
-        className={cn(ACTION_BUTTON, compact && "w-11 px-0", open && "bg-primary-lt")}
+        className={cn(ACTION_BUTTON, compact && "w-11 px-0", compact && bare && "text-primary-dk hover:bg-primary-lt", open && "bg-primary-lt")}
       >
         {compact ? (
           <span aria-hidden className="text-xl leading-none">

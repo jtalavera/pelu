@@ -1030,7 +1030,7 @@
         "csvPreviousHint": "Choose the date range",
         "csvDialog": {
           "title": "CSV of earlier periods",
-          "description": "It includes the settlements whose period touches that date range.",
+          "description": "It includes the settlements whose period touches that date range and what is still to be generated in it.",
           "from": "From",
           "to": "To",
           "confirm": "Download",
