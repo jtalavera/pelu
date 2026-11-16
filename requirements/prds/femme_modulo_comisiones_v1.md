@@ -440,6 +440,10 @@ Historia completa y criterios: [HU-COM-26](../user_stories/HU-COM-26-retencion-p
 
 Historia completa y criterios: [HU-COM-27](../user_stories/HU-COM-27-conteo-de-lineas-recalculadas.md). Resumen: «N líneas facturadas» (ficha) y «N movimientos» (Liquidar y Equipo) no cuentan la fila original anulada ni la reversión de una línea recalculada o reasignada. Sin cambios de importes.
 
+### HU-COM-28 · Liquidar más simple: una pestaña por etapa
+
+Historia completa y criterios: [HU-COM-28](../user_stories/HU-COM-28-liquidar-pestanas.md). Resumen: «Liquidar» pasa a una sola lista con pestañas (Por generar · Por aprobar · Por pagar · Pagadas) y un botón principal por etapa; desaparecen las tarjetas de paso, las píldoras de filtro, los encabezados de grupo y los avisos repetidos; quienes no tienen movimientos quedan en una línea al pie. Sin cambios de cálculo ni de API.
+
 ### HU-COM-19 · Anular borradores rápido desde Liquidar
 
 Historia completa y criterios: [HU-COM-19](../user_stories/HU-COM-19-anular-borradores-rapido.md). Resumen:
@@ -550,6 +554,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-25 | Movimientos en siete columnas (tarjetas en el celular); orden desde el encabezado FECHA (sin lista «Ordenar»); filtro de pago Todas · Sin pagar · Pagadas con cantidades; pie con total y retenido; el cálculo explica la retención. |
 | HU-COM-26 | Retención pendiente (sin liquidar / en borrador) como línea gris en Movimientos › Retención; mensaje cuando no hay nada; Pagar retención (deshabilitado sin saldo) y Ajustar el saldo siempre visibles; subtítulo «Retiene N %». |
 | HU-COM-27 | Conteo de líneas facturadas / movimientos sin contar la fila anulada ni la reversión de una línea recalculada. |
+| HU-COM-28 | Liquidar con pestañas por etapa, botón principal por etapa, sin carteles repetidos, «sin movimientos» al pie. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 

@@ -12,6 +12,7 @@ import {
   todayYmd,
   type CommissionWorld,
   liquidarRow,
+  liquidarTab,
   openCommissions,
   openExceptions,
   openCommissionsMore,
@@ -144,16 +145,18 @@ test("con una liquidación Pagada en el período: «Generar» crea solo las de q
 
   await loginAdminUi(page, w);
   await openCommissions(page, "settle");
-  await expect(liquidarRow(page, w.ana.name)).toContainText("Paid");
-  await expect(liquidarRow(page, w.bea.name)).toContainText("Not settled");
-  // Paid ones are not offered again: the step counts only who is missing.
-  await expect(page.getByTestId("liquidar-step-1-count")).toContainText("1 to generate");
+  await liquidarTab(page, "PAID");
+  await expect(liquidarRow(page, w.ana.name)).toHaveAttribute("data-status", "PAID");
+  await liquidarTab(page, "UNSETTLED");
+  await expect(liquidarRow(page, w.bea.name)).toHaveAttribute("data-status", "UNSETTLED");
+  // Paid ones are not offered again: the tab counts only who is missing.
+  await expect(page.getByTestId("liquidar-tab-UNSETTLED-count")).toHaveText("1");
 
-  await page.getByTestId("liquidar-step-1-action").click();
+  await page.getByTestId("liquidar-main-action").click();
   await expect(page.getByRole("dialog")).toContainText("Generate 1 settlement");
   await page.getByTestId("liquidar-confirm").click();
   await expect(page.getByTestId("liquidar-notice")).toContainText("1 settlement was generated.");
-  await expect(liquidarRow(page, w.bea.name)).toContainText("Draft");
+  await expect(liquidarRow(page, w.bea.name)).toHaveAttribute("data-status", "DRAFT");
   const list = await apiGetJson<{ items: { professionalId: number; status: string }[] }>(
     request,
     w.adminToken,
@@ -163,7 +166,7 @@ test("con una liquidación Pagada en el período: «Generar» crea solo las de q
   expect(list.items.filter((i) => i.professionalId === w.ana.id).map((i) => i.status)).toEqual(["PAID"]);
 });
 
-test("Liquidar: varios profesionales a la vez (elegir, generar y filtrar por estado)", async ({ page, request }) => {
+test("Liquidar: varios profesionales a la vez (elegir, generar y ver las pestañas por estado)", async ({ page, request }) => {
   await accrue(request, w.ana.id);
   await accrue(request, w.bea.id);
   await loginAdminUi(page, w);
@@ -172,18 +175,17 @@ test("Liquidar: varios profesionales a la vez (elegir, generar y filtrar por est
   // Pick both and generate them at once.
   await liquidarRow(page, w.ana.name).getByTestId("liquidar-row-check").check();
   await liquidarRow(page, w.bea.name).getByTestId("liquidar-row-check").check();
-  await page.getByTestId("liquidar-bulk-generate").click();
+  await expect(page.getByTestId("liquidar-main-action")).toHaveText("Generate 2");
+  await page.getByTestId("liquidar-main-action").click();
   await page.getByTestId("liquidar-confirm").click();
   await expect(page.getByTestId("liquidar-notice")).toContainText("2 settlements were generated.");
   await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
 
-  // Filter by state: both are drafts, nobody is paid yet.
-  await page.getByTestId("liquidar-filter-PAID").click();
+  // By stage: both are drafts, nobody is paid yet.
+  await liquidarTab(page, "PAID");
   await expect(page.getByTestId("liquidar-row")).toHaveCount(0);
   await expect(page.getByTestId("liquidar-empty")).toBeVisible();
-  await page.getByTestId("liquidar-filter-DRAFT").click();
-  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
-  await page.getByTestId("liquidar-filter-ALL").click();
+  await liquidarTab(page, "DRAFT");
   await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
 
   // The API filters by several professionals too.

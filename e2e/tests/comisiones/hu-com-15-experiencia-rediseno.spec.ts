@@ -10,6 +10,7 @@ import {
   issueInvoice,
   liquidarRow,
   liquidarStep,
+  liquidarTab,
   loginAdminUi,
   loginApi,
   openCommissions,
@@ -200,28 +201,29 @@ test("AC4 · Liquidar: generar → aprobar → pagar en tres pasos, con las fila
   await openCommissions(page, "settle");
 
   await expect(page.getByTestId("liquidar-period")).toBeVisible();
-  await expect(page.getByTestId("liquidar-step-1-count")).toContainText("2 to generate");
+  await expect(page.getByTestId("liquidar-tab-UNSETTLED-count")).toHaveText("2");
   await expect(page.getByTestId("liquidar-total")).toContainText("80.000");
   await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
   await expect(liquidarRow(page, w.ana.name).getByTestId("liquidar-row-amount")).toContainText("40.000");
 
   // 1 · Generate everything pending (the confirmation shows the total).
-  await page.getByTestId("liquidar-step-1-action").click();
+  await expect(page.getByTestId("liquidar-main-action")).toHaveText("Generate 2");
+  await page.getByTestId("liquidar-main-action").click();
   await expect(page.getByTestId("liquidar-dialog-summary")).toContainText("80.000");
   await page.getByTestId("liquidar-confirm").click();
   await expect(page.getByTestId("liquidar-notice")).toContainText("2 settlements were generated.");
-  await expect(page.getByTestId("liquidar-step-2-count")).toContainText("2 to approve");
+  await expect(page.getByTestId("liquidar-tab-DRAFT-count")).toHaveText("2"); // the open tab moves on to the next stage
   for (const row of await page.getByTestId("liquidar-row").all()) await expect(row).toHaveAttribute("data-status", "DRAFT");
 
   // 2 · Approve.
-  await page.getByTestId("liquidar-step-2-action").click();
+  await page.getByTestId("liquidar-main-action").click();
   await expect(page.getByRole("dialog")).toContainText("the amounts are frozen");
   await page.getByTestId("liquidar-confirm").click();
   await expect(page.getByTestId("liquidar-notice")).toContainText("2 settlements were approved.");
-  await expect(page.getByTestId("liquidar-step-3-count")).toContainText("2 to pay");
+  await expect(page.getByTestId("liquidar-tab-APPROVED-count")).toHaveText("2");
 
   // 3 · Pay: method, date and reference.
-  await page.getByTestId("liquidar-step-3-action").click();
+  await page.getByTestId("liquidar-main-action").click();
   await page.getByTestId("liquidar-method").selectOption("TRANSFER");
   await page.getByTestId("liquidar-reference").fill("OP-1500");
   await page.getByTestId("liquidar-confirm").click();
@@ -239,7 +241,7 @@ test("AC4 · Liquidar: generar → aprobar → pagar en tres pasos, con las fila
   await expect(liquidarRow(page, w.ana.name).getByTestId("liquidar-row-view")).toBeVisible();
 });
 
-test("AC4 · Liquidar: filtros por estado con contador, período anterior y el siguiente apagado en el actual", async ({
+test("AC4 · Liquidar: pestañas por etapa con contador, período anterior y el siguiente apagado en el actual", async ({
   page,
   request,
 }) => {
@@ -250,25 +252,29 @@ test("AC4 · Liquidar: filtros por estado con contador, período anterior y el s
   await loginAdminUi(page, w);
   await openCommissions(page, "settle");
 
-  await expect(page.getByTestId("liquidar-filter-ALL")).toContainText("2");
-  await expect(page.getByTestId("liquidar-filter-UNSETTLED")).toContainText("1");
-  await expect(page.getByTestId("liquidar-filter-DRAFT")).toContainText("1");
-  await page.getByTestId("liquidar-filter-UNSETTLED").click();
+  await expect(page.getByTestId("liquidar-tab-UNSETTLED-count")).toHaveText("1");
+  await expect(page.getByTestId("liquidar-tab-DRAFT-count")).toHaveText("1");
+  await liquidarTab(page, "UNSETTLED");
   await expect(page.getByTestId("liquidar-row")).toHaveCount(1);
   await expect(page.getByTestId("liquidar-row")).toContainText(w.bea.name, { ignoreCase: true });
-  await page.getByTestId("liquidar-filter-ALL").click();
+  await liquidarTab(page, "DRAFT");
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(1);
+  await expect(page.getByTestId("liquidar-row")).toContainText(w.ana.name, { ignoreCase: true });
 
   // The previous period has nothing; the next one is not available from the current period.
   await expect(page.getByTestId("liquidar-next")).toBeDisabled();
   const current = await page.getByTestId("liquidar-period").innerText();
   await page.getByTestId("liquidar-prev").click();
   await expect(page.getByTestId("liquidar-period")).not.toHaveText(current);
-  // HU-COM-17: nothing was accrued before, so everybody is listed as «No movements».
-  for (const row of await page.getByTestId("liquidar-row").all()) await expect(row).toHaveAttribute("data-status", "NONE");
-  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
+  // HU-COM-17/28: nothing was accrued before, so there are no rows and everybody hangs from «No movements».
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(0);
+  await expect(page.getByTestId("liquidar-none-toggle")).toContainText("2 with no movements");
+  await page.getByTestId("liquidar-none-toggle").click();
+  await expect(page.getByTestId("liquidar-none-item")).toHaveCount(2);
   await expect(page.getByTestId("liquidar-next")).toBeEnabled();
   await page.getByTestId("liquidar-next").click();
-  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
+  await expect(page.getByTestId("liquidar-tab-UNSETTLED-count")).toHaveText("1");
+  await expect(page.getByTestId("liquidar-tab-DRAFT-count")).toHaveText("1");
 });
 
 test("AC5 · generar no repite a quien ya tiene una liquidación del período; el detalle vuelve a Liquidar", async ({
@@ -291,6 +297,7 @@ test("AC5 · generar no repite a quien ya tiene una liquidación del período; e
   expect(list.total).toBe(2);
   expect(list.items.filter((i) => i.professionalId === w.ana.id)).toHaveLength(1);
 
+  await liquidarTab(page, "DRAFT");
   await liquidarRow(page, w.ana.name).getByTestId("liquidar-row-detail").click();
   await expect(page).toHaveURL(new RegExp(`/settlements/${first.id}$`));
   await page.getByTestId("settlement-back").click();
