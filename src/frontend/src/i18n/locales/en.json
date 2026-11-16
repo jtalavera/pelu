@@ -880,31 +880,8 @@
         "prevPeriod": "Previous period",
         "nextPeriod": "Next period",
         "periodicityNote": "Periods follow your salon's periodicity (changed in Setup).",
-        "step1": {
-          "title": "Generate",
-          "help": "Builds one settlement per professional from what was invoiced.",
-          "count": "{{count}} to generate",
-          "button": "Generate {{count}}"
-        },
-        "step2": {
-          "title": "Approve",
-          "help": "Review and approve: it gets frozen.",
-          "count": "{{count}} to approve",
-          "button": "Approve {{count}}"
-        },
-        "step3": {
-          "title": "Pay",
-          "help": "Record the payment of each one.",
-          "count": "{{count}} to pay · {{paid}} already paid",
-          "button": "Pay {{count}}"
-        },
-        "tableTitle": "Professionals of the period",
         "total": "Total",
-        "filterAria": "Filter by status",
-        "filterAll": "All",
-        "empty": "There are no professionals in this status.",
         "pick": "Select {{name}}",
-        "withSelected": "With the selected ones:",
         "action": {
           "GENERATE": "Generate",
           "APPROVE": "Approve",
@@ -970,24 +947,10 @@
             }
           }
         },
-        "detail": "See detail",
-        "scopeAll_one": "The active professional is shown.",
-        "scopeAll_other": "All {{count}} active professionals are shown.",
-        "scopeAllWith": "Everybody has commissions this period.",
-        "scopeSome_one": "{{with}} have commissions this period; the other one has nothing to settle (at the end).",
-        "scopeSome_other": "{{with}} have commissions this period; the other {{without}} have nothing to settle (at the end).",
         "alreadyPaid": "already paid",
         "colProfessional": "Professional",
         "colAmount": "Commission",
         "colRetained": "Withheld",
-        "colState": "Status",
-        "subtotal": {
-          "UNSETTLED": "{{amount}} to generate",
-          "DRAFT": "{{amount}} to approve",
-          "APPROVED": "{{amount}} to pay",
-          "PAID": "{{amount}} already collected",
-          "NONE": "Nothing to settle this period"
-        },
         "note": {
           "noneNoRules": "No sales this period · no rules of their own (the default % applies)",
           "none": "No sales this period",
@@ -997,13 +960,41 @@
           "settlement": "Settlement #{{id}}"
         },
         "voidRowAria": "Void the draft of {{name}}",
-        "pickGroup": "Select all: {{group}}",
         "selectionAria": "Selected professionals",
         "selectedCount": "{{count}} selected",
         "selectedCount_one": "{{count}} selected",
         "bulkVoid": "Void drafts",
         "clearSelection": "Clear",
-        "regenerate": "Generate again"
+        "regenerate": "Generate again",
+        "step1": {
+          "button": "Generate {{count}}"
+        },
+        "step2": {
+          "button": "Approve {{count}}"
+        },
+        "step3": {
+          "button": "Pay {{count}}"
+        },
+        "tabsAria": "Settlement stages",
+        "tab": {
+          "UNSETTLED": "To generate",
+          "DRAFT": "To approve",
+          "APPROVED": "To pay",
+          "PAID": "Paid"
+        },
+        "tabEmpty": {
+          "UNSETTLED": "Nothing to generate in this period ✓",
+          "DRAFT": "Nothing to approve in this period ✓",
+          "APPROVED": "Nothing to pay in this period ✓",
+          "PAID": "There are no paid settlements in this period yet."
+        },
+        "summary_one": "{{count}} professional",
+        "summary_other": "{{count}} professionals",
+        "noneToggle_one": "{{count}} with no movements",
+        "noneToggle_other": "{{count}} with no movements",
+        "periodInfoAria": "How periods are defined",
+        "moreAria": "More actions for {{name}}",
+        "pickGroup": "Select all: {{group}}"
       },
       "team": {
         "tabPeople": "Professionals ({{count}})",

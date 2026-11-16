@@ -21,6 +21,7 @@ import {
   openSetupStep,
   openProfessional,
   liquidarRow,
+  liquidarTab,
   professionalWithAccess,
   provisionCommissionWorld,
   restoreCommissionsGlobal,
@@ -544,6 +545,7 @@ test("AC11 · la liquidación y la vista previa muestran costo de producto y ret
   await generateSettlements(request, token, [s.migue.id]);
   await loginAdminUi(page, w);
   await openCommissions(page, "settle");
+  await liquidarTab(page, "DRAFT");
   await liquidarRow(page, "migue").getByTestId("liquidar-row-detail").click();
   const detail = page.getByTestId("commission-settlement-detail");
   await expect(detail.getByTestId("settlement-total")).toContainText("48.300");
@@ -584,9 +586,11 @@ test("AC12 · AC13 · AC14 · el fondo entra al aprobar; pagos parcial / por sal
 
   // Approving one settlement from the UI makes its retention enter the fund.
   await page.getByTestId("commissions-nav-settle").click();
+  await liquidarTab(page, "DRAFT");
   await liquidarRow(page, "gaby").getByTestId("liquidar-row-approve").click();
   await page.getByTestId("liquidar-confirm").click();
-  await expect(liquidarRow(page, "gaby")).toContainText("Approved");
+  await liquidarTab(page, "APPROVED");
+  await expect(liquidarRow(page, "gaby")).toHaveAttribute("data-status", "APPROVED");
   await approveSettlementApi(request, token, migueSettlement.id);
   void gabySettlement;
 

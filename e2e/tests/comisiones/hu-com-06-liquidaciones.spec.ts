@@ -9,6 +9,7 @@ import {
   loginAdminUi,
   openCommissions,
   liquidarRow,
+  liquidarTab,
   provisionCommissionWorld,
   restoreCommissionsGlobal,
   todayYmd,
@@ -48,11 +49,12 @@ test("Borrador → Aprobada → Pagada desde la UI, con detalle por línea, subt
   await openCommissions(page, "settle");
   // HU-COM-15: Liquidar lists every professional with her state; generate Ana's from her row.
   const row = liquidarRow(page, w.ana.name);
-  await expect(row).toContainText("Not settled");
+  await expect(row).toHaveAttribute("data-status", "UNSETTLED"); // «To generate» is the open tab
   await row.getByTestId("liquidar-row-generate").click();
   await page.getByTestId("liquidar-confirm").click();
   await expect(page.getByTestId("liquidar-notice")).toContainText("1 settlement was generated.");
-  await expect(row).toContainText("Draft");
+  // The open tab moves on to «To approve», where her draft is.
+  await expect(row).toHaveAttribute("data-status", "DRAFT");
   await row.getByTestId("liquidar-row-detail").click();
 
   const detail = page.getByTestId("commission-settlement-detail");
@@ -172,13 +174,13 @@ test("listado paginado y filtrable por profesional, estado y periodo; exportaci�
 
   await loginAdminUi(page, w);
   await openCommissions(page, "settle");
-  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
-  // HU-COM-15: the filter chips are the states of the period (with their counters).
-  await expect(page.getByTestId("liquidar-filter-APPROVED")).toContainText("1");
-  await page.getByTestId("liquidar-filter-APPROVED").click();
+  // HU-COM-28: the stages of the period are tabs (with their counters), one per state.
+  await expect(page.getByTestId("liquidar-tab-APPROVED-count")).toHaveText("1");
+  await expect(page.getByTestId("liquidar-tab-DRAFT-count")).toHaveText("1");
+  await liquidarTab(page, "APPROVED");
   await expect(page.getByTestId("liquidar-row")).toHaveCount(1);
-  await page.getByTestId("liquidar-filter-ALL").click();
-  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
+  await liquidarTab(page, "DRAFT");
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(1);
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("liquidar-csv").click()]);
   expect(download.suggestedFilename()).toBe("liquidaciones.csv");
 });
