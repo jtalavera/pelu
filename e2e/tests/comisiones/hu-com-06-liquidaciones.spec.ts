@@ -184,5 +184,6 @@ test("listado paginado y filtrable por profesional, estado y periodo; exportaci�
   // HU-COM-30: the download icon opens a menu; «this period» downloads straight away.
   await page.getByTestId("liquidar-csv").click();
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("liquidar-csv-period").click()]);
-  expect(download.suggestedFilename()).toBe("liquidaciones.csv");
+  // The file name carries the dates of the period it covers.
+  expect(download.suggestedFilename()).toMatch(/^liquidaciones_\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}\.csv$/);
 });
