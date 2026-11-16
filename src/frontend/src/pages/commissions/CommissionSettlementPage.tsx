@@ -19,14 +19,20 @@ import { FieldValidationError } from "../../components/FieldValidationError";
 import { LocalizedDateInput } from "../../components/LocalizedDateInput";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
-import { formatParaguayDate, formatParaguayDateTime } from "../../lib/paraguayDateTime";
+import { PARAGUAY_TIMEZONE, formatParaguayDate, formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ActionIcon } from "../../components/actionIcons";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 import { MoreActionsMenu } from "../../components/MoreActionsMenu";
+import { MovementChangeSteps } from "./MovementChangeSteps";
 import { ReassignDialog } from "./ReassignDialog";
 import { SettlementStatusBadge, formatPercent, todayYmd } from "./common";
+import { changeNote, changeTag, type MovementGroup } from "./movementGroups";
+import { buildSettlementDays, compose, type Composition as CompositionData, type SettlementDay } from "./settlementDays";
 
-/** HU-COM-06: settlement detail, adjustments (Draft), approve, pay, void, PDF. */
+/**
+ * HU-COM-06: settlement detail, adjustments (Draft), approve, pay, void, PDF.
+ * HU-COM-32: the detail is told day by day; a sale whose commission changed is ONE row with its history.
+ */
 export default function CommissionSettlementPage() {
   const { t, i18n } = useTranslation();
   const dateLocale = useDateLocale();
@@ -49,7 +55,8 @@ export default function CommissionSettlementPage() {
   const [voidError, setVoidError] = useState<string | null>(null);
   const [toReassign, setToReassign] = useState<EntryView | null>(null);
   const [adjOpen, setAdjOpen] = useState(false);
-  const [subtotalsOpen, setSubtotalsOpen] = useState(false);
+  /** Sales whose «Ver cambios» is open. */
+  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -98,9 +105,177 @@ export default function CommissionSettlementPage() {
   const s = detail.settlement;
   const isDraft = s.status === "DRAFT";
 
-  function entryLabel(e: EntryView): string {
-    if (e.sourceType === "REVERSAL") return t(`femme.commissions.reason.${e.reasonCode ?? "VOID"}`);
-    return "";
+  const days = buildSettlementDays(detail.entries, detail.adjustments);
+  const comp = compose(days);
+  const dayPart = (iso: string, opts: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(dateLocale, { timeZone: PARAGUAY_TIMEZONE, ...opts }).format(new Date(iso));
+
+  const chip = "inline-flex rounded-full px-2 py-0.5 text-xs font-extrabold";
+  const rowGrid =
+    "grid grid-cols-[minmax(0,1fr)_auto_2.75rem] items-center gap-x-2 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_7rem_3.5rem_7.5rem_2.75rem] sm:gap-x-3 sm:px-4";
+
+  function renderSale(g: MovementGroup) {
+    // The commission in force; a sale that ended up with none shows its last one.
+    const e = g.current ?? g.rep;
+    const hasCalc = g.current !== null || !g.changed;
+    const open = g.changed && openKeys.has(g.key);
+    const note = changeNote(t, g);
+    const baseShort = e.baseType ? t(`femme.commissions.baseShort.${e.baseType}`) : "";
+    const sub = [e.invoiceNumber ? t("femme.commissions.settlement.invoiceRef", { number: e.invoiceNumber }) : null, note || null]
+      .filter(Boolean)
+      .join(" · ");
+    return (
+      <li key={g.key} data-testid="settlement-line" data-changed={g.changed} className="border-t border-line first:border-t-0">
+        <div className={rowGrid}>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="break-words font-semibold text-ink">{e.itemName}</span>
+              {g.rep.itemKind === "PRODUCT" && (
+                <span className={`${chip} bg-primary-lt text-primary-dk`} data-testid="settlement-line-product">
+                  {t("femme.commissions.settlement.productTag")}
+                </span>
+              )}
+              {g.changed && (
+                <span
+                  className={`${chip} ${g.reason === "VOID" ? "bg-page text-ink-2" : "bg-warning-lt text-warning"}`}
+                  data-testid="settlement-line-tag"
+                >
+                  {changeTag(t, g)}
+                </span>
+              )}
+            </div>
+            {sub && <div className="text-sm text-ink-3">{sub}</div>}
+            {hasCalc && (e.fixedAmount !== 0 || e.retentionAmount !== 0) && (
+              <div className="text-sm text-ink-3" data-testid="settlement-line-extra">
+                {e.fixedAmount !== 0 &&
+                  t("femme.commissions.settlement.lineProductCost", { amount: formatGuaraniesGs(e.fixedAmount) })}
+                {e.fixedAmount !== 0 && e.retentionAmount !== 0 ? " · " : ""}
+                {e.retentionAmount !== 0 &&
+                  t("femme.commissions.settlement.lineRetention", {
+                    percent: formatPercent(e.retentionPercent),
+                    amount: formatGuaraniesGs(e.retentionAmount),
+                  })}
+              </div>
+            )}
+            {g.changed && (
+              <button
+                type="button"
+                aria-expanded={open}
+                data-testid="settlement-line-changes-toggle"
+                onClick={() =>
+                  setOpenKeys((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(g.key)) next.delete(g.key);
+                    else next.add(g.key);
+                    return next;
+                  })
+                }
+                className="inline-flex min-h-11 items-center gap-1 text-[13px] font-extrabold text-primary-dk underline underline-offset-4"
+              >
+                {open
+                  ? t("femme.commissions.movements.group.hide")
+                  : t("femme.commissions.movements.group.show", { count: g.entries.length })}
+                <span aria-hidden>{open ? "⌃" : "⌄"}</span>
+              </button>
+            )}
+          </div>
+          <div className="hidden flex-col items-end text-sm tabular-nums text-ink-2 sm:flex" data-testid="settlement-line-base">
+            {hasCalc ? (
+              <>
+                <span>{formatGuaraniesGs(e.baseAmount)}</span>
+                <span className="text-xs text-ink-3">{baseShort}</span>
+              </>
+            ) : (
+              "—"
+            )}
+          </div>
+          <span className="hidden text-right text-sm tabular-nums text-ink-2 sm:block">{hasCalc ? formatPercent(e.percentApplied) : "—"}</span>
+          <span
+            data-testid="settlement-line-amount"
+            className={`text-right font-heading font-extrabold tabular-nums ${g.net < 0 ? "text-danger" : g.changed && g.net === 0 ? "text-ink-3" : "text-ink"}`}
+          >
+            {formatGuaraniesGs(g.net)}
+          </span>
+          {isDraft && g.current?.reassignable ? (
+            <KebabMenu
+              id={`settlement-line-${g.current.id}`}
+              triggerAriaLabel={t("femme.commissions.settlement.lineActions")}
+              items={[
+                {
+                  id: "reassign",
+                  label: t("femme.commissions.reassign.action"),
+                  onSelect: () => setToReassign(g.current),
+                },
+              ]}
+            />
+          ) : (
+            <span className="w-11" aria-hidden />
+          )}
+          {hasCalc && (
+            <div className="col-span-2 text-xs text-ink-3 sm:hidden">
+              {formatGuaraniesGs(e.baseAmount)} × {formatPercent(e.percentApplied)}
+              {baseShort ? ` · ${baseShort}` : ""}
+            </div>
+          )}
+        </div>
+        {open && <MovementChangeSteps group={g} testIdPrefix="settlement-sale" />}
+      </li>
+    );
+  }
+
+  function renderAdjustment(a: EntryView) {
+    return (
+      <li key={a.id} data-testid="settlement-adjustment" className="border-t border-line first:border-t-0">
+        <div className={rowGrid}>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="break-words font-semibold text-ink">{a.note ?? t(`femme.commissions.reason.${a.reasonCode}`)}</span>
+            <span className={`${chip} bg-success-lt text-success`}>{t("femme.commissions.settlement.adjustmentTag")}</span>
+          </div>
+          <span
+            data-testid="settlement-adjustment-amount"
+            className={`col-start-2 text-right font-heading font-extrabold tabular-nums sm:col-start-4 ${a.commissionAmount < 0 ? "text-danger" : "text-success"}`}
+          >
+            {a.commissionAmount > 0 ? "+" : ""}
+            {formatGuaraniesGs(a.commissionAmount)}
+          </span>
+        </div>
+      </li>
+    );
+  }
+
+  function renderDay(day: SettlementDay) {
+    return (
+      <section
+        key={day.key}
+        data-testid="settlement-day"
+        data-day={day.key}
+        className="grid grid-cols-1 pb-3 last:pb-0 sm:grid-cols-[3.25rem_0.875rem_minmax(0,1fr)] sm:gap-x-3"
+      >
+        <div className="hidden flex-col items-end pt-2.5 sm:flex" aria-hidden>
+          <b className="font-heading text-2xl font-extrabold leading-none text-ink">{dayPart(day.iso, { day: "numeric" })}</b>
+          <span className="text-xs font-bold uppercase tracking-wide text-ink-3">{dayPart(day.iso, { month: "short" }).replace(".", "")}</span>
+        </div>
+        <div className="hidden flex-col items-center sm:flex" aria-hidden>
+          <span className="mt-4 size-3 rounded-full bg-primary" />
+          <span className="mt-1 w-0.5 flex-1 bg-line" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="mb-1 text-sm font-extrabold text-primary sm:sr-only">{dayPart(day.iso, { day: "numeric", month: "long" })}</h3>
+          <div className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
+            <div className="flex items-baseline justify-between gap-3 border-b border-line bg-page px-4 py-2 text-sm text-ink-2">
+              <span>{t("femme.commissions.settlement.dayTotal")}</span>
+              <b className="font-heading text-ink tabular-nums" data-testid="settlement-day-total">
+                {formatGuaraniesGs(day.total)}
+              </b>
+            </div>
+            <ul>
+              {day.sales.map(renderSale)}
+              {day.adjustments.map(renderAdjustment)}
+            </ul>
+          </div>
+        </div>
+      </section>
+    );
   }
 
   const sectionTitle = "mt-1 font-heading text-xs font-extrabold uppercase tracking-wider text-primary";
@@ -130,6 +305,7 @@ export default function CommissionSettlementPage() {
         <div className="font-heading text-3xl font-extrabold tabular-nums text-ink" data-testid="settlement-total">
           {formatGuaraniesGs(s.totalAmount)}
         </div>
+        <Composition comp={comp} />
         {(s.retentionAmount !== 0 || s.fixedAmount !== 0) && (
           <div className="flex flex-col gap-0.5 text-sm" data-testid="settlement-breakdown">
             {s.fixedAmount !== 0 && (
@@ -195,6 +371,17 @@ export default function CommissionSettlementPage() {
           >
             {t("femme.commissions.settlement.pdf")}
           </Button>
+          {isDraft && (
+            <Button
+              type="button"
+              variant="secondary"
+              className={ACTION_BUTTON}
+              onClick={() => setAdjOpen(true)}
+              data-testid="settlement-adjustment-open"
+            >
+              + {t("femme.commissions.settlement.addAdjustment")}
+            </Button>
+          )}
           {(isDraft || s.status === "APPROVED") && (
             <MoreActionsMenu
               label={t("femme.commissions.settlement.moreActions")}
@@ -216,126 +403,14 @@ export default function CommissionSettlementPage() {
         </div>
       </section>
 
-      <h2 className={sectionTitle}>{t("femme.commissions.settlement.lines")}</h2>
-      <ul className="rounded-card border border-line bg-surface shadow-sm" data-testid="settlement-lines">
-        {detail.entries.map((e) => (
-          <li
-            key={e.id}
-            data-testid="settlement-line"
-            className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-t border-line px-4 py-2.5 first:border-t-0"
-          >
-            <div className="min-w-0">
-              <div className="truncate font-semibold text-ink">{e.itemName}</div>
-              <div className="text-sm text-ink-3">
-                {formatParaguayDate(e.accrualAt, dateLocale)} · {e.invoiceNumber} ·{" "}
-                {formatGuaraniesGs(e.baseAmount)} × {formatPercent(e.percentApplied)}
-                {e.baseType ? ` · ${t(`femme.commissions.baseShort.${e.baseType}`)}` : ""}
-                {entryLabel(e) ? ` · ${entryLabel(e)}` : ""}
-              </div>
-              {(e.fixedAmount !== 0 || e.retentionAmount !== 0) && (
-                <div className="text-sm text-ink-3" data-testid="settlement-line-extra">
-                  {e.fixedAmount !== 0 &&
-                    t("femme.commissions.settlement.lineProductCost", { amount: formatGuaraniesGs(e.fixedAmount) })}
-                  {e.fixedAmount !== 0 && e.retentionAmount !== 0 ? " · " : ""}
-                  {e.retentionAmount !== 0 &&
-                    t("femme.commissions.settlement.lineRetention", {
-                      percent: formatPercent(e.retentionPercent),
-                      amount: formatGuaraniesGs(e.retentionAmount),
-                    })}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-right font-heading font-extrabold tabular-nums text-ink">
-                {formatGuaraniesGs(e.commissionAmount)}
-              </span>
-              {isDraft && e.reassignable && (
-                <KebabMenu
-                  id={`settlement-line-${e.id}`}
-                  triggerAriaLabel={t("femme.commissions.settlement.lineActions")}
-                  items={[
-                    {
-                      id: "reassign",
-                      label: t("femme.commissions.reassign.action"),
-                      onSelect: () => setToReassign(e),
-                    },
-                  ]}
-                />
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-
-      <h2 className={sectionTitle}>{t("femme.commissions.settlement.adjustments")}</h2>
-      <div className="rounded-card border border-line bg-surface shadow-sm">
-        {detail.adjustments.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-ink-3">{t("femme.commissions.settlement.noAdjustments")}</p>
-        ) : (
-          <ul data-testid="settlement-adjustments">
-            {detail.adjustments.map((a) => (
-              <li
-                key={a.id}
-                className="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5 first:border-t-0"
-              >
-                <span className="min-w-0 break-words text-ink">
-                  {a.note ?? t(`femme.commissions.reason.${a.reasonCode}`)}
-                </span>
-                <span
-                  className={`font-heading font-extrabold tabular-nums ${a.commissionAmount < 0 ? "text-danger" : "text-success"}`}
-                >
-                  {a.commissionAmount > 0 ? "+" : ""}
-                  {formatGuaraniesGs(a.commissionAmount)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      {isDraft && (
-        <button
-          type="button"
-          className="min-h-11 self-start px-1 text-sm font-bold text-primary underline underline-offset-4"
-          onClick={() => setAdjOpen(true)}
-          data-testid="settlement-adjustment-open"
-        >
-          + {t("femme.commissions.settlement.addAdjustment")}
-        </button>
-      )}
-
-      <button
-        type="button"
-        aria-expanded={subtotalsOpen}
-        aria-controls="settlement-subtotals"
-        data-testid="settlement-subtotals-toggle"
-        className={foldBtn}
-        onClick={() => setSubtotalsOpen((o) => !o)}
-      >
-        {t("femme.commissions.settlement.subtotals")}
-        <span aria-hidden className={`text-ink-3 transition-transform ${subtotalsOpen ? "rotate-180" : ""}`}>
-          ⌄
-        </span>
-      </button>
-      {subtotalsOpen && (
-        <div id="settlement-subtotals" className="grid gap-4 rounded-card border border-line bg-surface p-4 sm:grid-cols-2">
-          <div data-testid="settlement-subtotals-kind">
-            <h3 className="text-sm font-bold text-ink">{t("femme.commissions.settlement.byKind")}</h3>
-            {detail.byKind.map((st) => (
-              <div key={st.key} className="flex justify-between gap-2 py-1 text-sm">
-                <span>{t(`femme.commissions.kind.${st.key}`)}</span>
-                <b className="tabular-nums">{formatGuaraniesGs(st.amount)}</b>
-              </div>
-            ))}
-          </div>
-          <div data-testid="settlement-subtotals-item">
-            <h3 className="text-sm font-bold text-ink">{t("femme.commissions.settlement.byItem")}</h3>
-            {detail.byItem.map((st) => (
-              <div key={st.key} className="flex justify-between gap-2 py-1 text-sm">
-                <span className="min-w-0 break-words">{st.label}</span>
-                <b className="tabular-nums">{formatGuaraniesGs(st.amount)}</b>
-              </div>
-            ))}
-          </div>
+      <h2 className={sectionTitle}>{t("femme.commissions.settlement.timeline")}</h2>
+      {days.length === 0 ? (
+        <p className="rounded-card border border-line bg-surface px-4 py-3 text-sm text-ink-3" data-testid="settlement-no-days">
+          {t("femme.commissions.settlement.noDays")}
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3" data-testid="settlement-lines">
+          {days.map((day) => renderDay(day))}
         </div>
       )}
 
@@ -521,6 +596,39 @@ export default function CommissionSettlementPage() {
         />
         <FieldValidationError id="void-error">{voidError}</FieldValidationError>
       </Modal>
+    </div>
+  );
+}
+
+/** Services + products + adjustments = total: one bar and its legend, so it is clear where the total comes from. */
+function Composition({ comp }: { comp: CompositionData }) {
+  const { t } = useTranslation();
+  const parts = [
+    { id: "services", label: t("femme.commissions.settlement.compServices"), count: t("femme.commissions.settlement.compCount", { count: comp.services.count }), amount: comp.services.amount, color: "bg-primary", n: comp.services.count },
+    { id: "products", label: t("femme.commissions.settlement.compProducts"), count: t("femme.commissions.settlement.compCount", { count: comp.products.count }), amount: comp.products.amount, color: "bg-secondary", n: comp.products.count },
+    { id: "adjustments", label: t("femme.commissions.settlement.compAdjustments"), count: t("femme.commissions.settlement.adjCount", { count: comp.adjustments.count }), amount: comp.adjustments.amount, color: comp.adjustments.amount < 0 ? "bg-danger" : "bg-success", n: comp.adjustments.count },
+  ].filter((p) => p.n > 0);
+  if (parts.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2 pt-1" data-testid="settlement-composition">
+      <div role="img" aria-label={t("femme.commissions.settlement.composition")} className="flex h-4 gap-0.5 overflow-hidden rounded-full">
+        {parts.map((p) => (
+          <span key={p.id} className={`${p.color} min-w-2`} style={{ flexGrow: Math.max(Math.abs(p.amount), 1), flexBasis: 0 }} />
+        ))}
+      </div>
+      <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink">
+        {parts.map((p) => (
+          <li key={p.id} data-testid={`settlement-comp-${p.id}`} className="inline-flex items-center gap-2">
+            <span aria-hidden className={`size-3 rounded-[3px] ${p.color}`} />
+            <b>{p.label}</b>
+            <span className="text-ink-3">· {p.count}</span>
+            <span className="tabular-nums">
+              {p.id === "adjustments" && p.amount > 0 ? "+" : ""}
+              {formatGuaraniesGs(p.amount)}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

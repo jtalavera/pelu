@@ -9,7 +9,8 @@ import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ReassignDialog } from "./ReassignDialog";
 import { SettlementStatusBadge, oneMonthAgoYmd, formatPercent, todayYmd, useProfessionals } from "./common";
-import { groupMovements, type MovementGroup } from "./movementGroups";
+import { MovementChangeSteps } from "./MovementChangeSteps";
+import { changeNote, changeTag, groupMovements, type MovementGroup } from "./movementGroups";
 
 /** Every commission movement, with «Cambiar profesional» on the live ones. */
 export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: number } = {}) {
@@ -116,29 +117,6 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
     if (e.sourceType === "INVOICE_LINE") return t("femme.commissions.movements.type.LINE");
     if (e.sourceType === "REVERSAL") return t(`femme.commissions.reason.${e.reasonCode ?? "VOID"}`);
     return t(`femme.commissions.reason.${e.reasonCode ?? "MANUAL_ADJUSTMENT"}`);
-  }
-
-  /** The tag next to the item of a sale that has a history: why it changed. */
-  function changeTag(g: MovementGroup): string {
-    const known = ["RECALCULATION", "REASSIGNMENT", "VOID", "CORRECTION"];
-    return t(`femme.commissions.movements.group.tag.${g.reason && known.includes(g.reason) ? g.reason : "OTHER"}`);
-  }
-
-  /** «antes 40 %» / «antes Ana» / «comprobante anulado»: what the commission was before, in a few words. */
-  function changeNote(g: MovementGroup): string {
-    if (!g.changed) return "";
-    if (!g.current) return g.reason === "VOID" ? t("femme.commissions.movements.group.voided") : "";
-    const before = [...g.entries].reverse().find((e) => e.sourceType === "INVOICE_LINE" && e.id !== g.current!.id);
-    if (!before) return "";
-    if (g.reason === "REASSIGNMENT") {
-      return before.professionalName && before.professionalId !== g.current.professionalId
-        ? t("femme.commissions.movements.group.before", { value: before.professionalName })
-        : "";
-    }
-    if (g.reason === "RECALCULATION" && before.percentApplied !== null && before.percentApplied !== g.current.percentApplied) {
-      return t("femme.commissions.movements.group.before", { value: formatPercent(before.percentApplied) });
-    }
-    return "";
   }
 
   const pageItems = visible.slice(page * size, (page + 1) * size);
@@ -316,7 +294,7 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
               {pageItems.map((g) => {
                 const e = g.rep;
                 const c = calc(e);
-                const note = changeNote(g);
+                const note = changeNote(t, g);
                 const open = g.changed && (showReversed || openKeys.has(g.key));
                 const [datePart, ...timeParts] = formatParaguayDateTime(e.accrualAt, dateLocale).split(", ");
                 return (
@@ -339,7 +317,7 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
                             data-testid="movement-tag"
                             className={`mt-0.5 inline-flex rounded-full px-2.5 py-0.5 text-xs font-extrabold ${g.reason === "VOID" ? "bg-bg text-ink-2" : "bg-primary-lt text-primary-dk"}`}
                           >
-                            {changeTag(g)}
+                            {changeTag(t, g)}
                           </span>
                         )}
                       </div>
@@ -413,69 +391,7 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
                         </button>
                       </div>
                     )}
-                    {open && (
-                      <div data-testid="movement-changes" className="mx-4 mb-3 mt-1 rounded-2xl border border-line bg-bg/60 px-4 py-3">
-                        <div className="mb-1 text-xs font-extrabold uppercase tracking-wide text-ink-3">{t("femme.commissions.movements.group.title")}</div>
-                        <ol className="flex flex-col">
-                          {g.entries.map((x, i) => {
-                            const kind = x.sourceType === "REVERSAL" ? "reversal" : g.current && x.id === g.current.id ? "current" : "reverted";
-                            const firstLine = g.entries.findIndex((y) => y.sourceType === "INVOICE_LINE") === i;
-                            const reversedAt = x.reversesEntryId ? g.entries.findIndex((y) => y.id === x.reversesEntryId) : -1;
-                            const [, ...stepTime] = formatParaguayDateTime(x.accrualAt, dateLocale).split(", ");
-                            const label =
-                              kind === "reversal"
-                                ? t(`femme.commissions.reason.${x.reasonCode ?? "VOID"}`)
-                                : t(`femme.commissions.movements.group.step.${kind === "current" ? "current" : firstLine ? "initial" : "previous"}`);
-                            const sub = [
-                              stepTime.join(", "),
-                              new Set(g.entries.map((y) => y.professionalId)).size > 1 ? x.professionalName : null,
-                              kind === "reversal" && reversedAt >= 0 ? t("femme.commissions.movements.group.reverses", { n: reversedAt + 1 }) : null,
-                              kind === "reversal" ? x.note : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ");
-                            return (
-                              <li key={x.id} data-testid="movement-step" data-kind={kind} className="grid min-h-11 grid-cols-[1.5rem_minmax(0,1fr)_auto] items-start gap-x-2.5 py-1.5">
-                                <span
-                                  aria-hidden
-                                  className={`mt-0.5 inline-flex size-5 items-center justify-center rounded-full text-[11px] font-extrabold ${
-                                    kind === "reversal" ? "bg-danger-lt text-danger" : kind === "current" ? "bg-success-lt text-success" : "bg-line text-ink-2"
-                                  }`}
-                                >
-                                  {kind === "reversal" ? "↩" : kind === "current" ? "✓" : i + 1}
-                                </span>
-                                <span className="flex min-w-0 flex-col">
-                                  <b className="text-[13px] text-ink">
-                                    {label}
-                                    {x.percentApplied !== null && <span className="font-semibold text-ink-2"> · {formatPercent(x.percentApplied)}</span>}
-                                  </b>
-                                  <span className="text-xs text-ink-3">{sub}</span>
-                                </span>
-                                <span className="flex flex-col items-end gap-0.5">
-                                  <b
-                                    data-testid="movement-step-amount"
-                                    className={`tabular-nums text-sm ${kind === "reversal" ? "text-danger" : kind === "reverted" ? "text-ink-3 line-through" : "text-ink"}`}
-                                  >
-                                    {formatGuaraniesGs(x.commissionAmount)}
-                                  </b>
-                                  <span
-                                    className={`rounded-full px-2 py-0.5 text-[11px] font-extrabold ${
-                                      kind === "reversal" ? "bg-danger-lt text-danger" : kind === "current" ? "bg-success-lt text-success" : "bg-bg text-ink-2"
-                                    }`}
-                                  >
-                                    {t(`femme.commissions.movements.group.stepTag.${kind}`)}
-                                  </span>
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ol>
-                        <div className="mt-1 border-t border-dashed border-line pt-2 text-[13px] text-ink-2" data-testid="movement-changes-net">
-                          {t("femme.commissions.movements.group.net", { amount: formatGuaraniesGs(g.net) })}
-                          {!g.current && ` ${t("femme.commissions.movements.group.noCurrent")}`}
-                        </div>
-                      </div>
-                    )}
+                    {open && <MovementChangeSteps group={g} />}
                   </li>
                 );
               })}

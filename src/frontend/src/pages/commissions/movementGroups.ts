@@ -1,4 +1,6 @@
+import type { TFunction } from "i18next";
 import type { EntryView } from "../../api/commissions";
+import { formatPercent } from "./common";
 
 /**
  * HU-COM-29: a sale whose commission was recalculated (or reassigned, or whose invoice was voided) leaves several
@@ -56,4 +58,27 @@ export function groupMovements(entries: EntryView[]): MovementGroup[] {
     });
   }
   return groups;
+}
+
+/** The tag next to the item of a sale that has a history: why it changed. */
+export function changeTag(t: TFunction, g: MovementGroup): string {
+  const known = ["RECALCULATION", "REASSIGNMENT", "VOID", "CORRECTION"];
+  return t(`femme.commissions.movements.group.tag.${g.reason && known.includes(g.reason) ? g.reason : "OTHER"}`);
+}
+
+/** «antes 40 %» / «antes Ana» / «comprobante anulado»: what the commission was before, in a few words. */
+export function changeNote(t: TFunction, g: MovementGroup): string {
+  if (!g.changed) return "";
+  if (!g.current) return g.reason === "VOID" ? t("femme.commissions.movements.group.voided") : "";
+  const before = [...g.entries].reverse().find((e) => e.sourceType === "INVOICE_LINE" && e.id !== g.current!.id);
+  if (!before) return "";
+  if (g.reason === "REASSIGNMENT") {
+    return before.professionalName && before.professionalId !== g.current.professionalId
+      ? t("femme.commissions.movements.group.before", { value: before.professionalName })
+      : "";
+  }
+  if (g.reason === "RECALCULATION" && before.percentApplied !== null && before.percentApplied !== g.current.percentApplied) {
+    return t("femme.commissions.movements.group.before", { value: formatPercent(before.percentApplied) });
+  }
+  return "";
 }

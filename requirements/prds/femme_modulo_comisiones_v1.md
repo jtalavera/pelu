@@ -456,6 +456,10 @@ Historia completa y criterios: [HU-COM-30](../user_stories/HU-COM-30-liquidar-de
 
 Historia completa y criterios: [HU-COM-31](../user_stories/HU-COM-31-csv-incluye-por-generar.md). Resumen: el CSV de un rango trae también una fila por cada profesional que está «Por generar» (sin ID, «Sin liquidar», con lo pendiente como total), antes de las liquidaciones; y el ícono de descargar pierde el círculo.
 
+### HU-COM-32 · Liquidación: el detalle día a día
+
+Historia completa y criterios: [HU-COM-32](../user_stories/HU-COM-32-liquidacion-dia-a-dia.md). Resumen: el detalle de la liquidación se cuenta día por día, con una barra «Servicios + Productos + Ajustes = Total», una sola fila por venta (las recalculadas con «Ver cambios», como en Movimientos), los montos alineados y los ajustes en su día; se quitan los «Subtotales por tipo e ítem».
+
 ### HU-COM-19 · Anular borradores rápido desde Liquidar
 
 Historia completa y criterios: [HU-COM-19](../user_stories/HU-COM-19-anular-borradores-rapido.md). Resumen:
@@ -570,6 +574,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-29 | Movimientos: una fila por venta con su etiqueta, «Ver cambios» con el recorrido original → reversión → vigente, interruptor para ver todas; expone `invoiceLineId`. |
 | HU-COM-30 | Liquidar: «Descargar CSV» como ícono junto al total con menú (este período / períodos anteriores); `settlements.csv` acepta `from`/`to`. |
 | HU-COM-31 | CSV de Liquidar con las filas «Por generar» (sin ID, «Sin liquidar»); ícono de descargar sin círculo. |
+| HU-COM-32 | Liquidación: detalle día a día, composición del total, una fila por venta con «Ver cambios», montos alineados; sin subtotales por tipo e ítem. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 
