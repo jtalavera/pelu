@@ -256,29 +256,39 @@ describe("HU-COM-15 · Inicio", () => {
     expect(screen.queryByTestId("home-review-ungrouped")).toBeNull();
   });
 
-  it("«Para revisar» son tarjetas: el número una vez, qué pasa, el % general real y solo la primera con botón relleno", async () => {
+  it("«Para revisar» es un panel de filas: el número una vez, la consecuencia, un ícono por tipo y solo la primera con botón relleno", async () => {
     api.getSettings.mockResolvedValue({ defaultPercentService: 12, defaultPercentProduct: 5 });
     mount("/app/commissions", overview({ linesWithoutProfessional: 20, groupsWithoutPercent: 13, drafts: 3 }));
     await screen.findByTestId("home-review-lines");
-    const cards = [...screen.getByTestId("home-review").querySelectorAll("article")];
-    expect(cards.map((c) => c.getAttribute("data-testid"))).toEqual(["home-review-lines", "home-review-noPercent", "home-review-drafts"]);
-    expect(cards.map((c) => c.getAttribute("data-tone"))).toEqual(["money", "setup", "paperwork"]);
+    const rows = [...screen.getByTestId("home-review").querySelectorAll("li")];
+    expect(rows.map((r) => r.getAttribute("data-testid"))).toEqual(["home-review-lines", "home-review-noPercent", "home-review-drafts"]);
+    // Money lost (amber) / to set up (teal, the general % is not 0) / paperwork (gray).
+    expect(rows.map((r) => r.getAttribute("data-tone"))).toEqual(["money", "setup", "paperwork"]);
+    expect(screen.queryByTestId("home-review-tag")).toBeNull(); // the old tag is gone: the sentence says it
     const lines = screen.getByTestId("home-review-lines");
-    expect(within(lines).getByTestId("home-review-tag").textContent).toBe("No generan comisión");
     expect(within(lines).getByTestId("home-review-count").textContent).toBe("20");
     expect(within(lines).getByTestId("home-review-title").textContent).toBe("20 líneas de venta sin profesional");
-    expect(within(lines).getByTestId("home-review-help").textContent).toBe("Asignales una profesional para que cuenten en la liquidación.");
+    expect(within(lines).getByTestId("home-review-help").textContent).toBe("No generan comisión hasta que les asignes una profesional.");
     expect(within(lines).getByTestId("home-review-lines-action").textContent).toBe("Asignar profesional");
     const noPercent = screen.getByTestId("home-review-noPercent");
-    expect(within(noPercent).getByTestId("home-review-tag").textContent).toBe("Pagan el % general");
     expect(within(noPercent).getByTestId("home-review-title").textContent).toBe("13 grupos sin su propio %");
-    await waitFor(() => expect(within(noPercent).getByTestId("home-review-help").textContent).toBe("Hoy cobran el % general de servicios: 12 %."));
+    await waitFor(() => expect(within(noPercent).getByTestId("home-review-help").textContent).toBe("Hoy cobran el % general de servicios: 12\u00a0%."));
     expect(within(noPercent).getByTestId("home-review-noPercent-action").textContent).toBe("Poner los %");
     expect(within(screen.getByTestId("home-review-drafts")).getByTestId("home-review-drafts-action").textContent).toBe("Revisar borradores");
     // Only the first one is filled: it is the one to do first.
     const filled = (key: string) => /(^|\s)bg-primary(\s|$)/.test(screen.getByTestId(`home-review-${key}-action`).className);
     expect([filled("lines"), filled("noPercent"), filled("drafts")]).toEqual([true, false, false]);
-    expect(screen.getByTestId("home-review").textContent).toContain("3 cosas, de lo que más afecta la plata a lo que menos");
+  });
+
+  it("«Para revisar»: si el % general es 0 % dice sin rodeos que hoy no pagan comisión (en ámbar) y el 0 % no se parte", async () => {
+    api.getSettings.mockResolvedValue({ defaultPercentService: 0, defaultPercentProduct: 10 });
+    mount("/app/commissions", overview({ linesWithoutProfessional: 0, groupsWithoutPercent: 11, drafts: 0 }));
+    const noPercent = await screen.findByTestId("home-review-noPercent");
+    await waitFor(() => expect(within(noPercent).getByTestId("home-review-help").textContent).toBe("Hoy no pagan comisión: el % general de servicios es 0\u00a0%."));
+    expect(noPercent.getAttribute("data-tone")).toBe("money");
+    expect(within(noPercent).getByTestId("home-review-help").className).toContain("text-warning");
+    // It is the only row, so it is the filled one.
+    expect(screen.getByTestId("home-review-noPercent-action").className).toMatch(/(^|\s)bg-primary(\s|$)/);
   });
 
   it("«Para revisar» con una sola liquidación en borrador usa el singular y, sin leer el % general, no inventa un número", async () => {

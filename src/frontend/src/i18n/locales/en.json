@@ -772,28 +772,16 @@
         "review": {
           "lines": {
             "title": "sale lines without a professional",
-            "help": "Assign them a professional so they count in the settlement.",
+            "help": "They earn no commission until you assign them a professional.",
             "action": "Assign professional",
-            "title_one": "sale line without a professional",
-            "tag": "They earn no commission"
-          },
-          "ungrouped": {
-            "title": "{{count}} services without a group",
-            "help": "Without a group they are paid the default %.",
-            "action": "Create groups"
-          },
-          "noRules": {
-            "title": "{{count}} professionals without rules",
-            "help": "They are paid the default % on everything.",
-            "action": "Set rules"
+            "title_one": "sale line without a professional"
           },
           "drafts": {
             "title": "settlements in draft",
             "help": "They must be approved before they can be paid.",
             "action": "Review drafts",
             "title_one": "settlement in draft",
-            "help_one": "It must be approved before it can be paid.",
-            "tag": "Not paid yet"
+            "help_one": "It must be approved before it can be paid."
           },
           "noPercent": {
             "title": "groups without their own %",
@@ -801,7 +789,7 @@
             "help": "Today they are paid the general % for services.",
             "action": "Set the %",
             "helpPercent": "Today they are paid the general % for services: {{percent}}.",
-            "tag": "They pay the general %"
+            "helpZero": "Today they are not paid a commission: the general % for services is {{percent}}."
           }
         },
         "teamTitle": "Your team",
@@ -842,9 +830,7 @@
         "noneTitle_other": "{{count}} professionals without movements this period:",
         "noneMore": " and {{count}} more",
         "noneSee_one": "See her",
-        "noneSee_other": "See the {{count}}",
-        "reviewCount_one": "{{count}} thing, from what affects the money most to least",
-        "reviewCount_other": "{{count}} things, from what affects the money most to least"
+        "noneSee_other": "See the {{count}}"
       },
       "liquidar": {
         "prevPeriod": "Previous period",

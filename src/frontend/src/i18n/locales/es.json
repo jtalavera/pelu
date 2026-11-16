@@ -772,28 +772,16 @@
         "review": {
           "lines": {
             "title": "líneas de venta sin profesional",
-            "help": "Asignales una profesional para que cuenten en la liquidación.",
+            "help": "No generan comisión hasta que les asignes una profesional.",
             "action": "Asignar profesional",
-            "title_one": "línea de venta sin profesional",
-            "tag": "No generan comisión"
-          },
-          "ungrouped": {
-            "title": "{{count}} servicios sin grupo",
-            "help": "Sin grupo se les paga el % por defecto.",
-            "action": "Crear grupos"
-          },
-          "noRules": {
-            "title": "{{count}} profesionales sin reglas",
-            "help": "Se les paga el % por defecto en todo.",
-            "action": "Cargar reglas"
+            "title_one": "línea de venta sin profesional"
           },
           "drafts": {
             "title": "liquidaciones en borrador",
             "help": "Hay que aprobarlas para poder pagarlas.",
             "action": "Revisar borradores",
             "title_one": "liquidación en borrador",
-            "help_one": "Hay que aprobarla para poder pagarla.",
-            "tag": "Sin pagar todavía"
+            "help_one": "Hay que aprobarla para poder pagarla."
           },
           "noPercent": {
             "title": "grupos sin su propio %",
@@ -801,7 +789,7 @@
             "help": "Hoy cobran el % general de servicios.",
             "action": "Poner los %",
             "helpPercent": "Hoy cobran el % general de servicios: {{percent}}.",
-            "tag": "Pagan el % general"
+            "helpZero": "Hoy no pagan comisión: el % general de servicios es {{percent}}."
           }
         },
         "teamTitle": "Tu equipo",
@@ -842,9 +830,7 @@
         "noneTitle_other": "{{count}} profesionales sin movimientos este período:",
         "noneMore": " y {{count}} más",
         "noneSee_one": "Ver a la profesional",
-        "noneSee_other": "Ver las {{count}}",
-        "reviewCount_one": "{{count}} cosa, de lo que más afecta la plata a lo que menos",
-        "reviewCount_other": "{{count}} cosas, de lo que más afecta la plata a lo que menos"
+        "noneSee_other": "Ver las {{count}}"
       },
       "liquidar": {
         "prevPeriod": "Período anterior",
