@@ -372,7 +372,10 @@
         "bulkTarget": "Apply to",
         "bulkApply": "Apply to selected",
         "bulkSummary": "Set {{value}} ({{target}}) on {{count}} items.",
-        "cellTitle": "{{professional}} · {{item}}"
+        "cellTitle": "{{professional}} · {{item}}",
+        "groupShort": "of the group",
+        "inheritsGroup": "Inherits the % of the group {{group}} ({{value}})",
+        "useGroup": "Use the group's % ({{value}})"
       },
       "settlements": {
         "periodLine": "{{periodicity}} settlements · current period: {{range}}",

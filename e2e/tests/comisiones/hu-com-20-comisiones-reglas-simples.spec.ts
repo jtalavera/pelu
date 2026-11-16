@@ -11,6 +11,7 @@ import {
   issueInvoice,
   loginAdminUi,
   openCommissions,
+  openExceptions,
   openProfessional,
   openSetupStep,
   provisionCommissionWorld,
@@ -373,6 +374,48 @@ test("AC10 · la lista de grupos muestra el % de cada uno y la lista «Qué regl
   await page.goto("/app/commissions/configurar/grupos?tab=exceptions");
   const order = page.getByTestId("advanced-precedence").getByRole("listitem");
   await expect(order).toHaveText(["Default %", "% of the group", "% of the service", "% of the professional for that service"]);
+});
+
+// ── AC14 · Excepciones por servicio muestra lo que de verdad paga cada servicio ──────────────────
+
+test("AC14 · Excepciones por servicio muestra el % que paga cada servicio (el propio, el de su grupo o el general) y de dónde viene", async ({
+  page,
+  request,
+}) => {
+  const s = await salon(request);
+  const free = await createCatalogItem(request, w.adminToken, w, "Baño de crema"); // no group
+  await applyChanges(request, w.adminToken, [
+    { scope: "DEFAULT_SERVICE", value: "10" },
+    { scope: "RULE", serviceId: s.largo.id, value: "30" }, // its own % beats its group's 40 %
+  ]);
+  await loginAdminUi(page, w);
+  await openExceptions(page, "SERVICE");
+
+  // Without a % of its own it pays its group's (40 %), not the general one (10 %).
+  await expect(page.getByTestId(`rules-standard-${s.mediano.id}`)).toContainText("40 %");
+  await expect(page.getByTestId(`rules-source-${s.mediano.id}`)).toHaveText("of the group");
+  await expect(page.getByTestId(`rules-source-${s.mediano.id}`)).toHaveAttribute("data-source", "GROUP");
+  // With its own % nothing is said about where it comes from.
+  await expect(page.getByTestId(`rules-standard-${s.largo.id}`)).toHaveText("30 %");
+  await expect(page.getByTestId(`rules-source-${s.largo.id}`)).toHaveCount(0);
+  // Without a group it pays the general %, and says so.
+  await expect(page.getByTestId(`rules-standard-${free.id}`)).toContainText("10 %");
+  await expect(page.getByTestId(`rules-source-${free.id}`)).toHaveText("general");
+
+  // The panel says where it inherits from, and «use» takes the service back to its group's %, not the general one.
+  await page.getByTestId(`rules-row-${s.mediano.id}`).click();
+  await expect(page.getByTestId("rules-panel-standard")).toHaveText("40 %");
+  await expect(page.getByTestId("rules-panel")).toContainText("Inherits the % of the group Alisado (40 %)");
+  await page.getByTestId("rules-panel-close").click(); // the panel is a dialog: close it before opening another service
+  await page.getByTestId(`rules-row-${s.largo.id}`).click();
+  await expect(page.getByTestId("rules-panel-standard")).toHaveText("30 %");
+  await page.getByTestId("rules-change-standard").click();
+  await expect(page.getByRole("button", { name: "Use the group's % (40 %)" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Use the general commission/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Use the group's % (40 %)" }).click();
+  await expect(page.getByTestId(`rules-standard-${s.largo.id}`)).toContainText("40 %");
+  await expect(page.getByTestId(`rules-source-${s.largo.id}`)).toHaveText("of the group");
+  await expect(page.getByTestId(`rules-standard-${free.id}`)).toContainText("10 %");
 });
 
 // ── AC12 · API ─────────────────────────────────────────────────────────────────────────────────

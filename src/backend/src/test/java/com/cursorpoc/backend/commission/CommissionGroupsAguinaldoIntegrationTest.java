@@ -532,6 +532,51 @@ class CommissionGroupsAguinaldoIntegrationTest {
   }
 
   @Test
+  void theExceptionsListShowsWhereTheInheritedPercentComesFrom() {
+    configureSalon();
+    change("IMMEDIATE", new ConfigChange("DEFAULT_SERVICE", null, null, "10", null));
+    change("IMMEDIATE", new ConfigChange("RULE", brushingLargo.getId(), null, "30", null));
+    var items =
+        configService.rulesView(tenant.getId(), "SERVICE", null).categories().stream()
+            .flatMap(c -> c.items().stream())
+            .collect(java.util.stream.Collectors.toMap(i -> i.name(), i -> i));
+
+    // Pestañas has no % of its own: it pays its group's (50), not the general one (10).
+    var pestanasRow = items.get("Pestañas pelo a pelo");
+    assertThat(pestanasRow.ownStandard()).isFalse();
+    assertThat(pestanasRow.standardPercent()).isEqualByComparingTo("50");
+    assertThat(pestanasRow.inheritedPercent()).isEqualByComparingTo("50");
+    assertThat(pestanasRow.inheritedFrom()).isEqualTo("GROUP");
+    assertThat(pestanasRow.inheritedGroupName()).isEqualTo("Pestañas");
+
+    // Brushing has its own 30 %, but what it would pay without it is its group's 50 %.
+    var largo = items.get("Brushing pelo largo");
+    assertThat(largo.ownStandard()).isTrue();
+    assertThat(largo.standardPercent()).isEqualByComparingTo("30");
+    assertThat(largo.inheritedPercent()).isEqualByComparingTo("50");
+    assertThat(largo.inheritedFrom()).isEqualTo("GROUP");
+    assertThat(largo.inheritedGroupName()).isEqualTo("Brushing");
+
+    // Without a group it pays the general %, and says so.
+    var bano = items.get("Baño de crema");
+    assertThat(bano.standardPercent()).isEqualByComparingTo("10");
+    assertThat(bano.inheritedPercent()).isEqualByComparingTo("10");
+    assertThat(bano.inheritedFrom()).isEqualTo("GENERAL");
+    assertThat(bano.inheritedGroupName()).isNull();
+
+    // A group without its own % falls back to the general one.
+    change("IMMEDIATE", groupRule(lashesGroup, null, null));
+    var after =
+        configService.rulesView(tenant.getId(), "SERVICE", null).categories().stream()
+            .flatMap(c -> c.items().stream())
+            .filter(i -> i.name().equals("Pestañas pelo a pelo"))
+            .findFirst()
+            .orElseThrow();
+    assertThat(after.inheritedFrom()).isEqualTo("GENERAL");
+    assertThat(after.inheritedPercent()).isEqualByComparingTo("10");
+  }
+
+  @Test
   void aRetentionProfileIsStoredAndListedInTheSettings() {
     change(
         "IMMEDIATE",
