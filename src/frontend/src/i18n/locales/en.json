@@ -1186,6 +1186,12 @@
           "DRAFT": "Draft",
           "APPROVED": "Approved",
           "PAID": "Paid"
+        },
+        "stageHint": {
+          "UNSETTLED": "the settlement has not been generated yet",
+          "DRAFT": "next: approve it",
+          "APPROVED": "next: mark it as paid",
+          "PAID": "it is already paid"
         }
       },
       "activity": {

@@ -1186,6 +1186,12 @@
           "DRAFT": "Borrador",
           "APPROVED": "Aprobada",
           "PAID": "Pagada"
+        },
+        "stageHint": {
+          "UNSETTLED": "todavía no se generó la liquidación",
+          "DRAFT": "siguiente: aprobarla",
+          "APPROVED": "siguiente: marcarla como pagada",
+          "PAID": "ya está pagada"
         }
       },
       "activity": {

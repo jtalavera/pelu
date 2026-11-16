@@ -320,7 +320,8 @@ test("AC7 · la ficha tiene Resumen, Reglas e Historial; el Historial es solo de
 
   await page.getByTestId("pro-tab-history").click();
   await expect(page.getByTestId("movement-row")).toHaveCount(1);
-  await expect(page.getByTestId("movement-row")).toContainText(w.ana.name, { ignoreCase: true });
+  // HU-COM-33: inside her file there is no PROFESSIONAL column (it is always her).
+  await expect(page.getByTestId("movement-row").getByTestId("movement-professional")).toHaveCount(0);
   await page.getByTestId("movements-filters-toggle").click();
   await expect(page.locator("#mov-professional")).toHaveCount(0); // already filtered by her
 });
@@ -351,7 +352,7 @@ test("AC10 · AC11 · con la retención activa: solapa en Equipo, y en la ficha 
   // HU-COM-20: her retention comes out of what she is paid, so it asks since when it applies.
   await page.getByTestId("commission-apply-mode-IMMEDIATE").check();
   await page.getByTestId("commission-apply-confirm").click();
-  await expect(page.getByTestId("pro-retention-current")).toHaveText("Retention: 5 %");
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("5 %") // HU-COM-33: the Retention card shows only the %;
   const stored = await apiGetJson<{ retentionProfiles: { professionalId: number; percent: number | null }[] }>(
     request,
     w.adminToken,

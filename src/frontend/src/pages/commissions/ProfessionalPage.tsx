@@ -257,7 +257,7 @@ function SummaryPane({ professionalId, retentionPercent }: { professionalId: num
           <Text variant="small" className="text-ink-3" data-testid="pro-summary-lines">
             {t("femme.commissions.pro.summaryLines", { count: lineCount })}
             {comp.adjustments.count > 0 ? ` · ${t("femme.commissions.settlement.adjCount", { count: comp.adjustments.count })}` : ""}
-            {row.status !== "NONE" ? ` · ${t(`femme.commissions.pro.next.${row.status}`)}` : ""}
+            {row.status !== "NONE" ? ` · ${t(`femme.commissions.pro.stageHint.${row.status}`)}` : ""}
           </Text>
           {preview.carriedAmount !== 0 && (
             <Text variant="small" className="text-warning" data-testid="pro-summary-carried">
