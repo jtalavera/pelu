@@ -6,6 +6,12 @@
 //                   {"password":"…","tenants":[{"id":1,"sifen":true,"sifenIndex":0,"users":[{"email":"…"}]}]}
 //   PROFILE         smoke | ramp | soak (default ramp) — or VUS + DURATION for a flat run
 //   VUS, DURATION   flat profile overrides
+//   PROFILE=scale   open model for the "N active tenants" scaling test (one receptionist per tenant,
+//                   fixed arrival rate, 90 % of the active tenants on SIFEN when the DB has them):
+//                   ACTIVE = number of active tenants, LOAD = avg | peak (default avg), DURATION
+//                   (default 15m). avg = 30 iterations/day/tenant over 8 h (15 invoices/day at the
+//                   50 % invoice share); peak = 4x that. Logs in once per tenant in setup (the
+//                   8 h token covers the run), like a user who logs in once a day.
 //   SIFEN_RATE      SIFEN invoices per minute across ALL SIFEN tenants (default 2, 0 = off).
 //                   Every SIFEN tenant shares Femme Coiffure's RUC/timbrado on sifen-test: keep it low.
 //   REPORT_DIR      where handleSummary writes summary.json / summary.txt (default .)
@@ -23,6 +29,11 @@ const USERS = JSON.parse(__ENV.USERS_JSON || '{"tenants":[]}');
 const PASSWORD = USERS.password;
 const SIFEN_RATE = Number(__ENV.SIFEN_RATE ?? 2);
 const PROFILE = __ENV.PROFILE || "ramp";
+const SCALE = PROFILE === "scale";
+const ACTIVE = Number(__ENV.ACTIVE || 10);
+const LOAD = __ENV.LOAD || "avg";
+const SCALE_SIFEN_SHARE = 0.9;
+const ITERATIONS_PER_TENANT_PER_HOUR = (30 / 8) * (LOAD === "peak" ? 4 : 1);
 
 const sifenIssued = new Counter("sifen_invoices_issued");
 const sifenRangeExhausted = new Counter("sifen_range_exhausted");
@@ -49,10 +60,23 @@ const hasSifenTenants = USERS.tenants.some((t) => t.sifen);
 
 export const options = {
   scenarios: {
-    salon_day: flat
+    ...(SCALE
+      ? {
+          salon_scale: {
+            executor: "constant-arrival-rate",
+            rate: Math.max(1, Math.round(ACTIVE * ITERATIONS_PER_TENANT_PER_HOUR)),
+            timeUnit: "1h",
+            duration: __ENV.DURATION || "15m",
+            preAllocatedVUs: 20,
+            maxVUs: 300,
+            exec: "salonScale",
+          },
+        }
+      : {}),
+    ...(SCALE ? {} : { salon_day: flat
       ? { executor: "constant-vus", vus: Number(__ENV.VUS), duration: __ENV.DURATION, exec: "salonDay" }
-      : { executor: "ramping-vus", startVUs: 0, stages: PROFILES[PROFILE], exec: "salonDay" },
-    ...(SIFEN_RATE > 0 && hasSifenTenants
+      : { executor: "ramping-vus", startVUs: 0, stages: PROFILES[PROFILE], exec: "salonDay" } }),
+    ...(!SCALE && SIFEN_RATE > 0 && hasSifenTenants
       ? {
           sifen_issuance: {
             executor: "constant-arrival-rate",
@@ -81,6 +105,7 @@ export const options = {
     "http_req_duration{name:invoice_issue_non_fiscal}": ["p(95)<3000"],
     "http_req_duration{name:invoice_issue_sifen}": ["p(95)<5000"],
   },
+  setupTimeout: "10m",
   summaryTrendStats: ["avg", "med", "p(90)", "p(95)", "p(99)", "max"],
 };
 
@@ -89,11 +114,21 @@ function sumDuration(stages) {
   return `${seconds}s`;
 }
 
+// ACTIVE tenants for the scale profile: 90 % SIFEN / 10 % not, as far as the DB has both kinds.
+function activeSubset(all) {
+  const sifen = all.filter((t) => t.sifen);
+  const plain = all.filter((t) => !t.sifen);
+  const wantSifen = Math.min(sifen.length, Math.round(ACTIVE * SCALE_SIFEN_SHARE));
+  const wantPlain = Math.min(plain.length, ACTIVE - wantSifen);
+  const out = [...sifen.slice(0, wantSifen), ...plain.slice(0, wantPlain)];
+  return out.concat(sifen.slice(wantSifen, wantSifen + ACTIVE - out.length));
+}
+
 // ── setup: per-tenant catalog + an open cash session (invoices need one) ─────────────────────
 export function setup() {
   if (!USERS.tenants.length) throw new Error("USERS_JSON has no tenants");
   const tenants = [];
-  for (const t of USERS.tenants) {
+  for (const t of SCALE ? activeSubset(USERS.tenants) : USERS.tenants) {
     const user = t.users[0];
     const token = login(user.email, PASSWORD);
     if (!token) continue;
@@ -107,7 +142,7 @@ export function setup() {
     if (current.status !== 200) {
       post(token, "/api/cash-sessions/open", { openingCashAmount: 100000 }, "setup_cash_open");
     }
-    tenants.push({ id: t.id, sifen: !!t.sifen, email: user.email, professionals, services, clients });
+    tenants.push({ id: t.id, sifen: !!t.sifen, email: user.email, professionals, services, clients, token });
   }
   return { tenants };
 }
@@ -157,15 +192,31 @@ function pickAction(excludeInvoices) {
 export function salonDay(data) {
   const { tenant, token } = session(data, () => true);
   if (!token) return;
-  const now = new Date();
-  const weekStart = addDays(now, -((now.getUTCDay() + 6) % 7)); // Monday of this week (Sunday = 0)
-
-  get(token, `/api/appointments?from=${weekStart.toISOString()}&to=${addDays(weekStart, 7).toISOString()}`, "appointments_list");
+  agenda(token);
   sleep(1 + Math.random() * 2);
-
   // SIFEN tenants issue invoices only through the throttled sifenIssue stream (shared RUC on
   // sifen-test), so their VUs draw from the non-invoice actions only, keeping the same proportions.
-  const action = pickAction(tenant.sifen);
+  runAction(tenant, token, pickAction(tenant.sifen));
+  sleep(2 + Math.random() * 4);
+}
+
+// ── scenario: one iteration of a tenant's receptionist at a fixed arrival rate (PROFILE=scale) ─
+export function salonScale(data) {
+  const tenant = data.tenants[exec.scenario.iterationInTest % data.tenants.length];
+  if (!tenant.token) return;
+  agenda(tenant.token);
+  sleep(1 + Math.random() * 2);
+  runAction(tenant, tenant.token, pickAction(false)); // SIFEN tenants issue SIFEN invoices here
+}
+
+function agenda(token) {
+  const now = new Date();
+  const weekStart = addDays(now, -((now.getUTCDay() + 6) % 7)); // Monday of this week (Sunday = 0)
+  get(token, `/api/appointments?from=${weekStart.toISOString()}&to=${addDays(weekStart, 7).toISOString()}`, "appointments_list");
+}
+
+function runAction(tenant, token, action) {
+  const now = new Date();
   if (action === "appointment" && tenant.clients.length && tenant.services.length && tenant.professionals.length) {
     const body = {
       clientId: pick(tenant.clients), professionalId: pick(tenant.professionals),
@@ -195,9 +246,12 @@ export function salonDay(data) {
   } else if (action === "dashboard") {
     get(token, "/api/dashboard?days=30", "dashboard");
   } else if (action === "invoice_issue" && tenant.services.length) {
-    issueInvoice(tenant, token, "invoice_issue_non_fiscal", nonFiscalIssued, true);
+    if (tenant.sifen) {
+      if (!exhausted.has(tenant.id)) issueInvoice(tenant, token, "invoice_issue_sifen", sifenIssued, false);
+    } else {
+      issueInvoice(tenant, token, "invoice_issue_non_fiscal", nonFiscalIssued, true);
+    }
   }
-  sleep(2 + Math.random() * 4);
 }
 
 // ── scenario: throttled SIFEN issuance, only on the M SIFEN tenants ────────────────────────

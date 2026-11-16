@@ -25,6 +25,10 @@ gh workflow run loadtest.yml -f ref=<ref> -f bacpac=loadtest-V<v>-t10-s2 -f prof
 #    …or from an Azure VM, no approval needed (also the only way until loadtest.yml is on main:
 #    GitHub dispatches workflow_dispatch workflows only from the default branch)
 scripts/staging/run-loadtest.sh --bacpac=loadtest-V<v>-t10-s2 --ref=<ref> --profile=ramp --sifen-rate=2
+#    scaling test: N active tenants, one receptionist each, fixed arrival rate (open model),
+#    90 % of them on SIFEN when the golden DB has SIFEN tenants. avg = 15 invoices/day/tenant
+#    (30 iterations/day over 8 h); peak = 4x that. Needs a golden DB with at least N tenants.
+scripts/staging/run-loadtest.sh --bacpac=loadtest-V<v>-t100-s90 --ref=<ref> --profile=scale --active=50 --load=peak --duration=15m
 
 # 4. Server-side metrics while staging still exists, then fill loadtest/reports/TEMPLATE.md
 scripts/staging/collect-loadtest-metrics.sh --run=<prefix printed by the workflow / run-loadtest.sh>
