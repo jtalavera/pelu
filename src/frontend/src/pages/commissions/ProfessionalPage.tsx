@@ -20,7 +20,6 @@ import { formatParaguayDate, formatParaguayDateTime } from "../../lib/paraguayDa
 import { AguinaldoTab } from "./AguinaldoTab";
 import { useFundActions } from "./FundActions";
 import { formatPercent } from "./common";
-import { Avatar } from "./HomePage";
 import { MovementsTab } from "./MovementsTab";
 import { ProfessionalRates } from "./ProfessionalRates";
 import { StatusChip } from "./StatusChip";
@@ -67,7 +66,6 @@ export default function ProfessionalPage() {
       </Link>
       {row && (
         <header className="flex items-center gap-3">
-          <Avatar name={row.professionalName} />
           <div className="min-w-0">
             <h2 className="truncate font-heading text-xl font-extrabold text-ink" data-testid="pro-name">
               {row.professionalName}

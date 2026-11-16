@@ -10,19 +10,6 @@ import { formatPercent } from "./common";
 import { STATUS_META, periodLabel, setupProgress, summarize, useOverview } from "./overview";
 import { StatusChip } from "./StatusChip";
 
-/** Avatar with the two first letters. */
-export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
-  return (
-    <span
-      aria-hidden
-      style={{ width: size, height: size }}
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-bg text-xs font-extrabold text-ink-2"
-    >
-      {name.slice(0, 2).toUpperCase()}
-    </span>
-  );
-}
-
 /** The three steps to leave commissions ready: what each is for and where to do it (HU-COM-15 / HU-COM-20). */
 function SetupGuide({ overview }: { overview: Overview }) {
   const { t } = useTranslation();
@@ -339,7 +326,6 @@ export default function HomePage() {
           <ul>
             {withMoves.slice(0, 7).map((r) => (
               <li key={r.professionalId} data-testid="home-team-row" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line py-2">
-                <Avatar name={r.professionalName} />
                 <Link to={`/app/commissions/equipo/${r.professionalId}`} className="min-w-0 flex-1 basis-28 truncate font-extrabold text-ink">
                   {r.professionalName}
                 </Link>

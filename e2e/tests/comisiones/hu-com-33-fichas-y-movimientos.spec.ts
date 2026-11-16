@@ -250,3 +250,22 @@ test("AC9 · Equipo: la tarjeta empieza por el nombre (sin iniciales) y solo dic
   await ana.click();
   await expect(page.getByTestId("commission-professional")).toBeVisible();
 });
+
+test("AC9 · tampoco hay iniciales en Liquidar, Inicio ni en el encabezado de la ficha", async ({ page, request }) => {
+  await plainSales(request);
+  await loginAdminUi(page, w);
+  const initials = w.ana.name.slice(0, 2).toUpperCase();
+  const lines = async (loc: ReturnType<Page["locator"]>) => (await loc.innerText()).split("\n").map((l) => l.trim()).filter(Boolean);
+
+  await openCommissions(page, "settle");
+  const row = page.getByTestId("liquidar-row").filter({ hasText: w.ana.name });
+  expect(await lines(row)).not.toContain(initials);
+
+  await openCommissions(page, "home");
+  const home = page.getByTestId("home-team-row").filter({ hasText: w.ana.name });
+  expect((await lines(home))[0].toUpperCase()).toBe(w.ana.name.toUpperCase());
+
+  await openCommissions(page);
+  await openProfessional(page, w.ana.name, "summary");
+  expect((await lines(page.locator("header").filter({ has: page.getByTestId("pro-name") })))[0].toUpperCase()).toBe(w.ana.name.toUpperCase());
+});

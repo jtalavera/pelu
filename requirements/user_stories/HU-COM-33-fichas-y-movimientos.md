@@ -25,7 +25,7 @@ Multi-tenant y convenciones: [PRD Femme MVP v1](../prds/femme_historias_usuario_
 - En Movimientos, una venta recalculada ocupaba una fila mucho más alta (etiqueta en una línea propia y «Ver cambios» en otra), y la columna Monto partía «Gs. 163.636» en dos líneas dentro de la ficha.
 - En el Resumen de un profesional con una liquidación en Borrador el monto grande salía de la liquidación, pero «líneas facturadas», Servicios y Productos salían de lo que todavía estaba sin liquidar: daban 0. **Es un error**, no un cálculo distinto.
 - Reglas abría con una caja celeste que repetía el nombre y una explicación larga.
-- Equipo ponía las iniciales en un círculo antes del nombre y repetía «Cobra lo normal de cada servicio» en todas las tarjetas.
+- Equipo, Liquidar, Inicio y la ficha ponían las iniciales en un círculo antes del nombre; Equipo además repetía «Cobra lo normal de cada servicio» en todas las tarjetas.
 
 Solo cambia cómo se muestra: los importes, el saldo y la API son los mismos.
 
@@ -52,7 +52,7 @@ Solo cambia cómo se muestra: los importes, el saldo y la API son los mismos.
 
 ### Equipo
 
-9. **Tarjetas sin iniciales** — Cada tarjeta es más baja: nombre y monto arriba, «N movimientos · falta generar» y el estado abajo. No hay iniciales delante del nombre, y no se repite «Cobra lo normal de cada servicio»: una línea chica aparece solo si hay algo distinto («Cobra distinto en N servicios», «retiene 5 %», el saldo de retención). Tocar la tarjeta abre la ficha. Las iniciales de Liquidar y del encabezado de la ficha no cambian.
+9. **Sin iniciales (Equipo, Liquidar, Inicio y la ficha)** — En Equipo, cada tarjeta es más baja: nombre y monto arriba, «N movimientos · falta generar» y el estado abajo. No hay iniciales delante del nombre, y no se repite «Cobra lo normal de cada servicio»: una línea chica aparece solo si hay algo distinto («Cobra distinto en N servicios», «retiene 5 %», el saldo de retención). Tocar la tarjeta abre la ficha. **Tampoco hay iniciales** en Liquidar (cada fila), Inicio (la lista del equipo) ni en el encabezado de la ficha del profesional: el nombre va solo.
 
 ### Transversal
 
@@ -63,5 +63,4 @@ Solo cambia cómo se muestra: los importes, el saldo y la API son los mismos.
 
 ## Fuera de alcance
 
-- Las iniciales de Liquidar y del encabezado de la ficha.
 - La tarjeta de Retención del Resumen.
