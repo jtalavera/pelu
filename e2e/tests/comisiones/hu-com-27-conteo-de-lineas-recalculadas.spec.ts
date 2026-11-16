@@ -55,7 +55,7 @@ test("AC1 · AC3 · el Resumen dice «1 invoiced line» y no cambia el importe d
   await openCommissions(page);
   await openProfessional(page, w.ana.name);
 
-  await expect(page.getByTestId("pro-summary-lines")).toHaveText("1 invoiced line");
+  await expect(page.getByTestId("pro-summary-lines")).toContainText("1 invoiced line"); // HU-COM-33 adds the next step after it
   await expect(page.getByTestId("pro-summary-total")).toContainText("45.000"); // 50 % − 5 % retained
 });
 

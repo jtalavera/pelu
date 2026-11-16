@@ -311,7 +311,7 @@ test("AC7 · AC8 · la ficha dice que cobra lo normal; «Todo un grupo» carga u
   await page.getByTestId("pro-rate-save").click();
   await confirmImmediate(page);
   await expect(page.getByTestId("pro-rate-row")).toHaveCount(2);
-  await expect(page.getByTestId("pro-differences-count")).toHaveText("2 cases");
+  await expect(page.getByTestId("pro-differences-count")).toHaveText("2");
   await page.getByTestId("pro-rate-row").filter({ hasText: "Alisado pelo largo" }).getByTestId("pro-rate-remove").click();
   await confirmImmediate(page);
   await page.getByTestId("pro-rate-row").filter({ hasText: "Corte" }).getByTestId("pro-rate-remove").click();
@@ -347,7 +347,7 @@ test("AC7 · la retención se ve en la ficha solo con aguinaldo activo, se cambi
   await page.getByTestId("pro-retention-percent").fill("7");
   await page.getByTestId("pro-retention-save").click();
   await confirmImmediate(page);
-  await expect(page.getByTestId("pro-retention-current")).toHaveText("Retention: 7 %");
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("7 %");
 });
 
 // ── AC10 · Grupos y servicios ──────────────────────────────────────────────────────────────────

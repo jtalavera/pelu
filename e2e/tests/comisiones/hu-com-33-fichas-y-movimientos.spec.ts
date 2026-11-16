@@ -68,6 +68,18 @@ async function recalculatedSale(request: Req) {
   await applyChanges(request, w.adminToken, [{ scope: "RETENTION_PROFILE", professionalId: w.ana.id, value: "10" }], "PERIOD_START");
 }
 
+/** Group at 50 %; Ana's own rule of 40 % from the start of the period recalculates her sale (before 50 %); Bea's stays plain. */
+async function recalculatedNoRetention(request: Req) {
+  const g = await createGroup(request, w.adminToken, "Peluquería");
+  await assignToGroup(request, w.adminToken, g.id, [w.service.id]);
+  await applyChanges(request, w.adminToken, [{ scope: "GROUP_RULE", groupId: g.id, value: "50" }]);
+  for (const professionalId of [w.ana.id, w.bea.id]) {
+    const inv = await issueInvoice(request, w.adminToken, [{ serviceId: w.service.id, name: w.service.name, price: 100000, professionalId }]);
+    await entriesOfInvoice(request, w.adminToken, inv.id, 1);
+  }
+  await applyChanges(request, w.adminToken, [{ scope: "RULE", serviceId: w.service.id, professionalId: w.ana.id, value: "40" }], "PERIOD_START");
+}
+
 const rows = (page: Page) => page.getByTestId("movement-row");
 const height = async (loc: ReturnType<Page["locator"]>) => Math.round((await loc.boundingBox())?.height ?? 0);
 
@@ -84,7 +96,7 @@ test("AC1 · AC2 · todas las filas miden lo mismo; la flecha de la izquierda ab
   page,
   request,
 }) => {
-  await recalculatedSale(request);
+  await recalculatedNoRetention(request);
   await loginAdminUi(page, w);
   await openCommissions(page, "activity");
   await page.getByTestId("activity-tab-movements").click();
@@ -98,7 +110,7 @@ test("AC1 · AC2 · todas las filas miden lo mismo; la flecha de la izquierda ab
 
   // The tag sits in the TYPE column and «before 45 %» in the CALCULATION one.
   await expect(changed.getByTestId("movement-type").getByTestId("movement-tag")).toHaveText("Recalculated");
-  await expect(changed.getByTestId("movement-calc-note")).toHaveText("before 45 %");
+  await expect(changed.getByTestId("movement-calc-note")).toHaveText("before 50 %");
   // The arrow is the first cell of the row, to the left of the date.
   const toggle = changed.getByTestId("movement-changes-toggle");
   const arrowBox = (await toggle.boundingBox())!;
@@ -167,7 +179,7 @@ test("AC4 · la tarjeta muestra las etapas: Por generar → Borrador → Aprobad
 test("AC5 · con una liquidación generada el desglose sale de ella y suma el total (ya no dice 0), con los ajustes", async ({ page, request }) => {
   await plainSales(request);
   const [draft] = await generateSettlements(request, w.adminToken, [w.ana.id]);
-  await apiPostJson(request, w.adminToken, `/api/commissions/settlements/${draft.id}/adjustments`, { amount: 5000, note: "Bono por desempeño" });
+  await apiPostJson(request, w.adminToken, `/api/commissions/settlements/${draft.id}/adjustments`, { amount: 5000, reason: "Bono por desempeño" });
   await loginAdminUi(page, w);
   await openCommissions(page);
   await openProfessional(page, w.ana.name, "summary");
