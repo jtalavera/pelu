@@ -118,8 +118,6 @@ export function RulesTab() {
 
   return (
     <div className="flex min-w-0 flex-col gap-3" data-testid="commission-rules">
-      <p className="px-0.5 text-sm text-ink-3">{t("femme.commissions.rules.intro")}</p>
-
       <div className="flex gap-2" role="group" aria-label={t("femme.commissions.tabs.rules")}>
         {(["SERVICE", "PRODUCT"] as const).map((k) => (
           <button

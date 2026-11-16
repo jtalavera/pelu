@@ -50,7 +50,9 @@ public class CommissionRecalculationService {
           Objects.equals(key.groupId(), groupByService.get(e.getServiceId()))
               && (key.professionalId() == null
                   || Objects.equals(key.professionalId(), e.getProfessionalId()));
-      case AGUINALDO_DEFAULT, RETENTION_PROFILE -> false;
+      case AGUINALDO_DEFAULT -> false;
+      // HU-COM-20: the retention is the professional's and comes out of what she is paid.
+      case RETENTION_PROFILE -> Objects.equals(key.professionalId(), e.getProfessionalId());
       case DEFAULT_SERVICE -> e.getItemKind() != ServiceKind.PRODUCT;
       case DEFAULT_PRODUCT -> e.getItemKind() == ServiceKind.PRODUCT;
       case RULE ->

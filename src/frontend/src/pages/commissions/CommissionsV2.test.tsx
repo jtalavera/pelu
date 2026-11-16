@@ -7,7 +7,6 @@ import i18n from "../../i18n";
 import { AguinaldoTab } from "./AguinaldoTab";
 
 const api = vi.hoisted(() => ({
-  getProfessionalRules: vi.fn(),
   getGroups: vi.fn(),
   getGroupServices: vi.fn(),
   getProfessionalsSummary: vi.fn(),

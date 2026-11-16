@@ -251,13 +251,13 @@
         "AGUINALDO_DEFAULT": "Default retention %",
         "AGUINALDO_DEFAULTHelp": "Prefills the retention of the rules of professionals who retain.",
         "aguinaldoDefaultSummary": "Change the default retention % to {{value}}.",
-        "retentionTitle": "Who retains for aguinaldo",
-        "retentionHelp": "It also prefills the retention when you set rules for that professional.",
+        "retentionTitle": "Aguinaldo retention by professional",
+        "retentionHelp": "It belongs to each professional, not to the service: it comes out of what she is paid on any service and goes to her aguinaldo fund.",
         "retentionRetains": "Retains {{percent}}",
         "retentionNone": "Does not retain (keeps the whole amount)",
         "retentionEditTitle": "Retention of {{name}}",
         "retentionInputLabel": "Retention %",
-        "retentionInputHelp": "Leave it empty if she does not retain. Example: 5.",
+        "retentionInputHelp": "Leave it empty if she does not retain. Example: 5 (out of each commission, 5 points go to the aguinaldo).",
         "retentionSummary": "Change the retention of {{name}} to {{value}}.",
         "retentionNoneSummary": "{{name}} stops retaining for aguinaldo."
       },
@@ -710,8 +710,8 @@
         "NONE": "No movements"
       },
       "guide": {
-        "title": "Let's start: 4 steps and your commissions are running",
-        "intro": "First we define how it is calculated, then we group the services and finally we set rules for each professional. You only do it once.",
+        "title": "Let us start: 3 steps and your commissions are running",
+        "intro": "First we define how it is calculated and then how much each group of services pays. If a professional is paid differently somewhere, you note it later on her page. It is a one-time setup.",
         "progress": "{{done}} of {{total}} steps done",
         "optional": "Optional",
         "whatFor": "What is it for?",
@@ -721,18 +721,18 @@
         "step1": {
           "title": "How it is calculated",
           "done": "Already defined",
-          "todo": "Choose the base and the default %",
-          "why": "Defines whether the commission is calculated on the price with or without VAT and which % is paid when there is no rule.",
+          "todo": "Choose the calculation base and how often you settle",
+          "why": "It defines whether the commission is calculated on the price with or without VAT and how often you settle.",
           "example": "Example: a 100,000 Gs service with the «without VAT» base is commissioned on 90,909 Gs.",
           "start": "See how it is calculated"
         },
         "step2": {
-          "title": "Service groups",
-          "done": "Every service has a group",
-          "todo": "{{count}} services without a group",
-          "why": "A group puts together the services that commission the same way (Color, Nails, Blow-dry…), so you set one rule per group instead of one per service.",
-          "example": "Example: «Nails» groups Manicure, Pedicure and Gel polish.",
-          "start": "Create the groups"
+          "title": "Commission of each group",
+          "done": "Every group has its %",
+          "todo": "Set the % of each group",
+          "why": "A group puts together the services that commission the same way (Color, Nails, Brushing…). You set one % for the group and all its services use it; you only add an exception when something is different.",
+          "example": "Example: «Nails» groups Manicure and Pedicure and pays 30 %.",
+          "start": "Build the groups"
         },
         "step3": {
           "title": "Rules per professional",
@@ -789,6 +789,12 @@
             "title": "{{count}} settlements in draft",
             "help": "They must be approved before they can be paid.",
             "action": "Review"
+          },
+          "noPercent": {
+            "title": "{{count}} groups without a %",
+            "title_one": "{{count}} group without a %",
+            "help": "They pay the general % (0 % unless you changed it).",
+            "action": "Set the %"
           }
         },
         "teamTitle": "Your team",
@@ -986,7 +992,11 @@
           "DRAFT": "Draft: to approve",
           "APPROVED": "Ready to pay",
           "PAID": "Paid on {{date}}"
-        }
+        },
+        "usualPay": "Paid the usual % of each service",
+        "differentIn": "Paid differently in {{count}} services",
+        "differentIn_one": "Paid differently in {{count}} service",
+        "retainsPercent": "retains {{percent}}"
       },
       "pro": {
         "back": "Back to the team",
@@ -1036,7 +1046,47 @@
         "exceptionHint": "Does a specific service commission differently?",
         "exceptionLink": "Set an exception in Advanced",
         "summaryCarried": "Includes {{amount}} carried over from earlier periods.",
-        "summaryLines_one": "{{count}} invoiced line"
+        "summaryLines_one": "{{count}} invoiced line",
+        "rates": {
+          "usualTitle": "{{name}} is paid the usual % of each service",
+          "usualHelp": "It is what the salon pays. Here you only note where she is paid differently.",
+          "usualLink": "See the commissions",
+          "retention": "Aguinaldo retention: {{percent}}",
+          "retentionNone": "Does not retain for aguinaldo",
+          "retentionHelp": "It is hers, not the service's or the group's. It comes out of each commission and goes to her aguinaldo fund.",
+          "differentTitle": "Where she is paid differently",
+          "differentCount": "{{count}} cases",
+          "differentCount_one": "1 case",
+          "add": "+ Add",
+          "none": "{{name}} is paid the usual % everywhere. If she is paid differently in a group or service, add it here.",
+          "groupTitle": "{{group}} · {{count}} of {{total}} services",
+          "normal": "The usual is {{percent}}",
+          "normalVaries": "The usual varies by service",
+          "missing": "{{count}} services of the group use the usual %: {{names}}.",
+          "missing_one": "1 service of the group uses the usual %: {{names}}.",
+          "include": "Include them",
+          "include_one": "Include it",
+          "footer": "Everywhere else she is paid the usual %. «Change» and «Remove» ask since when it applies, as today.",
+          "editTitle": "Change the % in {{what}}",
+          "addTitle": "Where is {{name}} paid differently?",
+          "mode": {
+            "GROUP": "A whole group",
+            "SERVICE": "One service"
+          },
+          "groupLabel": "Group",
+          "serviceLabel": "Service or product",
+          "pickGroup": "Pick a group",
+          "pickService": "Pick a service",
+          "percentLabel": "Commission of {{name}} (%)",
+          "scope": "It is set on the {{count}} services the group has today (the usual is {{normal}}). The ones you add later use the usual % and we warn you here so you can include them.",
+          "scope_one": "It is set on the service the group has today (the usual is {{normal}}). The ones you add later use the usual % and we warn you here so you can include them.",
+          "example": "On Gs. 100,000 she is paid {{paid}}.",
+          "exampleRetains": "With her retention of {{percent}}: on Gs. 100,000 she is paid {{paid}} and {{retained}} go to her aguinaldo.",
+          "applyGroup": "Commission of {{name}} in {{group}}: {{percent}}",
+          "applyService": "Commission of {{name}} in {{service}}: {{percent}}",
+          "applyInclude": "Include {{count}} services of {{group}} in {{name}}'s %: {{percent}}",
+          "applyRemove": "Remove where {{name}} is paid differently in {{what}} (back to the usual %)"
+        }
       },
       "activity": {
         "intro": "Everything that happened with commissions: every movement and the reports.",
@@ -1048,13 +1098,14 @@
         "advancedLink": "Advanced options (exceptions, scheduled changes and history)",
         "step1": {
           "title": "How it is calculated",
-          "help": "The calculation base, the default % and how often you settle.",
-          "summary": "{{base}} · {{service}} services · {{product}} products · {{periodicity}}"
+          "help": "The calculation base and how often you settle.",
+          "summary": "{{base}} · {{service}} services · {{product}} products · {{periodicity}}",
+          "summaryShort": "{{base}} · {{periodicity}}"
         },
         "step2": {
-          "title": "Groups and services",
-          "help": "Put together the services that commission the same way, to set one rule per group.",
-          "open": "Organize groups and services",
+          "title": "Commission of each service",
+          "help": "Set how much each group of services pays.",
+          "open": "Set the %",
           "tileGroups_one": "group",
           "tileGroups_other": "groups",
           "ofTotal": "{{done}} of {{total}}",
@@ -1062,15 +1113,16 @@
           "tileUngrouped_one": "without a group: it needs a rule",
           "tileUngrouped_other": "without a group: they need a rule",
           "yourGroups": "Your groups:",
-          "summary_one": "{{count}} group · {{done}} of {{total}} services already have a group",
-          "summary_other": "{{count}} groups · {{done}} of {{total}} services already have a group",
-          "intro_one": "Put together the services that commission the same way, to set one rule per group. The service without a group uses the default %.",
-          "intro_other": "Put together the services that commission the same way, to set one rule per group. The {{count}} without a group use the default %.",
-          "missing_one": "{{count}} without a group",
-          "missing_other": "{{count}} without a group",
+          "summary_one": "{{count}} group · {{withPercent}} with its %",
+          "summary_other": "{{count}} groups · {{withPercent}} with their %",
+          "intro_one": "Set how much each group of services pays. The group without a % pays the general %. If a professional is paid differently, it is noted on her page.",
+          "intro_other": "Set how much each group of services pays. The {{count}} groups without a % pay the general %. If a professional is paid differently, it is noted on her page.",
+          "missing_one": "{{count}} group without a %",
+          "missing_other": "{{count}} groups without a %",
           "noGroups": "No groups yet",
           "seeUngrouped_one": "See the service without a group",
-          "seeUngrouped_other": "See the {{count}} without a group"
+          "seeUngrouped_other": "See the {{count}} without a group",
+          "order": "Organize groups and services"
         },
         "step3": {
           "title": "Rules per professional",
@@ -1111,11 +1163,12 @@
       },
       "advanced": {
         "precedenceTitle": "Which rule wins",
-        "precedence1": "Professional + specific service",
-        "precedence2": "Professional + group",
-        "precedence3": "Specific service",
-        "precedence4": "Group",
-        "precedence5": "Default %"
+        "precedence1": "Default %",
+        "precedence2": "% of the group",
+        "precedence3": "% of the service",
+        "precedence4": "% of the professional for that service",
+        "precedence5": "Default %",
+        "precedenceHelp": "From the most general to the most specific: the last one that applies wins."
       },
       "workspace": {
         "title": "Groups and services",
@@ -1127,8 +1180,8 @@
         "createGroupInline": "+ Create a group",
         "rulesFor_one": "rule set for {{count}} professional",
         "rulesFor_other": "rules set for {{count}} professionals",
-        "rulesHint": "This group's rules are set per professional.",
-        "rulesLink": "See the rules per professional",
+        "rulesHint": "What this group pays is set under «Commissions».",
+        "rulesLink": "Set the group's %",
         "groupEmpty": "This group has no services yet. Add them with «Add services».",
         "pick": "Choose a group from the list to see its services.",
         "addItems": "Add services",
@@ -1154,13 +1207,69 @@
         "addMoving_one": "{{count}} already has a group and moves",
         "addMoving_other": "{{count}} already have a group and move",
         "addConfirm_one": "Add {{count}} to {{name}}",
-        "addConfirm_other": "Add {{count}} to {{name}}"
+        "addConfirm_other": "Add {{count}} to {{name}}",
+        "noPercent": "No %"
       },
       "periodicityShort": {
         "WEEKLY": "weekly settlement",
         "BIWEEKLY": "biweekly settlement",
         "MONTHLY": "monthly settlement",
         "MANUAL": "manual settlement"
+      },
+      "rates": {
+        "title": "Commissions by group and service",
+        "subtitle": "What the salon pays for each service, the same for every professional.",
+        "help": "Each service pays its group's %, unless it has its own. What has no group nor its own % pays the general %. If a professional is paid differently, it is noted on her page.",
+        "general": "General % of {{kind}}",
+        "generalHelp": "For what has no group nor its own %",
+        "kind": {
+          "SERVICE": "services",
+          "PRODUCT": "products"
+        },
+        "itemKind": {
+          "PRODUCT": "product"
+        },
+        "noPercent": "No %",
+        "setPercent": "Set %",
+        "own": "Set its own %",
+        "remove": "Remove",
+        "source": {
+          "SERVICE": "own",
+          "GROUP": "from the group",
+          "GENERAL": "general"
+        },
+        "exceptions": "{{count}} professionals are paid differently: {{names}}",
+        "exceptions_one": "1 professional is paid differently: {{names}}",
+        "noServices": "This group has no services yet.",
+        "ungrouped": "No group",
+        "ungroupedHelp": "{{count}} services · pay the general % ({{percent}})",
+        "ungroupedHelp_one": "{{count}} service · pays the general % ({{percent}})",
+        "order": "Organize into groups",
+        "newGroup": "+ New group",
+        "footer": "«Change» and «Set its own %» ask since when it applies, as today. The product cost is under «More options» in each window.",
+        "editGeneral": "General % of {{kind}}",
+        "editGroup": "Commission of the group {{name}}",
+        "editService": "Commission of {{name}}",
+        "percentLabel": "Commission (%)",
+        "percentHelp": "It is the whole commission. If the professional retains for aguinaldo, it comes out of this %.",
+        "more": "More options",
+        "fixedLabel": "Product cost (Gs)",
+        "fixedHelp": "It is deducted from the price before the % is calculated. Leave it empty if there is none.",
+        "destinationLabel": "The product cost goes to",
+        "destinationDefault": "What the salon says ({{value}})",
+        "destination": {
+          "PROFESSIONAL": "The professional",
+          "SALON": "The salon"
+        },
+        "validation": {
+          "required": "Enter the commission %, for example 40 or 37.5.",
+          "percent": "The % must be between 0 and 100, with up to 2 decimals (for example 40 or 37.5).",
+          "fixed": "The product cost must be an amount in guaraníes, without decimals (for example 20,000)."
+        },
+        "applyGeneral": "New general % of {{kind}}: {{percent}}",
+        "applyGroup": "Commission of the group {{name}}: {{percent}}",
+        "applyService": "Commission of {{name}}: {{percent}}",
+        "applyRemove": "Remove the own % of {{name}} (it goes back to its group's)"
       }
     },
     "appTitle": "Flowbit",

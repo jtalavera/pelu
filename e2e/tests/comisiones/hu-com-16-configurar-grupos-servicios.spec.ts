@@ -50,7 +50,7 @@ async function salon(request: Parameters<typeof createGroup>[0]) {
 
 // ── AC1 · AC2 · Configurar muestra el estado de cada paso ─────────────────────────────────────
 
-test("AC1 · Configurar: el paso «Grupos y servicios» muestra cuántos grupos hay, cuántos servicios ya tienen grupo y cuántos no", async ({
+test("AC1 · Configurar: el paso «Comisión de cada servicio» muestra cuántos grupos hay y cuántos ya tienen su %", async ({
   page,
   request,
 }) => {
@@ -58,36 +58,37 @@ test("AC1 · Configurar: el paso «Grupos y servicios» muestra cuántos grupos 
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
 
-  // 2 groups; 3 grouped of 7 services (the world's 2 + 5 created); 4 without a group.
-  // HU-COM-18: each step is one folded line; the first one with something missing (step 2) opens by itself.
-  await expect(page.getByTestId("config-step-2")).toContainText("Groups and services");
-  await expect(page.getByTestId("config-step-2-summary")).toHaveText("2 groups · 3 of 7 services already have a group");
-  await expect(page.getByTestId("config-step-2-pill")).toHaveText("4 without a group");
+  // HU-COM-20: 2 groups, none with its % yet. Each step is one folded line; the first one with something
+  // missing (step 2) opens by itself.
+  await expect(page.getByTestId("config-step-2")).toContainText("Commission of each service");
+  await expect(page.getByTestId("config-step-2-summary")).toHaveText("2 groups · 0 with their %");
+  await expect(page.getByTestId("config-step-2-pill")).toHaveText("2 groups without a %");
   await expect(page.getByTestId("config-step-2-toggle")).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByTestId("config-group-chip")).toHaveText(["Color 2", "Manos y pies 1"]);
-  // The step 3 says who is missing rules, and the other steps still show their values once opened.
-  await expect(page.getByTestId("config-step-3-pill")).toContainText("without rules");
-  await openSetupStep(page, 3);
-  await expect(page.getByTestId("config-step-3-status")).toContainText("professionals without rules");
+  await expect(page.getByTestId("config-group-chip")).toHaveText(["Color No %", "Manos y pies No %"]);
+  // The other steps still show their values once opened; there is no «rules per professional» step.
+  await expect(page.getByTestId("config-step-3")).toContainText("Aguinaldo");
   await openSetupStep(page, 1);
   await expect(page.getByTestId("config-step-1").getByTestId("commission-setting-BASE")).toBeVisible();
   await expect(page.getByTestId("config-exceptions")).toBeVisible();
 });
 
-test("AC2 · los atajos de Configurar llevan al grupo, a «Sin grupo», a las excepciones y a lo programado", async ({ page, request }) => {
-  const s = await salon(request);
+test("AC2 · los atajos de Configurar llevan a poner los %, a ordenar los grupos, a cada grupo, a las excepciones y a lo programado", async ({
+  page,
+  request,
+}) => {
+  await salon(request);
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
 
   await openSetupStep(page, 2);
   await page.getByTestId("config-group-chip").filter({ hasText: "Manos y pies" }).click();
-  await expect(page).toHaveURL(new RegExp(`/configurar/grupos\\?group=${s.gManos.id}$`));
-  await expect(page.getByTestId("group-title")).toHaveText("Manos y pies");
+  await expect(page).toHaveURL(/\/configurar\/comisiones\?q=Manos%20y%20pies$/);
+  await expect(page.getByTestId("rates-group")).toHaveAttribute("data-group-name", "Manos y pies");
 
-  await page.getByTestId("config-back").click();
+  await page.getByTestId("rates-back").click();
   await openSetupStep(page, 2);
-  await page.getByTestId("config-step-2-ungrouped-link").click();
-  await expect(page).toHaveURL(/\/configurar\/grupos\?group=none$/);
+  await page.getByTestId("config-step-2-order-link").click();
+  await expect(page).toHaveURL(/\/configurar\/grupos$/);
   await expect(page.getByTestId("group-none")).toHaveAttribute("aria-current", "true");
 
   await page.getByTestId("config-back").click();
@@ -123,7 +124,7 @@ test("AC4 · AC5 · la lista de grupos con «Sin grupo» arriba y sus servicios 
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
   await openSetupStep(page, 2);
-  await page.getByTestId("config-step-2-link").click();
+  await page.getByTestId("config-step-2-order-link").click();
 
   // It opens on «No group» (what is left to do) with its counter; groups follow with their counts.
   await expect(page.getByTestId("group-none")).toHaveAttribute("aria-current", "true");
@@ -154,7 +155,7 @@ test("AC6 · buscar un servicio muestra en qué grupo está y se puede mover des
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
   await openSetupStep(page, 2);
-  await page.getByTestId("config-step-2-link").click();
+  await page.getByTestId("config-step-2-order-link").click();
 
   await page.getByTestId("groups-search").fill("mani");
   await expect(page.getByTestId("groups-results")).toContainText("Results for «mani»");
@@ -184,7 +185,7 @@ test("AC7 · «Agregar servicios»: primero los que no tienen grupo, marca los s
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
   await openSetupStep(page, 2);
-  await page.getByTestId("config-step-2-link").click();
+  await page.getByTestId("config-step-2-order-link").click();
   const pestanas = await createGroup(request, w.adminToken, "Pestañas");
   await page.reload();
   await page.getByTestId("group-row").filter({ hasText: "Pestañas" }).click();

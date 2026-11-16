@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "@design-system";
 import i18n from "../../i18n";
-import type { GroupRuleRow, Overview, OverviewRow, ProfessionalRulesView } from "../../api/commissions";
+import type { Overview, OverviewRow, RateException, RateItem, RatesView } from "../../api/commissions";
 import CommissionsLayout from "./CommissionsLayout";
 import HomePage from "./HomePage";
 import LiquidarPage from "./LiquidarPage";
@@ -14,7 +14,7 @@ import { AguinaldoGuard, TeamLayout, TeamList } from "./TeamPage";
 
 const api = vi.hoisted(() => ({
   getOverview: vi.fn(),
-  getProfessionalRules: vi.fn(),
+  getRates: vi.fn(),
   getProfessionalsSummary: vi.fn(),
   getAguinaldo: vi.fn(),
   getAguinaldoDetail: vi.fn(),
@@ -65,7 +65,7 @@ const overview = (over: Partial<Overview> = {}): Overview => ({
   paid: 1,
   linesWithoutProfessional: 0,
   ungroupedServices: 0,
-  professionalsWithoutRules: 1,
+  groupsWithoutPercent: 1,
   groupCount: 3,
   aguinaldoEnabled: false,
   aguinaldoBalance: 0,
@@ -73,36 +73,63 @@ const overview = (over: Partial<Overview> = {}): Overview => ({
   ...over,
 });
 
-const rule = (over: Partial<GroupRuleRow>): GroupRuleRow => ({
-  groupId: 1,
-  groupName: "Brushing",
-  serviceCount: 2,
-  ownRule: true,
-  percent: 45,
-  retentionPercent: 5,
-  fixedAmount: 0,
-  fixedDestination: null,
-  effectiveFixedDestination: "PROFESSIONAL",
-  versionId: 1,
+const item = (serviceId: number, name: string, over: Partial<RateItem> = {}): RateItem => ({
+  serviceId,
+  name,
+  kind: "SERVICE",
+  ownPercent: null,
+  ownFixedAmount: null,
+  ownFixedDestination: null,
+  normalPercent: 35,
+  normalFixedAmount: 0,
+  normalFixedDestination: "PROFESSIONAL",
+  source: "GROUP",
   scheduled: false,
+  exceptions: [],
   ...over,
 });
+const gabyPaid = (percent: number): RateException => ({ professionalId: 1, professionalName: "Gaby", percent, fixedAmount: 0, fixedDestination: null, scheduled: false });
 
-const gaby: ProfessionalRulesView = {
-  professionalId: 1,
-  professionalName: "Gaby",
-  active: true,
+/** Corte pays 35 % (Gaby 40 % in three of its four services); Alisado pays 40 %, «pelo largo» 30 % and Gaby 50 % there. */
+const rates: RatesView = {
+  date: "2026-11-15",
   baseType: "TAX_INCLUDED",
-  aguinaldoEnabled: true,
-  retentionProfilePercent: 5,
+  generalServicePercent: 10,
+  generalProductPercent: 5,
   defaultFixedDestination: "PROFESSIONAL",
-  defaultPercentService: 10,
   groups: [
-    rule({}),
-    rule({ groupId: 2, groupName: "Pestañas", serviceCount: 3, percent: 40, retentionPercent: 5, fixedAmount: 20000, fixedDestination: "PROFESSIONAL", versionId: 2 }),
-    rule({ groupId: 3, groupName: "Manos", ownRule: false, percent: null, retentionPercent: null, fixedAmount: null, versionId: null }),
+    {
+      id: 1,
+      name: "Corte",
+      percent: 35,
+      fixedAmount: null,
+      fixedDestination: null,
+      scheduled: false,
+      items: [
+        item(1, "Corte dama", { exceptions: [gabyPaid(40)] }),
+        item(2, "Corte caballero", { exceptions: [gabyPaid(40)] }),
+        item(3, "Corte niño", { exceptions: [gabyPaid(40)] }),
+        item(4, "Corte con tijera"),
+      ],
+    },
+    {
+      id: 2,
+      name: "Alisado",
+      percent: 40,
+      fixedAmount: null,
+      fixedDestination: null,
+      scheduled: false,
+      items: [
+        item(5, "Alisado pelo mediano", { normalPercent: 40 }),
+        item(6, "Alisado pelo largo", { ownPercent: 30, normalPercent: 30, source: "SERVICE", exceptions: [gabyPaid(50)] }),
+      ],
+    },
   ],
+  ungrouped: [item(7, "Baño de crema", { normalPercent: 10, source: "GENERAL" })],
 };
+
+/** What the «how to apply» dialog says is changing (its summary is the description of the dialog). */
+const applyText = async () => (await screen.findByTestId("commission-apply-dialog")).closest('[role="dialog"]')?.textContent ?? "";
 
 function mount(initial: string, ov: Overview = overview()) {
   api.getOverview.mockResolvedValue(ov);
@@ -138,7 +165,7 @@ beforeEach(async () => {
     ],
   });
   api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 0, balances: [] });
-  api.getProfessionalRules.mockResolvedValue(gaby);
+  api.getRates.mockResolvedValue(rates);
   api.getApplyModeOptions.mockResolvedValue({
     currentPeriod: { periodicity: "BIWEEKLY", from: "2026-11-01", to: "2026-11-15", nextFrom: "2026-11-16" },
     immediateFrom: "2026-11-14T12:00:00Z",
@@ -222,29 +249,30 @@ describe("HU-COM-15 · Inicio", () => {
   it("lista solo lo que hay para revisar", async () => {
     mount("/app/commissions");
     await screen.findByTestId("home-hero");
-    expect(screen.getByTestId("home-review-noRules")).toBeTruthy();
+    expect(screen.getByTestId("home-review-noPercent")).toBeTruthy();
     expect(screen.getByTestId("home-review-drafts")).toBeTruthy();
     expect(screen.queryByTestId("home-review-lines")).toBeNull();
     expect(screen.queryByTestId("home-review-ungrouped")).toBeNull();
   });
 
-  it("sin grupos muestra la guía de primera vez con cuatro pasos", async () => {
+  it("sin grupos muestra la guía de primera vez con tres pasos", async () => {
     mount("/app/commissions", overview({ groupCount: 0, rows: [], unsettled: 0, drafts: 0, approved: 0, paid: 0, total: 0 }));
     expect(await screen.findByTestId("setup-progress")).toBeTruthy();
-    for (const n of [1, 2, 3, 4]) expect(screen.getByTestId(`setup-step-${n}`)).toBeTruthy();
+    for (const n of [1, 2, 3]) expect(screen.getByTestId(`setup-step-${n}`)).toBeTruthy();
+    expect(screen.queryByTestId("setup-step-4")).toBeNull();
   });
 });
 
 describe("HU-COM-15 · Equipo", () => {
-  it("lista a cada profesional con su estado y filtra los que no tienen reglas", async () => {
-    const user = userEvent.setup();
+  it("lista a cada profesional con su estado y dice si cobra lo normal o distinto en algo", async () => {
     mount("/app/commissions/equipo");
     expect(await screen.findAllByTestId("team-card")).toHaveLength(5);
     expect(screen.getByTestId("team-counts").textContent).toBe("5 profesionales activas · 4 con comisiones · 1 sin movimientos");
-    await user.click(screen.getByTestId("team-filter-norules"));
-    const cards = screen.getAllByTestId("team-card");
-    expect(cards).toHaveLength(1);
-    expect(cards[0].textContent).toContain("Norma");
+    const byName = (n: string) => screen.getAllByTestId("team-card").find((c) => c.dataset.professional === n)!;
+    expect(within(byName("Gaby")).getByTestId("team-card-rules").textContent).toBe("Cobra distinto en 2 servicios");
+    // Nothing loaded for her: she is paid the usual % of each service (not a gap to fill).
+    expect(within(byName("Norma")).getByTestId("team-card-rules").textContent).toBe("Cobra lo normal de cada servicio");
+    expect(screen.queryByTestId("team-filter-norules")).toBeNull();
   });
 
   it("las que no tienen movimientos se ven con su estado y se filtran aparte; las pagadas dicen cuándo", async () => {
@@ -456,72 +484,101 @@ describe("HU-COM-15 · ficha de la profesional", () => {
     expect(screen.getByTestId("pro-summary-lines").textContent).toContain("3 líneas");
   });
 
-  it("cuenta cada regla en una frase (cobra, retiene y costo de producto)", async () => {
+  it("«Comisiones» dice que cobra lo normal y lista solo donde cobra distinto, juntando el grupo", async () => {
     mount("/app/commissions/equipo/1?tab=rules");
-    const cards = await screen.findAllByTestId("rule-card");
-    expect(cards).toHaveLength(2);
-    expect(within(cards[0]).getByTestId("rule-card-sentence").textContent).toContain("Cobra 45 %");
-    expect(within(cards[0]).getByTestId("rule-card-sentence").textContent).toContain("retiene 5 %");
-    const pestanas = within(cards[1]).getByTestId("rule-card-sentence").textContent ?? "";
-    expect(pestanas).toMatch(/costo de producto .*20\.000/);
-    expect(pestanas).toContain("para ella");
+    expect(await screen.findByTestId("pro-rates-usual")).toBeTruthy();
+    const rows = await screen.findAllByTestId("pro-rate-row");
+    expect(rows.map((r) => r.dataset.name)).toEqual(["Corte", "Alisado pelo largo"]);
+    expect(screen.getByTestId("pro-differences-count").textContent).toBe("2 casos");
+    const corte = rows[0];
+    expect(corte.dataset.kind).toBe("GROUP");
+    expect(within(corte).getByTestId("pro-rate-title").textContent).toBe("Corte · 3 de 4 servicios");
+    expect(within(corte).getByTestId("pro-rate-percent").textContent).toBe("40 %");
+    expect(within(corte).getByTestId("pro-rate-normal").textContent).toBe("Lo normal es 35 %");
+    // The service added later to the group does not inherit hers: it says so and offers to include it.
+    expect(within(corte).getByTestId("pro-rate-missing").textContent).toContain("Corte con tijera");
+    expect(within(rows[1]).getByTestId("pro-rate-percent").textContent).toBe("50 %");
+    expect(within(rows[1]).getByTestId("pro-rate-normal").textContent).toBe("Lo normal es 30 %");
   });
 
-  it("editar una regla muestra el ejemplo en vivo y pide cómo aplicarla", async () => {
+  it("cambiar, quitar o incluir piden cómo aplicar el cambio y dicen qué cambia", async () => {
     const user = userEvent.setup();
     mount("/app/commissions/equipo/1?tab=rules");
-    const cards = await screen.findAllByTestId("rule-card");
-    await user.click(within(cards[0]).getByTestId("rule-card-edit"));
-    const paid = await screen.findByTestId("rule-paid");
-    await user.clear(paid);
-    await user.type(paid, "50");
-    // 100.000 al 50 % = 50.000 ahora; 5 % al aguinaldo = 5.000
-    expect(screen.getByTestId("example-pays").textContent).toContain("50.000");
-    expect(screen.getByTestId("example-retention").textContent).toContain("5.000");
-    await user.click(screen.getByTestId("rule-editor-next"));
-    expect(await screen.findByTestId("commission-apply-dialog")).toBeTruthy();
+    const rows = await screen.findAllByTestId("pro-rate-row");
+    await user.click(within(rows[0]).getByTestId("pro-rate-edit"));
+    const input = await screen.findByTestId("pro-rate-percent-input");
+    await user.clear(input);
+    await user.type(input, "45");
+    await user.click(screen.getByTestId("pro-rate-save"));
+    expect(await applyText()).toContain("Comisión de Gaby en Corte: 45 %");
+    cleanup();
+    mount("/app/commissions/equipo/1?tab=rules");
+    const again = await screen.findAllByTestId("pro-rate-row");
+    await user.click(within(again[1]).getByTestId("pro-rate-remove"));
+    expect(await applyText()).toContain("vuelve a lo normal");
+    cleanup();
+    mount("/app/commissions/equipo/1?tab=rules");
+    await user.click(await screen.findByTestId("pro-rate-include"));
+    expect(await applyText()).toContain("Incluir 1 servicios de Corte");
   });
 
-  it("valida que lo que se paga más lo que se retiene no pase de 100 %", async () => {
+  it("agregar: un grupo entero se carga en cada uno de sus servicios y el ejemplo muestra lo que se le paga", async () => {
+    const user = userEvent.setup();
+    api.getProfessionalsSummary.mockResolvedValue({
+      aguinaldoEnabled: true,
+      professionals: [{ professionalId: 1, name: "Gaby", ruleCount: 2, retentionPercent: 5 }],
+    });
+    mount("/app/commissions/equipo/1?tab=rules");
+    await screen.findAllByTestId("pro-rate-row");
+    await user.click(screen.getByTestId("pro-rates-add"));
+    await user.selectOptions(await screen.findByTestId("pro-rate-group"), "2");
+    await user.type(screen.getByTestId("pro-rate-percent-input"), "45");
+    expect(screen.getByTestId("pro-rate-scope").textContent).toContain("2 servicios");
+    // 45 % of Gs. 100.000, with her 5 % retention: 40.000 paid and 5.000 to the fund.
+    expect(screen.getByTestId("pro-rate-example").textContent).toContain("40.000");
+    expect(screen.getByTestId("pro-rate-example").textContent).toContain("5.000");
+    await user.click(screen.getByTestId("pro-rate-save"));
+    expect(await applyText()).toContain("Comisión de Gaby en Alisado: 45 %");
+  });
+
+  it("agregar valida el %, y un servicio suelto también se puede elegir", async () => {
     const user = userEvent.setup();
     mount("/app/commissions/equipo/1?tab=rules");
-    const cards = await screen.findAllByTestId("rule-card");
-    await user.click(within(cards[0]).getByTestId("rule-card-edit"));
-    const paid = await screen.findByTestId("rule-paid");
-    await user.clear(paid);
-    await user.type(paid, "98");
-    await user.click(screen.getByTestId("rule-editor-next"));
-    expect((await screen.findByRole("alert")).textContent).toMatch(/100/);
+    await screen.findAllByTestId("pro-rate-row");
+    await user.click(screen.getByTestId("pro-rates-add"));
+    await user.click(await screen.findByTestId("pro-rate-mode-SERVICE"));
+    await user.selectOptions(screen.getByTestId("pro-rate-service"), "7");
+    await user.type(screen.getByTestId("pro-rate-percent-input"), "150");
+    await user.click(screen.getByTestId("pro-rate-save"));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/entre 0 y 100/);
     expect(screen.queryByTestId("commission-apply-dialog")).toBeNull();
   });
 
-  it("agregar una regla ofrece solo los grupos que todavía no tiene y sugiere su retención usual", async () => {
+  it("la retención de aguinaldo es de la profesional: solo aparece con Aguinaldo activo y pide desde cuándo aplica", async () => {
     const user = userEvent.setup();
     mount("/app/commissions/equipo/1?tab=rules");
-    await screen.findAllByTestId("rule-card");
-    await user.click(screen.getByTestId("rule-add"));
-    const select = (await screen.findByTestId("rule-add-group")) as HTMLSelectElement;
-    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(["Manos"]);
-    await user.click(screen.getByTestId("rule-add-confirm"));
-    expect(((await screen.findByTestId("rule-retention")) as HTMLInputElement).value).toBe("5");
-  });
-
-  it("sin Aguinaldo activado el editor no ofrece retención y la ficha no muestra la solapa", async () => {
-    api.getProfessionalRules.mockResolvedValue({ ...gaby, aguinaldoEnabled: false });
-    const user = userEvent.setup();
-    mount("/app/commissions/equipo/1?tab=rules");
-    const cards = await screen.findAllByTestId("rule-card");
+    await screen.findAllByTestId("pro-rate-row");
+    expect(screen.queryByTestId("pro-retention")).toBeNull();
     expect(screen.queryByTestId("pro-tab-aguinaldo")).toBeNull();
-    await user.click(within(cards[0]).getByTestId("rule-card-edit"));
-    await screen.findByTestId("rule-paid");
-    expect(screen.queryByTestId("rule-retention")).toBeNull();
+    cleanup();
+    api.getProfessionalsSummary.mockResolvedValue({
+      aguinaldoEnabled: true,
+      professionals: [{ professionalId: 1, name: "Gaby", ruleCount: 2, retentionPercent: 5 }],
+    });
+    mount("/app/commissions/equipo/1?tab=rules", overview({ aguinaldoEnabled: true }));
+    expect((await screen.findByTestId("pro-retention-current")).textContent).toBe("Retención para aguinaldo: 5 %");
+    await user.click(screen.getByTestId("pro-retention-edit"));
+    const input = await screen.findByTestId("pro-retention-percent");
+    await user.clear(input);
+    await user.type(input, "7");
+    await user.click(screen.getByTestId("pro-retention-save"));
+    expect(await applyText()).toContain("Cambiar la retención de Gaby a 7 %");
   });
 
-  it("quitar una regla pide cómo aplicar el cambio con valor vacío", async () => {
-    const user = userEvent.setup();
+  it("sin nada cargado dice que cobra lo normal en todo", async () => {
+    api.getRates.mockResolvedValue({ ...rates, groups: rates.groups.map((g) => ({ ...g, items: g.items.map((i) => ({ ...i, exceptions: [] })) })) });
     mount("/app/commissions/equipo/1?tab=rules");
-    const cards = await screen.findAllByTestId("rule-card");
-    await user.click(within(cards[0]).getByTestId("rule-card-remove"));
-    expect(await screen.findByTestId("commission-apply-dialog")).toBeTruthy();
+    expect((await screen.findByTestId("pro-differences-empty")).textContent).toContain("cobra lo normal en todo");
+    expect(screen.queryAllByTestId("pro-rate-row")).toHaveLength(0);
   });
 });

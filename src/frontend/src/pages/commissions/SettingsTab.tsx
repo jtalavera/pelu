@@ -45,8 +45,8 @@ export function SettingsTab({
   slots,
 }: {
   part?: "setup" | "advanced";
-  /** HU-COM-16/18: «Configurar» supplies steps 2 and 3 (they live on other pages) and its closing block. */
-  slots?: { step2?: StepSlot; step3?: StepSlot; after?: (ctx: { scheduledCount: number }) => ReactNode };
+  /** HU-COM-16/18/20: «Configurar» supplies step 2 (it lives on other pages) and its closing block. */
+  slots?: { step2?: StepSlot; after?: (ctx: { scheduledCount: number }) => ReactNode };
 } = {}) {
   const { t } = useTranslation();
   const { refresh: refreshOverview } = useOverview();
@@ -91,16 +91,6 @@ export function SettingsTab({
 
   const rows: { scope: Exclude<Editing, null>; label: string; current: string }[] = [
     { scope: "BASE", label: t("femme.commissions.settings.baseTitle"), current: t(`femme.commissions.base.${settings.base}`) },
-    {
-      scope: "DEFAULT_SERVICE",
-      label: t("femme.commissions.settings.DEFAULT_SERVICE"),
-      current: formatPercent(settings.defaultPercentService),
-    },
-    {
-      scope: "DEFAULT_PRODUCT",
-      label: t("femme.commissions.settings.DEFAULT_PRODUCT"),
-      current: formatPercent(settings.defaultPercentProduct),
-    },
     {
       scope: "FIXED_DESTINATION",
       label: t("femme.commissions.settings.FIXED_DESTINATION"),
@@ -329,8 +319,7 @@ export function SettingsTab({
   const steps: { n: number; tone: StepTone }[] = [
     { n: 1, tone: "done" },
     { n: 2, tone: slots?.step2?.tone ?? "done" },
-    { n: 3, tone: slots?.step3?.tone ?? "done" },
-    { n: 4, tone: step4Tone },
+    { n: 3, tone: step4Tone },
   ];
   /** The first step with something missing opens by itself (when the screen appears) and carries the one filled button. */
   const firstPending = steps.find((x) => x.tone === "pending")?.n ?? null;
@@ -338,11 +327,12 @@ export function SettingsTab({
   const isOpen = (n: number) => toggled[n] ?? n === initialOpen.current;
   const toggle = (n: number) => setToggled((cur) => ({ ...cur, [n]: !(cur[n] ?? n === initialOpen.current) }));
 
-  const step = (n: number, tone: StepTone, summary: ReactNode, pill: string | undefined, body: ReactNode) => (
+  /** `key` picks the texts of the step (the aguinaldo step keeps the block «step4»). */
+  const step = (n: number, key: number, tone: StepTone, summary: ReactNode, pill: string | undefined, body: ReactNode) => (
     <ConfigStep
       key={n}
       n={n}
-      title={t(`femme.commissions.config.step${n}.title`)}
+      title={t(`femme.commissions.config.step${key}.title`)}
       summary={summary}
       tone={tone}
       pill={pill}
@@ -366,19 +356,18 @@ export function SettingsTab({
           <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
             {step(
               1,
+              1,
               "done",
-              t("femme.commissions.config.step1.summary", {
+              t("femme.commissions.config.step1.summaryShort", {
                 base: t(`femme.commissions.base.${settings.base}`),
-                service: formatPercent(settings.defaultPercentService),
-                product: formatPercent(settings.defaultPercentProduct),
                 periodicity: t(`femme.commissions.periodicityShort.${settings.periodicity}`),
               }),
               undefined,
-              settingRows(["BASE", "DEFAULT_SERVICE", "DEFAULT_PRODUCT", "PERIODICITY"]),
+              settingRows(["BASE", "PERIODICITY"]),
             )}
-            {slots?.step2 && step(2, slots.step2.tone, slots.step2.summary, slots.step2.pill, slots.step2.body?.(firstPending === 2))}
-            {slots?.step3 && step(3, slots.step3.tone, slots.step3.summary, slots.step3.pill, slots.step3.body?.(firstPending === 3))}
+            {slots?.step2 && step(2, 2, slots.step2.tone, slots.step2.summary, slots.step2.pill, slots.step2.body?.(firstPending === 2))}
             {step(
+              3,
               4,
               step4Tone,
               step4Summary,
@@ -607,7 +596,7 @@ export function SettingsTab({
               type="button"
               className="min-h-11 w-full sm:w-auto"
               data-testid="commission-retention-save"
-              onClick={async () => {
+              onClick={() => {
                 if (!retention) return;
                 const raw = retention.value.trim();
                 const parsed = raw === "" ? null : parsePercentInput(raw);
@@ -615,23 +604,18 @@ export function SettingsTab({
                   setRetentionError(t("femme.commissions.validation.percent"));
                   return;
                 }
-                try {
-                  // It only prefills the rules: no calculation changes, so no apply-mode question.
-                  await applyChanges({
-                    changes: [{ scope: "RETENTION_PROFILE", professionalId: retention.professionalId, value: parsed }],
-                    applyMode: null,
-                    replacePending: true,
-                    preview: false,
-                  });
-                  setRetention(null);
-                  setNotice(t("femme.commissions.applyDialog.applied"));
-                  await load();
-                } catch (err) {
-                  setRetentionError(translateApiError(err, t));
-                }
+                // HU-COM-20: the retention comes out of what she is paid, so it asks since when it applies.
+                setApply({
+                  change: { scope: "RETENTION_PROFILE", professionalId: retention.professionalId, value: parsed },
+                  summary:
+                    parsed === null
+                      ? t("femme.commissions.settings.retentionNoneSummary", { name: retention.name })
+                      : t("femme.commissions.settings.retentionSummary", { name: retention.name, value: formatPercent(parsed) }),
+                });
+                setRetention(null);
               }}
             >
-              {t("femme.commissions.common.save")}
+              {t("femme.commissions.rules.apply")}
             </Button>
           </>
         }

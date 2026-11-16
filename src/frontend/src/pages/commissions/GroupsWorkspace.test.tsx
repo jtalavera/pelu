@@ -44,8 +44,8 @@ describe("HU-COM-16 · Grupos y servicios", () => {
   beforeEach(async () => {
     await i18n.changeLanguage("es");
     api.getGroups.mockResolvedValue([
-      { id: 1, name: "Brushing", serviceCount: 1, serviceNames: ["Brushing pelo corto"], professionalsWithRule: 4 },
-      { id: 2, name: "Tratamiento", serviceCount: 0, serviceNames: [], professionalsWithRule: 0 },
+      { id: 1, name: "Brushing", serviceCount: 1, serviceNames: ["Brushing pelo corto"], percent: 40 },
+      { id: 2, name: "Tratamiento", serviceCount: 0, serviceNames: [], percent: null },
     ]);
     api.getGroupServices.mockImplementation(async (kind: string) =>
       kind === "PRODUCT"
@@ -94,7 +94,7 @@ describe("HU-COM-16 · Grupos y servicios", () => {
     expect(screen.getAllByTestId("groups-row").map((r) => r.getAttribute("data-name"))).toEqual(["Brushing pelo corto"]);
     expect(screen.getByTestId("group-title").textContent).toBe("Brushing");
     expect(screen.getByTestId("group-summary").textContent).toContain("1 servicio");
-    expect(screen.getByTestId("group-summary").textContent).toContain("reglas cargadas para 4 profesionales");
+    expect(screen.getByTestId("group-percent").textContent).toBe("40 %");
     expect(screen.getByTestId("groups-rules-link")).toBeTruthy();
   });
 

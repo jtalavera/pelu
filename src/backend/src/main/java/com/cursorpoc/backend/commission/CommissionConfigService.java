@@ -64,12 +64,13 @@ public class CommissionConfigService {
 
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
-  /** Scopes that never change an amount already (or about to be) calculated. */
+  /**
+   * Scopes that never change an amount already (or about to be) calculated. HU-COM-20: the
+   * retention of a professional is not one of them any more, it comes out of what she is paid.
+   */
   private static final Set<String> NO_CALCULATION_EFFECT =
       Set.of(
-          CommissionConfigScope.PERIODICITY.name(),
-          CommissionConfigScope.AGUINALDO_DEFAULT.name(),
-          CommissionConfigScope.RETENTION_PROFILE.name());
+          CommissionConfigScope.PERIODICITY.name(), CommissionConfigScope.AGUINALDO_DEFAULT.name());
 
   private final CommissionConfigVersionRepository versionRepository;
   private final SalonServiceRepository serviceRepository;
@@ -149,7 +150,7 @@ public class CommissionConfigService {
     }
     CommissionConfigSnapshot snapshot = ledger.snapshot(tenantId);
     Instant now = Instant.now();
-    // C13: periodicity and the retention defaults do not change any calculation → no question.
+    // C13: periodicity and the default retention do not change any calculation → no question.
     boolean onlyPeriodicity =
         request.changes().stream().allMatch(c -> NO_CALCULATION_EFFECT.contains(c.scope()));
 
@@ -414,7 +415,9 @@ public class CommissionConfigService {
     }
   }
 
-  /** Validates a rule value (plain percent or {@code pago|retención|fijo|destino}). */
+  /**
+   * Validates a rule value (plain percent or {@code %|0|fijo|destino}; the retention is ignored).
+   */
   static String parseRuleValue(String raw) {
     CommissionRuleValue value;
     try {
@@ -423,11 +426,8 @@ public class CommissionConfigService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_PERCENT_OUT_OF_RANGE");
     }
     BigDecimal percent = parsePercent(value.percent().toPlainString());
-    BigDecimal retention = parsePercent(value.retentionPercent().toPlainString());
-    if (percent.add(retention).compareTo(HUNDRED) > 0) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "COMMISSION_TOTAL_PERCENT_EXCEEDED");
-    }
+    // HU-COM-20: the retention for aguinaldo is the professional's, not part of a rule any more.
+    BigDecimal retention = BigDecimal.ZERO.setScale(2);
     BigDecimal fixed = value.fixedAmount();
     if (fixed.signum() < 0
         || fixed.compareTo(BigDecimal.valueOf(999_999_999L)) > 0
@@ -613,8 +613,17 @@ public class CommissionConfigService {
             .toList();
     for (SalonService s : items) {
       Optional<CommissionConfigVersion> own = snapshot.ruleAt(s.getId(), null, at);
+      // HU-COM-20: without a % of its own a service pays its group's, then the general of its kind.
+      BigDecimal viaGroup =
+          s.getCommissionGroupId() == null
+              ? null
+              : snapshot
+                  .groupRuleAt(s.getCommissionGroupId(), null, at)
+                  .map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent())
+                  .orElse(null);
       BigDecimal standard =
-          own.map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent()).orElse(general);
+          own.map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent())
+              .orElse(viaGroup != null ? viaGroup : general);
       List<RuleException> exceptions = new ArrayList<>();
       for (Professional p : professionals) {
         snapshot

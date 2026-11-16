@@ -400,6 +400,15 @@ Historia completa y criterios: [HU-COM-17](../user_stories/HU-COM-17-resumen-pro
 - **Equipo** muestra el estado de todas (también «Sin movimientos») y filtra Pagadas y Sin movimientos.
 - La API del resumen agrega `lineCount` y `paidOn` por fila. Sin cambios en el cálculo.
 
+### HU-COM-20 · Comisiones con reglas simples
+
+Historia completa y criterios: [HU-COM-20](../user_stories/HU-COM-20-comisiones-reglas-simples.md). Resumen:
+
+- **Cuatro capas, gana la última:** % por defecto → % del grupo → % del servicio → % de la profesional para ese servicio. Se elimina la regla de la profesional por grupo (queda como atajo «Todo un grupo» al cargar, que escribe una regla por servicio).
+- **La retención de aguinaldo es de la profesional** y sale de la comisión (50 % con retención de 5 % → se paga 45 % y 5 % va al aguinaldo); las reglas ya no la llevan y cambiarla pide desde cuándo aplica.
+- **Configurar en tres pasos** (sin «Reglas por profesional»), nueva pantalla **Configurar › Comisiones** (% general, % por grupo y por servicio) y ficha de la profesional con «Donde cobra distinto» y su retención.
+- Migración V101 de las reglas existentes; `GET /api/commissions/rates`.
+
 ### HU-COM-19 · Anular borradores rápido desde Liquidar
 
 Historia completa y criterios: [HU-COM-19](../user_stories/HU-COM-19-anular-borradores-rapido.md). Resumen:
@@ -501,6 +510,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-16 | Estado de cada paso y atajos en Configurar; buscador; lista de grupos + detalle con «Sin grupo» arriba; mover desde la fila, en lote y por sugerencia; buscar con resultados por grupo; agregar servicios; cambio inmediato y rechazo; crear/renombrar/eliminar; solapa de excepciones; celular. |
 | HU-COM-17 | Liquidar con todas las activas, tramos y subtotales, motivos por fila, «Sin movimientos» al final y su filtro; Inicio con pagado/por pagar, leyenda de la barra, 4 pasos y equipo; Equipo con estados y filtros; celular; `overview` con `lineCount` y `paidOn`. |
 | HU-COM-18 | Configurar en pasos plegables: círculo y etiqueta por estado, resúmenes, abre solo el primer pendiente con un único botón principal, paso 4 según aguinaldo y quién retiene, contador del menú, excepciones y programados siempre a mano; `overview` con `professionalsRetaining`. |
+| HU-COM-20 | Cuatro capas y gana la última (profesional en ese servicio › servicio › grupo › por defecto); retención de la profesional que sale de la comisión (con tope, solo con aguinaldo activo, cambia → pide desde cuándo); Configurar en tres pasos y pendientes; Configurar › Comisiones (general, grupo, servicio, «propio», quitar, costo de producto, buscador); ficha «Donde cobra distinto» (grupo entero → una regla por servicio, incluir los nuevos, cambiar, quitar) y retención; sin «sin reglas» en Inicio y Equipo; conversión de lo existente; `rates`. |
 | HU-COM-19 | «Anular» por fila y en lote solo para borradores; motivo opcional y frecuentes; vuelve a «Sin liquidar» y «Generar de nuevo»; aviso de filas que no son borradores; motivo obligatorio en aprobada (API y detalle). |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |

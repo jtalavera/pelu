@@ -33,6 +33,8 @@ import { loginAs } from "../../fixtures/auth";
  * HU-COM-14 · Comisiones por grupo, retención de aguinaldo y monto fijo por servicio
  * (requirements/user_stories/HU-COM-14-grupos-retencion-aguinaldo-y-monto-fijo.md).
  * Precios con IVA: la base de cálculo se fija en «con IVA», como en el salón.
+ * HU-COM-20: el % de un grupo vale para todas y la retención es de la profesional (sale de la
+ * comisión); las pantallas de reglas por profesional se prueban en hu-com-20.
  */
 let w: CommissionWorld;
 
@@ -48,39 +50,27 @@ test.beforeEach(async ({ request }) => {
   w = await provisionCommissionWorld(request, "HU-COM-14");
 });
 
-type ProRules = {
-  aguinaldoEnabled: boolean;
-  retentionProfilePercent: number | null;
-  groups: {
-    groupId: number;
-    groupName: string;
-    ownRule: boolean;
-    percent: number | null;
-    retentionPercent: number | null;
-    fixedAmount: number | null;
-    fixedDestination: string | null;
-    serviceCount: number;
-  }[];
+type Rates = {
+  groups: { id: number; name: string; percent: number | null; items: { serviceId: number; name: string; ownPercent: number | null; normalPercent: number; exceptions: { professionalId: number; percent: number }[] }[] }[];
 };
 
-const proRules = (request: Parameters<typeof apiGetJson>[0], id: number) =>
-  apiGetJson<ProRules>(request, w.adminToken, `/api/commissions/professionals/${id}/rules`);
+const ratesOf = (request: Parameters<typeof apiGetJson>[0]) => apiGetJson<Rates>(request, w.adminToken, "/api/commissions/rates");
 
 /** HU-COM-15: groups live in Setup › step 2; service/product exceptions in Setup › Advanced. */
 async function openGroups(page: Page) {
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
   await openSetupStep(page, 2);
-  await page.getByTestId("config-step-2-link").click();
+  await page.getByTestId("config-step-2-order-link").click();
   await expect(page.getByTestId("commission-groups")).toBeVisible();
 }
 
-/** Opens a professional's «Reglas» tab (Equipo › her page). */
+/** Opens a professional's «Comisiones» tab (Equipo › her page). */
 async function openRulesOf(page: Page, name: string) {
   await loginAdminUi(page, w);
   await openCommissions(page);
   await openProfessional(page, name, "rules");
-  await expect(page.getByTestId("pro-rules")).toBeVisible();
+  await expect(page.getByTestId("pro-rates")).toBeVisible();
 }
 
 async function confirmImmediate(page: Page) {
@@ -110,10 +100,10 @@ async function salon(request: Parameters<typeof apiGetJson>[0]) {
     { scope: "AGUINALDO_DEFAULT", value: "5" },
     { scope: "RETENTION_PROFILE", professionalId: gaby.id, value: "5" },
     { scope: "RETENTION_PROFILE", professionalId: migue.id, value: "5" },
-    { scope: "GROUP_RULE", groupId: gBrushing.id, professionalId: gaby.id, value: "45|5|0|" },
-    { scope: "GROUP_RULE", groupId: gLashes.id, professionalId: gaby.id, value: "45|5|20000|P" },
-    { scope: "GROUP_RULE", groupId: gManos.id, professionalId: migue.id, value: "45|5|3000|P" },
-    { scope: "GROUP_RULE", groupId: gManos.id, professionalId: jorgelina.id, value: "50|0|3000|P" },
+    // HU-COM-20: the % of a group is the whole commission for everybody; Gaby and Migue retain 5 of it.
+    { scope: "GROUP_RULE", groupId: gBrushing.id, value: "50" },
+    { scope: "GROUP_RULE", groupId: gLashes.id, value: "50|0|20000|P" },
+    { scope: "GROUP_RULE", groupId: gManos.id, value: "50|0|3000|P" },
   ]);
   return { gaby, migue, jorgelina, brushing, lashes, manos, gBrushing, gLashes, gManos };
 }
@@ -166,7 +156,7 @@ test("AC1 · crear, renombrar y eliminar grupos: nombre obligatorio y sin repeti
   const g = await createGroup(request, w.adminToken, "Con reglas");
   await assignToGroup(request, w.adminToken, g.id, [svc.id]);
   await applyChanges(request, w.adminToken, [
-    { scope: "GROUP_RULE", groupId: g.id, professionalId: w.ana.id, value: "40" },
+    { scope: "GROUP_RULE", groupId: g.id, value: "40" },
   ]);
   await page.reload();
   await expect(page.getByTestId("commission-groups")).toBeVisible();
@@ -343,173 +333,9 @@ test("AC2 · asignar es inmediato: la fila cambia al instante, queda marcada un 
   expect(extra).toHaveLength(40);
 });
 
-test("AC3 · AC4 · la ficha de la profesional cuenta cada regla en una frase; editar, agregar y quitar preguntan «desde cuándo»", async ({
-  page,
-  request,
-}) => {
-  const s = await salon(request);
-  await openRulesOf(page, "gaby");
-  await expect(page.getByTestId("pro-name")).toHaveText(/^gaby$/i);
-  await expect(page.getByTestId("pro-rules-retains")).toHaveText("Retains 5 % for aguinaldo");
-  const cards = page.getByTestId("rule-card");
-  await expect(cards).toHaveCount(2);
-  const brushing = cards.filter({ hasText: "Brushing" });
-  await expect(brushing.getByTestId("rule-card-sentence")).toHaveText("Earns 45 % · withholds 5 % for aguinaldo");
-  const lashes = cards.filter({ hasText: "Pestañas" });
-  await expect(lashes.getByTestId("rule-card-sentence")).toContainText("product cost");
-  await expect(lashes.getByTestId("rule-card-sentence")).toContainText("20.000");
-  await expect(lashes.getByTestId("rule-card-sentence")).toContainText("(for her)");
-
-  // Edit: the editor asks the numbers; «Next →» asks since when it applies.
-  await brushing.getByTestId("rule-card-edit").click();
-  await expect(page.getByTestId("rule-paid")).toHaveValue("45");
-  await expect(page.getByTestId("rule-retention")).toHaveValue("5");
-  await page.getByTestId("rule-paid").fill("50");
-  await page.getByTestId("rule-editor-next").click();
-  await expect(page.getByTestId("commission-apply-dialog")).toBeVisible();
-  await confirmImmediate(page);
-  await expect(page.getByRole("status").filter({ hasText: "Change applied." })).toBeVisible();
-  const saved = (await proRules(request, s.gaby.id)).groups.find((g) => g.groupId === s.gBrushing.id)!;
-  expect(saved.percent).toBe(50);
-  expect(saved.retentionPercent).toBe(5);
-  await expect(brushing.getByTestId("rule-card-sentence")).toContainText("Earns 50 %");
-
-  // «Add a rule» offers only the groups she has no rule for; her usual retention is prefilled.
-  await page.getByTestId("rule-add").click();
-  await expect(page.getByTestId("rule-add-group").locator("option")).toHaveText(["Manos"]);
-  await page.getByTestId("rule-add-confirm").click();
-  await expect(page.getByTestId("rule-retention")).toHaveValue("5");
-  await page.getByTestId("rule-paid").fill("35");
-  await page.getByTestId("rule-fixed").fill("3000");
-  await page.getByTestId("rule-destination").selectOption("SALON");
-  await page.getByTestId("rule-editor-next").click();
-  await confirmImmediate(page);
-  const manosRule = (await proRules(request, s.gaby.id)).groups.find((g) => g.groupId === s.gManos.id)!;
-  expect(manosRule).toMatchObject({ ownRule: true, percent: 35, retentionPercent: 5, fixedAmount: 3000, fixedDestination: "SALON" });
-  await expect(cards.filter({ hasText: "Manos" }).getByTestId("rule-card-sentence")).toContainText("(for the salon)");
-
-  // Removing a rule leaves her with no rule of her own for that group.
-  await cards.filter({ hasText: "Manos" }).getByTestId("rule-card-remove").click();
-  await confirmImmediate(page);
-  expect((await proRules(request, s.gaby.id)).groups.find((g) => g.groupId === s.gManos.id)!.ownRule).toBe(false);
-  await expect(cards).toHaveCount(2);
-});
-
-test("AC3 · Equipo: lista ordenada con las reglas de cada persona, búsqueda, filtros y la ficha", async ({ page, request }) => {
-  const s = await salon(request);
-  await loginAdminUi(page, w);
-  await openCommissions(page, "team");
-  const cards = page.getByTestId("team-card");
-  const names = (await cards.evaluateAll((els) => els.map((e) => e.getAttribute("data-professional") ?? ""))).map((n) => n.toLowerCase());
-  expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
-  expect(names).toEqual(expect.arrayContaining([w.ana.name.toLowerCase(), "gaby", "jorgelina", "migue"]));
-  const card = (name: string) => cards.filter({ hasText: name });
-  await expect(card("gaby").getByTestId("team-card-rules")).toContainText("2 rules · retains 5 %");
-  await expect(card("jorgelina").getByTestId("team-card-rules")).toContainText("1 rule");
-  await expect(card("migue").getByTestId("team-card-rules")).toContainText("1 rule · retains 5 %");
-  await expect(card(w.bea.name).getByTestId("team-card-missing")).toBeVisible();
-
-  // Search ignoring case.
-  await page.getByTestId("team-search").fill("JORG");
-  await expect(cards).toHaveCount(1);
-  await page.getByTestId("team-search").fill("");
-  // Filters: only the ones without rules, and only the ones who withhold aguinaldo.
-  await page.getByTestId("team-filter-norules").click();
-  await expect(card("gaby")).toHaveCount(0);
-  await expect(card(w.bea.name)).toHaveCount(1);
-  await page.getByTestId("team-filter-retain").click();
-  await expect(cards).toHaveCount(2); // Gaby and Migue
-  await page.getByTestId("team-filter-all").click();
-
-  // Tapping a professional opens her page; the arrow brings you back.
-  await card("jorgelina").click();
-  await expect(page.getByTestId("pro-name")).toContainText("Jorgelina", { ignoreCase: true });
-  await page.getByTestId("pro-tab-rules").click();
-  await expect(page.getByTestId("rule-card")).toHaveCount(1); // her Manos rule
-  await page.getByTestId("pro-back").click();
-  await expect(page.getByTestId("team-list")).toBeVisible();
-  expect(s.gaby.id).toBeGreaterThan(0);
-});
-
-test("AC5 · validaciones: pago + retención ≤ 100 %, % entre 0 y 100, monto fijo entero; con error no se guarda", async ({
-  page,
-  request,
-}) => {
-  const s = await salon(request);
-  await openRulesOf(page, "gaby");
-  await page.getByTestId("rule-card").filter({ hasText: "Brushing" }).getByTestId("rule-card-edit").click();
-  const paid = page.getByTestId("rule-paid");
-  const error = page.getByTestId("rule-editor").getByRole("alert");
-  const next = page.getByTestId("rule-editor-next");
-
-  await paid.fill("99");
-  await next.click();
-  await expect(error).toHaveText("The paid % plus the retention cannot exceed 100 %. Example: 45 and 5.");
-  await expect(paid).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByTestId("commission-apply-dialog")).toHaveCount(0);
-
-  await paid.fill("4x");
-  await next.click();
-  await expect(error).toContainText("between 0 and 100 with up to 2 decimals, for example 45");
-
-  await paid.fill("");
-  await next.click();
-  await expect(error).toContainText("Enter the paid % to create the rule, for example 45");
-
-  await paid.fill("40");
-  await page.getByTestId("rule-fixed").fill("3,5");
-  await next.click();
-  await expect(error).toHaveText("Enter a whole amount in guaraníes, for example 3,000.");
-  await expect(page.getByTestId("commission-apply-dialog")).toHaveCount(0);
-
-  // Nothing was saved, and the server also refuses it (the UI never sends it).
-  expect((await proRules(request, s.gaby.id)).groups.find((g) => g.groupId === s.gBrushing.id)!.percent).toBe(45);
-  await expect(
-    applyChanges(request, w.adminToken, [
-      { scope: "GROUP_RULE", groupId: s.gBrushing.id, professionalId: s.gaby.id, value: "60|50|0|" },
-    ]),
-  ).rejects.toThrow();
-});
-
-test("AC6 · ejemplo en vivo: lo que se paga, lo que se retiene y lo que queda en el salón", async ({ page, request }) => {
-  await salon(request);
-  await openRulesOf(page, "gaby");
-  await page.getByTestId("rule-card").filter({ hasText: "Pestañas" }).getByTestId("rule-card-edit").click();
-  await page.getByTestId("rule-example-price").fill("50000");
-  // 50.000 − 20.000 (product cost, hers) = 30.000 → 45 % = 13.500, 5 % = 1.500; she is paid 13.500 + 20.000.
-  await expect(page.getByTestId("example-pays")).toContainText("33.500");
-  await expect(page.getByTestId("example-retention")).toContainText("1.500");
-  await expect(page.getByTestId("example-salon")).toContainText("15.000");
-
-  // Changing the destination to the salon changes what she is paid.
-  await page.getByTestId("rule-destination").selectOption("SALON");
-  await expect(page.getByTestId("example-pays")).toContainText("13.500");
-  await expect(page.getByTestId("example-salon")).toContainText("35.000");
-});
-
-test("AC7 · copiar reglas de otra profesional prepara sus reglas propias y pregunta «desde cuándo»", async ({ page, request }) => {
-  const s = await salon(request);
-  await openRulesOf(page, "jorgelina");
-  await page.getByTestId("rule-copy").click();
-  await page.getByTestId("rule-copy-from").selectOption(String(s.gaby.id));
-  await page.getByTestId("rule-copy-confirm").click();
-  await expect(page.getByRole("dialog")).toContainText("Copy 2 rules");
-  await confirmImmediate(page);
-  const copied = await proRules(request, s.jorgelina.id);
-  expect(copied.groups.find((g) => g.groupId === s.gBrushing.id)).toMatchObject({ percent: 45, retentionPercent: 5, fixedAmount: 0 });
-  expect(copied.groups.find((g) => g.groupId === s.gLashes.id)).toMatchObject({ percent: 45, fixedAmount: 20000, fixedDestination: "PROFESSIONAL" });
-  // Her own rule for Manos is untouched.
-  expect(copied.groups.find((g) => g.groupId === s.gManos.id)).toMatchObject({ percent: 50, retentionPercent: 0, fixedAmount: 3000 });
-  await expect(page.getByTestId("rule-card")).toHaveCount(3);
-
-  // A professional with no rules of her own has nothing to copy.
-  await page.getByTestId("pro-back").click();
-  await openProfessional(page, w.bea.name, "rules");
-  await page.getByTestId("rule-copy").click();
-  await page.getByTestId("rule-copy-from").selectOption(String(w.ana.id));
-  await page.getByTestId("rule-copy-confirm").click();
-  await expect(page.getByRole("dialog").getByRole("alert")).toHaveText("That professional has no own rules to copy.");
-});
+// HU-COM-20: la ficha de la profesional («Donde cobra distinto»), su retención y la carga por grupo se
+// prueban en hu-com-20-comisiones-reglas-simples.spec.ts (reemplazan al editor de reglas por grupo,
+// sus validaciones, el ejemplo en vivo y «Copiar reglas»).
 
 // ── AC8 · AC9 · Configuración ─────────────────────────────────────────────────────────────────
 
@@ -521,7 +347,7 @@ test("AC8 · AC9 · Configuración: retención de aguinaldo, % por defecto, qui�
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
   const settings = page.getByTestId("commission-settings");
-  await openSetupStep(page, 4); // HU-COM-18: the aguinaldo step is folded until opened
+  await openSetupStep(page, 3); // HU-COM-18/20: the aguinaldo step is the third one, folded until opened
 
   // Starts off: no retention, the fixed amount is the professional's, the default % row is hidden.
   await expect(settings.getByTestId("commission-setting-AGUINALDO_ENABLED")).toContainText("Off");
@@ -554,6 +380,8 @@ test("AC8 · AC9 · Configuración: retención de aguinaldo, % por defecto, qui�
   await expect(page.getByRole("dialog").getByRole("alert")).toContainText("between 0 and 100 with up to 2 decimals");
   await page.getByTestId("commission-retention-percent").fill("5");
   await page.getByTestId("commission-retention-save").click();
+  // HU-COM-20: the retention comes out of what she is paid, so it asks since when it applies.
+  await confirmImmediate(page);
   await expect(gabyRow.getByTestId("commission-retention-current")).toHaveText("Retains 5 %");
 
   // The fixed amount can default to the salon.
@@ -572,16 +400,9 @@ test("AC8 · AC9 · Configuración: retención de aguinaldo, % por defecto, qui�
   expect(stored).toMatchObject({ aguinaldoEnabled: true, aguinaldoDefaultPercent: 5, fixedDestination: "SALON" });
   expect(stored.retentionProfiles.find((r) => r.professionalId === gaby.id)?.percent).toBe(5);
 
-  // That profile prefills the retention of a new rule for her (AC4).
-  const g = await createGroup(request, w.adminToken, "Color");
-  const color = await createCatalogItem(request, w.adminToken, w, "Color completo");
-  await assignToGroup(request, w.adminToken, g.id, [color.id]);
+  // Her retention is shown on her page (HU-COM-20).
   await openProfessional(page, "gaby", "rules");
-  await page.getByTestId("rule-add").click();
-  await page.getByTestId("rule-add-confirm").click();
-  await page.getByTestId("rule-paid").fill("15");
-  await expect(page.getByTestId("rule-retention")).toHaveValue("5");
-  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("Aguinaldo retention: 5 %");
 
   // The history lists the changes with what changed (Setup › Advanced).
   await page.getByTestId("commissions-nav-setup").click();
@@ -592,7 +413,7 @@ test("AC8 · AC9 · Configuración: retención de aguinaldo, % por defecto, qui�
   await expect(history).toContainText("Fixed amount destination");
 });
 
-test("AC8 · con la retención desactivada no se retiene, no hay columna «Retención» y se avisa", async ({ page, request }) => {
+test("AC8 · con la retención desactivada no se retiene, no hay tarjeta de retención y se avisa", async ({ page, request }) => {
   const token = w.adminToken;
   const gaby = await createProfessional(request, token, "Gaby");
   const brushing = await createCatalogItem(request, token, w, "Brushing pelo largo");
@@ -600,24 +421,21 @@ test("AC8 · con la retención desactivada no se retiene, no hay columna «Reten
   await assignToGroup(request, token, g.id, [brushing.id]);
   await applyChanges(request, token, [
     { scope: "BASE", value: "TAX_INCLUDED" },
-    { scope: "GROUP_RULE", groupId: g.id, professionalId: gaby.id, value: "45|5|0|" },
+    { scope: "RETENTION_PROFILE", professionalId: gaby.id, value: "5" },
+    { scope: "GROUP_RULE", groupId: g.id, value: "50" },
   ]);
   const inv = await issueInvoice(request, token, [
     { serviceId: brushing.id, name: brushing.name, price: 100000, professionalId: gaby.id },
   ]);
   const [e] = await entriesOfInvoice(request, token, inv.id, 1);
-  expect(e.commissionAmount).toBe(45000);
+  // Aguinaldo is off: nothing is retained and she is paid the whole 50 %.
+  expect(e.commissionAmount).toBe(50000);
   expect(e.retentionAmount).toBe(0);
 
   await openRulesOf(page, "gaby");
-  // No retention anywhere: no retention in the sentence or the editor, no Aguinaldo tab.
-  await expect(page.getByTestId("rule-card-sentence")).toHaveText("Earns 45 %");
-  await expect(page.getByTestId("pro-rules-retains")).toHaveCount(0);
+  await expect(page.getByTestId("pro-retention")).toHaveCount(0);
   await expect(page.getByTestId("pro-tab-aguinaldo")).toHaveCount(0);
-  await page.getByTestId("rule-card-edit").click();
-  await expect(page.getByTestId("rule-paid")).toBeVisible();
-  await expect(page.getByTestId("rule-retention")).toHaveCount(0);
-  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByTestId("pro-differences-empty")).toBeVisible();
 
   // Aguinaldo is not offered in Equipo, and its address brings you back to the list (HU-COM-15).
   await page.getByTestId("commissions-nav-team").click();
@@ -639,7 +457,8 @@ test("AC9 · AC10 · cada línea guarda base, % pagado, retención, monto fijo y
   const gProduct = await createGroup(request, token, "Venta de producto");
   await assignToGroup(request, token, gProduct.id, [product.id]);
   await applyChanges(request, token, [
-    { scope: "GROUP_RULE", groupId: gProduct.id, professionalId: aracelyRows.id, value: "5|5|0|" },
+    { scope: "GROUP_RULE", groupId: gProduct.id, value: "10" },
+    { scope: "RETENTION_PROFILE", professionalId: aracelyRows.id, value: "5" },
   ]);
 
   const line = (service: { id: number; name: string }, professionalId: number, price: number) => ({
@@ -656,7 +475,7 @@ test("AC9 · AC10 · cada línea guarda base, % pagado, retención, monto fijo y
 
   const only = async (id: number) => (await entriesOfInvoice(request, token, id, 1))[0];
   const brushing = await only(brushingInv.id);
-  expect(brushing).toMatchObject({ baseAmount: 100000, commissionAmount: 45000, retentionAmount: 5000, retentionPercent: 5, fixedAmount: 0, ruleOrigin: "BENEFICIARY_GROUP" });
+  expect(brushing).toMatchObject({ baseAmount: 100000, commissionAmount: 45000, retentionAmount: 5000, retentionPercent: 5, fixedAmount: 0, ruleOrigin: "GROUP" });
   const lashes = await only(lashesInv.id);
   expect(lashes).toMatchObject({ baseAmount: 30000, commissionAmount: 33500, retentionAmount: 1500, fixedAmount: 20000, fixedToProfessional: true });
   const migue = await only(miguelInv.id);
@@ -669,21 +488,21 @@ test("AC9 · AC10 · cada línea guarda base, % pagado, retención, monto fijo y
   // The destination follows the salon default when the rule does not set one.
   await applyChanges(request, token, [{ scope: "FIXED_DESTINATION", value: "SALON" }]);
   await applyChanges(request, token, [
-    { scope: "GROUP_RULE", groupId: s.gManos.id, professionalId: s.jorgelina.id, value: "50|0|3000|" },
+    { scope: "GROUP_RULE", groupId: s.gManos.id, value: "50|0|3000|" },
   ]);
   const saloon = await only((await issueInvoice(request, token, [line(s.manos, s.jorgelina.id, 50000)])).id);
   expect(saloon).toMatchObject({ commissionAmount: 23500, fixedAmount: 3000, fixedToProfessional: false });
   // ...and an explicit destination in the rule wins over that default.
   await applyChanges(request, token, [
-    { scope: "GROUP_RULE", groupId: s.gManos.id, professionalId: s.jorgelina.id, value: "50|0|3000|P" },
+    { scope: "GROUP_RULE", groupId: s.gManos.id, value: "50|0|3000|P" },
   ]);
   const explicit = await only((await issueInvoice(request, token, [line(s.manos, s.jorgelina.id, 50000)])).id);
   expect(explicit).toMatchObject({ commissionAmount: 26500, fixedToProfessional: true });
 
-  // Precedence: professional + service > professional + group > service > group > default.
+  // Precedence (HU-COM-20): professional + service > service > group > default; the retention is hers.
   await applyChanges(request, token, [{ scope: "RULE", serviceId: s.brushing.id, professionalId: s.gaby.id, value: "60" }]);
   const exception = await only((await issueInvoice(request, token, [line(s.brushing, s.gaby.id, 100000)])).id);
-  expect(exception).toMatchObject({ ruleOrigin: "BENEFICIARY_ITEM", commissionAmount: 60000, retentionAmount: 0 });
+  expect(exception).toMatchObject({ ruleOrigin: "BENEFICIARY_ITEM", commissionAmount: 55000, retentionAmount: 5000 });
   await applyChanges(request, token, [{ scope: "RULE", serviceId: s.brushing.id, professionalId: s.gaby.id, value: null }]);
   await applyChanges(request, token, [{ scope: "GROUP_RULE", groupId: s.gBrushing.id, value: "30" }]);
   const other = await only((await issueInvoice(request, token, [line(s.brushing, w.ana.id, 100000)])).id);
@@ -844,7 +663,7 @@ test("AC12 · AC13 · AC14 · el fondo entra al aprobar; pagos parcial / por sal
   // Voiding an approved settlement takes its retention back out of the fund.
   const lola = await createProfessional(request, token, "Lola");
   await applyChanges(request, token, [
-    { scope: "GROUP_RULE", groupId: s.gBrushing.id, professionalId: lola.id, value: "45|5|0|" },
+    { scope: "RETENTION_PROFILE", professionalId: lola.id, value: "5" },
   ]);
   await issue(s.brushing, lola.id, 100000);
   const [again] = await generateSettlements(request, token, [lola.id]);
@@ -872,7 +691,8 @@ test("AC15 · «Mis comisiones» muestra lo retenido, el aguinaldo acumulado y e
   await applyChanges(request, token, [
     { scope: "BASE", value: "TAX_INCLUDED" },
     { scope: "AGUINALDO_ENABLED", value: "true" },
-    { scope: "GROUP_RULE", groupId: g.id, professionalId: me.id, value: "45|5|3000|P" },
+    { scope: "RETENTION_PROFILE", professionalId: me.id, value: "5" },
+    { scope: "GROUP_RULE", groupId: g.id, value: "50|0|3000|P" },
   ]);
   const inv = await issueInvoice(request, token, [{ serviceId: manos.id, name: manos.name, price: 50000, professionalId: me.id }]);
   await entriesOfInvoice(request, token, inv.id, 1);
@@ -910,33 +730,22 @@ test("AC16 · reglas de grupo programables y con recálculo desde el inicio del 
   const [before] = await entriesOfInvoice(request, token, inv.id, 1);
   expect(before).toMatchObject({ commissionAmount: 45000, retentionAmount: 5000 });
 
-  // Scheduled for the next period: it shows in «Scheduled changes» with group, professional and values.
-  await applyChanges(
-    request,
-    token,
-    [{ scope: "GROUP_RULE", groupId: s.gBrushing.id, professionalId: s.gaby.id, value: "40|5|0|" }],
-    "NEXT_PERIOD",
-  );
+  // Scheduled for the next period: it shows in «Scheduled changes» with the group and the values.
+  await applyChanges(request, token, [{ scope: "GROUP_RULE", groupId: s.gBrushing.id, value: "40" }], "NEXT_PERIOD");
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
   await page.getByTestId("config-advanced-link").click(); // scheduled changes: Setup › Advanced
   await page.getByTestId("commission-scheduled-toggle").click();
   const scheduled = page.getByTestId("commission-scheduled-changes");
   await expect(scheduled).toContainText("Brushing");
-  await expect(scheduled).toContainText("Gaby", { ignoreCase: true });
-  await expect(scheduled).toContainText("40 % + 5 %");
-  await expect(scheduled).toContainText("45 % + 5 %"); // the value in force today
+  await expect(scheduled).toContainText("40 %");
+  await expect(scheduled).toContainText("50 %"); // the value in force today
   await scheduled.getByRole("button", { name: "Cancel change" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Cancel change" }).click();
   await expect(page.getByTestId("commission-scheduled-changes")).toHaveCount(0);
 
   // From the start of the period: the live entry is recalculated (reversal + new revision).
-  const res = await applyChanges(
-    request,
-    token,
-    [{ scope: "GROUP_RULE", groupId: s.gBrushing.id, professionalId: s.gaby.id, value: "50|5|0|" }],
-    "PERIOD_START",
-  );
+  const res = await applyChanges(request, token, [{ scope: "GROUP_RULE", groupId: s.gBrushing.id, value: "55" }], "PERIOD_START");
   expect(res.recalculation).toMatchObject({ entriesRecalculated: 1, deltaAmount: 5000 });
   const all = (await entries(request, token)).filter((e) => e.invoiceId === inv.id);
   expect(all.reduce((a, e) => a + e.commissionAmount, 0)).toBe(50000);
@@ -948,6 +757,6 @@ test("AC16 · reglas de grupo programables y con recálculo desde el inicio del 
   await page.getByTestId("config-advanced-link").click();
   await page.getByTestId("commission-history-toggle").click();
   const history = page.getByTestId("commission-settings-history");
-  await expect(history).toContainText(/Group rule · Brushing · gaby/i);
-  await expect(history).toContainText("50 % + 5 %");
+  await expect(history).toContainText(/Group rule · Brushing/i);
+  await expect(history).toContainText("55 %");
 });

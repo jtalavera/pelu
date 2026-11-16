@@ -251,13 +251,13 @@
         "AGUINALDO_DEFAULT": "% de retención por defecto",
         "AGUINALDO_DEFAULTHelp": "Precarga la retención de las reglas de las profesionales que retienen.",
         "aguinaldoDefaultSummary": "Cambiar el % de retención por defecto a {{value}}.",
-        "retentionTitle": "Quién retiene para aguinaldo",
-        "retentionHelp": "También precarga la retención cuando cargás reglas para esa profesional.",
+        "retentionTitle": "Retención de aguinaldo por profesional",
+        "retentionHelp": "Es de cada profesional, no del servicio: se descuenta de lo que cobra en cualquier servicio y va a su fondo de aguinaldo.",
         "retentionRetains": "Retiene {{percent}}",
         "retentionNone": "No retiene (lleva el total)",
         "retentionEditTitle": "Retención de {{name}}",
         "retentionInputLabel": "% de retención",
-        "retentionInputHelp": "Dejalo vacío si no retiene. Ejemplo: 5.",
+        "retentionInputHelp": "Dejalo vacío si no retiene. Ejemplo: 5 (de cada comisión, 5 puntos van al aguinaldo).",
         "retentionSummary": "Cambiar la retención de {{name}} a {{value}}.",
         "retentionNoneSummary": "{{name}} deja de retener para aguinaldo."
       },
@@ -710,8 +710,8 @@
         "NONE": "Sin movimientos"
       },
       "guide": {
-        "title": "Empecemos: 4 pasos y tus comisiones quedan andando",
-        "intro": "Primero definimos cómo se calcula, después agrupamos los servicios y por último le ponemos reglas a cada profesional. Es una sola vez.",
+        "title": "Empecemos: 3 pasos y tus comisiones quedan andando",
+        "intro": "Primero definimos cómo se calcula y después cuánto paga cada grupo de servicios. Si una profesional cobra distinto en algo, se anota después en su ficha. Es una sola vez.",
         "progress": "{{done}} de {{total}} pasos listos",
         "optional": "Opcional",
         "whatFor": "¿Para qué sirve?",
@@ -721,18 +721,18 @@
         "step1": {
           "title": "Cómo se calcula",
           "done": "Ya definido",
-          "todo": "Elegí la base y el % por defecto",
-          "why": "Define si la comisión se calcula sobre el precio con o sin IVA y qué % se paga cuando no hay una regla.",
+          "todo": "Elegí la base de cálculo y cada cuánto se liquida",
+          "why": "Define si la comisión se calcula sobre el precio con o sin IVA y cada cuánto se liquida.",
           "example": "Ejemplo: un servicio de 100.000 Gs con base «sin IVA» comisiona sobre 90.909 Gs.",
           "start": "Ver cómo se calcula"
         },
         "step2": {
-          "title": "Grupos de servicios",
-          "done": "Todos los servicios tienen grupo",
-          "todo": "{{count}} servicios sin grupo",
-          "why": "Un grupo junta los servicios que comisionan igual (Color, Manos, Brushing…), así cargás una regla por grupo y no una por servicio.",
-          "example": "Ejemplo: «Manos» agrupa Manicura, Pedicura y Esmaltado semipermanente.",
-          "start": "Crear los grupos"
+          "title": "Comisión de cada grupo",
+          "done": "Todos los grupos tienen su %",
+          "todo": "Ponerle su % a cada grupo",
+          "why": "Un grupo junta los servicios que comisionan igual (Color, Manos, Brushing…). Le ponés un % al grupo y todos sus servicios lo usan; solo cargás una excepción cuando algo es distinto.",
+          "example": "Ejemplo: «Manos» agrupa Manicura y Pedicura y paga 30 %.",
+          "start": "Armar los grupos"
         },
         "step3": {
           "title": "Reglas por profesional",
@@ -789,6 +789,12 @@
             "title": "{{count}} liquidaciones en borrador",
             "help": "Falta aprobarlas para poder pagarlas.",
             "action": "Revisar"
+          },
+          "noPercent": {
+            "title": "{{count}} grupos sin %",
+            "title_one": "{{count}} grupo sin %",
+            "help": "Pagan el % general (0 % si no lo cambiaste).",
+            "action": "Poner los %"
           }
         },
         "teamTitle": "Tu equipo",
@@ -986,7 +992,11 @@
           "DRAFT": "Borrador: falta aprobar",
           "APPROVED": "Lista para pagar",
           "PAID": "Pagada el {{date}}"
-        }
+        },
+        "usualPay": "Cobra lo normal de cada servicio",
+        "differentIn": "Cobra distinto en {{count}} servicios",
+        "differentIn_one": "Cobra distinto en {{count}} servicio",
+        "retainsPercent": "retiene {{percent}}"
       },
       "pro": {
         "back": "Volver al equipo",
@@ -1036,7 +1046,47 @@
         "exceptionHint": "¿Un servicio puntual comisiona distinto?",
         "exceptionLink": "Cargá una excepción en Avanzado",
         "summaryCarried": "Incluye {{amount}} arrastrados de períodos anteriores.",
-        "summaryLines_one": "{{count}} línea facturada"
+        "summaryLines_one": "{{count}} línea facturada",
+        "rates": {
+          "usualTitle": "{{name}} cobra lo normal de cada servicio",
+          "usualHelp": "Es lo que paga el salón. Acá solo anotás donde cobra distinto.",
+          "usualLink": "Ver las comisiones",
+          "retention": "Retención para aguinaldo: {{percent}}",
+          "retentionNone": "No retiene para aguinaldo",
+          "retentionHelp": "Es de ella, no del servicio ni del grupo. Se descuenta de cada comisión y va a su fondo de aguinaldo.",
+          "differentTitle": "Donde cobra distinto",
+          "differentCount": "{{count}} casos",
+          "differentCount_one": "1 caso",
+          "add": "+ Agregar",
+          "none": "{{name}} cobra lo normal en todo. Si en algún grupo o servicio cobra distinto, agregalo acá.",
+          "groupTitle": "{{group}} · {{count}} de {{total}} servicios",
+          "normal": "Lo normal es {{percent}}",
+          "normalVaries": "Lo normal varía según el servicio",
+          "missing": "{{count}} servicios del grupo usan lo normal: {{names}}.",
+          "missing_one": "1 servicio del grupo usa lo normal: {{names}}.",
+          "include": "Incluirlos",
+          "include_one": "Incluirlo",
+          "footer": "En todo lo demás cobra lo normal. «Cambiar» y «Quitar» preguntan desde cuándo aplica, como hoy.",
+          "editTitle": "Cambiar el % en {{what}}",
+          "addTitle": "¿Dónde cobra distinto {{name}}?",
+          "mode": {
+            "GROUP": "Todo un grupo",
+            "SERVICE": "Un servicio"
+          },
+          "groupLabel": "Grupo",
+          "serviceLabel": "Servicio o producto",
+          "pickGroup": "Elegí un grupo",
+          "pickService": "Elegí un servicio",
+          "percentLabel": "Comisión de {{name}} (%)",
+          "scope": "Se carga en los {{count}} servicios del grupo que hay hoy (lo normal es {{normal}}). Los que agregues después usan lo normal y te avisamos acá para incluirlos.",
+          "scope_one": "Se carga en el servicio del grupo que hay hoy (lo normal es {{normal}}). Los que agregues después usan lo normal y te avisamos acá para incluirlos.",
+          "example": "Sobre Gs. 100.000 se le pagan {{paid}}.",
+          "exampleRetains": "Con su retención de {{percent}}: sobre Gs. 100.000 se le pagan {{paid}} y {{retained}} van a su aguinaldo.",
+          "applyGroup": "Comisión de {{name}} en {{group}}: {{percent}}",
+          "applyService": "Comisión de {{name}} en {{service}}: {{percent}}",
+          "applyInclude": "Incluir {{count}} servicios de {{group}} en lo de {{name}}: {{percent}}",
+          "applyRemove": "Quitar lo que {{name}} cobra distinto en {{what}} (vuelve a lo normal)"
+        }
       },
       "activity": {
         "intro": "Todo lo que pasó con las comisiones: cada movimiento y los reportes.",
@@ -1048,13 +1098,14 @@
         "advancedLink": "Opciones avanzadas (excepciones, cambios programados e historial)",
         "step1": {
           "title": "Cómo se calcula",
-          "help": "La base de cálculo, los % por defecto y cada cuánto se liquida.",
-          "summary": "{{base}} · {{service}} servicios · {{product}} productos · {{periodicity}}"
+          "help": "La base de cálculo y cada cuánto se liquida.",
+          "summary": "{{base}} · {{service}} servicios · {{product}} productos · {{periodicity}}",
+          "summaryShort": "{{base}} · {{periodicity}}"
         },
         "step2": {
-          "title": "Grupos y servicios",
-          "help": "Juntá los servicios que comisionan igual para cargar una regla por grupo.",
-          "open": "Ordenar grupos y servicios",
+          "title": "Comisión de cada servicio",
+          "help": "Poné cuánto paga cada grupo de servicios.",
+          "open": "Poner los %",
           "tileGroups_one": "grupo",
           "tileGroups_other": "grupos",
           "ofTotal": "{{done}} de {{total}}",
@@ -1062,15 +1113,16 @@
           "tileUngrouped_one": "sin grupo: le falta regla",
           "tileUngrouped_other": "sin grupo: les falta regla",
           "yourGroups": "Tus grupos:",
-          "summary_one": "{{count}} grupo · {{done}} de {{total}} servicios ya tienen grupo",
-          "summary_other": "{{count}} grupos · {{done}} de {{total}} servicios ya tienen grupo",
-          "intro_one": "Juntá los servicios que comisionan igual para cargar una regla por grupo. El servicio que no tiene grupo usa el % por defecto.",
-          "intro_other": "Juntá los servicios que comisionan igual para cargar una regla por grupo. Los {{count}} que no tienen grupo usan el % por defecto.",
-          "missing_one": "{{count}} sin grupo",
-          "missing_other": "{{count}} sin grupo",
+          "summary_one": "{{count}} grupo · {{withPercent}} con su %",
+          "summary_other": "{{count}} grupos · {{withPercent}} con su %",
+          "intro_one": "Poné cuánto paga cada grupo de servicios. El grupo sin % paga el % general. Si una profesional cobra distinto, se anota en su ficha.",
+          "intro_other": "Poné cuánto paga cada grupo de servicios. Los {{count}} grupos sin % pagan el % general. Si una profesional cobra distinto, se anota en su ficha.",
+          "missing_one": "{{count}} grupo sin %",
+          "missing_other": "{{count}} grupos sin %",
           "noGroups": "Sin grupos todavía",
           "seeUngrouped_one": "Ver el servicio sin grupo",
-          "seeUngrouped_other": "Ver los {{count}} sin grupo"
+          "seeUngrouped_other": "Ver los {{count}} sin grupo",
+          "order": "Ordenar grupos y servicios"
         },
         "step3": {
           "title": "Reglas por profesional",
@@ -1111,11 +1163,12 @@
       },
       "advanced": {
         "precedenceTitle": "Qué regla gana",
-        "precedence1": "Profesional + servicio puntual",
-        "precedence2": "Profesional + grupo",
-        "precedence3": "Servicio puntual",
-        "precedence4": "Grupo",
-        "precedence5": "% por defecto"
+        "precedence1": "% por defecto",
+        "precedence2": "% del grupo",
+        "precedence3": "% del servicio",
+        "precedence4": "% de la profesional para ese servicio",
+        "precedence5": "% por defecto",
+        "precedenceHelp": "De lo general a lo específico: gana la última que corresponda."
       },
       "workspace": {
         "title": "Grupos y servicios",
@@ -1127,8 +1180,8 @@
         "createGroupInline": "+ Crear un grupo",
         "rulesFor_one": "regla cargada para {{count}} profesional",
         "rulesFor_other": "reglas cargadas para {{count}} profesionales",
-        "rulesHint": "Las reglas de este grupo se cargan por profesional.",
-        "rulesLink": "Ver las reglas por profesional",
+        "rulesHint": "Lo que paga este grupo se pone en «Comisiones».",
+        "rulesLink": "Poner el % del grupo",
         "groupEmpty": "Este grupo todavía no tiene servicios. Agregalos con «Agregar servicios».",
         "pick": "Elegí un grupo de la lista para ver sus servicios.",
         "addItems": "Agregar servicios",
@@ -1154,13 +1207,69 @@
         "addMoving_one": "{{count}} ya tiene grupo y se mueve",
         "addMoving_other": "{{count}} ya tienen grupo y se mueven",
         "addConfirm_one": "Agregar {{count}} a {{name}}",
-        "addConfirm_other": "Agregar {{count}} a {{name}}"
+        "addConfirm_other": "Agregar {{count}} a {{name}}",
+        "noPercent": "Sin %"
       },
       "periodicityShort": {
         "WEEKLY": "liquidación semanal",
         "BIWEEKLY": "liquidación quincenal",
         "MONTHLY": "liquidación mensual",
         "MANUAL": "liquidación manual"
+      },
+      "rates": {
+        "title": "Comisiones por grupo y servicio",
+        "subtitle": "Lo que paga el salón por cada servicio, igual para todas las profesionales.",
+        "help": "Cada servicio paga el de su grupo, salvo que tenga uno propio. Lo que no tiene grupo ni % propio paga el % general. Si una profesional cobra distinto, se anota en su ficha.",
+        "general": "% general de {{kind}}",
+        "generalHelp": "Para lo que no tiene grupo ni % propio",
+        "kind": {
+          "SERVICE": "servicios",
+          "PRODUCT": "productos"
+        },
+        "itemKind": {
+          "PRODUCT": "producto"
+        },
+        "noPercent": "Sin %",
+        "setPercent": "Poner %",
+        "own": "Poner un % propio",
+        "remove": "Quitar",
+        "source": {
+          "SERVICE": "propio",
+          "GROUP": "del grupo",
+          "GENERAL": "general"
+        },
+        "exceptions": "{{count}} profesionales cobran distinto: {{names}}",
+        "exceptions_one": "1 profesional cobra distinto: {{names}}",
+        "noServices": "Este grupo todavía no tiene servicios.",
+        "ungrouped": "Sin grupo",
+        "ungroupedHelp": "{{count}} servicios · pagan el % general ({{percent}})",
+        "ungroupedHelp_one": "{{count}} servicio · paga el % general ({{percent}})",
+        "order": "Ordenar en grupos",
+        "newGroup": "+ Nuevo grupo",
+        "footer": "«Cambiar» y «Poner un % propio» preguntan desde cuándo aplica, como hoy. El costo de producto está en «Más opciones» de cada ventana.",
+        "editGeneral": "% general de {{kind}}",
+        "editGroup": "Comisión del grupo {{name}}",
+        "editService": "Comisión de {{name}}",
+        "percentLabel": "Comisión (%)",
+        "percentHelp": "Es la comisión total. Si la profesional retiene para aguinaldo, sale de este %.",
+        "more": "Más opciones",
+        "fixedLabel": "Costo de producto (Gs)",
+        "fixedHelp": "Se descuenta del precio antes de calcular el %. Dejalo vacío si no hay.",
+        "destinationLabel": "El costo de producto va para",
+        "destinationDefault": "Lo que dice el salón ({{value}})",
+        "destination": {
+          "PROFESSIONAL": "La profesional",
+          "SALON": "El salón"
+        },
+        "validation": {
+          "required": "Escribí el % de comisión, por ejemplo 40 o 37,5.",
+          "percent": "El % debe estar entre 0 y 100, con hasta 2 decimales (por ejemplo 40 o 37,5).",
+          "fixed": "El costo de producto debe ser un monto en guaraníes, sin decimales (por ejemplo 20.000)."
+        },
+        "applyGeneral": "Nuevo % general de {{kind}}: {{percent}}",
+        "applyGroup": "Comisión del grupo {{name}}: {{percent}}",
+        "applyService": "Comisión de {{name}}: {{percent}}",
+        "applyRemove": "Quitar el % propio de {{name}} (vuelve a pagar el de su grupo)"
       }
     },
     "appTitle": "Flowbit",
