@@ -451,6 +451,23 @@ class CommissionGroupsAguinaldoIntegrationTest {
   }
 
   @Test
+  void theEntriesOfARecalculatedLineShareItsInvoiceLine() {
+    configureSalon();
+    accrue(invoice(brushingLargo, jorgelina, "100000"));
+    change(
+        "PERIOD_START",
+        new ConfigChange("RETENTION_PROFILE", null, jorgelina.getId(), null, "5", null));
+    java.time.LocalDate today = java.time.LocalDate.now();
+    var views =
+        queryService.entries(
+            tenant.getId(), today.minusDays(1), today.plusDays(1), List.of(), null, null);
+    // The original, its reversal and the new commission: the screen shows them as one sale.
+    assertThat(views).hasSize(3);
+    assertThat(views).extracting(v -> v.invoiceLineId()).doesNotContainNull();
+    assertThat(views.stream().map(v -> v.invoiceLineId()).distinct()).hasSize(1);
+  }
+
+  @Test
   void theLastLayerThatExistsWins() {
     configureSalon();
     // Default % → group (50) → service for everybody → professional for that service.

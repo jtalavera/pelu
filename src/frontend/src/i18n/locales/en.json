@@ -87,6 +87,36 @@
         "totals": {
           "total": "Total",
           "retained": "Retained"
+        },
+        "group": {
+          "showReversed": "Also show reversed lines",
+          "show": "See changes · {{count}} rows",
+          "hide": "Hide changes",
+          "title": "How it got to this amount",
+          "tag": {
+            "RECALCULATION": "Recalculated",
+            "REASSIGNMENT": "Reassigned",
+            "VOID": "Voided",
+            "CORRECTION": "Corrected",
+            "OTHER": "With changes"
+          },
+          "before": "before {{value}}",
+          "voided": "invoice voided",
+          "step": {
+            "initial": "Initial commission",
+            "previous": "Previous commission",
+            "current": "Current commission"
+          },
+          "stepTag": {
+            "reverted": "Reversed",
+            "reversal": "Reversal",
+            "current": "In force"
+          },
+          "reverses": "undoes step {{n}}",
+          "net": "Net of this sale: {{amount}}.",
+          "noCurrent": "There is no commission in force.",
+          "changedCount_one": "{{count}} with changes",
+          "changedCount_other": "{{count}} with changes"
         }
       },
       "preview": {

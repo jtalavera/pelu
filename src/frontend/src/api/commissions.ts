@@ -302,6 +302,8 @@ export type EntryView = {
   revision: number;
   reasonCode: string | null;
   invoiceId: number | null;
+  /** The invoice line shared by an entry, its reversal and its new revision (HU-COM-29). */
+  invoiceLineId: number | null;
   invoiceNumber: string | null;
   serviceId: number | null;
   itemName: string | null;

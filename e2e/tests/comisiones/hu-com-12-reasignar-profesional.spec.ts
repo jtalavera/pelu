@@ -75,13 +75,19 @@ test("desde «Movimientos»: valida profesional y motivo, revierte la comisión 
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("status").filter({ hasText: "Commission reassigned." })).toBeVisible();
 
-  await expect(rows).toHaveCount(3);
-  const reversal = rows.filter({ hasText: "Reversal due to professional change" });
+  // HU-COM-29: the sale is one row, now Bea's, and its history keeps the original and the reversal.
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText(w.bea.name);
+  await expect(rows.first()).toContainText("50.000");
+  await expect(rows.first().getByTestId("movement-tag")).toHaveText("Reassigned");
+  await expect(rows.first().getByTestId("movement-calc-note")).toContainText(`before ${w.ana.name}`, { ignoreCase: true });
+  await rows.first().getByTestId("movement-changes-toggle").click();
+  await expect(page.getByTestId("movement-step")).toHaveCount(3);
+  const reversal = page.getByTestId("movement-step").filter({ hasText: "Reversal due to professional change" });
   await expect(reversal).toContainText(w.ana.name);
   await expect(reversal).toContainText("El servicio lo hizo Bea");
-  await expect(reversal).toContainText("-");
-  await expect(rows.filter({ hasText: w.bea.name })).toContainText("50.000");
-  // Neither the original (already reversed) nor the reversal can be reassigned again.
+  await expect(reversal.getByTestId("movement-step-amount")).toContainText("-");
+  // Only the live commission can be reassigned again (not the original, already reversed, nor the reversal).
   await expect(rows.getByRole("button", { name: /actions/i })).toHaveCount(1);
 
   const es = await entries(request, w.adminToken);

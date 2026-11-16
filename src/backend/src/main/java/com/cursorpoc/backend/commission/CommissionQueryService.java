@@ -308,6 +308,7 @@ public class CommissionQueryService {
         e.getRevision(),
         e.getReasonCode(),
         e.getInvoiceId(),
+        e.getInvoiceLineId(),
         e.getInvoiceNumber(),
         e.getServiceId(),
         e.getItemName(),
