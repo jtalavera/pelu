@@ -2,6 +2,7 @@ package com.cursorpoc.backend.commission;
 
 import com.cursorpoc.backend.domain.CommissionEntry;
 import com.cursorpoc.backend.domain.CommissionSettlement;
+import com.cursorpoc.backend.domain.enums.CommissionEntrySource;
 import com.cursorpoc.backend.domain.enums.CommissionPeriodicity;
 import com.cursorpoc.backend.domain.enums.CommissionSettlementStatus;
 import com.cursorpoc.backend.domain.enums.ServiceKind;
@@ -112,6 +113,7 @@ public class CommissionOverviewService {
     inPeriod.keySet().stream().filter(id -> !ids.contains(id)).forEach(ids::add);
 
     Instant end = period.endInstant(zone);
+    java.util.Set<Long> reversed = entryRepository.findReversedIds(tenantId);
     List<OverviewRow> rows = new ArrayList<>();
     BigDecimal total = BigDecimal.ZERO;
     BigDecimal retentionTotal = BigDecimal.ZERO;
@@ -134,7 +136,7 @@ public class CommissionOverviewService {
         amount = s.getTotalAmount();
         retention = sum(entries);
         settlementId = s.getId();
-        lineCount = entries.size();
+        lineCount = liveCount(entries, reversed);
         if (s.getStatus() == CommissionSettlementStatus.PAID && s.getPaidAt() != null) {
           paidOn = LocalDate.ofInstant(s.getPaidAt(), zone);
         }
@@ -145,7 +147,7 @@ public class CommissionOverviewService {
                 .map(CommissionEntry::getCommissionAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         retention = sum(entries);
-        lineCount = entries.size();
+        lineCount = liveCount(entries, reversed);
         status = entries.isEmpty() ? "NONE" : "UNSETTLED";
       }
       switch (status) {
@@ -202,6 +204,18 @@ public class CommissionOverviewService {
         aguinaldo,
         aguinaldo ? aguinaldoService.summary(tenantId).totalBalance() : BigDecimal.ZERO,
         retaining);
+  }
+
+  /**
+   * Movements still in force: a reversal and the entry it cancels are the same sale undone, so
+   * neither counts (a recalculated line is then one movement, not three).
+   */
+  private static int liveCount(List<CommissionEntry> entries, java.util.Set<Long> reversed) {
+    return (int)
+        entries.stream()
+            .filter(e -> e.getSourceType() != CommissionEntrySource.REVERSAL)
+            .filter(e -> !reversed.contains(e.getId()))
+            .count();
   }
 
   private static BigDecimal sum(List<CommissionEntry> entries) {
