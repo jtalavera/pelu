@@ -14,6 +14,7 @@ import { AguinaldoGuard, TeamLayout, TeamList } from "./TeamPage";
 
 const api = vi.hoisted(() => ({
   getOverview: vi.fn(),
+  getSettings: vi.fn(),
   getRates: vi.fn(),
   getProfessionalsSummary: vi.fn(),
   getAguinaldo: vi.fn(),
@@ -253,6 +254,42 @@ describe("HU-COM-15 · Inicio", () => {
     expect(screen.getByTestId("home-review-drafts")).toBeTruthy();
     expect(screen.queryByTestId("home-review-lines")).toBeNull();
     expect(screen.queryByTestId("home-review-ungrouped")).toBeNull();
+  });
+
+  it("«Para revisar» son tarjetas: el número una vez, qué pasa, el % general real y solo la primera con botón relleno", async () => {
+    api.getSettings.mockResolvedValue({ defaultPercentService: 12, defaultPercentProduct: 5 });
+    mount("/app/commissions", overview({ linesWithoutProfessional: 20, groupsWithoutPercent: 13, drafts: 3 }));
+    await screen.findByTestId("home-review-lines");
+    const cards = [...screen.getByTestId("home-review").querySelectorAll("article")];
+    expect(cards.map((c) => c.getAttribute("data-testid"))).toEqual(["home-review-lines", "home-review-noPercent", "home-review-drafts"]);
+    expect(cards.map((c) => c.getAttribute("data-tone"))).toEqual(["money", "setup", "paperwork"]);
+    const lines = screen.getByTestId("home-review-lines");
+    expect(within(lines).getByTestId("home-review-tag").textContent).toBe("No generan comisión");
+    expect(within(lines).getByTestId("home-review-count").textContent).toBe("20");
+    expect(within(lines).getByTestId("home-review-title").textContent).toBe("20 líneas de venta sin profesional");
+    expect(within(lines).getByTestId("home-review-help").textContent).toBe("Asignales una profesional para que cuenten en la liquidación.");
+    expect(within(lines).getByTestId("home-review-lines-action").textContent).toBe("Asignar profesional");
+    const noPercent = screen.getByTestId("home-review-noPercent");
+    expect(within(noPercent).getByTestId("home-review-tag").textContent).toBe("Pagan el % general");
+    expect(within(noPercent).getByTestId("home-review-title").textContent).toBe("13 grupos sin su propio %");
+    await waitFor(() => expect(within(noPercent).getByTestId("home-review-help").textContent).toBe("Hoy cobran el % general de servicios: 12 %."));
+    expect(within(noPercent).getByTestId("home-review-noPercent-action").textContent).toBe("Poner los %");
+    expect(within(screen.getByTestId("home-review-drafts")).getByTestId("home-review-drafts-action").textContent).toBe("Revisar borradores");
+    // Only the first one is filled: it is the one to do first.
+    const filled = (key: string) => /(^|\s)bg-primary(\s|$)/.test(screen.getByTestId(`home-review-${key}-action`).className);
+    expect([filled("lines"), filled("noPercent"), filled("drafts")]).toEqual([true, false, false]);
+    expect(screen.getByTestId("home-review").textContent).toContain("3 cosas, de lo que más afecta la plata a lo que menos");
+  });
+
+  it("«Para revisar» con una sola liquidación en borrador usa el singular y, sin leer el % general, no inventa un número", async () => {
+    api.getSettings.mockRejectedValue(new Error("NETWORK"));
+    mount("/app/commissions", overview({ linesWithoutProfessional: 0, groupsWithoutPercent: 1, drafts: 1 }));
+    await screen.findByTestId("home-review-drafts");
+    expect(screen.getByTestId("home-review-drafts").textContent).toContain("1 liquidación en borrador");
+    expect(screen.getByTestId("home-review-drafts").textContent).toContain("Hay que aprobarla para poder pagarla.");
+    expect(screen.getByTestId("home-review-noPercent").textContent).toContain("1 grupo sin su propio %");
+    expect(screen.getByTestId("home-review-noPercent-action").className).toMatch(/(^|\s)bg-primary(\s|$)/);
+    expect(within(screen.getByTestId("home-review-noPercent")).getByTestId("home-review-help").textContent).toBe("Hoy cobran el % general de servicios.");
   });
 
   it("sin grupos muestra la guía de primera vez con tres pasos", async () => {

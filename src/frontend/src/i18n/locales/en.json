@@ -771,9 +771,11 @@
         "allGood": "All good: there is nothing to review.",
         "review": {
           "lines": {
-            "title": "{{count}} lines without a professional",
-            "help": "Some sales have no professional assigned: they earn no commission.",
-            "action": "Assign"
+            "title": "sale lines without a professional",
+            "help": "Assign them a professional so they count in the settlement.",
+            "action": "Assign professional",
+            "title_one": "sale line without a professional",
+            "tag": "They earn no commission"
           },
           "ungrouped": {
             "title": "{{count}} services without a group",
@@ -786,15 +788,20 @@
             "action": "Set rules"
           },
           "drafts": {
-            "title": "{{count}} settlements in draft",
+            "title": "settlements in draft",
             "help": "They must be approved before they can be paid.",
-            "action": "Review"
+            "action": "Review drafts",
+            "title_one": "settlement in draft",
+            "help_one": "It must be approved before it can be paid.",
+            "tag": "Not paid yet"
           },
           "noPercent": {
-            "title": "{{count}} groups without a %",
-            "title_one": "{{count}} group without a %",
-            "help": "They pay the general % (0 % unless you changed it).",
-            "action": "Set the %"
+            "title": "groups without their own %",
+            "title_one": "group without its own %",
+            "help": "Today they are paid the general % for services.",
+            "action": "Set the %",
+            "helpPercent": "Today they are paid the general % for services: {{percent}}.",
+            "tag": "They pay the general %"
           }
         },
         "teamTitle": "Your team",
@@ -835,7 +842,9 @@
         "noneTitle_other": "{{count}} professionals without movements this period:",
         "noneMore": " and {{count}} more",
         "noneSee_one": "See her",
-        "noneSee_other": "See the {{count}}"
+        "noneSee_other": "See the {{count}}",
+        "reviewCount_one": "{{count}} thing, from what affects the money most to least",
+        "reviewCount_other": "{{count}} things, from what affects the money most to least"
       },
       "liquidar": {
         "prevPeriod": "Previous period",
@@ -1175,7 +1184,7 @@
         "tabGroups": "Groups",
         "tabExceptions": "Exceptions by service",
         "product": "Product",
-        "noGroupSub": "They need a rule",
+        "noGroupSub": "They pay the general %",
         "allGroups": "All groups",
         "createGroupInline": "+ Create a group",
         "rulesFor_one": "rule set for {{count}} professional",
@@ -1208,7 +1217,18 @@
         "addMoving_other": "{{count}} already have a group and move",
         "addConfirm_one": "Add {{count}} to {{name}}",
         "addConfirm_other": "Add {{count}} to {{name}}",
-        "noPercent": "No %"
+        "noPercent": "No %",
+        "noneItems_one": "{{n}} item",
+        "noneItems_other": "{{n}} items",
+        "noneServices_one": "{{n}} service",
+        "noneServices_other": "{{n}} services",
+        "noneProducts_one": "{{n}} product",
+        "noneProducts_other": "{{n}} products",
+        "noneHint": "They pay the general %: services {{service}}, products {{product}}. You can leave them like that or build groups to give them another %.",
+        "noneHintNoPercent": "They pay the general %. You can leave them like that or build groups to give them another %.",
+        "noneFilterAll": "All {{n}}",
+        "noneFilterServices": "Services {{n}}",
+        "noneFilterProducts": "Products {{n}}"
       },
       "periodicityShort": {
         "WEEKLY": "weekly settlement",

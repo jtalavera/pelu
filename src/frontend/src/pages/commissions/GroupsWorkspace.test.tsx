@@ -10,6 +10,7 @@ import { GroupsWorkspace } from "./GroupsWorkspace";
 const api = vi.hoisted(() => ({
   getGroups: vi.fn(),
   getGroupServices: vi.fn(),
+  getSettings: vi.fn(),
   assignGroups: vi.fn(),
   createGroup: vi.fn(),
   renameGroup: vi.fn(),
@@ -57,6 +58,7 @@ describe("HU-COM-16 · Grupos y servicios", () => {
             svc(13, "Brushing pelo corto", { groupId: 1, groupName: "Brushing" }),
           ],
     );
+    api.getSettings.mockResolvedValue({ defaultPercentService: 10, defaultPercentProduct: 5 });
     api.assignGroups.mockResolvedValue({ changed: 1, rows: [] });
     api.createGroup.mockResolvedValue({ id: 3, name: "Color" });
     api.renameGroup.mockResolvedValue(undefined);
@@ -85,6 +87,67 @@ describe("HU-COM-16 · Grupos y servicios", () => {
     expect(within(rowOf("Maquillaje")).queryByTestId("groups-suggestion")).toBeNull();
     expect(within(rowOf("Shampoo")).getByText(/Producto/)).toBeTruthy();
     expect(screen.getByTestId("groups-new")).toBeTruthy();
+  });
+
+  it("«Sin grupo» dice qué paga (el % general), cuántos ítems hay y de qué tipo", async () => {
+    wrap();
+    await screen.findAllByTestId("groups-row");
+    expect(screen.getByTestId("group-none").textContent).toContain("Pagan el % general");
+    expect(screen.getByTestId("none-counts").textContent).toBe("5 ítems · 3 servicios · 2 productos");
+    await waitFor(() =>
+      expect(screen.getByTestId("none-hint").textContent).toBe(
+        "Pagan el % general: servicios 10 %, productos 5 %. Podés dejarlos así o armar grupos para darles otro %.",
+      ),
+    );
+    // Nothing here «lacks a rule» any more, so it is not drawn as a warning.
+    expect(screen.getByTestId("group-none").className).not.toContain("warning");
+  });
+
+  it("si los % generales no se pudieron leer, el texto sigue siendo claro (sin inventar un número)", async () => {
+    api.getSettings.mockRejectedValue(new Error("NETWORK"));
+    wrap();
+    await screen.findAllByTestId("groups-row");
+    expect(screen.getByTestId("none-hint").textContent).toBe("Pagan el % general. Podés dejarlos así o armar grupos para darles otro %.");
+  });
+
+  it("la cantidad de «Sin grupo» es una píldora con separador de miles que no se corta (1.247)", async () => {
+    api.getGroupServices.mockImplementation(async (kind: string) =>
+      kind === "PRODUCT" ? Array.from({ length: 1244 }, (_, i) => svc(1000 + i, `Producto ${i}`)) : [svc(10, "Baño de crema"), svc(11, "Maquillaje"), svc(12, "Peinado")],
+    );
+    wrap();
+    await screen.findAllByTestId("groups-row");
+    const pill = screen.getByTestId("group-none-count");
+    expect(pill.textContent).toBe("1.247");
+    expect(pill.className).toContain("min-w-");
+    expect(pill.className).not.toContain("size-[30px]");
+    expect(screen.getByTestId("none-counts").textContent).toBe("1.247 ítems · 3 servicios · 1.244 productos");
+    expect(screen.getByTestId("none-filter-ALL").textContent).toBe("Todos 1.247");
+    expect(screen.getByTestId("none-filter-PRODUCT").textContent).toBe("Productos 1.244");
+  });
+
+  it("los filtros de «Sin grupo» muestran solo servicios, solo productos o todo", async () => {
+    wrap();
+    await screen.findAllByTestId("groups-row");
+    const names = () => screen.getAllByTestId("groups-row").map((r) => r.getAttribute("data-name"));
+    expect(screen.getByTestId("none-filter-ALL").getAttribute("aria-pressed")).toBe("true");
+    await userEvent.click(screen.getByTestId("none-filter-PRODUCT"));
+    expect(names()).toEqual(["Acondicionador", "Shampoo"]);
+    expect(screen.getByTestId("none-filter-PRODUCT").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("none-filter-ALL").getAttribute("aria-pressed")).toBe("false");
+    await userEvent.click(screen.getByTestId("none-filter-SERVICE"));
+    expect(names()).toEqual(["Aplicación de ampolla", "Baño de crema", "Maquillaje"]);
+    await userEvent.click(screen.getByTestId("none-filter-ALL"));
+    expect(names()).toHaveLength(5);
+    // The pill and the counts still talk about everything without a group.
+    expect(screen.getByTestId("group-none-count").textContent).toBe("5");
+  });
+
+  it("dentro de «Sin grupo» las filas no repiten la etiqueta «Sin grupo»; en una búsqueda sí dicen en qué grupo están", async () => {
+    wrap();
+    await screen.findAllByTestId("groups-row");
+    expect(screen.queryAllByTestId("groups-row-chip")).toHaveLength(0);
+    await userEvent.type(screen.getByTestId("groups-search"), "Maquillaje");
+    expect(within(rowOf("Maquillaje")).getByTestId("groups-row-chip").textContent).toBe("Sin grupo");
   });
 
   it("tocar un grupo muestra sus servicios con el resumen del grupo", async () => {
@@ -190,7 +253,9 @@ describe("HU-COM-16 · Grupos y servicios", () => {
     wrap();
     await screen.findAllByTestId("groups-row");
     await userEvent.selectOptions(within(rowOf("Maquillaje")).getByTestId("groups-row-select"), "1");
-    await waitFor(() => expect(within(rowOf("Maquillaje")).getByTestId("groups-row-chip").textContent).toContain("Sin grupo"));
+    // The row goes back to where it was: no group, and the real state is read again.
+    await waitFor(() => expect((within(rowOf("Maquillaje")).getByTestId("groups-row-select") as HTMLSelectElement).value).toBe(""));
+    expect(rowOf("Maquillaje").getAttribute("data-state")).toBeNull();
     expect(screen.queryByTestId("groups-notice")).toBeNull();
   });
 

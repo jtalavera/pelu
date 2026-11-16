@@ -771,9 +771,11 @@
         "allGood": "Todo en orden: no hay nada para revisar.",
         "review": {
           "lines": {
-            "title": "{{count}} líneas sin profesional",
-            "help": "Hay ventas sin profesional asignada: no generan comisión.",
-            "action": "Asignar"
+            "title": "líneas de venta sin profesional",
+            "help": "Asignales una profesional para que cuenten en la liquidación.",
+            "action": "Asignar profesional",
+            "title_one": "línea de venta sin profesional",
+            "tag": "No generan comisión"
           },
           "ungrouped": {
             "title": "{{count}} servicios sin grupo",
@@ -786,15 +788,20 @@
             "action": "Cargar reglas"
           },
           "drafts": {
-            "title": "{{count}} liquidaciones en borrador",
-            "help": "Falta aprobarlas para poder pagarlas.",
-            "action": "Revisar"
+            "title": "liquidaciones en borrador",
+            "help": "Hay que aprobarlas para poder pagarlas.",
+            "action": "Revisar borradores",
+            "title_one": "liquidación en borrador",
+            "help_one": "Hay que aprobarla para poder pagarla.",
+            "tag": "Sin pagar todavía"
           },
           "noPercent": {
-            "title": "{{count}} grupos sin %",
-            "title_one": "{{count}} grupo sin %",
-            "help": "Pagan el % general (0 % si no lo cambiaste).",
-            "action": "Poner los %"
+            "title": "grupos sin su propio %",
+            "title_one": "grupo sin su propio %",
+            "help": "Hoy cobran el % general de servicios.",
+            "action": "Poner los %",
+            "helpPercent": "Hoy cobran el % general de servicios: {{percent}}.",
+            "tag": "Pagan el % general"
           }
         },
         "teamTitle": "Tu equipo",
@@ -835,7 +842,9 @@
         "noneTitle_other": "{{count}} profesionales sin movimientos este período:",
         "noneMore": " y {{count}} más",
         "noneSee_one": "Ver a la profesional",
-        "noneSee_other": "Ver las {{count}}"
+        "noneSee_other": "Ver las {{count}}",
+        "reviewCount_one": "{{count}} cosa, de lo que más afecta la plata a lo que menos",
+        "reviewCount_other": "{{count}} cosas, de lo que más afecta la plata a lo que menos"
       },
       "liquidar": {
         "prevPeriod": "Período anterior",
@@ -1175,7 +1184,7 @@
         "tabGroups": "Grupos",
         "tabExceptions": "Excepciones por servicio",
         "product": "Producto",
-        "noGroupSub": "Les falta regla",
+        "noGroupSub": "Pagan el % general",
         "allGroups": "Todos los grupos",
         "createGroupInline": "+ Crear un grupo",
         "rulesFor_one": "regla cargada para {{count}} profesional",
@@ -1208,7 +1217,18 @@
         "addMoving_other": "{{count}} ya tienen grupo y se mueven",
         "addConfirm_one": "Agregar {{count}} a {{name}}",
         "addConfirm_other": "Agregar {{count}} a {{name}}",
-        "noPercent": "Sin %"
+        "noPercent": "Sin %",
+        "noneItems_one": "{{n}} ítem",
+        "noneItems_other": "{{n}} ítems",
+        "noneServices_one": "{{n}} servicio",
+        "noneServices_other": "{{n}} servicios",
+        "noneProducts_one": "{{n}} producto",
+        "noneProducts_other": "{{n}} productos",
+        "noneHint": "Pagan el % general: servicios {{service}}, productos {{product}}. Podés dejarlos así o armar grupos para darles otro %.",
+        "noneHintNoPercent": "Pagan el % general. Podés dejarlos así o armar grupos para darles otro %.",
+        "noneFilterAll": "Todos {{n}}",
+        "noneFilterServices": "Servicios {{n}}",
+        "noneFilterProducts": "Productos {{n}}"
       },
       "periodicityShort": {
         "WEEKLY": "liquidación semanal",

@@ -139,7 +139,7 @@ test("AC2 · Inicio: cuánto hay para pagar, avance por estado, «Para revisar»
   await expect(page.getByTestId("home-pending-amount")).toContainText("80.000");
 
   // «Para revisar» lists only what exists: a line without professional (HU-COM-20: no «sin reglas»).
-  await expect(page.getByTestId("home-review-lines")).toContainText("1 lines without a professional");
+  await expect(page.getByTestId("home-review-lines")).toContainText("1 sale line without a professional");
   await expect(page.getByTestId("home-review-noRules")).toHaveCount(0);
   await expect(page.getByTestId("home-review-noPercent")).toHaveCount(0);
   await expect(page.getByTestId("home-review-ungrouped")).toHaveCount(0);

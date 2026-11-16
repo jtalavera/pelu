@@ -8,6 +8,7 @@ import {
   deleteGroup,
   getGroupServices,
   getGroups,
+  getSettings,
   renameGroup,
   type GroupServiceRow,
   type GroupView,
@@ -17,7 +18,7 @@ import { translateApiError } from "../../api/parseApiErrorMessage";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { FieldValidationError } from "../../components/FieldValidationError";
 import { ACTION_BUTTON } from "../../components/actionButtons";
-import { formatGuaraniesGs } from "../../lib/formatMoney";
+import { formatGuaraniesGs, formatIntegerGs } from "../../lib/formatMoney";
 import { useOverview } from "./overview";
 import { formatPercent } from "./common";
 
@@ -71,6 +72,10 @@ export function GroupsWorkspace() {
   /** Rows whose change is being saved (shown dimmed until the server answers). */
   const [saving, setSaving] = useState<Set<number>>(new Set());
   const [visibleCount, setVisibleCount] = useState(PAGE);
+  /** «Sin grupo» can be narrowed to services or products (most of what has no group are products). */
+  const [kindFilter, setKindFilter] = useState<"ALL" | ItemKind>("ALL");
+  /** What an item without a group is paid: the general % (HU-COM-20). Unknown until the settings load. */
+  const [general, setGeneral] = useState<{ service: number; product: number } | null>(null);
   /** Saves in flight: a refresh that started before them must not overwrite what is on screen. */
   const inFlight = useRef(0);
   const mutation = useRef(0);
@@ -95,6 +100,18 @@ export function GroupsWorkspace() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    let live = true;
+    Promise.resolve(getSettings())
+      .then((st) => {
+        if (live && typeof st?.defaultPercentService === "number") setGeneral({ service: st.defaultPercentService, product: st.defaultPercentProduct });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+
   const all: Item[] = useMemo(
     () =>
       [...items.SERVICE.map((r) => ({ ...r, kind: "SERVICE" as const })), ...items.PRODUCT.map((r) => ({ ...r, kind: "PRODUCT" as const }))].sort(
@@ -104,6 +121,8 @@ export function GroupsWorkspace() {
   );
   const shownGroups = useMemo(() => (groups ? withMembers(groups, all) : null), [groups, all]);
   const ungrouped = useMemo(() => all.filter((r) => r.groupId === null), [all]);
+  const noneServices = ungrouped.filter((r) => r.kind === "SERVICE").length;
+  const noneProducts = ungrouped.length - noneServices;
 
   // Which view is open: «Sin grupo» ("none") or a group id. On a phone nothing is open until one is chosen.
   const explicit = params.get("group");
@@ -119,6 +138,7 @@ export function GroupsWorkspace() {
   function openView(key: string | null) {
     setSelected(new Set());
     setBulkGroup("");
+    setKindFilter("ALL");
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -138,14 +158,14 @@ export function GroupsWorkspace() {
     const base = searching
       ? all.filter((r) => normalize(r.name).includes(needle))
       : current === NONE
-        ? all.filter((r) => r.groupId === null)
+        ? all.filter((r) => r.groupId === null && (kindFilter === "ALL" || r.kind === kindFilter))
         : current
           ? all.filter((r) => String(r.groupId) === current)
           : [];
     // A row that was just assigned from this view stays where it was for a moment.
     const keep = all.filter((r) => recent[r.serviceId] === viewKey && !base.some((b) => b.serviceId === r.serviceId));
     return [...base, ...keep].sort((a, b) => a.name.localeCompare(b.name));
-  }, [all, searching, needle, current, recent, viewKey]);
+  }, [all, searching, needle, current, recent, viewKey, kindFilter]);
   const matchingGroups = useMemo(
     () => (searching ? (shownGroups ?? []).filter((g) => normalize(g.name).includes(needle)) : []),
     [searching, shownGroups, needle],
@@ -355,15 +375,18 @@ export function GroupsWorkspace() {
               .join(" · ")}
           </div>
         </div>
-        <span
-          data-testid="groups-row-chip"
-          className={`inline-flex min-h-[30px] items-center rounded-full px-3 text-xs font-extrabold ${
-            r.groupName ? "bg-primary-lt text-primary" : "bg-warning-lt text-warning"
-          }`}
-        >
-          {recent[r.serviceId] ? "✓ " : ""}
-          {r.groupName ?? t("femme.commissions.groups.noGroup")}
-        </span>
+        {/* Inside «Sin grupo» every row is without a group: the tag would only repeat the title. */}
+        {(r.groupName || current !== NONE || searching) && (
+          <span
+            data-testid="groups-row-chip"
+            className={`inline-flex min-h-[30px] items-center rounded-full px-3 text-xs font-extrabold ${
+              r.groupName ? "bg-primary-lt text-primary" : "bg-warning-lt text-warning"
+            }`}
+          >
+            {recent[r.serviceId] ? "✓ " : ""}
+            {r.groupName ?? t("femme.commissions.groups.noGroup")}
+          </span>
+        )}
         {r.suggestion && (
           <>
             <span data-testid="groups-suggestion" className="inline-flex min-h-8 items-center rounded-full bg-warning-lt px-3 text-xs font-extrabold text-warning">
@@ -475,15 +498,19 @@ export function GroupsWorkspace() {
         aria-current={current === NONE ? "true" : undefined}
         onClick={() => openView(NONE)}
         className={`flex min-h-16 w-full items-center justify-between gap-3 rounded-2xl border-2 px-3.5 py-2 text-left ${
-          current === NONE ? "border-warning bg-warning-lt" : "border-line bg-warning-lt/60 hover:bg-warning-lt"
+          current === NONE ? "border-primary bg-primary-lt" : "border-line bg-bg hover:bg-primary-lt/60"
         }`}
       >
         <span className="min-w-0">
-          <b className="block font-extrabold text-warning">{t("femme.commissions.groups.noGroup")}</b>
-          <span className="text-xs text-warning">{t("femme.commissions.workspace.noGroupSub")}</span>
+          <b className="block font-extrabold text-primary">{t("femme.commissions.groups.noGroup")}</b>
+          <span className="text-xs text-ink-2">{t("femme.commissions.workspace.noGroupSub")}</span>
         </span>
-        <span data-testid="group-none-count" className="inline-flex size-[30px] items-center justify-center rounded-full bg-warning text-sm font-extrabold text-surface">
-          {ungrouped.length}
+        {/* A pill that grows with the number (1.247 did not fit in a circle). */}
+        <span
+          data-testid="group-none-count"
+          className="inline-flex h-[30px] min-w-[30px] shrink-0 items-center justify-center rounded-full bg-primary px-2.5 text-sm font-extrabold tabular-nums text-primary-fg"
+        >
+          {formatIntegerGs(ungrouped.length)}
         </span>
       </button>
       <div className="mx-1.5 my-1.5 h-px bg-line" aria-hidden />
@@ -532,13 +559,53 @@ export function GroupsWorkspace() {
       </button>
       {current === NONE && (
         <>
-          <div>
-            <h3 className="font-heading text-xl font-extrabold text-ink">{t("femme.commissions.groups.noGroup")}</h3>
-            <p className="text-sm text-ink-3">{t("femme.commissions.groups.ungroupedHint")}</p>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h3 className="font-heading text-xl font-extrabold text-ink">{t("femme.commissions.groups.noGroup")}</h3>
+              <span className="text-sm text-ink-2" data-testid="none-counts">
+                <b className="text-ink">{t("femme.commissions.workspace.noneItems", { count: ungrouped.length, n: formatIntegerGs(ungrouped.length) })}</b>
+                {" · "}
+                {t("femme.commissions.workspace.noneServices", { count: noneServices, n: formatIntegerGs(noneServices) })}
+                {" · "}
+                {t("femme.commissions.workspace.noneProducts", { count: noneProducts, n: formatIntegerGs(noneProducts) })}
+              </span>
+            </div>
+            <p className="text-sm text-ink-2" data-testid="none-hint">
+              {general
+                ? t("femme.commissions.workspace.noneHint", { service: formatPercent(general.service), product: formatPercent(general.product) })
+                : t("femme.commissions.workspace.noneHintNoPercent")}
+            </p>
           </div>
+          {ungrouped.length > 0 && (
+            <div role="group" aria-label={t("femme.commissions.groups.kindAria")} className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["ALL", t("femme.commissions.workspace.noneFilterAll", { n: formatIntegerGs(ungrouped.length) })],
+                  ["SERVICE", t("femme.commissions.workspace.noneFilterServices", { n: formatIntegerGs(noneServices) })],
+                  ["PRODUCT", t("femme.commissions.workspace.noneFilterProducts", { n: formatIntegerGs(noneProducts) })],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={kindFilter === value}
+                  data-testid={`none-filter-${value}`}
+                  onClick={() => {
+                    setKindFilter(value);
+                    setVisibleCount(PAGE);
+                  }}
+                  className={`min-h-11 rounded-full border px-4 text-sm font-extrabold ${
+                    kindFilter === value ? "border-primary bg-primary text-primary-fg" : "border-line bg-surface text-ink hover:bg-primary-lt"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {viewRows.length === 0 ? (
             <Text variant="muted" data-testid="groups-no-matches">
-              {t("femme.commissions.groups.ungroupedEmpty")}
+              {t(ungrouped.length > 0 ? "femme.commissions.groups.noMatches" : "femme.commissions.groups.ungroupedEmpty")}
             </Text>
           ) : null}
         </>
