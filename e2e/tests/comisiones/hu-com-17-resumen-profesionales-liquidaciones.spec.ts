@@ -37,13 +37,10 @@ test.afterAll(async ({ request }) => {
 test.beforeEach(async ({ request }) => {
   w = await provisionCommissionWorld(request, "HU-COM-17");
   await applyChanges(request, w.adminToken, [{ scope: "DEFAULT_SERVICE", value: "40" }]);
-  // Groups and rules so the home is not the first-time guide.
+  // A group with its % so the home is not the first-time guide (HU-COM-20).
   const g = await createGroup(request, w.adminToken, "Peluquería");
   await assignToGroup(request, w.adminToken, g.id, [w.service.id, w.service2.id]);
-  await applyChanges(request, w.adminToken, [
-    { scope: "GROUP_RULE", groupId: g.id, professionalId: w.ana.id, value: "40" },
-    { scope: "GROUP_RULE", groupId: g.id, professionalId: w.bea.id, value: "40" },
-  ]);
+  await applyChanges(request, w.adminToken, [{ scope: "GROUP_RULE", groupId: g.id, value: "40" }]);
 });
 
 async function accrue(request: Parameters<typeof issueInvoice>[0], professionalId: number) {
@@ -95,8 +92,8 @@ test("AC1 · Liquidar muestra a TODAS las profesionales activas; las sin movimie
   await expect(rosa.getByTestId("liquidar-row-amount")).toHaveText("—");
   await expect(rosa.getByTestId("liquidar-row-check")).toHaveCount(0);
   await expect(rosa.getByRole("button")).toHaveCount(0);
-  // Rosa has no rules of her own: the row says so.
-  await expect(rosa).toContainText("no rules of their own");
+  // HU-COM-20: a professional with nothing loaded is paid the usual %, so there is no «no rules» note.
+  await expect(rosa).not.toContainText("no rules");
 
   // The filter «No movements» lists just them.
   await expect(page.getByTestId("liquidar-filter-NONE")).toContainText("No movements · 2");

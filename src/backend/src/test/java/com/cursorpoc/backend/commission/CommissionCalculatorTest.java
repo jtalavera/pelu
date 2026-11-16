@@ -160,7 +160,8 @@ class CommissionCalculatorTest {
         .hasMessageContaining("COMMISSION_PERCENT_OUT_OF_RANGE");
   }
 
-  // ── HU-COM-14: reglas del salón (precio con IVA, retención de aguinaldo, monto fijo) ──────────
+  // ── HU-COM-14 / HU-COM-20: reglas del salón (precio con IVA, retención de la profesional, monto
+  // fijo)
 
   private static final Instant NOW = Instant.parse("2026-11-14T12:00:00Z");
   private static final Instant EARLIER = NOW.minusSeconds(3600);
@@ -171,6 +172,11 @@ class CommissionCalculatorTest {
         v(CommissionConfigScope.GROUP_RULE, null, professionalId, value, from);
     v.setGroupId(groupId);
     return v;
+  }
+
+  /** The retention for aguinaldo of one professional (HU-COM-20: hers, not of the rule). */
+  private static CommissionConfigVersion retains(long professionalId, String percent) {
+    return v(CommissionConfigScope.RETENTION_PROFILE, null, professionalId, percent, EARLIER);
   }
 
   private static CommissionConfigSnapshot salon(CommissionConfigVersion... rules) {
@@ -188,18 +194,22 @@ class CommissionCalculatorTest {
   }
 
   @Test
-  void brushingPaysFortyFiveAndRetainsFive() {
-    CommissionConfigSnapshot snap = salon(group(10, 7L, "45|5|0|", EARLIER));
+  void brushingIsFiftyAndGabyRetainsFiveOfIt() {
+    CommissionConfigSnapshot snap = salon(group(10, null, "50", EARLIER), retains(7L, "5"));
     CommissionCalculator.LineAmounts a = line(snap, 10, 7L, "100000");
     assertThat(a.commissionAmount()).isEqualByComparingTo("45000");
     assertThat(a.retentionAmount()).isEqualByComparingTo("5000");
     assertThat(a.fixedAmount()).isEqualByComparingTo("0");
+    // Somebody who does not retain is paid the whole 50 %.
+    assertThat(line(snap, 10, 8L, "100000").commissionAmount()).isEqualByComparingTo("50000");
+    assertThat(line(snap, 10, 8L, "100000").retentionAmount()).isEqualByComparingTo("0");
   }
 
   @Test
   void eyelashesFixedAmountIsPaidToTheProfessionalOnTopOfTheCommission() {
     // 30.000 servicio + 20.000 pestaña: comisiona solo sobre los 30.000; los 20.000 son de Gaby.
-    CommissionConfigSnapshot snap = salon(group(10, 7L, "45|5|20000|P", EARLIER));
+    CommissionConfigSnapshot snap =
+        salon(group(10, null, "50|0|20000|P", EARLIER), retains(7L, "5"));
     CommissionCalculator.LineAmounts a = line(snap, 10, 7L, "50000");
     assertThat(a.baseAmount()).isEqualByComparingTo("30000");
     assertThat(a.percentAmount()).isEqualByComparingTo("13500");
@@ -210,7 +220,8 @@ class CommissionCalculatorTest {
 
   @Test
   void aFixedAmountForTheSalonOnlyLowersTheBase() {
-    CommissionConfigSnapshot snap = salon(group(10, 7L, "45|5|3000|S", EARLIER));
+    CommissionConfigSnapshot snap =
+        salon(group(10, null, "50|0|3000|S", EARLIER), retains(7L, "5"));
     CommissionCalculator.LineAmounts a = line(snap, 10, 7L, "50000");
     assertThat(a.baseAmount()).isEqualByComparingTo("47000");
     assertThat(a.commissionAmount()).isEqualByComparingTo("21150");
@@ -221,7 +232,7 @@ class CommissionCalculatorTest {
   @Test
   void theSalonDefaultDestinationAppliesWhenTheRuleDoesNotSetOne() {
     java.util.List<CommissionConfigVersion> all = new java.util.ArrayList<>();
-    all.add(group(10, 7L, "50|0|3000|", EARLIER));
+    all.add(group(10, null, "50|0|3000|", EARLIER));
     all.add(v(CommissionConfigScope.FIXED_DESTINATION, null, null, "SALON", EARLIER));
     CommissionConfigSnapshot snap = new CommissionConfigSnapshot(all);
     assertThat(line(snap, 10, 7L, "50000").commissionAmount()).isEqualByComparingTo("23500");
@@ -233,15 +244,16 @@ class CommissionCalculatorTest {
   @Test
   void withoutRetentionEnabledNothingIsRetained() {
     CommissionConfigSnapshot snap =
-        new CommissionConfigSnapshot(List.of(group(10, 7L, "45|5|0|", EARLIER)));
+        new CommissionConfigSnapshot(List.of(group(10, null, "50", EARLIER), retains(7L, "5")));
     CommissionCalculator.LineAmounts a = line(snap, 10, 7L, "100000");
     assertThat(a.retentionAmount()).isEqualByComparingTo("0");
-    assertThat(a.commissionAmount()).isEqualByComparingTo("45000");
+    assertThat(a.commissionAmount()).isEqualByComparingTo("50000");
   }
 
   @Test
   void aFixedAmountBiggerThanThePriceLeavesAZeroBaseButIsStillPaid() {
-    CommissionConfigSnapshot snap = salon(group(10, 7L, "45|5|20000|P", EARLIER));
+    CommissionConfigSnapshot snap =
+        salon(group(10, null, "50|0|20000|P", EARLIER), retains(7L, "5"));
     CommissionCalculator.LineAmounts a = line(snap, 10, 7L, "15000");
     assertThat(a.baseAmount()).isEqualByComparingTo("0");
     assertThat(a.commissionAmount()).isEqualByComparingTo("20000");
@@ -251,31 +263,39 @@ class CommissionCalculatorTest {
   }
 
   @Test
-  void precedenceGoesFromTheMostSpecificToTheDefault() {
-    CommissionConfigSnapshot snap =
+  void theRetentionNeverExceedsTheCommission() {
+    CommissionConfigSnapshot snap = salon(group(10, null, "3", EARLIER), retains(7L, "5"));
+    CommissionCalculator.LineAmounts a = line(snap, 10, 7L, "100000");
+    assertThat(a.retentionAmount()).isEqualByComparingTo("3000");
+    assertThat(a.commissionAmount()).isEqualByComparingTo("0");
+  }
+
+  @Test
+  void theLastLayerThatExistsWins() {
+    CommissionConfigSnapshot all =
         salon(
-            v(CommissionConfigScope.RULE, 1L, 7L, "70", EARLIER),
-            group(10, 7L, "45|5|0|", EARLIER),
-            v(CommissionConfigScope.RULE, 1L, null, "40", EARLIER),
+            v(CommissionConfigScope.DEFAULT_SERVICE, null, null, "20", EARLIER),
             group(10, null, "30", EARLIER),
-            v(CommissionConfigScope.DEFAULT_SERVICE, null, null, "20", EARLIER));
-    assertThat(CommissionCalculator.resolve(snap, 1L, 10L, ServiceKind.SERVICE, 7L, NOW).origin())
-        .isEqualTo(CommissionRuleOrigin.BENEFICIARY_ITEM);
-    // Without the professional + item exception: professional + group.
-    CommissionConfigSnapshot noException =
-        salon(
-            group(10, 7L, "45|5|0|", EARLIER),
             v(CommissionConfigScope.RULE, 1L, null, "40", EARLIER),
-            group(10, null, "30", EARLIER));
+            v(CommissionConfigScope.RULE, 1L, 7L, "70", EARLIER));
+    // professional + service › service › group › default of the kind
+    CommissionCalculator.Resolution hers =
+        CommissionCalculator.resolve(all, 1L, 10L, ServiceKind.SERVICE, 7L, NOW);
+    assertThat(hers.origin()).isEqualTo(CommissionRuleOrigin.BENEFICIARY_ITEM);
+    assertThat(hers.percent()).isEqualByComparingTo("70");
+    CommissionCalculator.Resolution another =
+        CommissionCalculator.resolve(all, 1L, 10L, ServiceKind.SERVICE, 8L, NOW);
+    assertThat(another.origin()).isEqualTo(CommissionRuleOrigin.ITEM);
+    assertThat(another.percent()).isEqualByComparingTo("40");
+    // The % of a group for a professional is not a layer any more (HU-COM-20): it is ignored.
+    CommissionConfigSnapshot oldRule =
+        salon(
+            group(10, 7L, "45", EARLIER),
+            group(10, null, "30", EARLIER),
+            v(CommissionConfigScope.RULE, 1L, null, "40", EARLIER));
     assertThat(
-            CommissionCalculator.resolve(noException, 1L, 10L, ServiceKind.SERVICE, 7L, NOW)
-                .origin())
-        .isEqualTo(CommissionRuleOrigin.BENEFICIARY_GROUP);
-    // Another professional: the item rule for everyone, then the group rule for everyone.
-    assertThat(
-            CommissionCalculator.resolve(noException, 1L, 10L, ServiceKind.SERVICE, 8L, NOW)
-                .origin())
-        .isEqualTo(CommissionRuleOrigin.ITEM);
+            CommissionCalculator.resolve(oldRule, 1L, 10L, ServiceKind.SERVICE, 7L, NOW).percent())
+        .isEqualByComparingTo("40");
     CommissionConfigSnapshot groupOnly = salon(group(10, null, "30", EARLIER));
     assertThat(
             CommissionCalculator.resolve(groupOnly, 1L, 10L, ServiceKind.SERVICE, 8L, NOW).origin())
@@ -290,21 +310,23 @@ class CommissionCalculatorTest {
 
   @Test
   void salonCasesAreCalculatedAsAgreed() {
-    // Migue · Manos: 50.000 → 3.000 de producto para ella + 45 % y 5 % de 47.000.
-    CommissionConfigSnapshot migue = salon(group(10, 7L, "45|5|3000|P", EARLIER));
+    // Migue · Manos: 50.000 → 3.000 de producto para ella + 45 % y 5 % de 47.000 (50 % y retiene
+    // 5).
+    CommissionConfigSnapshot migue =
+        salon(group(10, null, "50|0|3000|P", EARLIER), retains(7L, "5"));
     CommissionCalculator.LineAmounts m = line(migue, 10, 7L, "50000");
     assertThat(m.commissionAmount()).isEqualByComparingTo("24150");
     assertThat(m.retentionAmount()).isEqualByComparingTo("2350");
     // Jorgelina · Manos: sin retención.
-    CommissionConfigSnapshot jorgelina = salon(group(10, 8L, "50|0|3000|P", EARLIER));
+    CommissionConfigSnapshot jorgelina = salon(group(10, null, "50|0|3000|P", EARLIER));
     assertThat(line(jorgelina, 10, 8L, "50000").commissionAmount()).isEqualByComparingTo("26500");
-    // Aracely · producto: 5 % + 5 %.
-    CommissionConfigSnapshot aracely = salon(group(11, 9L, "5|5|0|", EARLIER));
+    // Aracely · producto: 10 % y retiene 5 → 5 % + 5 %.
+    CommissionConfigSnapshot aracely = salon(group(11, null, "10", EARLIER), retains(9L, "5"));
     CommissionCalculator.LineAmounts p = line(aracely, 11, 9L, "80000");
     assertThat(p.commissionAmount()).isEqualByComparingTo("4000");
     assertThat(p.retentionAmount()).isEqualByComparingTo("4000");
     // Myriam · Tratamiento 30 % sin retención.
-    CommissionConfigSnapshot myriam = salon(group(12, 10L, "30", EARLIER));
+    CommissionConfigSnapshot myriam = salon(group(12, null, "30", EARLIER));
     CommissionCalculator.LineAmounts t = line(myriam, 12, 10L, "80000");
     assertThat(t.commissionAmount()).isEqualByComparingTo("24000");
     assertThat(t.retentionAmount()).isEqualByComparingTo("0");

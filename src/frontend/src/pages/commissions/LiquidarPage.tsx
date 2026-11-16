@@ -158,7 +158,7 @@ export default function LiquidarPage() {
   /** One line under the name: what is behind the amount (movements, settlement, payment day) or why there is none. */
   function rowNote(r: OverviewRow): string {
     if (r.status === "NONE") {
-      return r.ruleCount === 0 ? t("femme.commissions.liquidar.note.noneNoRules") : t("femme.commissions.liquidar.note.none");
+      return t("femme.commissions.liquidar.note.none");
     }
     if (r.status === "UNSETTLED") return t("femme.commissions.liquidar.note.lines", { count: r.lineCount });
     if (r.status === "PAID" && r.paidOn) {

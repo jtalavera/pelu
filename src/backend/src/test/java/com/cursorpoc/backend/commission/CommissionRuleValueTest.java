@@ -51,10 +51,11 @@ class CommissionRuleValueTest {
 
   @Test
   void theServiceValidationRejectsOutOfRangeValues() {
+    // HU-COM-20: the retention is not part of a rule any more: it is ignored when stored.
     assertThat(CommissionConfigService.parseRuleValue("45|5|3000|P"))
-        .isEqualTo("45.00|5.00|3000|P");
+        .isEqualTo("45.00|0.00|3000|P");
     assertThat(CommissionConfigService.parseRuleValue("45")).isEqualTo("45.00");
-    for (String bad : new String[] {"101", "60|50|0|", "45|5|-1|", "45|5|1.5|", "45|5|x|"}) {
+    for (String bad : new String[] {"101", "45|0|-1|", "45|0|1.5|", "45|0|x|"}) {
       assertThatThrownBy(() -> CommissionConfigService.parseRuleValue(bad))
           .isInstanceOf(ResponseStatusException.class);
     }

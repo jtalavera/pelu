@@ -55,7 +55,7 @@ export function AguinaldoGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-type Filter = "all" | "pending" | "paid" | "none" | "norules" | "retain";
+type Filter = "all" | "pending" | "paid" | "none" | "retain";
 
 /** One card per professional: what she earned in the period, her rules and her aguinaldo. */
 export function TeamList() {
@@ -69,7 +69,7 @@ export function TeamList() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>(() => {
     const f = params.get("filter");
-    return f === "norules" || f === "retain" || f === "pending" || f === "paid" || f === "none" ? f : "all";
+    return f === "retain" || f === "pending" || f === "paid" || f === "none" ? f : "all";
   });
   const enabled = overview?.aguinaldoEnabled ?? false;
 
@@ -93,13 +93,12 @@ export function TeamList() {
   const needle = normalize(query.trim());
   const matches = (f: Filter, r: (typeof rows)[number]) =>
     f === "all" ||
-    (f === "norules" && r.ruleCount === 0) ||
     (f === "retain" && !!retention.get(r.professionalId)) ||
     (f === "pending" && ["UNSETTLED", "DRAFT", "APPROVED"].includes(r.status)) ||
     (f === "paid" && r.status === "PAID") ||
     (f === "none" && r.status === "NONE");
   const visible = rows.filter((r) => matches(filter, r) && (!needle || normalize(r.professionalName).includes(needle)));
-  const chips: Filter[] = enabled ? ["all", "pending", "paid", "none", "norules", "retain"] : ["all", "pending", "paid", "none", "norules"];
+  const chips: Filter[] = enabled ? ["all", "pending", "paid", "none", "retain"] : ["all", "pending", "paid", "none"];
   const sum = summarize(overview);
   const detailOf = (r: (typeof rows)[number]) => {
     if (r.status === "NONE") return t("femme.commissions.team.detail.NONE");
@@ -150,7 +149,6 @@ export function TeamList() {
         <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
           {visible.map((r) => {
             const pct = retention.get(r.professionalId);
-            const noRules = r.ruleCount === 0;
             const b = balance.get(r.professionalId);
             return (
               <Link
@@ -159,7 +157,7 @@ export function TeamList() {
                 data-testid="team-card"
                 data-professional={r.professionalName}
                 className={`flex min-w-0 flex-col gap-2.5 rounded-card bg-surface p-4 hover:bg-bg ${
-                  r.status === "NONE" ? "border border-dashed border-ink-3/40" : noRules ? "border border-warning/40" : "border border-line"
+                  r.status === "NONE" ? "border border-dashed border-ink-3/40" : "border border-line"
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -167,20 +165,14 @@ export function TeamList() {
                   <div className="min-w-0 flex-1">
                     <b className="block truncate font-heading text-lg text-ink">{r.professionalName}</b>
                     <span className="block truncate text-xs text-ink-3" data-testid="team-card-rules">
-                      {noRules
-                        ? t("femme.commissions.team.noRulesYet")
-                        : enabled && pct
-                          ? t("femme.commissions.byProfessional.selectorDetail", { rules: t("femme.commissions.byProfessional.ruleCount", { count: r.ruleCount }), percent: formatPercent(pct) })
-                          : t("femme.commissions.byProfessional.ruleCount", { count: r.ruleCount })}
+                      {r.ruleCount === 0
+                        ? t("femme.commissions.team.usualPay")
+                        : t("femme.commissions.team.differentIn", { count: r.ruleCount })}
+                      {enabled && pct ? ` · ${t("femme.commissions.team.retainsPercent", { percent: formatPercent(pct) })}` : ""}
                     </span>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <StatusChip status={r.status} />
-                    {noRules && (
-                      <span className="inline-flex min-h-6 items-center rounded-full bg-warning-lt px-2.5 text-[11px] font-extrabold text-warning" data-testid="team-card-missing">
-                        {t("femme.commissions.team.missingRules")}
-                      </span>
-                    )}
                   </div>
                 </div>
                 <div className="flex items-baseline justify-between text-[13px] text-ink-3">

@@ -2,57 +2,50 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button, Input, Label, Spinner } from "@design-system";
-import { getGroupServices, getGroups, type GroupServiceRow, type GroupView } from "../../api/commissions";
+import { getGroups, type GroupView } from "../../api/commissions";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 import { GroupsWorkspace } from "./GroupsWorkspace";
 import { RulesTab } from "./RulesTab";
 import { SettingsTab, type StepSlot } from "./SettingsTab";
+import { formatPercent } from "./common";
 import { setupProgress, useOverview } from "./overview";
 
 const back = "inline-flex min-h-11 items-center text-sm font-bold text-primary";
 const GROUPS = "/app/commissions/configurar/grupos";
+const RATES = "/app/commissions/configurar/comisiones";
 
-/** Comisiones › Configurar: each step shows where it stands, and one search finds a group or a service (HU-COM-16). */
+/** Comisiones › Configurar: each step shows where it stands, and one search finds a group or a service (HU-COM-16/20). */
 export function ConfigPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { overview } = useOverview();
   const [groups, setGroups] = useState<GroupView[] | null>(null);
-  const [services, setServices] = useState<GroupServiceRow[] | null>(null);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
     getGroups()
       .then(setGroups)
       .catch(() => setGroups([]));
-    getGroupServices("SERVICE")
-      .then(setServices)
-      .catch(() => setServices([]));
   }, []);
 
   // The overview decides which step opens by itself: wait for it so the screen does not jump.
   if (!overview) return <Spinner />;
 
-  const total = services?.length ?? 0;
-  // Until the lists arrive the overview already knows how many services lack a group.
-  const ungrouped = services ? services.filter((s) => s.groupId === null).length : overview.ungroupedServices;
   const groupCount = groups?.length ?? overview.groupCount;
-  const withoutRules = overview.professionalsWithoutRules;
+  const withPercent = groups ? groups.filter((g) => g.percent !== null).length : groupCount - overview.groupsWithoutPercent;
+  const missing = overview.groupsWithoutPercent;
   const progress = setupProgress(overview);
 
   const linkBtn = "inline-flex min-h-11 items-center rounded-xl border border-line px-4 text-sm font-extrabold text-primary";
 
   const step2: StepSlot = {
     tone: progress.groupsDone ? "done" : "pending",
-    summary:
-      groups && services
-        ? t("femme.commissions.config.step2.summary", { count: groups.length, done: total - ungrouped, total })
-        : t("femme.commissions.config.step2.help"),
-    pill: groupCount === 0 ? t("femme.commissions.config.step2.noGroups") : t("femme.commissions.config.step2.missing", { count: ungrouped }),
+    summary: groups ? t("femme.commissions.config.step2.summary", { count: groups.length, withPercent }) : t("femme.commissions.config.step2.help"),
+    pill: groupCount === 0 ? t("femme.commissions.config.step2.noGroups") : t("femme.commissions.config.step2.missing", { count: missing }),
     body: (primary) => (
       <div className="flex flex-col gap-3.5 px-4 pb-[18px] pt-4 sm:px-5">
         <p className="text-sm text-ink-2">
-          {ungrouped > 0 ? t("femme.commissions.config.step2.intro", { count: ungrouped }) : t("femme.commissions.config.step2.help")}
+          {missing > 0 ? t("femme.commissions.config.step2.intro", { count: missing }) : t("femme.commissions.config.step2.help")}
         </p>
         {groups && groups.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
@@ -60,45 +53,28 @@ export function ConfigPage() {
             {groups.map((g) => (
               <Link
                 key={g.id}
-                to={`${GROUPS}?group=${g.id}`}
+                to={`${RATES}?q=${encodeURIComponent(g.name)}`}
                 data-testid="config-group-chip"
-                className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line px-3 text-[13px] font-bold text-ink"
+                data-missing={g.percent === null}
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-bold ${
+                  g.percent === null ? "border-warning/50 bg-warning-lt text-warning" : "border-line text-ink"
+                }`}
               >
-                {g.name} <span className="text-ink-3">{g.serviceCount}</span>
+                {g.name} <span className={g.percent === null ? "" : "text-ink-3"}>{g.percent === null ? t("femme.commissions.workspace.noPercent") : formatPercent(g.percent)}</span>
               </Link>
             ))}
           </div>
         )}
         <div className="flex flex-wrap items-center gap-3">
-          <Link to={GROUPS} data-testid="config-step-2-link">
+          <Link to={RATES} data-testid="config-step-2-link">
             <Button type="button" variant={primary ? "primary" : "secondary"} className={ACTION_BUTTON}>
               {t("femme.commissions.config.step2.open")}
             </Button>
           </Link>
-          {ungrouped > 0 && (
-            <Link to={`${GROUPS}?group=none`} data-testid="config-step-2-ungrouped-link" className="inline-flex min-h-11 items-center text-sm font-extrabold text-primary">
-              {t("femme.commissions.config.step2.seeUngrouped", { count: ungrouped })}
-            </Link>
-          )}
+          <Link to={GROUPS} data-testid="config-step-2-order-link" className="inline-flex min-h-11 items-center text-sm font-extrabold text-primary">
+            {t("femme.commissions.config.step2.order")}
+          </Link>
         </div>
-      </div>
-    ),
-  };
-
-  const step3: StepSlot = {
-    tone: progress.rulesDone ? "done" : "pending",
-    summary: t("femme.commissions.config.step3.help"),
-    pill: withoutRules > 0 ? t("femme.commissions.config.step3.pill", { count: withoutRules }) : t("femme.commissions.config.step3.pending"),
-    body: (primary) => (
-      <div className="flex flex-wrap items-center gap-3 px-4 pb-[18px] pt-4 sm:px-5">
-        <p className="min-w-0 flex-1 basis-64 text-sm text-ink-2" data-testid="config-step-3-status">
-          {withoutRules > 0 ? t("femme.commissions.config.step3.missing", { count: withoutRules }) : t("femme.commissions.config.step3.allSet")}
-        </p>
-        <Link to="/app/commissions/equipo" data-testid="config-step-3-link">
-          <Button type="button" variant={primary ? "primary" : "secondary"} className={ACTION_BUTTON}>
-            {t("femme.commissions.config.step3.open")}
-          </Button>
-        </Link>
       </div>
     ),
   };
@@ -148,7 +124,7 @@ export function ConfigPage() {
           {t("femme.commissions.groups.searchSubmit")}
         </Button>
       </form>
-      <SettingsTab part="setup" slots={{ step2, step3, after }} />
+      <SettingsTab part="setup" slots={{ step2, after }} />
     </div>
   );
 }
@@ -196,8 +172,9 @@ function ExceptionsPane() {
     <div className="flex flex-col gap-4" data-testid="commissions-exceptions">
       <div className="rounded-card border border-line bg-surface p-4" data-testid="advanced-precedence">
         <h3 className="font-heading font-extrabold text-ink">{t("femme.commissions.advanced.precedenceTitle")}</h3>
+        <p className="text-sm text-ink-3">{t("femme.commissions.advanced.precedenceHelp")}</p>
         <ol className="mt-1 list-decimal pl-5 text-sm text-ink-2">
-          {[1, 2, 3, 4, 5].map((n) => (
+          {[1, 2, 3, 4].map((n) => (
             <li key={n}>{t(`femme.commissions.advanced.precedence${n}`)}</li>
           ))}
         </ol>

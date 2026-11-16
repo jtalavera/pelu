@@ -105,7 +105,8 @@ export type GroupView = {
   name: string;
   serviceCount: number;
   serviceNames: string[];
-  professionalsWithRule: number;
+  /** The % the group pays to everybody (HU-COM-20); null = it has none. */
+  percent: number | null;
 };
 export type GroupSuggestion = { groupId: number; groupName: string; reason: string };
 /** One active catalog item with its current commission group (null = none) and a name suggestion. */
@@ -121,35 +122,57 @@ export type GroupServiceRow = {
 export type ProfessionalRuleSummary = {
   professionalId: number;
   name: string;
-  /** Group rules in force. */
+  /** Services where she is paid differently. */
   ruleCount: number;
   retentionPercent: number | null;
 };
 export type ProfessionalsRuleSummary = { aguinaldoEnabled: boolean; professionals: ProfessionalRuleSummary[] };
-export type GroupRuleRow = {
-  groupId: number;
-  groupName: string;
-  serviceCount: number;
-  ownRule: boolean;
-  percent: number | null;
-  retentionPercent: number | null;
-  fixedAmount: number | null;
-  /** Set by the rule; null = follows the salon default. */
-  fixedDestination: FixedDestination | null;
-  effectiveFixedDestination: FixedDestination;
-  versionId: number | null;
-  scheduled: boolean;
-};
-export type ProfessionalRulesView = {
+
+// ── Commission rates: group → service → professional (HU-COM-20) ─────────────────────────────
+
+/** A professional that is paid a different % than usual for one service. */
+export type RateException = {
   professionalId: number;
   professionalName: string;
-  active: boolean;
+  percent: number;
+  fixedAmount: number;
+  /** Set by the rule; null = follows the salon default. */
+  fixedDestination: FixedDestination | null;
+  scheduled: boolean;
+};
+export type RateSource = "SERVICE" | "GROUP" | "GENERAL";
+export type RateItem = {
+  serviceId: number;
+  name: string;
+  kind: ItemKind;
+  ownPercent: number | null;
+  ownFixedAmount: number | null;
+  ownFixedDestination: FixedDestination | null;
+  /** What it pays to everybody: its own %, else its group's, else the general one. */
+  normalPercent: number;
+  normalFixedAmount: number;
+  normalFixedDestination: FixedDestination;
+  source: RateSource;
+  scheduled: boolean;
+  exceptions: RateException[];
+};
+export type RateGroup = {
+  id: number;
+  name: string;
+  percent: number | null;
+  fixedAmount: number | null;
+  fixedDestination: FixedDestination | null;
+  scheduled: boolean;
+  items: RateItem[];
+};
+export type RatesView = {
+  date: string;
   baseType: BaseType;
-  aguinaldoEnabled: boolean;
-  retentionProfilePercent: number | null;
+  generalServicePercent: number;
+  generalProductPercent: number;
   defaultFixedDestination: FixedDestination;
-  defaultPercentService: number;
-  groups: GroupRuleRow[];
+  groups: RateGroup[];
+  ungrouped: RateItem[];
 };
 
 // ── Period overview (HU-COM-15) ─────────────────────────────────────────────────────────────
@@ -180,7 +203,8 @@ export type Overview = {
   paid: number;
   linesWithoutProfessional: number;
   ungroupedServices: number;
-  professionalsWithoutRules: number;
+  /** Groups that do not have their % yet (HU-COM-20). */
+  groupsWithoutPercent: number;
   groupCount: number;
   aguinaldoEnabled: boolean;
   aguinaldoBalance: number;
@@ -518,8 +542,8 @@ export const getProfessionalsSummary = () =>
   femmeJson<ProfessionalsRuleSummary>("/api/commissions/professionals/summary");
 export const assignGroups = (assignments: { serviceId: number; groupId: number | null }[]) =>
   femmePostJson<{ changed: number; rows: GroupServiceRow[] }>("/api/commissions/groups/assign", { assignments });
-export const getProfessionalRules = (professionalId: number, date?: string) =>
-  femmeJson<ProfessionalRulesView>(`/api/commissions/professionals/${professionalId}/rules${qs({ date })}`);
+/** HU-COM-20: every group and service with what it pays and who is paid differently. */
+export const getRates = (date?: string) => femmeJson<RatesView>(`/api/commissions/rates${date ? `?date=${date}` : ""}`);
 
 export const getAguinaldo = () => femmeJson<AguinaldoSummary>("/api/commissions/aguinaldo");
 export const getAguinaldoDetail = (professionalId: number) =>

@@ -29,7 +29,6 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyChangesRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ConfigChange;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GenerateSettlementsRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupAssignment;
-import com.cursorpoc.backend.web.dto.CommissionDtos.GroupRuleRow;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PayRequest;
 import java.math.BigDecimal;
@@ -180,9 +179,11 @@ class CommissionGroupsAguinaldoIntegrationTest {
         "IMMEDIATE",
         new ConfigChange("BASE", null, null, "TAX_INCLUDED", null),
         new ConfigChange("AGUINALDO_ENABLED", null, null, "true", null),
-        groupRule(brushingGroup, gaby, "45|5|0|"),
-        groupRule(lashesGroup, gaby, "45|5|20000|P"),
-        groupRule(brushingGroup, jorgelina, "50"));
+        // HU-COM-20: the % of a group is the whole commission for everybody; Gaby retains 5 % of
+        // it.
+        new ConfigChange("RETENTION_PROFILE", null, gaby.getId(), null, "5", null),
+        groupRule(brushingGroup, null, "50"),
+        groupRule(lashesGroup, null, "50|0|20000|P"));
   }
 
   private List<CommissionEntry> entries() {
@@ -255,7 +256,7 @@ class CommissionGroupsAguinaldoIntegrationTest {
     List<CommissionEntry> es = entries();
     assertThat(es).hasSize(3);
     CommissionEntry brushing = es.get(0);
-    assertThat(brushing.getRuleOrigin()).isEqualTo(CommissionRuleOrigin.BENEFICIARY_GROUP);
+    assertThat(brushing.getRuleOrigin()).isEqualTo(CommissionRuleOrigin.GROUP);
     assertThat(brushing.getCommissionAmount()).isEqualByComparingTo("45000");
     assertThat(brushing.getRetentionAmount()).isEqualByComparingTo("5000");
     assertThat(brushing.getRetentionPercent()).isEqualByComparingTo("5");
@@ -393,23 +394,92 @@ class CommissionGroupsAguinaldoIntegrationTest {
   }
 
   @Test
-  void aPlainItemRuleForTheProfessionalBeatsHerGroupRule() {
+  void theRuleOfTheProfessionalForAServiceBeatsTheGroup() {
     configureSalon();
     change("IMMEDIATE", new ConfigChange("RULE", brushingLargo.getId(), gaby.getId(), "60", null));
     accrue(invoice(brushingLargo, gaby, "100000"));
     CommissionEntry e = entries().get(0);
     assertThat(e.getRuleOrigin()).isEqualTo(CommissionRuleOrigin.BENEFICIARY_ITEM);
-    assertThat(e.getCommissionAmount()).isEqualByComparingTo("60000");
-    assertThat(e.getRetentionAmount()).isEqualByComparingTo("0");
+    // 60 % is her whole commission; she retains 5 % of the base out of it.
+    assertThat(e.getCommissionAmount()).isEqualByComparingTo("55000");
+    assertThat(e.getRetentionAmount()).isEqualByComparingTo("5000");
+  }
+
+  @Test
+  void changingTheRetentionOfAProfessionalRecalculatesWhatIsStillOpen() {
+    configureSalon();
+    accrue(invoice(brushingLargo, jorgelina, "100000")); // 50 %, no retention yet
+    assertThat(entries().get(0).getCommissionAmount()).isEqualByComparingTo("50000");
+    // The retention is not a harmless default any more: it asks how to apply and it recalculates.
+    change(
+        "PERIOD_START",
+        new ConfigChange("RETENTION_PROFILE", null, jorgelina.getId(), null, "5", null));
+    // The old entry is reversed and a new revision is written: the net is what counts.
+    List<CommissionEntry> all = entries();
+    assertThat(
+            all.stream()
+                .map(CommissionEntry::getCommissionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add))
+        .isEqualByComparingTo("45000");
+    assertThat(
+            all.stream()
+                .map(CommissionEntry::getRetentionAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add))
+        .isEqualByComparingTo("5000");
+  }
+
+  @Test
+  void theLastLayerThatExistsWins() {
+    configureSalon();
+    // Default % → group (50) → service for everybody → professional for that service.
+    change("IMMEDIATE", new ConfigChange("DEFAULT_SERVICE", null, null, "10", null));
+    accrue(invoice(banoDeCrema, jorgelina, "100000")); // no group, no own %: the general 10 %
+    change("IMMEDIATE", new ConfigChange("RULE", brushingLargo.getId(), null, "30", null));
+    accrue(invoice(brushingLargo, jorgelina, "100000")); // the service beats its group
+    change(
+        "IMMEDIATE",
+        new ConfigChange("RULE", brushingLargo.getId(), jorgelina.getId(), "70", null));
+    accrue(invoice(brushingLargo, jorgelina, "100000")); // she beats the service
+    List<CommissionEntry> es = entries();
+    assertThat(es).hasSize(3);
+    assertThat(es.get(0).getRuleOrigin()).isEqualTo(CommissionRuleOrigin.TENANT_DEFAULT_SERVICE);
+    assertThat(es.get(0).getCommissionAmount()).isEqualByComparingTo("10000");
+    assertThat(es.get(1).getRuleOrigin()).isEqualTo(CommissionRuleOrigin.ITEM);
+    assertThat(es.get(1).getCommissionAmount()).isEqualByComparingTo("30000");
+    assertThat(es.get(2).getRuleOrigin()).isEqualTo(CommissionRuleOrigin.BENEFICIARY_ITEM);
+    assertThat(es.get(2).getCommissionAmount()).isEqualByComparingTo("70000");
+  }
+
+  @Test
+  void theRetentionIsTheProfessionalsAndComesOutOfTheCommissionInEveryLayer() {
+    configureSalon();
+    // The default % has no retention of its own: Gaby's 5 % comes out of it too.
+    change("IMMEDIATE", new ConfigChange("DEFAULT_SERVICE", null, null, "20", null));
+    accrue(invoice(banoDeCrema, gaby, "100000"));
+    CommissionEntry e = entries().get(0);
+    assertThat(e.getRetentionPercent()).isEqualByComparingTo("5");
+    assertThat(e.getRetentionAmount()).isEqualByComparingTo("5000");
+    assertThat(e.getCommissionAmount()).isEqualByComparingTo("15000"); // 20 % − 5 %
+    // Never more than the commission itself: a 3 % rule with a 5 % retention pays nothing.
+    change("IMMEDIATE", new ConfigChange("RULE", banoDeCrema.getId(), null, "3", null));
+    accrue(invoice(banoDeCrema, gaby, "100000"));
+    CommissionEntry small = entries().get(1);
+    assertThat(small.getRetentionAmount()).isEqualByComparingTo("3000");
+    assertThat(small.getCommissionAmount()).isEqualByComparingTo("0");
+    // Without the retention for aguinaldo on the salon, nobody retains.
+    change("IMMEDIATE", new ConfigChange("AGUINALDO_ENABLED", null, null, "false", null));
+    accrue(invoice(banoDeCrema, gaby, "100000"));
+    assertThat(entries().get(2).getRetentionAmount()).isEqualByComparingTo("0");
+    assertThat(entries().get(2).getCommissionAmount()).isEqualByComparingTo("3000");
   }
 
   @Test
   void invalidRuleValuesAreRejectedWithCodes() {
-    assertThatThrownBy(() -> change("IMMEDIATE", groupRule(brushingGroup, gaby, "60|50|0|")))
-        .hasMessageContaining("COMMISSION_TOTAL_PERCENT_EXCEEDED");
-    assertThatThrownBy(() -> change("IMMEDIATE", groupRule(brushingGroup, gaby, "45|5|-3|")))
+    assertThatThrownBy(() -> change("IMMEDIATE", groupRule(brushingGroup, null, "120")))
+        .hasMessageContaining("COMMISSION_PERCENT_OUT_OF_RANGE");
+    assertThatThrownBy(() -> change("IMMEDIATE", groupRule(brushingGroup, null, "45|0|-3|")))
         .hasMessageContaining("COMMISSION_FIXED_AMOUNT_INVALID");
-    assertThatThrownBy(() -> change("IMMEDIATE", groupRule(999_999L, gaby, "45")))
+    assertThatThrownBy(() -> change("IMMEDIATE", groupRule(999_999L, null, "45")))
         .hasMessageContaining("COMMISSION_GROUP_NOT_FOUND");
     assertThatThrownBy(
             () ->
@@ -419,32 +489,46 @@ class CommissionGroupsAguinaldoIntegrationTest {
   }
 
   @Test
-  void theProfessionalRulesViewShowsTheCurrentRuleOfEachGroup() {
+  void theRatesViewShowsWhatEachGroupAndServicePaysAndWhoIsPaidDifferently() {
     configureSalon();
-    var view = groupService.professionalRules(tenant.getId(), gaby.getId(), null);
-    assertThat(view.aguinaldoEnabled()).isTrue();
+    change("IMMEDIATE", new ConfigChange("RULE", brushingLargo.getId(), null, "30", null));
+    change("IMMEDIATE", new ConfigChange("RULE", brushingLargo.getId(), gaby.getId(), "55", null));
+    change("IMMEDIATE", new ConfigChange("DEFAULT_SERVICE", null, null, "10", null));
+    var view = groupService.ratesView(tenant.getId(), null);
     assertThat(view.baseType()).isEqualTo("TAX_INCLUDED");
+    assertThat(view.generalServicePercent()).isEqualByComparingTo("10");
     assertThat(view.defaultFixedDestination()).isEqualTo("PROFESSIONAL");
-    GroupRuleRow lashes =
-        view.groups().stream()
-            .filter(g -> g.groupId().equals(lashesGroup))
-            .findFirst()
-            .orElseThrow();
-    assertThat(lashes.ownRule()).isTrue();
-    assertThat(lashes.percent()).isEqualByComparingTo("45");
-    assertThat(lashes.retentionPercent()).isEqualByComparingTo("5");
-    assertThat(lashes.fixedAmount()).isEqualByComparingTo("20000");
-    assertThat(lashes.fixedDestination()).isEqualTo("PROFESSIONAL");
-    assertThat(lashes.serviceCount()).isEqualTo(1);
 
-    var other = groupService.professionalRules(tenant.getId(), jorgelina.getId(), null);
-    GroupRuleRow noRule =
-        other.groups().stream()
-            .filter(g -> g.groupId().equals(lashesGroup))
+    var brushing =
+        view.groups().stream().filter(g -> g.id().equals(brushingGroup)).findFirst().orElseThrow();
+    assertThat(brushing.percent()).isEqualByComparingTo("50");
+    var largo = brushing.items().get(0);
+    assertThat(largo.name()).isEqualTo("Brushing pelo largo");
+    assertThat(largo.source()).isEqualTo("SERVICE");
+    assertThat(largo.ownPercent()).isEqualByComparingTo("30");
+    assertThat(largo.normalPercent()).isEqualByComparingTo("30");
+    assertThat(largo.exceptions()).hasSize(1);
+    assertThat(largo.exceptions().get(0).professionalName()).isEqualTo("Gaby");
+    assertThat(largo.exceptions().get(0).percent()).isEqualByComparingTo("55");
+
+    var lashes =
+        view.groups().stream().filter(g -> g.id().equals(lashesGroup)).findFirst().orElseThrow();
+    assertThat(lashes.percent()).isEqualByComparingTo("50");
+    assertThat(lashes.fixedAmount()).isEqualByComparingTo("20000");
+    var pestanasRow = lashes.items().get(0);
+    assertThat(pestanasRow.source()).isEqualTo("GROUP");
+    assertThat(pestanasRow.ownPercent()).isNull();
+    assertThat(pestanasRow.normalPercent()).isEqualByComparingTo("50");
+    assertThat(pestanasRow.normalFixedAmount()).isEqualByComparingTo("20000");
+
+    // An item without group nor % of its own pays the general % of its kind.
+    var bano =
+        view.ungrouped().stream()
+            .filter(i -> i.name().equals("Baño de crema"))
             .findFirst()
             .orElseThrow();
-    assertThat(noRule.ownRule()).isFalse();
-    assertThat(noRule.percent()).isNull();
+    assertThat(bano.source()).isEqualTo("GENERAL");
+    assertThat(bano.normalPercent()).isEqualByComparingTo("10");
   }
 
   @Test
@@ -532,24 +616,21 @@ class CommissionGroupsAguinaldoIntegrationTest {
   }
 
   @Test
-  void theProfessionalsSummaryCountsGroupRulesAlphabetically() {
+  void theProfessionalsSummaryCountsWhereEachIsPaidDifferentlyAlphabetically() {
     configureSalon();
     var summary = groupService.professionalsSummary(tenant.getId());
     assertThat(summary.aguinaldoEnabled()).isTrue();
     assertThat(summary.professionals())
         .extracting(p -> p.name().toLowerCase())
         .containsExactly("gaby", "jorgelina");
-    assertThat(summary.professionals().get(0).ruleCount()).isEqualTo(2);
-    assertThat(summary.professionals().get(1).ruleCount()).isEqualTo(1);
-    assertThat(summary.professionals().get(0).retentionPercent()).isNull();
-    change("IMMEDIATE", new ConfigChange("RETENTION_PROFILE", null, gaby.getId(), null, "5", null));
-    assertThat(
-            groupService
-                .professionalsSummary(tenant.getId())
-                .professionals()
-                .get(0)
-                .retentionPercent())
-        .isEqualByComparingTo("5");
+    assertThat(summary.professionals().get(0).ruleCount()).isZero();
+    assertThat(summary.professionals().get(1).ruleCount()).isZero();
+    assertThat(summary.professionals().get(0).retentionPercent()).isEqualByComparingTo("5");
+    change(
+        "IMMEDIATE",
+        new ConfigChange("RULE", brushingLargo.getId(), jorgelina.getId(), "60", null));
+    assertThat(groupService.professionalsSummary(tenant.getId()).professionals().get(1).ruleCount())
+        .isEqualTo(1);
   }
 
   @Test
@@ -565,7 +646,7 @@ class CommissionGroupsAguinaldoIntegrationTest {
     assertThat(ov.rows()).extracting(r -> r.status()).containsExactly("UNSETTLED", "UNSETTLED");
     assertThat(ov.rows().get(0).amount()).isEqualByComparingTo("45000");
     assertThat(ov.rows().get(0).retention()).isEqualByComparingTo("5000");
-    assertThat(ov.rows().get(0).ruleCount()).isEqualTo(2);
+    assertThat(ov.rows().get(0).ruleCount()).isZero(); // nobody is paid differently yet
     // Each row says how many movements are behind its amount; nothing is paid yet.
     assertThat(ov.rows()).extracting(r -> r.lineCount()).containsExactly(1, 1);
     assertThat(ov.rows()).extracting(r -> r.paidOn()).containsOnlyNulls();
@@ -574,14 +655,10 @@ class CommissionGroupsAguinaldoIntegrationTest {
     assertThat(ov.unsettled()).isEqualTo(2);
     assertThat(ov.groupCount()).isEqualTo(2);
     assertThat(ov.ungroupedServices()).isEqualTo(1); // "Baño de crema" has no group
-    assertThat(ov.professionalsWithoutRules()).isZero();
     assertThat(ov.aguinaldoEnabled()).isTrue();
     assertThat(ov.aguinaldoBalance()).isEqualByComparingTo("0");
-    // HU-COM-18: nobody has a usual retention yet; once Gaby has one, only she counts (the other
-    // professional legitimately does not retain, which is not a gap).
-    assertThat(ov.professionalsRetaining()).isZero();
-    change("IMMEDIATE", new ConfigChange("RETENTION_PROFILE", null, gaby.getId(), null, "5", null));
-    assertThat(overviewService.overview(tenant.getId(), 0).professionalsRetaining()).isEqualTo(1);
+    // HU-COM-18: only Gaby retains (the other professional legitimately does not).
+    assertThat(ov.professionalsRetaining()).isEqualTo(1);
     assertThat(ov.period().from()).isNotNull();
 
     LocalDate today = LocalDate.now(configService.zone());
@@ -621,9 +698,8 @@ class CommissionGroupsAguinaldoIntegrationTest {
   }
 
   @Test
-  void theOverviewCountsProfessionalsWithoutRules() {
+  void theOverviewListsEveryActiveProfessionalEvenWithNothingToSettle() {
     var ov = overviewService.overview(tenant.getId(), 0);
-    assertThat(ov.professionalsWithoutRules()).isEqualTo(2);
     assertThat(ov.professionalsRetaining()).isZero();
     assertThat(ov.rows()).extracting(r -> r.status()).containsOnly("NONE");
   }

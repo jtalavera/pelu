@@ -32,6 +32,7 @@ import { AguinaldoGuard, TeamLayout, TeamList } from "./pages/commissions/TeamPa
 import ProfessionalPage from "./pages/commissions/ProfessionalPage";
 import ActivityPage from "./pages/commissions/ActivityPage";
 import { AdvancedPage, ConfigPage, GroupsPage } from "./pages/commissions/ConfigPages";
+import { RatesPage } from "./pages/commissions/RatesPage";
 import { AguinaldoTab } from "./pages/commissions/AguinaldoTab";
 import CommissionSettlementPage from "./pages/commissions/CommissionSettlementPage";
 import MyCommissionsPage from "./pages/commissions/MyCommissionsPage";
@@ -138,6 +139,7 @@ export function AppRoutes() {
             <Route path="actividad" element={<ActivityPage />} />
             <Route path="configurar" element={<ConfigPage />} />
             <Route path="configurar/grupos" element={<GroupsPage />} />
+            <Route path="configurar/comisiones" element={<RatesPage />} />
             <Route path="configurar/avanzado" element={<AdvancedPage />} />
             <Route path="*" element={<Navigate to="/app/commissions" replace />} />
           </Route>

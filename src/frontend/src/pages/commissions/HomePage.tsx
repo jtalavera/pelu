@@ -21,13 +21,14 @@ export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
   );
 }
 
-/** The four steps to leave commissions ready: what each is for and where to do it (HU-COM-15). */
+/** The three steps to leave commissions ready: what each is for and where to do it (HU-COM-15 / HU-COM-20). */
 function SetupGuide({ overview }: { overview: Overview }) {
   const { t } = useTranslation();
   const p = setupProgress(overview);
-  const done = 1 + (p.groupsDone ? 1 : 0) + (p.rulesDone ? 1 : 0) + (p.aguinaldoDone ? 1 : 0);
-  const current = !p.groupsDone ? 2 : !p.rulesDone ? 3 : 4;
-  const step = (n: number, doneStep: boolean, to: string, optional = false) => {
+  const done = 1 + (p.groupsDone ? 1 : 0) + (p.aguinaldoDone ? 1 : 0);
+  const current = !p.groupsDone ? 2 : 3;
+  /** `key` is the i18n block of the step (the aguinaldo step keeps its old text block). */
+  const step = (n: number, key: number, doneStep: boolean, to: string, optional = false) => {
     const isCurrent = n === current && !doneStep;
     return (
       <div
@@ -48,10 +49,10 @@ function SetupGuide({ overview }: { overview: Overview }) {
           </span>
           <div className="min-w-0 flex-1">
             <div className="font-heading text-base font-extrabold text-ink">
-              {t(`femme.commissions.guide.step${n}.title`)}
+              {t(`femme.commissions.guide.step${key}.title`)}
               {optional && <span className="ml-2 text-xs font-bold text-ink-3">{t("femme.commissions.guide.optional")}</span>}
             </div>
-            <div className="text-sm text-ink-3">{t(`femme.commissions.guide.step${n}.${doneStep ? "done" : "todo"}`, { count: overview.ungroupedServices })}</div>
+            <div className="text-sm text-ink-3">{t(`femme.commissions.guide.step${key}.${doneStep ? "done" : "todo"}`, { count: overview.groupsWithoutPercent })}</div>
           </div>
           {(!isCurrent || optional) && (
             <Link to={to} className="inline-flex min-h-11 items-center text-sm font-extrabold text-primary" data-testid={`setup-step-${n}-link`}>
@@ -63,13 +64,13 @@ function SetupGuide({ overview }: { overview: Overview }) {
           <>
             <div className="rounded-xl bg-primary-lt p-3 text-sm text-ink">
               <div className="text-xs font-extrabold text-primary-dk">{t("femme.commissions.guide.whatFor")}</div>
-              <p className="mt-1">{t(`femme.commissions.guide.step${n}.why`)}</p>
-              <p className="mt-1 text-ink-2">{t(`femme.commissions.guide.step${n}.example`)}</p>
+              <p className="mt-1">{t(`femme.commissions.guide.step${key}.why`)}</p>
+              <p className="mt-1 text-ink-2">{t(`femme.commissions.guide.step${key}.example`)}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link to={to} data-testid={`setup-step-${n}-start`}>
                 <Button type="button" className={ACTION_BUTTON}>
-                  {t(`femme.commissions.guide.step${n}.start`)}
+                  {t(`femme.commissions.guide.step${key}.start`)}
                 </Button>
               </Link>
             </div>
@@ -84,20 +85,19 @@ function SetupGuide({ overview }: { overview: Overview }) {
         <h2 className="font-heading text-2xl font-extrabold text-ink">{t("femme.commissions.guide.title")}</h2>
         <p className="max-w-xl text-ink-2">{t("femme.commissions.guide.intro")}</p>
         <div className="flex items-center gap-3">
-          <div className="flex h-2.5 flex-1 gap-0.5 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuemin={0} aria-valuemax={4} aria-valuenow={done}>
-            {[1, 2, 3, 4].map((i) => (
+          <div className="flex h-2.5 flex-1 gap-0.5 overflow-hidden rounded-full bg-line" role="progressbar" aria-valuemin={0} aria-valuemax={3} aria-valuenow={done}>
+            {[1, 2, 3].map((i) => (
               <div key={i} className={`flex-1 ${i <= done ? "bg-primary" : ""}`} />
             ))}
           </div>
           <b className="text-sm text-primary" data-testid="setup-progress">
-            {t("femme.commissions.guide.progress", { done, total: 4 })}
+            {t("femme.commissions.guide.progress", { done, total: 3 })}
           </b>
         </div>
       </section>
-      {step(1, true, "/app/commissions/configurar")}
-      {step(2, p.groupsDone, "/app/commissions/configurar/grupos?group=none")}
-      {step(3, p.rulesDone, "/app/commissions/equipo")}
-      {step(4, p.aguinaldoDone, "/app/commissions/configurar", true)}
+      {step(1, 1, true, "/app/commissions/configurar")}
+      {step(2, 2, p.groupsDone, "/app/commissions/configurar/comisiones")}
+      {step(3, 4, p.aguinaldoDone, "/app/commissions/configurar", true)}
       <p className="px-1 text-sm text-ink-3">{t("femme.commissions.guide.footer")}</p>
     </div>
   );
@@ -115,8 +115,7 @@ export default function HomePage() {
   const sum = summarize(o);
   const review = [
     { key: "lines", n: o.linesWithoutProfessional, to: "/app/commissions/actividad?tab=reports" },
-    { key: "ungrouped", n: o.ungroupedServices, to: "/app/commissions/configurar/grupos?group=none" },
-    { key: "noRules", n: o.professionalsWithoutRules, to: "/app/commissions/equipo?filter=norules" },
+    { key: "noPercent", n: o.groupsWithoutPercent, to: "/app/commissions/configurar/comisiones" },
     { key: "drafts", n: o.drafts, to: "/app/commissions/liquidar?state=DRAFT" },
   ].filter((r) => r.n > 0);
   const STEP_ACTION = { UNSETTLED: "GENERATE", DRAFT: "APPROVE", APPROVED: "PAY", PAID: "VIEW" } as const;

@@ -51,15 +51,18 @@ async function accrue(request: Parameters<typeof issueInvoice>[0], professionalI
   return inv;
 }
 
-/** Groups every service and gives Ana a rule, so the first-time guide is out of the way. */
-async function setUpGroupsAndRules(request: Parameters<typeof issueInvoice>[0], rulesFor: number[] = [w.ana.id]) {
+/**
+ * Groups every service and gives the group its %, so the first-time guide is out of the way
+ * (HU-COM-20). `paidDifferently` are the professionals paid differently in one service (the same 40 %
+ * here, only to count as a case); everybody else is paid the usual % of each service.
+ */
+async function setUpGroupsAndRules(request: Parameters<typeof issueInvoice>[0], paidDifferently: number[] = [w.ana.id]) {
   const g = await createGroup(request, w.adminToken, "Peluquería");
   await assignToGroup(request, w.adminToken, g.id, [w.service.id, w.service2.id]);
-  await applyChanges(
-    request,
-    w.adminToken,
-    rulesFor.map((professionalId) => ({ scope: "GROUP_RULE" as const, groupId: g.id, professionalId, value: "40" })),
-  );
+  await applyChanges(request, w.adminToken, [
+    { scope: "GROUP_RULE", groupId: g.id, value: "40" },
+    ...paidDifferently.map((professionalId) => ({ scope: "RULE" as const, serviceId: w.service.id, professionalId, value: "40" })),
+  ]);
   return g;
 }
 
@@ -73,7 +76,7 @@ type Overview = {
   total: number;
   groupCount: number;
   ungroupedServices: number;
-  professionalsWithoutRules: number;
+  groupsWithoutPercent: number;
   linesWithoutProfessional: number;
   aguinaldoEnabled: boolean;
 };
@@ -98,9 +101,9 @@ test("AC1 · cinco lugares con el período a la vista y contadores de lo pendien
     await expect(page.getByTestId(`commissions-nav-${key}`)).toContainText(label);
   }
   await expect(page.getByTestId("commissions-period")).toBeVisible();
-  // One professional with something unsettled; Bea has no rules yet (a pending setup step).
+  // One professional with something unsettled; every group has its % so nothing is pending in Setup (HU-COM-20).
   await expect(page.getByTestId("commissions-nav-badge-settle")).toHaveText("1");
-  await expect(page.getByTestId("commissions-nav-badge-setup")).toHaveText("1");
+  await expect(page.getByTestId("commissions-nav-badge-setup")).toHaveCount(0);
 
   for (const [key, path] of [
     ["settle", "/liquidar"],
@@ -121,7 +124,7 @@ test("AC2 · Inicio: cuánto hay para pagar, avance por estado, «Para revisar»
   page,
   request,
 }) => {
-  await setUpGroupsAndRules(request); // Bea has no rules
+  await setUpGroupsAndRules(request);
   await accrue(request, w.ana.id);
   await accrue(request, w.bea.id);
   await accrue(request, null); // a sale without professional
@@ -135,19 +138,15 @@ test("AC2 · Inicio: cuánto hay para pagar, avance por estado, «Para revisar»
   await expect(page.getByTestId("home-paid-amount")).toContainText("0");
   await expect(page.getByTestId("home-pending-amount")).toContainText("80.000");
 
-  // «Para revisar» lists only what exists: a line without professional, Bea without rules.
+  // «Para revisar» lists only what exists: a line without professional (HU-COM-20: no «sin reglas»).
   await expect(page.getByTestId("home-review-lines")).toContainText("1 lines without a professional");
-  await expect(page.getByTestId("home-review-noRules")).toContainText("1 professionals without rules");
+  await expect(page.getByTestId("home-review-noRules")).toHaveCount(0);
+  await expect(page.getByTestId("home-review-noPercent")).toHaveCount(0);
   await expect(page.getByTestId("home-review-ungrouped")).toHaveCount(0);
   await expect(page.getByTestId("home-review-drafts")).toHaveCount(0);
   await page.getByTestId("home-review-lines-action").click();
   await expect(page).toHaveURL(/\/app\/commissions\/actividad\?tab=reports$/);
   await expect(page.getByTestId("report-lines-without-beneficiary")).toBeVisible();
-
-  await page.getByTestId("commissions-nav-home").click();
-  await page.getByTestId("home-review-noRules-action").click();
-  await expect(page).toHaveURL(/\/app\/commissions\/equipo\?filter=norules$/);
-  await expect(page.getByTestId("team-card")).toHaveCount(1);
 
   // The steps lead into the settlement (HU-COM-17: «What is left to do»).
   await page.getByTestId("commissions-nav-home").click();
@@ -167,18 +166,19 @@ test("AC2 · Inicio: cuando no hay nada para revisar lo dice", async ({ page, re
 
 // ── AC3 · Guía de primera vez ────────────────────────────────────────────────────────────────
 
-test("AC3 · sin grupos Inicio muestra la guía de cuatro pasos y se retira al configurarlos", async ({ page, request }) => {
+test("AC3 · sin grupos Inicio muestra la guía de tres pasos y se retira al configurarlos", async ({ page, request }) => {
   await loginAdminUi(page, w);
   await openCommissions(page);
   await expect(page.getByTestId("setup-guide")).toBeVisible();
-  await expect(page.getByTestId("setup-progress")).toHaveText("1 of 4 steps done");
-  for (const n of [1, 2, 3, 4]) await expect(page.getByTestId(`setup-step-${n}`)).toBeVisible();
+  await expect(page.getByTestId("setup-progress")).toHaveText("1 of 3 steps done");
+  for (const n of [1, 2, 3]) await expect(page.getByTestId(`setup-step-${n}`)).toBeVisible();
+  await expect(page.getByTestId("setup-step-4")).toHaveCount(0);
   // The step in progress is highlighted and explains what it is for, with an example.
   await expect(page.getByTestId("setup-step-2")).toHaveAttribute("data-state", "current");
   await expect(page.getByTestId("setup-step-2")).toContainText("What is it for?");
   await page.getByTestId("setup-step-2-start").click();
-  await expect(page).toHaveURL(/\/configurar\/grupos\?group=none$/);
-  await expect(page.getByTestId("commission-groups")).toBeVisible();
+  await expect(page).toHaveURL(/\/configurar\/comisiones$/);
+  await expect(page.getByTestId("commission-rates")).toBeVisible();
 
   await setUpGroupsAndRules(request, [w.ana.id, w.bea.id]);
   await page.getByTestId("commissions-nav-home").click();
@@ -334,16 +334,17 @@ test("AC10 · AC11 · con Aguinaldo activo: pestaña en Equipo y en la ficha, y 
   await page.getByTestId("team-tab-people").click();
 
   await openProfessional(page, w.ana.name, "rules");
-  await expect(page.getByTestId("pro-rules-retains")).toHaveText("Does not retain for aguinaldo");
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("Does not retain for aguinaldo");
   await page.getByTestId("pro-retention-edit").click();
   await page.getByTestId("pro-retention-percent").fill("abc");
   await page.getByTestId("pro-retention-save").click();
   await expect(page.getByRole("dialog").getByRole("alert")).toContainText("between 0 and 100 with up to 2 decimals");
   await page.getByTestId("pro-retention-percent").fill("5");
   await page.getByTestId("pro-retention-save").click();
-  // It only prefills new rules: no «since when» question.
-  await expect(page.getByTestId("commission-apply-dialog")).toHaveCount(0);
-  await expect(page.getByTestId("pro-rules-retains")).toHaveText("Retains 5 % for aguinaldo");
+  // HU-COM-20: her retention comes out of what she is paid, so it asks since when it applies.
+  await page.getByTestId("commission-apply-mode-IMMEDIATE").check();
+  await page.getByTestId("commission-apply-confirm").click();
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("Aguinaldo retention: 5 %");
   const stored = await apiGetJson<{ retentionProfiles: { professionalId: number; percent: number | null }[] }>(
     request,
     w.adminToken,
@@ -365,7 +366,7 @@ test("AC13 · apagar Aguinaldo en Configurar actualiza la navegación sin recarg
   await expect(page.getByTestId("team-tab-aguinaldo")).toBeVisible();
 
   await page.getByTestId("commissions-nav-setup").click();
-  await openSetupStep(page, 4);
+  await openSetupStep(page, 3);
   await page.getByTestId("commission-setting-change-AGUINALDO_ENABLED").click();
   await page.getByTestId("commission-aguinaldo-false").check();
   await page.getByTestId("commission-setting-save").click();
@@ -380,28 +381,30 @@ test("AC13 · apagar Aguinaldo en Configurar actualiza la navegación sin recarg
 
 // ── AC13 · AC14 · Configurar y Avanzado ──────────────────────────────────────────────────────
 
-test("AC13 · Configurar son cuatro pasos: cómo se calcula, grupos, reglas y aguinaldo", async ({ page, request }) => {
+test("AC13 · Configurar son tres pasos: cómo se calcula, comisión de cada servicio y aguinaldo", async ({ page, request }) => {
   await setUpGroupsAndRules(request, [w.ana.id, w.bea.id]);
   await loginAdminUi(page, w);
   await openCommissions(page, "setup");
-  for (const n of [1, 2, 3, 4]) await expect(page.getByTestId(`config-step-${n}`)).toBeVisible();
+  for (const n of [1, 2, 3]) await expect(page.getByTestId(`config-step-${n}`)).toBeVisible();
+  await expect(page.getByTestId("config-step-4")).toHaveCount(0); // HU-COM-20: no «rules per professional» step
   await expect(page.getByTestId("config-step-1")).toContainText("How it is calculated");
+  await expect(page.getByTestId("config-step-2")).toContainText("Commission of each service");
   await openSetupStep(page, 1);
-  await openSetupStep(page, 4);
-  for (const scope of ["BASE", "DEFAULT_SERVICE", "DEFAULT_PRODUCT", "PERIODICITY"]) {
+  await openSetupStep(page, 3);
+  for (const scope of ["BASE", "PERIODICITY"]) {
     await expect(page.getByTestId("config-step-1").getByTestId(`commission-setting-${scope}`)).toBeVisible();
   }
   for (const scope of ["AGUINALDO_ENABLED", "FIXED_DESTINATION"]) {
-    await expect(page.getByTestId("config-step-4").getByTestId(`commission-setting-${scope}`)).toBeVisible();
+    await expect(page.getByTestId("config-step-3").getByTestId(`commission-setting-${scope}`)).toBeVisible();
   }
   await openSetupStep(page, 2);
-  await page.getByTestId("config-step-2-link").click();
+  await page.getByTestId("config-step-2-order-link").click();
   await expect(page.getByTestId("commission-groups")).toBeVisible();
   await page.getByTestId("config-back").click();
-  await openSetupStep(page, 3);
-  await page.getByTestId("config-step-3-link").click();
-  await expect(page).toHaveURL(/\/app\/commissions\/equipo$/);
-  await expect(page.getByTestId("team-list")).toBeVisible();
+  await openSetupStep(page, 2);
+  await page.getByTestId("config-step-2-link").click();
+  await expect(page).toHaveURL(/\/app\/commissions\/configurar\/comisiones$/);
+  await expect(page.getByTestId("commission-rates")).toBeVisible();
 });
 
 test("AC14 · Excepciones por servicio y «Cambios programados e historial» salen de Configurar", async ({ page }) => {
@@ -410,9 +413,11 @@ test("AC14 · Excepciones por servicio y «Cambios programados e historial» sal
   // The exceptions are a visible tab of «Groups and services» (HU-COM-16), with the order in which rules apply.
   await page.getByTestId("config-exceptions-link").click();
   const rules = page.getByTestId("advanced-precedence").getByRole("listitem");
-  await expect(rules).toHaveCount(5);
-  await expect(rules.first()).toHaveText("Professional + specific service");
-  await expect(rules.last()).toHaveText("Default %");
+  // HU-COM-20: four layers from the general to the specific; the last one that applies wins.
+  await expect(rules).toHaveCount(4);
+  await expect(rules.first()).toHaveText("Default %");
+  await expect(rules.last()).toHaveText("% of the professional for that service");
+  await expect(page.getByTestId("advanced-precedence")).toContainText("the last one that applies wins");
   await expect(page.getByTestId("rules-kind-SERVICE")).toBeVisible();
   await expect(page.getByTestId("rules-kind-PRODUCT")).toBeVisible();
   await page.getByTestId("config-back").click();
@@ -476,7 +481,7 @@ test("AC17 · GET /overview: una fila por profesional activa con su estado, tota
     paid: 0,
     groupCount: 1,
     ungroupedServices: 0,
-    professionalsWithoutRules: 1,
+    groupsWithoutPercent: 0,
     linesWithoutProfessional: 1,
     aguinaldoEnabled: false,
   });

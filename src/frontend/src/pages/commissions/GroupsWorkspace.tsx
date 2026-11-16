@@ -19,6 +19,7 @@ import { FieldValidationError } from "../../components/FieldValidationError";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { useOverview } from "./overview";
+import { formatPercent } from "./common";
 
 type Item = GroupServiceRow & { kind: ItemKind };
 type Scope = "UNGROUPED" | "GROUPED" | "ALL";
@@ -293,7 +294,7 @@ export function GroupsWorkspace() {
           ...made,
           serviceCount: made.serviceCount ?? 0,
           serviceNames: made.serviceNames ?? [],
-          professionalsWithRule: made.professionalsWithRule ?? 0,
+          percent: made.percent ?? null,
         };
         const ids = [...selected];
         setGroups((cur) => (cur ? [...cur, created].sort((x, y) => x.name.localeCompare(y.name)) : cur));
@@ -551,7 +552,7 @@ export function GroupsWorkspace() {
               </h3>
               <p className="text-sm text-ink-3" data-testid="group-summary">
                 {t("femme.commissions.groups.services", { count: group.serviceCount })} ·{" "}
-                {t("femme.commissions.workspace.rulesFor", { count: group.professionalsWithRule })}
+                <span data-testid="group-percent">{group.percent === null ? t("femme.commissions.workspace.noPercent") : formatPercent(group.percent)}</span>
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -579,7 +580,7 @@ export function GroupsWorkspace() {
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-primary-lt px-3.5 py-2.5 text-sm text-ink">
             <span>{t("femme.commissions.workspace.rulesHint")}</span>
-            <Link to="/app/commissions/equipo" className="min-h-11 content-center font-bold text-primary" data-testid="groups-rules-link">
+            <Link to={`/app/commissions/configurar/comisiones?q=${encodeURIComponent(group.name)}`} className="min-h-11 content-center font-bold text-primary" data-testid="groups-rules-link">
               {t("femme.commissions.workspace.rulesLink")} →
             </Link>
           </div>
@@ -618,7 +619,7 @@ export function GroupsWorkspace() {
                 <span className="min-w-0">
                   <b className="block text-base text-ink">{g.name}</b>
                   <span className="text-sm text-ink-3">
-                    {t("femme.commissions.groups.services", { count: g.serviceCount })} · {t("femme.commissions.workspace.rulesFor", { count: g.professionalsWithRule })}
+                    {t("femme.commissions.groups.services", { count: g.serviceCount })} · {g.percent === null ? t("femme.commissions.workspace.noPercent") : formatPercent(g.percent)}
                   </span>
                 </span>
                 <Button type="button" variant="secondary" className={ACTION_BUTTON} data-testid="groups-result-open" onClick={() => openView(String(g.id))}>

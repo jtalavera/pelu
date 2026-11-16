@@ -13,13 +13,15 @@ import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.web.dto.CommissionDtos.AssignGroupsResult;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupAssignment;
-import com.cursorpoc.backend.web.dto.CommissionDtos.GroupRuleRow;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupServiceRow;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupSuggestion;
 import com.cursorpoc.backend.web.dto.CommissionDtos.GroupView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalRuleSummary;
-import com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalRulesView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalsRuleSummary;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RateException;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RateGroup;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RateItem;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RatesView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.UngroupedService;
 import java.math.BigDecimal;
 import java.text.Normalizer;
@@ -87,23 +89,15 @@ public class CommissionGroupService {
         .map(
             g -> {
               List<SalonService> members = byGroup.getOrDefault(g.getId(), List.of());
-              long pros =
-                  snapshot.timelines().keySet().stream()
-                      .filter(
-                          k ->
-                              k.scope() == CommissionConfigScope.GROUP_RULE
-                                  && Objects.equals(k.groupId(), g.getId())
-                                  && k.professionalId() != null
-                                  && snapshot
-                                      .groupRuleAt(g.getId(), k.professionalId(), now)
-                                      .isPresent())
-                      .count();
               return new GroupView(
                   g.getId(),
                   g.getName(),
                   members.size(),
                   members.stream().map(SalonService::getName).limit(SAMPLE_NAMES).toList(),
-                  (int) pros);
+                  snapshot
+                      .groupRuleAt(g.getId(), null, now)
+                      .map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent())
+                      .orElse(null));
             })
         .toList();
   }
@@ -119,7 +113,7 @@ public class CommissionGroupService {
     g.setName(name);
     g.setCreatedAt(Instant.now());
     g = groupRepository.save(g);
-    return new GroupView(g.getId(), g.getName(), 0, List.of(), 0);
+    return new GroupView(g.getId(), g.getName(), 0, List.of(), null);
   }
 
   @Transactional
@@ -253,11 +247,12 @@ public class CommissionGroupService {
   public ProfessionalsRuleSummary professionalsSummary(long tenantId) {
     CommissionConfigSnapshot snapshot = ledger.snapshot(tenantId);
     Instant now = Instant.now();
+    // HU-COM-20: «rules» of a professional are the services where she is paid differently.
     Map<Long, Integer> counts = new HashMap<>();
     for (ScopeKey key : snapshot.timelines().keySet()) {
-      if (key.scope() == CommissionConfigScope.GROUP_RULE
+      if (key.scope() == CommissionConfigScope.RULE
           && key.professionalId() != null
-          && snapshot.groupRuleAt(key.groupId(), key.professionalId(), now).isPresent()) {
+          && snapshot.ruleAt(key.serviceId(), key.professionalId(), now).isPresent()) {
         counts.merge(key.professionalId(), 1, Integer::sum);
       }
     }
@@ -318,17 +313,14 @@ public class CommissionGroupService {
     return name;
   }
 
-  // ── Rules of one professional ─────────────────────────────────────────────────────────────
+  // ── Rates: group → service → professional (HU-COM-20) ─────────────────────────────────────
 
-  /** One row per group with the rule in force for the professional at {@code date}. */
+  /**
+   * Every group with its % and its services, each with what it normally pays and who is paid
+   * differently (the exceptions of professionals), as of {@code date} (today by default).
+   */
   @Transactional(readOnly = true)
-  public ProfessionalRulesView professionalRules(
-      long tenantId, long professionalId, LocalDate date) {
-    Professional p =
-        professionalRepository
-            .findByIdAndTenant_Id(professionalId, tenantId)
-            .orElseThrow(
-                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
+  public RatesView ratesView(long tenantId, LocalDate date) {
     var zone = configService.zone();
     LocalDate day = date != null ? date : LocalDate.now(zone);
     Instant at =
@@ -336,46 +328,123 @@ public class CommissionGroupService {
             ? Instant.now()
             : day.plusDays(1).atStartOfDay(zone).toInstant().minusMillis(1);
     CommissionConfigSnapshot snapshot = ledger.snapshot(tenantId);
-    Map<Long, Long> counts = new HashMap<>();
-    for (SalonService s : serviceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(tenantId)) {
-      if (s.getCommissionGroupId() != null) {
-        counts.merge(s.getCommissionGroupId(), 1L, Long::sum);
+    CommissionRuleValue.FixedDestination defaultDestination = snapshot.fixedDestinationAt(at);
+    BigDecimal generalService =
+        snapshot.defaultPercentAt(CommissionConfigScope.DEFAULT_SERVICE, at);
+    BigDecimal generalProduct =
+        snapshot.defaultPercentAt(CommissionConfigScope.DEFAULT_PRODUCT, at);
+    List<Professional> professionals =
+        professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
+            .filter(Professional::isActive)
+            .toList();
+    // Services with a change scheduled for later (any rule of the service, any professional).
+    java.util.Set<Long> scheduledItems = new java.util.HashSet<>();
+    java.util.Set<Long> scheduledGroups = new java.util.HashSet<>();
+    for (var entry : snapshot.timelines().entrySet()) {
+      ScopeKey key = entry.getKey();
+      if (snapshot.scheduledAfter(key, at).isEmpty()) {
+        continue;
+      }
+      if (key.scope() == CommissionConfigScope.RULE && key.serviceId() != null) {
+        scheduledItems.add(key.serviceId());
+      } else if (key.scope() == CommissionConfigScope.GROUP_RULE
+          && key.groupId() != null
+          && key.professionalId() == null) {
+        scheduledGroups.add(key.groupId());
       }
     }
-    CommissionRuleValue.FixedDestination defaultDestination = snapshot.fixedDestinationAt(at);
-    List<GroupRuleRow> rows = new ArrayList<>();
-    for (CommissionGroup g : groupRepository.findByTenantIdOrderByNameAsc(tenantId)) {
-      Optional<CommissionConfigVersion> own = snapshot.groupRuleAt(g.getId(), professionalId, at);
-      boolean scheduled =
-          !snapshot.scheduledAfter(ScopeKey.group(g.getId(), professionalId), at).isEmpty();
-      CommissionRuleValue value =
+    List<CommissionGroup> groups = groupRepository.findByTenantIdOrderByNameAsc(tenantId);
+    Map<Long, Optional<CommissionConfigVersion>> groupRules = new HashMap<>();
+    groups.forEach(g -> groupRules.put(g.getId(), snapshot.groupRuleAt(g.getId(), null, at)));
+    Map<Long, List<RateItem>> byGroup = new HashMap<>();
+    List<RateItem> ungrouped = new ArrayList<>();
+    for (SalonService s : serviceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(tenantId)) {
+      Optional<CommissionConfigVersion> own = snapshot.ruleAt(s.getId(), null, at);
+      Optional<CommissionConfigVersion> viaGroup =
+          s.getCommissionGroupId() == null
+              ? Optional.empty()
+              : groupRules.getOrDefault(s.getCommissionGroupId(), Optional.empty());
+      CommissionRuleValue ownValue =
           own.map(v -> CommissionRuleValue.parse(v.getConfigValue())).orElse(null);
-      CommissionRuleValue.FixedDestination explicit =
-          value == null ? null : value.fixedDestination();
-      rows.add(
-          new GroupRuleRow(
-              g.getId(),
-              g.getName(),
-              counts.getOrDefault(g.getId(), 0L).intValue(),
-              own.isPresent(),
-              value == null ? null : value.percent(),
-              value == null ? null : value.retentionPercent(),
-              value == null ? null : value.fixedAmount(),
-              explicit == null ? null : explicit.name(),
-              (explicit != null ? explicit : defaultDestination).name(),
-              own.map(CommissionConfigVersion::getId).orElse(null),
-              scheduled));
+      CommissionRuleValue normal =
+          ownValue != null
+              ? ownValue
+              : viaGroup
+                  .map(v -> CommissionRuleValue.parse(v.getConfigValue()))
+                  .orElse(
+                      CommissionRuleValue.ofPercent(
+                          s.getKind() == ServiceKind.PRODUCT ? generalProduct : generalService));
+      String source = ownValue != null ? "SERVICE" : viaGroup.isPresent() ? "GROUP" : "GENERAL";
+      List<RateException> exceptions = new ArrayList<>();
+      for (Professional p : professionals) {
+        snapshot
+            .ruleAt(s.getId(), p.getId(), at)
+            .ifPresent(
+                v -> {
+                  CommissionRuleValue value = CommissionRuleValue.parse(v.getConfigValue());
+                  exceptions.add(
+                      new RateException(
+                          p.getId(),
+                          p.getDisplayName(),
+                          value.percent(),
+                          value.fixedAmount(),
+                          value.fixedDestination() == null ? null : value.fixedDestination().name(),
+                          !snapshot
+                              .scheduledAfter(ScopeKey.rule(s.getId(), p.getId()), at)
+                              .isEmpty()));
+                });
+      }
+      RateItem item =
+          new RateItem(
+              s.getId(),
+              s.getName(),
+              s.getKind().name(),
+              ownValue == null ? null : ownValue.percent(),
+              ownValue == null ? null : ownValue.fixedAmount(),
+              ownValue == null || ownValue.fixedDestination() == null
+                  ? null
+                  : ownValue.fixedDestination().name(),
+              normal.percent(),
+              normal.fixedAmount(),
+              (normal.fixedDestination() != null ? normal.fixedDestination() : defaultDestination)
+                  .name(),
+              source,
+              scheduledItems.contains(s.getId()),
+              exceptions);
+      if (s.getCommissionGroupId() == null) {
+        ungrouped.add(item);
+      } else {
+        byGroup.computeIfAbsent(s.getCommissionGroupId(), k -> new ArrayList<>()).add(item);
+      }
     }
-    BigDecimal retention = snapshot.retentionProfileAt(professionalId, at);
-    return new ProfessionalRulesView(
-        professionalId,
-        p.getDisplayName(),
-        p.isActive(),
+    List<RateGroup> rateGroups =
+        groups.stream()
+            .map(
+                g -> {
+                  CommissionRuleValue value =
+                      groupRules
+                          .get(g.getId())
+                          .map(v -> CommissionRuleValue.parse(v.getConfigValue()))
+                          .orElse(null);
+                  return new RateGroup(
+                      g.getId(),
+                      g.getName(),
+                      value == null ? null : value.percent(),
+                      value == null ? null : value.fixedAmount(),
+                      value == null || value.fixedDestination() == null
+                          ? null
+                          : value.fixedDestination().name(),
+                      scheduledGroups.contains(g.getId()),
+                      byGroup.getOrDefault(g.getId(), List.of()));
+                })
+            .toList();
+    return new RatesView(
+        day,
         snapshot.baseAt(at).name(),
-        snapshot.aguinaldoEnabledAt(at),
-        retention,
+        generalService,
+        generalProduct,
         defaultDestination.name(),
-        snapshot.defaultPercentAt(CommissionConfigScope.DEFAULT_SERVICE, at),
-        rows);
+        rateGroups,
+        ungrouped);
   }
 }

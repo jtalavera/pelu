@@ -97,12 +97,9 @@ public final class CommissionDtos {
 
   // ── Commission groups (HU-COM-14) ─────────────────────────────────────────────────────────
 
+  /** {@code percent}: the % the group pays to everybody (HU-COM-20); null when it has none. */
   public record GroupView(
-      Long id,
-      String name,
-      int serviceCount,
-      List<String> serviceNames,
-      int professionalsWithRule) {}
+      Long id, String name, int serviceCount, List<String> serviceNames, BigDecimal percent) {}
 
   public record GroupRequest(String name) {}
 
@@ -134,31 +131,55 @@ public final class CommissionDtos {
   public record ProfessionalsRuleSummary(
       boolean aguinaldoEnabled, List<ProfessionalRuleSummary> professionals) {}
 
-  /** One group row of a professional's rules (null rule fields = she has no own rule for it). */
-  public record GroupRuleRow(
-      Long groupId,
-      String groupName,
-      int serviceCount,
-      boolean ownRule,
+  // ── Commission rates: group → service → professional (HU-COM-20) ─────────────────────────
+
+  /** A professional that is paid a different % than usual for one service. */
+  public record RateException(
+      Long professionalId,
+      String professionalName,
       BigDecimal percent,
-      BigDecimal retentionPercent,
       BigDecimal fixedAmount,
       /** PROFESSIONAL / SALON when the rule sets it, null when it follows the salon default. */
       String fixedDestination,
-      String effectiveFixedDestination,
-      Long versionId,
       boolean scheduled) {}
 
-  public record ProfessionalRulesView(
-      Long professionalId,
-      String professionalName,
-      boolean active,
+  /**
+   * One service or product with what it normally pays. {@code source}: SERVICE (its own %), GROUP
+   * (the % of its group) or GENERAL (the default % of its kind). The {@code normal*} fields are the
+   * rule that applies to everybody (what an exception is compared with and copies its cost from).
+   */
+  public record RateItem(
+      Long serviceId,
+      String name,
+      String kind,
+      BigDecimal ownPercent,
+      BigDecimal ownFixedAmount,
+      String ownFixedDestination,
+      BigDecimal normalPercent,
+      BigDecimal normalFixedAmount,
+      String normalFixedDestination,
+      String source,
+      boolean scheduled,
+      List<RateException> exceptions) {}
+
+  /** A commission group with its own % (null = it has none) and its services. */
+  public record RateGroup(
+      Long id,
+      String name,
+      BigDecimal percent,
+      BigDecimal fixedAmount,
+      String fixedDestination,
+      boolean scheduled,
+      List<RateItem> items) {}
+
+  public record RatesView(
+      LocalDate date,
       String baseType,
-      boolean aguinaldoEnabled,
-      BigDecimal retentionProfilePercent,
+      BigDecimal generalServicePercent,
+      BigDecimal generalProductPercent,
       String defaultFixedDestination,
-      BigDecimal defaultPercentService,
-      List<GroupRuleRow> groups) {}
+      List<RateGroup> groups,
+      List<RateItem> ungrouped) {}
 
   // ── Overview of a settlement period (HU-COM-15) ───────────────────────────────────────────
 
@@ -194,7 +215,8 @@ public final class CommissionDtos {
       /* "Para revisar" */
       int linesWithoutProfessional,
       int ungroupedServices,
-      int professionalsWithoutRules,
+      /* HU-COM-20: groups that do not have their % yet (they pay the general one) */
+      int groupsWithoutPercent,
       int groupCount,
       /* Aguinaldo */
       boolean aguinaldoEnabled,

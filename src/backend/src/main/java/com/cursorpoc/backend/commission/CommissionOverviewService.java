@@ -173,8 +173,13 @@ public class CommissionOverviewService {
         Comparator.comparing(
             r -> r.professionalName() == null ? "" : r.professionalName().toLowerCase()));
 
-    int withoutRules = (int) summary.stream().filter(s -> s.ruleCount() == 0).count();
     boolean aguinaldo = snapshot.aguinaldoEnabledAt(now);
+    var groups = groupRepository.findByTenantIdOrderByNameAsc(tenantId);
+    int groupsWithoutPercent =
+        (int)
+            groups.stream()
+                .filter(g -> snapshot.groupRuleAt(g.getId(), null, now).isEmpty())
+                .count();
     int retaining =
         (int)
             summary.stream()
@@ -192,8 +197,8 @@ public class CommissionOverviewService {
         paid,
         queryService.linesWithoutBeneficiary(tenantId, null, null).size(),
         groupService.ungrouped(tenantId, ServiceKind.SERVICE).size(),
-        withoutRules,
-        groupRepository.findByTenantIdOrderByNameAsc(tenantId).size(),
+        groupsWithoutPercent,
+        groups.size(),
         aguinaldo,
         aguinaldo ? aguinaldoService.summary(tenantId).totalBalance() : BigDecimal.ZERO,
         retaining);

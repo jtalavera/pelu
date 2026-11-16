@@ -11,11 +11,12 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * Pure calculation rules of the module (§3, §4 and HU-COM-14): rule resolution (professional + item
- * → professional + group → item → group → default of the item's kind) and the amounts of a line:
- * base (line total after discounts, with or without IVA) minus the fixed amount, then the percent
- * that is paid and the percent retained for aguinaldo. Amounts are rounded per entry to the
- * currency minor unit (Gs: no decimals) with HALF_UP.
+ * Pure calculation rules of the module (§3, §4, HU-COM-14 and HU-COM-20): rule resolution (default
+ * of the item's kind → group → item → professional + item, the last one that exists wins; the
+ * retention for aguinaldo is the professional's) and the amounts of a line: base (line total after
+ * discounts, with or without IVA) minus the fixed amount, then the percent that is paid and the
+ * percent retained for aguinaldo. Amounts are rounded per entry to the currency minor unit (Gs: no
+ * decimals) with HALF_UP.
  */
 public final class CommissionCalculator {
 
@@ -64,7 +65,39 @@ public final class CommissionCalculator {
     return resolve(snapshot, serviceId, null, kind, professionalId, at);
   }
 
+  /**
+   * The % that applies to a line. HU-COM-20: four layers, from the general to the specific, and the
+   * last one that exists wins: the default % of the item's kind, the % of its group, the % of the
+   * service itself, and the % of the professional for that service. The retention for aguinaldo
+   * belongs to the professional: it comes out of the commission (a rule of 50 % for a professional
+   * that retains 5 % pays 45 % and sends 5 % to her aguinaldo fund).
+   */
   public static Resolution resolve(
+      CommissionConfigSnapshot snapshot,
+      long serviceId,
+      Long groupId,
+      ServiceKind kind,
+      Long professionalId,
+      Instant at) {
+    Resolution rule = resolveRule(snapshot, serviceId, groupId, kind, professionalId, at);
+    BigDecimal retention = BigDecimal.ZERO;
+    if (professionalId != null && snapshot.aguinaldoEnabledAt(at)) {
+      BigDecimal profile = snapshot.retentionProfileAt(professionalId, at);
+      if (profile != null && profile.signum() > 0) {
+        retention = profile.min(rule.percent());
+      }
+    }
+    return new Resolution(
+        rule.percent().subtract(retention),
+        retention,
+        rule.fixedAmount(),
+        rule.fixedToProfessional(),
+        rule.origin(),
+        rule.ruleVersionId());
+  }
+
+  /** The rule itself (total commission %, before the professional's retention). */
+  private static Resolution resolveRule(
       CommissionConfigSnapshot snapshot,
       long serviceId,
       Long groupId,
@@ -75,14 +108,6 @@ public final class CommissionCalculator {
       Optional<CommissionConfigVersion> exception = snapshot.ruleAt(serviceId, professionalId, at);
       if (exception.isPresent()) {
         return fromRule(snapshot, exception.get(), CommissionRuleOrigin.BENEFICIARY_ITEM, at);
-      }
-      if (groupId != null) {
-        Optional<CommissionConfigVersion> groupException =
-            snapshot.groupRuleAt(groupId, professionalId, at);
-        if (groupException.isPresent()) {
-          return fromRule(
-              snapshot, groupException.get(), CommissionRuleOrigin.BENEFICIARY_GROUP, at);
-        }
       }
     }
     Optional<CommissionConfigVersion> general = snapshot.ruleAt(serviceId, null, at);
@@ -113,15 +138,14 @@ public final class CommissionCalculator {
       CommissionRuleOrigin origin,
       Instant at) {
     CommissionRuleValue value = CommissionRuleValue.parse(version.getConfigValue());
-    BigDecimal retention =
-        snapshot.aguinaldoEnabledAt(at) ? value.retentionPercent() : BigDecimal.ZERO;
     CommissionRuleValue.FixedDestination destination =
         value.fixedDestination() != null
             ? value.fixedDestination()
             : snapshot.fixedDestinationAt(at);
+    // The retention that old rules carried is not read any more: it is the professional's.
     return new Resolution(
         value.percent(),
-        retention,
+        BigDecimal.ZERO,
         value.fixedAmount(),
         destination == CommissionRuleValue.FixedDestination.PROFESSIONAL,
         origin,

@@ -35,25 +35,26 @@ export function periodLabel(t: TFunction, period: PeriodInfo | null | undefined,
   return t(`femme.commissions.period.${period.periodicity}`, { from, to });
 }
 
-/** What still needs doing in the setup: steps 2 and 3, and step 4 when aguinaldo is on but nobody retains. */
+/**
+ * What still needs doing in the setup (HU-COM-20): a group without its % (it pays the general one),
+ * and aguinaldo on while nobody retains. A professional with nothing loaded just earns the usual
+ * % of each service, so there is no step «rules per professional» any more.
+ */
 export function setupProgress(o: Overview) {
-  const groupsDone = o.groupCount > 0 && o.ungroupedServices === 0;
-  const rulesDone = o.groupCount > 0 && o.professionalsWithoutRules === 0 && o.rows.length > 0;
+  const groupsDone = o.groupCount > 0 && o.groupsWithoutPercent === 0;
   // Aguinaldo on but nobody retains yet: it was switched on and never finished. Some professionals
   // not retaining is normal, so only «nobody» counts as missing.
   const aguinaldoPending = o.aguinaldoEnabled && o.professionalsRetaining === 0;
   return {
     groupsDone,
-    rulesDone,
     aguinaldoDone: o.aguinaldoEnabled,
     aguinaldoPending,
     /** Steps still pending (shown as the badge of «Configurar»). */
-    pending: (groupsDone ? 0 : 1) + (rulesDone ? 0 : 1) + (aguinaldoPending ? 1 : 0),
+    pending: (o.groupCount > 0 && o.groupsWithoutPercent > 0 ? 1 : 0) + (aguinaldoPending ? 1 : 0),
     /** Nothing was set up yet: the first-time guide replaces the home. */
     firstTime: o.groupCount === 0,
   };
 }
-
 
 /**
  * What the period looks like in people and money (HU-COM-17): each state with its professionals and

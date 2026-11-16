@@ -37,7 +37,7 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.MySummary;
 import com.cursorpoc.backend.web.dto.CommissionDtos.Overview;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PagedSettlements;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PayRequest;
-import com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalRulesView;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RatesView;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ReassignRequest;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ReportResponse;
 import com.cursorpoc.backend.web.dto.CommissionDtos.RulesView;
@@ -223,17 +223,14 @@ public class CommissionController {
             Map.of("changed", groupService.assignUngrouped(p.getTenantId(), id, parseKind(kind))));
   }
 
-  @GetMapping("/professionals/{professionalId}/rules")
-  public ProfessionalRulesView professionalRules(
+  /** HU-COM-20: every group and service with what it pays and who is paid differently. */
+  @GetMapping("/rates")
+  public RatesView rates(
       @AuthenticationPrincipal FemmeUserPrincipal p,
-      @PathVariable long professionalId,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate date) {
     return admin(
-        p,
-        "GET",
-        "/api/commissions/professionals/" + professionalId + "/rules",
-        () -> groupService.professionalRules(p.getTenantId(), professionalId, date));
+        p, "GET", "/api/commissions/rates", () -> groupService.ratesView(p.getTenantId(), date));
   }
 
   // ── Aguinaldo fund (HU-COM-14) ────────────────────────────────────────────────────────────
