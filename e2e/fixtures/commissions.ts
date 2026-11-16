@@ -379,9 +379,22 @@ export async function openExceptions(page: Page, kind?: "SERVICE" | "PRODUCT") {
 export const liquidarRow = (page: Page, name: string) =>
   page.getByTestId("liquidar-row").filter({ hasText: name });
 
-/** Liquidar › step N button (generate / approve / pay everything pending) and its confirmation. */
+/** Opens one of the stage tabs of Liquidar: only the rows of the open tab are shown. */
+export async function liquidarTab(page: Page, status: "UNSETTLED" | "DRAFT" | "APPROVED" | "PAID") {
+  await page.getByTestId(`liquidar-tab-${status}`).click();
+  await expect(page.getByTestId(`liquidar-tab-${status}`)).toHaveAttribute("aria-selected", "true");
+}
+
+/** Voids a draft from its row: «⋯» opens the menu and «Void» is its option (on the «To approve» tab). */
+export async function liquidarVoidRow(page: Page, name: string) {
+  await liquidarRow(page, name).getByTestId("liquidar-row-more").click();
+  await page.getByTestId("liquidar-row-void").click();
+}
+
+/** Liquidar › step N (1 generate, 2 approve, 3 pay): opens its tab, uses the main button and confirms. */
 export async function liquidarStep(page: Page, step: 1 | 2 | 3) {
-  await page.getByTestId(`liquidar-step-${step}-action`).click();
+  await liquidarTab(page, (["UNSETTLED", "DRAFT", "APPROVED"] as const)[step - 1]);
+  await page.getByTestId("liquidar-main-action").click();
   await page.getByTestId("liquidar-confirm").click();
 }
 

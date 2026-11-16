@@ -910,31 +910,8 @@
         "prevPeriod": "Período anterior",
         "nextPeriod": "Período siguiente",
         "periodicityNote": "Los períodos siguen la periodicidad de tu salón (se cambia en Configurar).",
-        "step1": {
-          "title": "Generar",
-          "help": "Arma una liquidación por profesional con lo facturado.",
-          "count": "{{count}} por generar",
-          "button": "Generar {{count}}"
-        },
-        "step2": {
-          "title": "Aprobar",
-          "help": "Revisá y aprobá: queda congelada.",
-          "count": "{{count}} por aprobar",
-          "button": "Aprobar {{count}}"
-        },
-        "step3": {
-          "title": "Pagar",
-          "help": "Registrá el pago de cada una.",
-          "count": "{{count}} por pagar · {{paid}} ya pagadas",
-          "button": "Pagar {{count}}"
-        },
-        "tableTitle": "Profesionales del período",
         "total": "Total",
-        "filterAria": "Filtrar por estado",
-        "filterAll": "Todas",
-        "empty": "No hay profesionales en este estado.",
         "pick": "Elegir a {{name}}",
-        "withSelected": "Con las seleccionadas:",
         "action": {
           "GENERATE": "Generar",
           "APPROVE": "Aprobar",
@@ -1000,24 +977,10 @@
             }
           }
         },
-        "detail": "Ver detalle",
-        "scopeAll_one": "Se muestra a la profesional activa.",
-        "scopeAll_other": "Se muestran las {{count}} profesionales activas.",
-        "scopeAllWith": "Todas tienen comisiones este período.",
-        "scopeSome_one": "{{with}} tienen comisiones este período; la otra no tiene nada para liquidar (está al final).",
-        "scopeSome_other": "{{with}} tienen comisiones este período; las otras {{without}} no tienen nada para liquidar (están al final).",
         "alreadyPaid": "ya pagado",
         "colProfessional": "Profesional",
         "colAmount": "Comisión",
         "colRetained": "Retenido",
-        "colState": "Estado",
-        "subtotal": {
-          "UNSETTLED": "{{amount}} por generar",
-          "DRAFT": "{{amount}} por aprobar",
-          "APPROVED": "{{amount}} por pagar",
-          "PAID": "{{amount}} ya cobrado",
-          "NONE": "Nada para liquidar en este período"
-        },
         "note": {
           "noneNoRules": "No tiene ventas este período · sin reglas propias (usa el % por defecto)",
           "none": "No tiene ventas este período",
@@ -1027,13 +990,41 @@
           "settlement": "Liquidación #{{id}}"
         },
         "voidRowAria": "Anular el borrador de {{name}}",
-        "pickGroup": "Marcar a todas: {{group}}",
         "selectionAria": "Profesionales seleccionadas",
         "selectedCount": "{{count}} seleccionadas",
         "selectedCount_one": "{{count}} seleccionada",
         "bulkVoid": "Anular borradores",
         "clearSelection": "Limpiar",
-        "regenerate": "Generar de nuevo"
+        "regenerate": "Generar de nuevo",
+        "step1": {
+          "button": "Generar {{count}}"
+        },
+        "step2": {
+          "button": "Aprobar {{count}}"
+        },
+        "step3": {
+          "button": "Pagar {{count}}"
+        },
+        "tabsAria": "Etapas de la liquidación",
+        "tab": {
+          "UNSETTLED": "Por generar",
+          "DRAFT": "Por aprobar",
+          "APPROVED": "Por pagar",
+          "PAID": "Pagadas"
+        },
+        "tabEmpty": {
+          "UNSETTLED": "Nada por generar en este período ✓",
+          "DRAFT": "Nada por aprobar en este período ✓",
+          "APPROVED": "Nada por pagar en este período ✓",
+          "PAID": "Todavía no hay liquidaciones pagadas en este período."
+        },
+        "summary_one": "{{count}} profesional",
+        "summary_other": "{{count}} profesionales",
+        "noneToggle_one": "{{count}} sin movimientos",
+        "noneToggle_other": "{{count}} sin movimientos",
+        "periodInfoAria": "Cómo se definen los períodos",
+        "moreAria": "Más acciones de {{name}}",
+        "pickGroup": "Marcar a todas: {{group}}"
       },
       "team": {
         "tabPeople": "Profesionales ({{count}})",

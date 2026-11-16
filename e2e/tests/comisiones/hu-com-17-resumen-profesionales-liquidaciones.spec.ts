@@ -11,6 +11,7 @@ import {
   generateSettlements,
   issueInvoice,
   liquidarRow,
+  liquidarTab,
   loginAdminUi,
   openCommissions,
   provisionCommissionWorld,
@@ -75,51 +76,61 @@ type Overview = { rows: { professionalName: string; status: string; amount: numb
 
 // ── AC1 · Todas las profesionales activas ─────────────────────────────────────────────────────
 
-test("AC1 · Liquidar muestra a TODAS las profesionales activas; las sin movimientos van al final con su motivo", async ({ page, request }) => {
+test("AC1 · Liquidar cuenta a TODAS las profesionales activas: las con movimientos en sus pestañas; las sin movimientos, en una línea al pie", async ({
+  page,
+  request,
+}) => {
   await team(request);
   await loginAdminUi(page, w);
   await openCommissions(page, "settle");
 
-  // 5 active professionals: 3 with commissions and 2 without sales this period.
-  await expect(page.getByTestId("liquidar-row")).toHaveCount(5);
-  await expect(page.getByTestId("liquidar-scope")).toContainText("All 5 active professionals are shown.");
-  await expect(page.getByTestId("liquidar-scope")).toContainText("3 have commissions this period; the other 2 have nothing to settle");
-  const order = await page.getByTestId("liquidar-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-status")));
-  expect(order).toEqual(["UNSETTLED", "DRAFT", "PAID", "NONE", "NONE"]);
+  // 5 active professionals: 3 with commissions (one per stage) and 2 without sales this period.
+  await expect(page.getByTestId("liquidar-scope")).toHaveCount(0); // HU-COM-28: no «5 active professionals are shown» banner
+  await expect(page.getByTestId("liquidar-tab-UNSETTLED-count")).toHaveText("1");
+  await expect(page.getByTestId("liquidar-tab-DRAFT-count")).toHaveText("1");
+  await expect(page.getByTestId("liquidar-tab-APPROVED-count")).toHaveText("0");
+  await expect(page.getByTestId("liquidar-tab-PAID-count")).toHaveText("1");
+  // It opens on the stage that is next to do, and only its rows are shown.
+  await expect(page.getByTestId("liquidar-tab-UNSETTLED")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(1);
+  await expect(page.getByTestId("liquidar-row")).toHaveAttribute("data-status", "UNSETTLED");
+  await liquidarTab(page, "DRAFT");
+  await expect(page.getByTestId("liquidar-row")).toHaveAttribute("data-status", "DRAFT");
+  await liquidarTab(page, "PAID");
+  await expect(page.getByTestId("liquidar-row")).toHaveAttribute("data-status", "PAID");
 
-  const rosa = liquidarRow(page, "Rosa");
-  await expect(rosa).toContainText("No sales this period");
-  await expect(rosa.getByTestId("liquidar-row-amount")).toHaveText("—");
-  await expect(rosa.getByTestId("liquidar-row-check")).toHaveCount(0);
-  await expect(rosa.getByRole("button")).toHaveCount(0);
+  // The two without movements are not rows: a line at the bottom opens their names.
+  await expect(page.getByTestId("liquidar-none-toggle")).toContainText("2 with no movements");
+  await expect(page.getByTestId("liquidar-none-list")).toHaveCount(0);
+  await page.getByTestId("liquidar-none-toggle").click();
+  await expect(page.getByTestId("liquidar-none-item")).toHaveCount(2);
+  await expect(page.getByTestId("liquidar-none-list")).toContainText("Rosa", { ignoreCase: true });
+  await expect(page.getByTestId("liquidar-none-list")).toContainText("Tomás", { ignoreCase: true });
   // HU-COM-20: a professional with nothing loaded is paid the usual %, so there is no «no rules» note.
-  await expect(rosa).not.toContainText("no rules");
-
-  // The filter «No movements» lists just them.
-  await expect(page.getByTestId("liquidar-filter-NONE")).toContainText("No movements · 2");
-  await page.getByTestId("liquidar-filter-NONE").click();
-  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
-  await expect(page.getByTestId("liquidar-filter-ALL")).toContainText("5");
+  await expect(page.getByTestId("liquidar-none-list")).not.toContainText("no rules");
+  await expect(page.getByTestId("liquidar-row").filter({ hasText: "Rosa" })).toHaveCount(0);
 });
 
 // ── AC2 · Cada fila dice qué hay detrás de su monto ───────────────────────────────────────────
 
-test("AC2 · cada fila dice qué hay detrás: movimientos, liquidación o cuándo se pagó; hay subtotal por tramo", async ({ page, request }) => {
+test("AC2 · cada fila dice qué hay detrás: movimientos, liquidación o cuándo se pagó; cada pestaña dice cuánto suma", async ({ page, request }) => {
   const t = await team(request);
   await loginAdminUi(page, w);
   await openCommissions(page, "settle");
 
   await expect(liquidarRow(page, "Carla").getByTestId("liquidar-row-note")).toHaveText("1 movement");
+  await expect(page.getByTestId("liquidar-summary")).toContainText("1 professional");
+  await expect(page.getByTestId("liquidar-summary")).toContainText("40.000");
+  await liquidarTab(page, "DRAFT");
   await expect(liquidarRow(page, w.bea.name).getByTestId("liquidar-row-note")).toContainText("Settlement #");
+  await expect(page.getByTestId("liquidar-summary")).toContainText("40.000");
+  await liquidarTab(page, "PAID");
   await expect(liquidarRow(page, w.ana.name).getByTestId("liquidar-row-note")).toContainText("Paid on");
-  await expect(page.getByTestId("liquidar-group-UNSETTLED-subtotal")).toContainText("40.000 to generate");
-  await expect(page.getByTestId("liquidar-group-DRAFT-subtotal")).toContainText("40.000 to approve");
-  await expect(page.getByTestId("liquidar-group-PAID-subtotal")).toContainText("40.000 already collected");
-  await expect(page.getByTestId("liquidar-group-NONE-subtotal")).toContainText("Nothing to settle this period");
-  // The steps say how much money is in each, and the total says how much is already paid.
-  await expect(page.getByTestId("liquidar-step-1-amount")).toContainText("40.000");
-  await expect(page.getByTestId("liquidar-step-2-amount")).toContainText("40.000");
-  await expect(page.getByTestId("liquidar-step-3-amount")).toContainText("0");
+  await expect(page.getByTestId("liquidar-summary")).toContainText("40.000");
+  await liquidarTab(page, "APPROVED");
+  await expect(page.getByTestId("liquidar-summary")).toContainText("0 professionals");
+  await expect(page.getByTestId("liquidar-empty")).toBeVisible();
+  // The total says how much is already paid.
   await expect(page.getByTestId("liquidar-total")).toContainText("120.000");
   await expect(page.getByTestId("liquidar-paid-total")).toContainText("40.000");
   expect(t.anaS.id).toBeGreaterThan(0);
@@ -178,7 +189,8 @@ test("AC5 · «Tu equipo» cuenta las activas, las que tienen comisiones y nombr
   await expect(page.getByTestId("home-team-none")).toContainText("Tomás", { ignoreCase: true });
   await page.getByTestId("home-team-none-link").click();
   await expect(page).toHaveURL(/\/liquidar\?state=NONE$/);
-  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
+  // The names of those without movements are already open.
+  await expect(page.getByTestId("liquidar-none-item")).toHaveCount(2);
 });
 
 // ── AC6 · Equipo ──────────────────────────────────────────────────────────────────────────────
@@ -217,7 +229,7 @@ test("AC7 · en el celular Inicio y Liquidar se leen sin scroll horizontal", asy
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
   await expect(page.getByTestId("home-step-UNSETTLED")).toBeVisible();
   await page.goto("/app/commissions/liquidar");
-  await expect(page.getByTestId("liquidar-scope")).toBeVisible();
+  await expect(page.getByTestId("liquidar-tabs")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
 });
 

@@ -349,49 +349,79 @@ describe("HU-COM-15 · Equipo", () => {
 });
 
 describe("HU-COM-15 · Liquidar", () => {
-  it("resume los tres pasos y filtra por estado", async () => {
+  it("tiene una pestaña por etapa con su cantidad, abre en la que toca hacer y muestra solo esa", async () => {
     const user = userEvent.setup();
     mount("/app/commissions/liquidar");
-    await screen.findByTestId("liquidar-step-1");
-    expect(screen.getAllByTestId("liquidar-row")).toHaveLength(5);
-    await user.click(screen.getByTestId("liquidar-filter-DRAFT"));
+    await screen.findByTestId("liquidar-tabs");
+    // «Por generar» is next to do: only its rows are shown.
+    expect(screen.getByTestId("liquidar-tab-UNSETTLED").getAttribute("aria-selected")).toBe("true");
+    expect(screen.getAllByTestId("liquidar-row")).toHaveLength(1);
+    expect(screen.getByTestId("liquidar-tab-UNSETTLED-count").textContent).toBe("1");
+    expect(screen.getByTestId("liquidar-tab-PAID-count").textContent).toBe("1");
+    await user.click(screen.getByTestId("liquidar-tab-DRAFT"));
     const rows = screen.getAllByTestId("liquidar-row");
     expect(rows).toHaveLength(1);
     expect(rows[0].getAttribute("data-status")).toBe("DRAFT");
   });
 
-  it("lista a todas las profesionales: primero lo que falta hacer, con subtotal por tramo, y al final «Sin movimientos»", async () => {
-    mount("/app/commissions/liquidar");
-    await screen.findByTestId("liquidar-scope");
-    expect(screen.getByTestId("liquidar-scope").textContent).toContain("Se muestran las 5 profesionales activas.");
-    expect(screen.getByTestId("liquidar-scope").textContent).toContain("la otra no tiene nada para liquidar");
-    const order = screen.getAllByTestId("liquidar-row").map((r) => r.getAttribute("data-status"));
-    expect(order).toEqual(["UNSETTLED", "DRAFT", "APPROVED", "PAID", "NONE"]);
-    expect(screen.getByTestId("liquidar-group-UNSETTLED-subtotal").textContent).toContain("120.000 por generar");
-    expect(screen.getByTestId("liquidar-group-PAID-subtotal").textContent).toContain("30.000 ya cobrado");
-    expect(screen.getByTestId("liquidar-paid-total").textContent).toContain("30.000");
-    // Each step also says how much money is in it.
-    expect(screen.getByTestId("liquidar-step-1-amount").textContent).toContain("120.000");
-    expect(screen.getByTestId("liquidar-step-3-amount").textContent).toContain("50.000");
-    // The row says what is behind the amount.
-    const notes = screen.getAllByTestId("liquidar-row-note").map((n) => n.textContent);
-    expect(notes[0]).toBe("1 movimiento");
-    expect(notes[1]).toBe("Liquidación #7");
-    expect(notes[3]).toContain("Pagada el");
-    expect(notes[4]).toBe("No tiene ventas este período");
-  });
-
-  it("«Sin movimientos» no tiene casilla ni acción y tiene su propio filtro", async () => {
+  it("dice cuántas hay y cuánto suman, con un solo botón principal para la etapa", async () => {
     const user = userEvent.setup();
     mount("/app/commissions/liquidar");
-    await screen.findAllByTestId("liquidar-row");
-    const rosa = screen.getAllByTestId("liquidar-row").find((r) => r.getAttribute("data-status") === "NONE")!;
-    expect(within(rosa).queryByTestId("liquidar-row-check")).toBeNull();
-    expect(within(rosa).getByTestId("liquidar-row-amount").textContent).toBe("—");
-    expect(within(rosa).queryByRole("button")).toBeNull();
-    await user.click(screen.getByTestId("liquidar-filter-NONE"));
-    expect(screen.getAllByTestId("liquidar-row")).toHaveLength(1);
-    expect(screen.getByTestId("liquidar-filter-NONE").textContent).toContain("Sin movimientos · 1");
+    await screen.findByTestId("liquidar-tabs");
+    expect(screen.getByTestId("liquidar-summary").textContent).toBe("1 profesional · Gs. 120.000");
+    expect(screen.getByTestId("liquidar-main-action").textContent).toBe("Generar 1");
+    await user.click(screen.getByTestId("liquidar-tab-APPROVED"));
+    expect(screen.getByTestId("liquidar-summary").textContent).toContain("50.000");
+    expect(screen.getByTestId("liquidar-main-action").textContent).toBe("Pagar 1");
+    // «Pagadas» has nothing to do: no main button.
+    await user.click(screen.getByTestId("liquidar-tab-PAID"));
+    expect(screen.queryByTestId("liquidar-main-action")).toBeNull();
+    expect(screen.getByTestId("liquidar-paid-total").textContent).toContain("30.000");
+    expect(screen.getByTestId("liquidar-total").textContent).toContain("280.000");
+  });
+
+  it("sin carteles de más: no hay aviso de alcance y la periodicidad se abre con el ⓘ", async () => {
+    const user = userEvent.setup();
+    mount("/app/commissions/liquidar");
+    await screen.findByTestId("liquidar-tabs");
+    expect(screen.queryByTestId("liquidar-scope")).toBeNull();
+    expect(screen.queryByTestId("liquidar-period-note")).toBeNull();
+    await user.click(screen.getByTestId("liquidar-period-info"));
+    expect(screen.getByTestId("liquidar-period-note").textContent).toContain("periodicidad de tu salón");
+  });
+
+  it("cada fila dice qué hay detrás del monto: movimientos, liquidación (con enlace) o día de pago", async () => {
+    const user = userEvent.setup();
+    mount("/app/commissions/liquidar");
+    await screen.findByTestId("liquidar-tabs");
+    expect(screen.getByTestId("liquidar-row-note").textContent).toBe("1 movimiento");
+    await user.click(screen.getByTestId("liquidar-tab-DRAFT"));
+    expect(screen.getByTestId("liquidar-row-note").textContent).toBe("Liquidación #7");
+    expect(screen.getByTestId("liquidar-row-detail").getAttribute("href")).toBe("/app/commissions/settlements/7");
+    await user.click(screen.getByTestId("liquidar-tab-PAID"));
+    expect(screen.getByTestId("liquidar-row-note").textContent).toContain("Pagada el");
+    expect(screen.queryByTestId("liquidar-row-detail")).toBeNull();
+  });
+
+  it("«Sin movimientos» queda en una línea al pie que se abre para ver los nombres; no tiene filas ni acciones", async () => {
+    const user = userEvent.setup();
+    mount("/app/commissions/liquidar");
+    await screen.findByTestId("liquidar-tabs");
+    expect(screen.getAllByTestId("liquidar-row").every((r) => r.getAttribute("data-status") !== "NONE")).toBe(true);
+    expect(screen.getByTestId("liquidar-none-toggle").textContent).toContain("1 sin movimientos");
+    expect(screen.queryByTestId("liquidar-none-list")).toBeNull();
+    await user.click(screen.getByTestId("liquidar-none-toggle"));
+    expect(screen.getByTestId("liquidar-none-list").textContent).toContain("Rosa");
+    expect(screen.getByTestId("liquidar-none-toggle").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("una pestaña sin filas dice que no hay nada por hacer", async () => {
+    const user = userEvent.setup();
+    mount("/app/commissions/liquidar", overview({ rows: [person(1, "Gaby", { status: "UNSETTLED", amount: 120000 })], unsettled: 1, drafts: 0, approved: 0, paid: 0 }));
+    await screen.findByTestId("liquidar-tabs");
+    await user.click(screen.getByTestId("liquidar-tab-DRAFT"));
+    expect(screen.getByTestId("liquidar-empty").textContent).toContain("Nada por aprobar");
+    expect(screen.getByTestId("liquidar-main-action").hasAttribute("disabled")).toBe(true);
   });
 
   it("generar la liquidación de una profesional pide confirmar y no repite períodos ya liquidados", async () => {
@@ -423,20 +453,24 @@ describe("HU-COM-15 · Liquidar", () => {
 });
 
 describe("HU-COM-19 · anular borradores", () => {
-  it("solo las filas en Borrador tienen «Anular», junto a «Aprobar»", async () => {
+  it("solo las filas en Borrador tienen «Anular» (en «Más acciones»), junto a «Aprobar»", async () => {
+    const user = userEvent.setup();
     mount("/app/commissions/liquidar");
-    const rows = await screen.findAllByTestId("liquidar-row");
-    expect(screen.getAllByTestId("liquidar-row-void")).toHaveLength(1);
-    const migue = rows.find((r) => r.dataset.professional === "Migue")!;
+    await screen.findAllByTestId("liquidar-row");
+    // Not settled yet: nothing to void.
+    expect(screen.queryByTestId("liquidar-row-more")).toBeNull();
+    await user.click(screen.getByTestId("liquidar-tab-DRAFT"));
+    const migue = screen.getAllByTestId("liquidar-row").find((r) => r.dataset.professional === "Migue")!;
     expect(within(migue).getByTestId("liquidar-row-approve")).toBeTruthy();
-    expect(within(migue).getByTestId("liquidar-row-void")).toBeTruthy();
-    for (const r of rows.filter((r) => r !== migue)) expect(within(r).queryByTestId("liquidar-row-void")).toBeNull();
+    await user.click(within(migue).getByTestId("liquidar-row-more"));
+    expect(await screen.findByTestId("liquidar-row-void")).toBeTruthy();
   });
 
   it("anular una fila pide confirmar, el motivo es opcional y ofrece generar de nuevo", async () => {
     const user = userEvent.setup();
     api.voidSettlement.mockResolvedValue({});
     mount("/app/commissions/liquidar?state=DRAFT");
+    await user.click(await screen.findByTestId("liquidar-row-more"));
     await user.click(await screen.findByTestId("liquidar-row-void"));
     expect(await screen.findByTestId("liquidar-confirm")).toHaveProperty("textContent", "Anular borrador");
     expect(screen.getByTestId("liquidar-dialog-summary").textContent).toContain("Migue");
@@ -454,6 +488,7 @@ describe("HU-COM-19 · anular borradores", () => {
     const user = userEvent.setup();
     api.voidSettlement.mockResolvedValue({});
     mount("/app/commissions/liquidar?state=DRAFT");
+    await user.click(await screen.findByTestId("liquidar-row-more"));
     await user.click(await screen.findByTestId("liquidar-row-void"));
     await user.click(await screen.findByTestId("liquidar-void-reason-rule"));
     expect((screen.getByTestId("liquidar-void-reason") as HTMLInputElement).value).toBe("Cambió una regla");
@@ -478,10 +513,12 @@ describe("HU-COM-19 · anular borradores", () => {
     mount("/app/commissions/liquidar", ov);
     await screen.findAllByTestId("liquidar-row");
     expect(screen.queryByTestId("liquidar-selection")).toBeNull();
-    // The header checkbox of «Borrador» marks both drafts.
+    // The header checkbox of the «Por aprobar» tab marks both drafts.
+    await user.click(screen.getByTestId("liquidar-tab-DRAFT"));
     await user.click(screen.getByTestId("liquidar-group-check-DRAFT"));
     expect(screen.getByTestId("liquidar-selection-count").textContent).toBe("2 seleccionadas");
     // A non-draft in the selection is left alone.
+    await user.click(screen.getByTestId("liquidar-tab-UNSETTLED"));
     await user.click(screen.getAllByTestId("liquidar-row-check")[0]);
     await user.click(screen.getByTestId("liquidar-bulk-void"));
     expect(await screen.findByTestId("liquidar-confirm")).toHaveProperty("textContent", "Anular 2 borradores");

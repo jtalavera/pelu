@@ -10,6 +10,8 @@ import {
   generateSettlements,
   issueInvoice,
   liquidarRow,
+  liquidarTab,
+  liquidarVoidRow,
   loginAdminUi,
   openCommissions,
   provisionCommissionWorld,
@@ -70,18 +72,23 @@ test("AC1 · cada fila en Borrador tiene «Anular» junto a «Aprobar»; las otr
   await loginAdminUi(page, w);
   await openCommissions(page, "settle");
 
+  await liquidarTab(page, "DRAFT");
   const ana = liquidarRow(page, w.ana.name);
   await expect(ana.getByTestId("liquidar-row-approve")).toBeVisible();
-  await expect(ana.getByTestId("liquidar-row-void")).toBeVisible();
-  await expect(ana.getByTestId("liquidar-row-void")).toHaveText("Void");
+  await ana.getByTestId("liquidar-row-more").click(); // «Void» lives in the row's «⋯» menu
+  await expect(page.getByTestId("liquidar-row-void")).toBeVisible();
+  await expect(page.getByTestId("liquidar-row-void")).toContainText("Void");
+  await page.keyboard.press("Escape");
   // Bea is not settled yet: she can only be generated.
+  await liquidarTab(page, "UNSETTLED");
   const bea = liquidarRow(page, w.bea.name);
   await expect(bea.getByTestId("liquidar-row-generate")).toBeVisible();
-  await expect(bea.getByTestId("liquidar-row-void")).toHaveCount(0);
+  await expect(bea.getByTestId("liquidar-row-more")).toHaveCount(0);
   // An approved one is corrected from its detail page, not from here.
   await approveSettlementApi(request, w.adminToken, anaDraft.id);
   await page.reload();
-  await expect(liquidarRow(page, w.ana.name).getByTestId("liquidar-row-void")).toHaveCount(0);
+  await liquidarTab(page, "APPROVED");
+  await expect(liquidarRow(page, w.ana.name).getByTestId("liquidar-row-more")).toHaveCount(0);
 });
 
 // ── AC2 · AC3 · anular una fila ────────────────────────────────────────────────────────────────
@@ -93,17 +100,19 @@ test("AC2 · anular un borrador pide confirmar, el motivo es opcional, vuelve a 
   const [anaDraft] = await twoDrafts(request);
   await loginAdminUi(page, w);
   await openCommissions(page, "settle");
-  await expect(page.getByTestId("liquidar-group-DRAFT")).toBeVisible();
+  await expect(page.getByTestId("liquidar-tab-DRAFT")).toHaveAttribute("aria-selected", "true");
 
-  await liquidarRow(page, w.ana.name).getByTestId("liquidar-row-void").click();
+  await liquidarVoidRow(page, w.ana.name);
   await expect(page.getByTestId("liquidar-dialog-summary")).toContainText(w.ana.name);
   await expect(page.getByTestId("liquidar-confirm")).toHaveText("Void draft");
   await page.getByTestId("liquidar-confirm").click(); // without a reason
 
   await expect(page.getByTestId("liquidar-notice")).toContainText("The draft was voided");
   // She moves to «Not settled» and the other draft stays.
-  await expect(page.getByTestId("liquidar-group-UNSETTLED").getByTestId("liquidar-row")).toHaveCount(1);
+  await expect(page.getByTestId("liquidar-tab-UNSETTLED-count")).toHaveText("1");
+  await liquidarTab(page, "UNSETTLED");
   await expect(liquidarRow(page, w.ana.name)).toHaveAttribute("data-status", "UNSETTLED");
+  await liquidarTab(page, "DRAFT");
   await expect(liquidarRow(page, w.bea.name)).toHaveAttribute("data-status", "DRAFT");
   expect((await detailOf(request, anaDraft.id)).settlement).toMatchObject({ status: "VOIDED", voidReason: null });
 
@@ -111,6 +120,7 @@ test("AC2 · anular un borrador pide confirmar, el motivo es opcional, vuelve a 
   await page.getByTestId("liquidar-regenerate").click();
   await expect(page.getByTestId("liquidar-dialog-summary")).toContainText(w.ana.name);
   await page.getByTestId("liquidar-confirm").click();
+  await liquidarTab(page, "DRAFT");
   await expect(liquidarRow(page, w.ana.name)).toHaveAttribute("data-status", "DRAFT");
 });
 
@@ -119,16 +129,19 @@ test("AC3 · el motivo se escribe o se elige de tres frecuentes y queda guardado
   await loginAdminUi(page, w);
   await openCommissions(page, "settle");
 
-  await liquidarRow(page, w.ana.name).getByTestId("liquidar-row-void").click();
+  await liquidarVoidRow(page, w.ana.name);
   await page.getByTestId("liquidar-void-reason-rule").click();
   await expect(page.getByTestId("liquidar-void-reason")).toHaveValue("A rule changed");
   await page.getByTestId("liquidar-confirm").click();
+  await liquidarTab(page, "UNSETTLED");
   await expect(liquidarRow(page, w.ana.name)).toHaveAttribute("data-status", "UNSETTLED");
   expect((await detailOf(request, anaDraft.id)).settlement.voidReason).toBe("A rule changed");
 
-  await liquidarRow(page, w.bea.name).getByTestId("liquidar-row-void").click();
+  await liquidarTab(page, "DRAFT");
+  await liquidarVoidRow(page, w.bea.name);
   await page.getByTestId("liquidar-void-reason").fill("Falta una factura");
   await page.getByTestId("liquidar-confirm").click();
+  await liquidarTab(page, "UNSETTLED");
   await expect(liquidarRow(page, w.bea.name)).toHaveAttribute("data-status", "UNSETTLED");
   expect((await detailOf(request, beaDraft.id)).settlement.voidReason).toBe("Falta una factura");
 });
@@ -158,8 +171,10 @@ test("AC4 · en lote: la casilla del tramo marca los borradores, la barra de sel
   await page.getByTestId("liquidar-confirm").click();
 
   await expect(page.getByTestId("liquidar-notice")).toContainText("2 drafts were voided");
-  await expect(page.getByTestId("liquidar-group-DRAFT")).toHaveCount(0);
-  await expect(page.getByTestId("liquidar-group-UNSETTLED").getByTestId("liquidar-row")).toHaveCount(2);
+  await expect(page.getByTestId("liquidar-tab-DRAFT-count")).toHaveText("0");
+  await expect(page.getByTestId("liquidar-tab-UNSETTLED-count")).toHaveText("2");
+  await liquidarTab(page, "UNSETTLED");
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
   await expect(page.getByTestId("liquidar-selection")).toHaveCount(0);
   for (const id of [anaDraft.id, beaDraft.id]) {
     expect((await detailOf(request, id)).settlement).toMatchObject({ status: "VOIDED", voidReason: "Cambió una regla" });
@@ -173,12 +188,15 @@ test("AC4b · si en la selección hay filas que no son borradores, solo se anula
   await loginAdminUi(page, w);
   await openCommissions(page, "settle");
 
+  await liquidarTab(page, "DRAFT");
   await liquidarRow(page, w.ana.name).getByTestId("liquidar-row-check").check();
+  await liquidarTab(page, "UNSETTLED");
   await liquidarRow(page, w.bea.name).getByTestId("liquidar-row-check").check();
   await page.getByTestId("liquidar-bulk-void").click();
   await expect(page.getByTestId("liquidar-confirm")).toHaveText("Void draft");
   await expect(page.getByTestId("liquidar-void-skipped")).toContainText("the other selected one stays as it is");
   await page.getByTestId("liquidar-confirm").click();
+  await liquidarTab(page, "UNSETTLED");
   await expect(liquidarRow(page, w.ana.name)).toHaveAttribute("data-status", "UNSETTLED");
   await expect(liquidarRow(page, w.bea.name)).toHaveAttribute("data-status", "UNSETTLED");
   expect((await detailOf(request, anaDraft.id)).settlement.status).toBe("VOIDED");
