@@ -638,6 +638,80 @@ describe("HU-COM-15 · ficha de la profesional", () => {
     expect(screen.getByTestId("aguinaldo-adjust").textContent).toBe("Ajustar el saldo");
   });
 
+  it("HU-COM-26 · el Resumen muestra «Pagar retención» (deshabilitado sin saldo) y «Ajustar el saldo» aunque todavía no tenga movimientos, y el subtítulo dice cuánto retiene", async () => {
+    api.getSettlementPreview.mockResolvedValue(previewOf());
+    api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 0, balances: [] }); // nothing approved yet: no row in the fund
+    mount("/app/commissions/equipo/1", overview({ aguinaldoEnabled: true }));
+    const pay = (await screen.findByTestId("pro-retention-pay")) as HTMLButtonElement;
+    expect(pay.disabled).toBe(true);
+    expect(pay.title).toContain("Todavía no hay saldo para pagar");
+    expect(screen.getByTestId("pro-retention-nothing-to-pay").textContent).toContain("se suma cuando se aprueba la liquidación");
+    expect((screen.getByTestId("pro-retention-adjust") as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId("pro-retention-balance").textContent).toContain("0");
+    // Her retention (5 %) is in the subtitle, as in the mockup.
+    await waitFor(() => expect(screen.getByTestId("pro-subtitle").textContent).toContain("Retiene 5 %"));
+  });
+
+  it("HU-COM-26 · con saldo «Pagar retención» se habilita y el aviso de «sin saldo» desaparece", async () => {
+    api.getSettlementPreview.mockResolvedValue(previewOf());
+    api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 32000, balances: [fundOf()] });
+    mount("/app/commissions/equipo/1", overview({ aguinaldoEnabled: true }));
+    await waitFor(() => expect((screen.getByTestId("pro-retention-pay") as HTMLButtonElement).disabled).toBe(false));
+    expect(screen.queryByTestId("pro-retention-nothing-to-pay")).toBeNull();
+  });
+
+  it("HU-COM-26 · Movimientos › Retención muestra lo retenido que espera aprobación como una línea gris «Pendiente», aunque el saldo sea 0", async () => {
+    api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 0, balances: [] });
+    api.getAguinaldoDetail.mockResolvedValue({ professionalId: 1, professionalName: "Gaby", balance: 0, movements: [] });
+    api.getEntries.mockResolvedValue([]);
+    mount(
+      "/app/commissions/equipo/1?tab=history&view=retention",
+      overview({ aguinaldoEnabled: true, rows: [person(1, "Gaby", { status: "UNSETTLED", retention: 5000 })] }),
+    );
+    const pending = await screen.findByTestId("aguinaldo-pending");
+    expect(pending.getAttribute("data-status")).toBe("UNSETTLED");
+    expect(pending.textContent).toContain("Pendiente");
+    expect(pending.textContent).toContain("sin liquidar");
+    expect(screen.getByTestId("aguinaldo-pending-amount").textContent).toBe("+ Gs. 5.000");
+    expect(screen.getByTestId("aguinaldo-balance").textContent).toContain("0");
+    expect(screen.queryByTestId("aguinaldo-movements-empty")).toBeNull(); // the pending line already explains it
+    // The actions are there even with a balance of 0.
+    expect((screen.getByTestId("aguinaldo-pay") as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTestId("aguinaldo-adjust") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("HU-COM-26 · si la retención está en un borrador lo dice; y sin movimientos ni pendientes hay un mensaje en lugar de la caja vacía", async () => {
+    api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 0, balances: [] });
+    api.getAguinaldoDetail.mockResolvedValue({ professionalId: 1, professionalName: "Gaby", balance: 0, movements: [] });
+    api.getEntries.mockResolvedValue([]);
+    mount(
+      "/app/commissions/equipo/1?tab=history&view=retention",
+      overview({ aguinaldoEnabled: true, rows: [person(1, "Gaby", { status: "DRAFT", retention: 5000, settlementId: 7 })] }),
+    );
+    expect((await screen.findByTestId("aguinaldo-pending")).textContent).toContain("en un borrador, pendiente de aprobar");
+    cleanup();
+    mount("/app/commissions/equipo/1?tab=history&view=retention", overview({ aguinaldoEnabled: true, rows: [person(1, "Gaby", { status: "UNSETTLED", retention: 0 })] }));
+    expect((await screen.findByTestId("aguinaldo-movements-empty")).textContent).toContain("Todavía no hay movimientos de retención");
+    expect(screen.queryByTestId("aguinaldo-pending")).toBeNull();
+  });
+
+  it("HU-COM-26 · lo retenido ya aprobado no se muestra como pendiente (ya está en el saldo)", async () => {
+    api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 5000, balances: [fundOf({ balance: 5000 })] });
+    api.getAguinaldoDetail.mockResolvedValue({
+      professionalId: 1,
+      professionalName: "Gaby",
+      balance: 5000,
+      movements: [{ kind: "ACCRUAL", date: "2026-11-15", amount: 5000, balance: 5000, note: "1 al 15", closesFund: false, settlementId: 7, movementId: null }],
+    });
+    api.getEntries.mockResolvedValue([]);
+    mount(
+      "/app/commissions/equipo/1?tab=history&view=retention",
+      overview({ aguinaldoEnabled: true, rows: [person(1, "Gaby", { status: "APPROVED", retention: 5000, settlementId: 7 })] }),
+    );
+    expect(await screen.findAllByTestId("aguinaldo-movement")).toHaveLength(1);
+    expect(screen.queryByTestId("aguinaldo-pending")).toBeNull();
+  });
+
   it("HU-COM-24 · la dirección vieja ?tab=aguinaldo abre la lista de Retención de Movimientos; y sin retención no hay interruptor", async () => {
     api.getAguinaldo.mockResolvedValue({ enabled: true, totalBalance: 0, balances: [fundOf({ balance: 0 })] });
     api.getAguinaldoDetail.mockResolvedValue({ professionalId: 1, professionalName: "Gaby", balance: 0, movements: [] });

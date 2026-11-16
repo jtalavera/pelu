@@ -722,7 +722,11 @@
           "exceeds": "The amount cannot exceed the balance ({{balance}}).",
           "adjustAmount": "Enter a whole amount other than 0, for example -2,350 or 5,000.",
           "reason": "Enter the reason for the adjustment, for example «voided invoice»."
-        }
+        },
+        "pendingTag": "Pending",
+        "pendingUnsettled": "Retention of this period · not settled",
+        "pendingDraft": "Retention of this period · in a draft, pending approval",
+        "emptyMovements": "There are no retention movements yet. What is retained is added to the balance when the settlement is approved."
       },
       "nav": {
         "home": "Home",
@@ -1130,7 +1134,9 @@
         "retentionMovements": "See the retention movements →",
         "movementsSwitchAria": "Which movements to see",
         "movementsCommissions": "Commissions",
-        "movementsRetention": "Retention"
+        "movementsRetention": "Retention",
+        "subtitleRetains": "Retains {{percent}}",
+        "retentionNothingToPay": "There is no balance to pay yet: the retention is added when the settlement is approved."
       },
       "activity": {
         "intro": "Everything that happened with commissions: every movement and the reports.",

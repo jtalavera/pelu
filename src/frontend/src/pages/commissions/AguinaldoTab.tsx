@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Spinner, Text } from "@design-system";
-import { getAguinaldo, getAguinaldoDetail, type AguinaldoDetail, type AguinaldoSummary } from "../../api/commissions";
+import { getAguinaldo, getAguinaldoDetail, type AguinaldoBalance, type AguinaldoDetail, type AguinaldoSummary } from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 import { useDateLocale } from "../../i18n/dateLocale";
@@ -13,7 +13,17 @@ import { useFundActions } from "./FundActions";
  * HU-COM-14 «Aguinaldo»: the fund of what was retained from each professional's commissions —
  * balances, movements, payments (partial, whole, on departure, to everyone) and manual adjustments.
  */
-export function AguinaldoTab({ professionalId, part }: { professionalId?: number; /** «movements»: only the balance bar and the movements of one professional (her page). */ part?: "movements" } = {}) {
+export function AguinaldoTab({
+  professionalId,
+  part,
+  pending,
+}: {
+  professionalId?: number;
+  /** «movements»: only the balance bar and the movements of one professional (her page). */
+  part?: "movements";
+  /** What was retained and still waits for the settlement to be approved (not in the balance yet). */
+  pending?: { amount: number; status: "UNSETTLED" | "DRAFT" } | null;
+} = {}) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const [summary, setSummary] = useState<AguinaldoSummary | null>(null);
@@ -70,9 +80,31 @@ export function AguinaldoTab({ professionalId, part }: { professionalId?: number
       return t(m.closesFund ? "femme.commissions.aguinaldo.concept.PAYMENT_EXIT" : "femme.commissions.aguinaldo.concept.PAYMENT");
     return t("femme.commissions.aguinaldo.concept.ADJUSTMENT", { note: m.note ?? "" });
   };
+  /** The retention that waits for the settlement to be approved: gray, at the top, and not part of the balance. */
+  const pendingRow =
+    pending && pending.amount !== 0 ? (
+      <li
+        data-testid="aguinaldo-pending"
+        data-status={pending.status}
+        className="grid grid-cols-[5.5rem_minmax(0,1fr)_6.5rem_7rem] items-center gap-2 border-t border-line bg-bg/60 py-2 text-sm first:border-t-0"
+      >
+        <span className="font-bold text-ink-3">{t("femme.commissions.aguinaldo.pendingTag")}</span>
+        <span className="min-w-0 break-words text-ink-2">
+          <span className="font-semibold">{t(pending.status === "DRAFT" ? "femme.commissions.aguinaldo.pendingDraft" : "femme.commissions.aguinaldo.pendingUnsettled")}</span>
+          <span className="block text-xs text-ink-3">{t("femme.commissions.pro.retentionNote")}</span>
+        </span>
+        <span className="text-right font-extrabold tabular-nums text-ink-3" data-testid="aguinaldo-pending-amount">
+          + {formatGuaraniesGs(pending.amount)}
+        </span>
+        <span className="text-right text-ink-3" aria-hidden>
+          —
+        </span>
+      </li>
+    ) : null;
   const movementList = detail ? (
     <div className="mt-2 w-full overflow-x-auto">
       <ul className="min-w-[28rem]">
+        {pendingRow}
         {detail.movements.map((m, i) => (
           <li
             key={`${m.kind}-${m.movementId ?? m.settlementId}-${i}`}
@@ -96,7 +128,12 @@ export function AguinaldoTab({ professionalId, part }: { professionalId?: number
   ) : null;
 
   if (part === "movements") {
-    const mine = summary.balances[0] ?? null;
+    // A professional without any movement has no row in the fund yet: her balance is 0, and she can still be adjusted.
+    const mine: AguinaldoBalance | null =
+      summary.balances[0] ??
+      (professionalId === undefined
+        ? null
+        : { professionalId, professionalName: detail?.professionalName ?? null, active: true, retained: 0, paid: 0, balance: 0, lastPaymentOn: null });
     return (
       <div className="flex min-w-0 flex-col gap-3" data-testid="commission-aguinaldo">
         {!summary.enabled && (
@@ -116,8 +153,16 @@ export function AguinaldoTab({ professionalId, part }: { professionalId?: number
             {formatGuaraniesGs(mine?.balance ?? 0)}
           </b>
           <div className="flex flex-wrap gap-2">
-            {mine && mine.balance > 0 && (
-              <Button type="button" variant="outline" className={ACTION_BUTTON} data-testid="aguinaldo-pay" onClick={() => fund.openPay(mine)}>
+            {mine && (
+              <Button
+                type="button"
+                variant="outline"
+                className={ACTION_BUTTON}
+                data-testid="aguinaldo-pay"
+                disabled={mine.balance <= 0}
+                title={mine.balance <= 0 ? t("femme.commissions.pro.retentionNothingToPay") : undefined}
+                onClick={() => fund.openPay(mine)}
+              >
                 {t("femme.commissions.pro.retentionPay")}
               </Button>
             )}
@@ -129,7 +174,15 @@ export function AguinaldoTab({ professionalId, part }: { professionalId?: number
           </div>
         </div>
         <section className="rounded-card border border-line bg-surface p-3 shadow-sm sm:p-4" data-testid="aguinaldo-detail">
-          {movementList ?? <Spinner />}
+          {!detail ? (
+            <Spinner />
+          ) : detail.movements.length === 0 && !pendingRow ? (
+            <Text variant="muted" data-testid="aguinaldo-movements-empty">
+              {t("femme.commissions.aguinaldo.emptyMovements")}
+            </Text>
+          ) : (
+            movementList
+          )}
         </section>
         {fund.dialogs}
       </div>
