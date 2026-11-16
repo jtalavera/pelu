@@ -122,3 +122,42 @@ Server-side durations, run C (App Insights; sampled, so counts are lower than k6
   after each, from a fresh `loadtest-V99-t10-s0` import (or a regenerated golden DB at the new
   Flyway version).
 - Then the SIFEN tenants (`t10-s2`, `sifen_rate=2`) and a `soak` run for memory behaviour.
+
+## Run D — 2026-11-16: appointments index (V102) + agenda N+1 fix, compared with run C
+
+Same ramp, same golden DB (fresh import), same sizing. Build `39224ac7` = run C's build plus two
+commits applied together: `V102` (`ix_appointments_tenant_start (tenant_id, start_at) INCLUDE …`)
+and `findInRangeFiltered` fetching client / professional / service in the same query.
+Window 18:06–18:25 UTC; private report `loadtest-reports/20261116-local180559-loadtest-V99-t10-s0/`.
+
+**Caveat:** run C ran on a Sunday with the scenario's week-start bug (issue #431), so its agenda
+calls hit next week's mostly empty window. Run D uses the fixed scenario (current week, populated).
+D's agenda calls are therefore *heavier* than C's: the comparison understates the gain.
+
+| | C: agenda split | D: + V102 + N+1 fix |
+|---|---|---|
+| Requests | 4,682 | **6,356** |
+| Throughput | 4.06 req/s | **5.50 req/s** (×1.35) |
+| Non-fiscal invoices issued | 848 | **1,129** (×1.33) |
+| `http_req_failed` (< 2 %) | 1.05 % ✓ | 1.63 % ✓ |
+| SQL DTU avg / max | 81 / 100 | 81 / 100 (still saturated) |
+| CPU avg / max (of 0.5 vCPU) | 0.14 / 0.26 | 0.15 / 0.25 |
+| Memory avg / max (of 1 GiB) | 876 / 909 MiB | 872 / 895 MiB |
+
+All per-endpoint p95 thresholds still fail over the whole ramp (the overload phase dominates).
+Per load level (all requests):
+
+| VUs | C req/s | C p50 / p95 (s) | D req/s | D p50 / p95 (s) |
+|---|---|---|---|---|
+| 6 | 1.43 | 0.3 / 0.6 | 1.51 | 0.1 / 0.6 |
+| 11 | 3.37 | 0.2 / 0.6 | 4.13 | 0.1 / 0.6 |
+| 14 | 4.03 | 0.4 / 2.2 | 5.93 | 0.2 / 0.7 |
+| 20 | 4.57 | 1.2 / 4.1 | 6.48 | 0.6 / 2.3 |
+| 31 | 4.37 | 4.1 / 6.9 | 6.08 | 2.8 / 6.2 |
+| 53 | 4.55 | 7.9 / 13.3 | 5.98 | 6.6 / 13.4 |
+| 100 | 4.38 | 17.2 / 30.3 | 6.07 | 11.6 / 21.4 |
+
+Capacity: ~14 simultaneous receptionists now stay at p95 ≤ 0.7 s (C: 11), ~20 at ≤ 2.3 s (C: 14 at
+2.2 s); saturation at ~6 req/s (C: ~4.4). The DB is still the bottleneck, at ~6 req/s now.
+Failed requests are mostly invoice issue (61 server-side), appointment create (74) and update (18)
+under overload; not yet analysed by status code.
