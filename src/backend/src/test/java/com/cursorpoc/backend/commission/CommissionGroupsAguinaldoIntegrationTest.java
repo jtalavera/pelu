@@ -468,6 +468,32 @@ class CommissionGroupsAguinaldoIntegrationTest {
   }
 
   @Test
+  void pendingToSettleListsWhoHasCommissionsToGenerateAndNoSettlementOfHerOwn() {
+    configureSalon();
+    accrue(invoice(brushingLargo, jorgelina, "100000")); // 50.000 pending, nothing generated yet
+    java.time.LocalDate today = java.time.LocalDate.now();
+    var rows =
+        queryService.pendingToSettle(
+            tenant.getId(), today.minusDays(10), today.plusDays(1), List.of());
+    assertThat(rows).extracting(r -> r.professionalName().toLowerCase()).contains("jorgelina");
+    var her =
+        rows.stream().filter(r -> r.professionalName().equalsIgnoreCase("jorgelina")).toList();
+    assertThat(her).hasSize(1);
+    assertThat(her.get(0).total()).isEqualByComparingTo("50000");
+    // Only the ones asked for.
+    assertThat(
+            queryService.pendingToSettle(
+                tenant.getId(), today.minusDays(10), today.plusDays(1), List.of(-1L)))
+        .isEmpty();
+    // A range that ended before the sale does not see it as pending.
+    assertThat(
+            queryService.pendingToSettle(
+                tenant.getId(), today.minusDays(40), today.minusDays(30), List.of()))
+        .extracting(r -> r.professionalName().toLowerCase())
+        .doesNotContain("jorgelina");
+  }
+
+  @Test
   void theLastLayerThatExistsWins() {
     configureSalon();
     // Default % → group (50) → service for everybody → professional for that service.

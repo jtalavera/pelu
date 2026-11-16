@@ -21,6 +21,7 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -80,11 +81,37 @@ public class CommissionExportService {
     return sb.toString().getBytes(StandardCharsets.UTF_8);
   }
 
+  /**
+   * A professional whose commissions of the period are still to be generated (HU-COM-31): there is
+   * no settlement yet, so it goes without id, as «Unsettled», with what is pending as its total.
+   */
+  public record PendingRow(
+      String professionalName, LocalDate periodFrom, LocalDate periodTo, BigDecimal total) {}
+
   /** Column headers and the status values are in {@code lang}. */
   public byte[] settlementsCsv(List<SettlementView> settlements, String lang) {
+    return settlementsCsv(List.of(), settlements, lang);
+  }
+
+  /** What is still to be generated comes first (as on the screen), then the settlements. */
+  public byte[] settlementsCsv(
+      List<PendingRow> pending, List<SettlementView> settlements, String lang) {
     CommissionExportLabels l = CommissionExportLabels.of(lang);
     StringBuilder sb = new StringBuilder("\uFEFF");
     header(sb, l.settlementsHeader());
+    for (PendingRow r : pending) {
+      sb.append(',')
+          .append(csv(r.professionalName()))
+          .append(',')
+          .append(r.periodFrom())
+          .append(',')
+          .append(r.periodTo())
+          .append(',')
+          .append(csv(l.status("UNSETTLED")))
+          .append(',')
+          .append(num(r.total()))
+          .append(",,\n");
+    }
     for (SettlementView s : settlements) {
       sb.append(s.id())
           .append(',')
