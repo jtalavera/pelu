@@ -601,6 +601,10 @@ public class CommissionConfigService {
         professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
             .filter(Professional::isActive)
             .toList();
+    Map<Long, String> groupNames = new java.util.HashMap<>();
+    groupRepository
+        .findByTenantIdOrderByNameAsc(tenantId)
+        .forEach(g -> groupNames.put(g.getId(), g.getName()));
     Map<Long, RuleCategoryBuilder> categories = new java.util.LinkedHashMap<>();
     int itemCount = 0;
     int withExceptions = 0;
@@ -621,9 +625,9 @@ public class CommissionConfigService {
                   .groupRuleAt(s.getCommissionGroupId(), null, at)
                   .map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent())
                   .orElse(null);
+      BigDecimal inherited = viaGroup != null ? viaGroup : general;
       BigDecimal standard =
-          own.map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent())
-              .orElse(viaGroup != null ? viaGroup : general);
+          own.map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent()).orElse(inherited);
       List<RuleException> exceptions = new ArrayList<>();
       for (Professional p : professionals) {
         snapshot
@@ -657,6 +661,9 @@ public class CommissionConfigService {
               base.setScale(0, java.math.RoundingMode.HALF_UP),
               standard,
               own.isPresent(),
+              inherited,
+              viaGroup != null ? "GROUP" : "GENERAL",
+              viaGroup != null ? groupNames.get(s.getCommissionGroupId()) : null,
               exceptions,
               scheduled);
       itemCount++;

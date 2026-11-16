@@ -306,6 +306,14 @@ public final class CommissionDtos {
       BigDecimal standardPercent,
       /** True when the item has its own % (differs from / overrides the general one). */
       boolean ownStandard,
+      /**
+       * What the item pays without a % of its own: its group's %, else the general % of its kind.
+       */
+      BigDecimal inheritedPercent,
+      /** Where {@code inheritedPercent} comes from: {@code GROUP} or {@code GENERAL}. */
+      String inheritedFrom,
+      /** Name of the group the inherited % comes from ({@code GROUP} only), else null. */
+      String inheritedGroupName,
       List<RuleException> exceptions,
       boolean scheduled) {}
 

@@ -272,6 +272,11 @@ export type RuleItem = {
   baseAmount: number;
   standardPercent: number;
   ownStandard: boolean;
+  /** What it pays without a % of its own: its group's %, else the general one (HU-COM-20). */
+  inheritedPercent: number;
+  inheritedFrom: "GROUP" | "GENERAL";
+  /** Group the inherited % comes from (only when `inheritedFrom` is GROUP). */
+  inheritedGroupName: string | null;
   exceptions: RuleException[];
   scheduled: boolean;
 };
