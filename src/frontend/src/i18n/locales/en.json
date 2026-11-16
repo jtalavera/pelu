@@ -1062,7 +1062,6 @@
         "empty": "No professionals match.",
         "noRulesYet": "No rules: earns the default %",
         "missingRules": "Rules missing",
-        "thisPeriod": "This period",
         "aguinaldo": "Accumulated retention",
         "footer": "Tap a professional to see their summary, rules and history.",
         "detail": {
@@ -1073,10 +1072,10 @@
           "APPROVED": "Ready to pay",
           "PAID": "Paid on {{date}}"
         },
-        "usualPay": "Paid the usual % of each service",
         "differentIn": "Paid differently in {{count}} services",
         "differentIn_one": "Paid differently in {{count}} service",
-        "retainsPercent": "retains {{percent}}"
+        "retainsPercent": "retains {{percent}}",
+        "usualPay": "Paid the usual % of each service"
       },
       "pro": {
         "back": "Back to the team",
@@ -1127,15 +1126,9 @@
         "summaryCarried": "Includes {{amount}} carried over from earlier periods.",
         "summaryLines_one": "{{count}} invoiced line",
         "rates": {
-          "usualTitle": "{{name}} is paid the usual % of each service",
-          "usualHelp": "It is what the salon pays. Here you only note where she is paid differently.",
           "usualLink": "See the commissions",
-          "retention": "Retention: {{percent}}",
           "retentionNone": "Does not retain",
-          "retentionHelp": "It is hers, not the service's or the group's. It comes out of each commission and goes to her retention balance.",
           "differentTitle": "Where she is paid differently",
-          "differentCount": "{{count}} cases",
-          "differentCount_one": "1 case",
           "add": "+ Add",
           "none": "{{name}} is paid the usual % everywhere. If she is paid differently in a group or service, add it here.",
           "groupTitle": "{{group}} · {{count}} of {{total}} services",
@@ -1164,7 +1157,15 @@
           "applyGroup": "Commission of {{name}} in {{group}}: {{percent}}",
           "applyService": "Commission of {{name}} in {{service}}: {{percent}}",
           "applyInclude": "Include {{count}} services of {{group}} in {{name}}'s %: {{percent}}",
-          "applyRemove": "Remove where {{name}} is paid differently in {{what}} (back to the usual %)"
+          "applyRemove": "Remove where {{name}} is paid differently in {{what}} (back to the usual %)",
+          "tileCommission": "Commission",
+          "tileCommissionValue": "The usual",
+          "tileCommissionSub": "What the salon pays",
+          "tileRetention": "Retention",
+          "tileRetentionSub": "Of each commission, to her balance",
+          "tileExceptions": "Exceptions",
+          "exceptionsNone": "None",
+          "tileExceptionsSub": "Where she charges differently"
         },
         "retentionPill": "{{percent}} of each commission",
         "retentionNote": "It is added to the balance when the settlement is approved",
@@ -1177,7 +1178,15 @@
         "movementsCommissions": "Commissions",
         "movementsRetention": "Retention",
         "subtitleRetains": "Retains {{percent}}",
-        "retentionNothingToPay": "There is no balance to pay yet: the retention is added when the settlement is approved."
+        "retentionNothingToPay": "There is no balance to pay yet: the retention is added when the settlement is approved.",
+        "viewSettlement": "View the settlement",
+        "stepperAria": "Stage of this period's settlement",
+        "stepper": {
+          "UNSETTLED": "To generate",
+          "DRAFT": "Draft",
+          "APPROVED": "Approved",
+          "PAID": "Paid"
+        }
       },
       "activity": {
         "intro": "Everything that happened with commissions: every movement and the reports.",

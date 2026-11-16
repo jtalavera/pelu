@@ -7,7 +7,6 @@ import { translateApiError } from "../../api/parseApiErrorMessage";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDate } from "../../lib/paraguayDateTime";
 import { useDateLocale } from "../../i18n/dateLocale";
-import { Avatar } from "./HomePage";
 import { StatusChip } from "./StatusChip";
 import { formatPercent } from "./common";
 import { summarize, useOverview } from "./overview";
@@ -150,48 +149,46 @@ export function TeamList() {
           {visible.map((r) => {
             const pct = retention.get(r.professionalId);
             const b = balance.get(r.professionalId);
+            // HU-COM-33: a line only when something is out of the ordinary (rules of her own, a retention).
+            const note = [
+              r.ruleCount > 0 ? t("femme.commissions.team.differentIn", { count: r.ruleCount }) : null,
+              enabled && pct ? t("femme.commissions.team.retainsPercent", { percent: formatPercent(pct) }) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
             return (
               <Link
                 key={r.professionalId}
                 to={`/app/commissions/equipo/${r.professionalId}`}
                 data-testid="team-card"
                 data-professional={r.professionalName}
-                className={`flex min-w-0 flex-col gap-2.5 rounded-card bg-surface p-4 hover:bg-bg ${
+                className={`grid min-h-[5.75rem] min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 rounded-card bg-surface px-4 py-3.5 hover:bg-bg ${
                   r.status === "NONE" ? "border border-dashed border-ink-3/40" : "border border-line"
                 }`}
               >
-                <div className="flex items-center gap-3">
-                  <Avatar name={r.professionalName} size={44} />
-                  <div className="min-w-0 flex-1">
-                    <b className="block truncate font-heading text-lg text-ink">{r.professionalName}</b>
-                    <span className="block truncate text-xs text-ink-3" data-testid="team-card-rules">
-                      {r.ruleCount === 0
-                        ? t("femme.commissions.team.usualPay")
-                        : t("femme.commissions.team.differentIn", { count: r.ruleCount })}
-                      {enabled && pct ? ` · ${t("femme.commissions.team.retainsPercent", { percent: formatPercent(pct) })}` : ""}
+                <b className="truncate font-heading text-[17px] text-ink">{r.professionalName}</b>
+                <b className={`text-xl tabular-nums ${r.status === "NONE" ? "text-ink-3" : "text-ink"}`} data-testid="team-card-amount">
+                  {r.status === "NONE" ? "—" : formatGuaraniesGs(r.amount)}
+                </b>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-[13.5px] text-ink-3" data-testid="team-card-detail">
+                    {detailOf(r)}
+                  </span>
+                  {note && (
+                    <span className="text-xs text-ink-3 first-letter:uppercase" data-testid="team-card-rules">
+                      {note}
                     </span>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <StatusChip status={r.status} />
-                  </div>
-                </div>
-                <div className="flex items-baseline justify-between text-[13px] text-ink-3">
-                  <span>{t("femme.commissions.team.thisPeriod")}</span>
-                  <b className={`text-lg tabular-nums ${r.status === "NONE" ? "text-ink-3" : "text-ink"}`} data-testid="team-card-amount">
-                    {r.status === "NONE" ? "—" : formatGuaraniesGs(r.amount)}
-                  </b>
-                </div>
-                <div className="-mt-1.5 text-xs text-ink-3" data-testid="team-card-detail">
-                  {detailOf(r)}
-                </div>
-                {enabled && (
-                  <div className="flex items-baseline justify-between text-[13px] text-warning">
-                    <span>{t("femme.commissions.team.aguinaldo")}</span>
-                    <b className="tabular-nums" data-testid="team-card-aguinaldo">
-                      {b && b.balance !== 0 ? formatGuaraniesGs(b.balance) : "—"}
-                    </b>
-                  </div>
-                )}
+                  )}
+                  {enabled && b && b.balance !== 0 && (
+                    <span className="text-xs text-warning">
+                      {t("femme.commissions.team.aguinaldo")}:{" "}
+                      <b className="tabular-nums" data-testid="team-card-aguinaldo">
+                        {formatGuaraniesGs(b.balance)}
+                      </b>
+                    </span>
+                  )}
+                </span>
+                <StatusChip status={r.status} />
               </Link>
             );
           })}

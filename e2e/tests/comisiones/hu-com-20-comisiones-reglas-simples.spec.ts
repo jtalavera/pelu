@@ -194,7 +194,7 @@ test("AC4 Â· una profesional sin nada cargado cobra lo normal y no hay un paso Â
   await expect(page.getByTestId("commissions-nav-badge-setup")).toHaveCount(0);
   await page.getByTestId("commissions-nav-team").click();
   const ana = page.getByTestId("team-card").filter({ hasText: w.ana.name });
-  await expect(ana.getByTestId("team-card-rules")).toHaveText("Paid the usual % of each service");
+  await expect(ana.getByTestId("team-card-rules")).toHaveCount(0); // HU-COM-33: nothing to say when she is paid the usual
   await expect(page.getByTestId("team-filter-norules")).toHaveCount(0);
 });
 

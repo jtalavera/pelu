@@ -12,6 +12,14 @@ import { SettlementStatusBadge, oneMonthAgoYmd, formatPercent, todayYmd, useProf
 import { MovementChangeSteps } from "./MovementChangeSteps";
 import { changeNote, changeTag, groupMovements, type MovementGroup } from "./movementGroups";
 
+/**
+ * HU-COM-33: every row has the same shape (chevron · date · item · [professional] · type · calculation · status · amount · ⋮).
+ * Inside a professional\'s file the PROFESSIONAL column is redundant, so it is left out.
+ */
+const GRID_WITH_PROFESSIONAL =
+  "md:grid-cols-[2.5rem_5rem_minmax(0,1.3fr)_6.5rem_6.5rem_minmax(0,1fr)_6rem_6.5rem_2.5rem]";
+const GRID_WITHOUT_PROFESSIONAL = "md:grid-cols-[2.5rem_5rem_minmax(0,1.5fr)_6.5rem_minmax(0,1fr)_6rem_6.5rem_2.5rem]";
+
 /** Every commission movement, with «Cambiar profesional» on the live ones. */
 export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: number } = {}) {
   const { t } = useTranslation();
@@ -119,6 +127,7 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
     return t(`femme.commissions.reason.${e.reasonCode ?? "MANUAL_ADJUSTMENT"}`);
   }
 
+  const gridClass = fixedProfessionalId ? GRID_WITHOUT_PROFESSIONAL : GRID_WITH_PROFESSIONAL;
   const pageItems = visible.slice(page * size, (page + 1) * size);
   const totalPages = Math.max(1, Math.ceil(visible.length / size));
 
@@ -266,7 +275,11 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
           </Text>
         ) : (
           <>
-            <div className="hidden items-center gap-x-2 border-b border-line bg-primary-lt/40 px-4 py-1 text-xs font-extrabold uppercase tracking-wide text-ink-2 md:grid md:grid-cols-[5.5rem_minmax(0,1.4fr)_6rem_6.5rem_minmax(0,1.3fr)_5.5rem_8.5rem]" data-testid="movements-head">
+            <div
+              className={`hidden items-center gap-x-2 border-b border-line bg-primary-lt/40 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-ink-2 md:grid ${gridClass}`}
+              data-testid="movements-head"
+            >
+              <span aria-hidden />
               <button
                 type="button"
                 data-testid="movements-sort"
@@ -284,11 +297,12 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
                 </span>
               </button>
               <span>{t("femme.commissions.movements.col.item")}</span>
-              <span>{t("femme.commissions.movements.col.professional")}</span>
+              {!fixedProfessionalId && <span>{t("femme.commissions.movements.col.professional")}</span>}
               <span>{t("femme.commissions.movements.col.type")}</span>
               <span>{t("femme.commissions.movements.col.calc")}</span>
               <span>{t("femme.commissions.movements.col.status")}</span>
               <span className="text-right">{t("femme.commissions.movements.col.amount")}</span>
+              <span aria-hidden />
             </div>
             <ul>
               {pageItems.map((g) => {
@@ -296,15 +310,41 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
                 const c = calc(e);
                 const note = changeNote(t, g);
                 const open = g.changed && (showReversed || openKeys.has(g.key));
+                const label = open ? t("femme.commissions.movements.group.hide") : t("femme.commissions.movements.group.show", { count: g.entries.length });
                 const [datePart, ...timeParts] = formatParaguayDateTime(e.accrualAt, dateLocale).split(", ");
                 return (
                   <li key={g.key} data-testid="movement-row" data-status={e.settlementStatus ?? ""} data-changed={g.changed} className="border-t border-line first:border-t-0">
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-[13px] md:gap-x-2 md:gap-y-0 md:grid-cols-[5.5rem_minmax(0,1.4fr)_6rem_6.5rem_minmax(0,1.3fr)_5.5rem_8.5rem]">
+                    <div
+                      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-[13px] md:min-h-[4.75rem] md:gap-x-2 md:gap-y-0 md:px-3 md:py-2 ${gridClass}`}
+                    >
+                      {g.changed ? (
+                        <button
+                          type="button"
+                          aria-expanded={open}
+                          aria-label={label}
+                          title={label}
+                          data-testid="movement-changes-toggle"
+                          onClick={() =>
+                            setOpenKeys((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(g.key)) next.delete(g.key);
+                              else next.add(g.key);
+                              return next;
+                            })
+                          }
+                          className="order-8 col-span-2 inline-flex min-h-11 items-center gap-1 justify-self-start text-[13px] font-extrabold text-primary-dk underline underline-offset-4 md:order-none md:col-span-1 md:size-11 md:justify-center md:justify-self-auto md:rounded-xl md:bg-primary-lt md:text-lg md:no-underline"
+                        >
+                          <span className="md:hidden">{label}</span>
+                          <span aria-hidden>{open ? "⌃" : "⌄"}</span>
+                        </button>
+                      ) : (
+                        <span className="hidden size-11 md:block" aria-hidden />
+                      )}
                       <div data-testid="movement-date" className="order-4 col-span-2 text-ink-3 md:order-none md:col-span-1 md:text-ink">
                         <span className="font-bold md:block">{datePart}</span> <span className="text-ink-3">{timeParts.join(", ")}</span>
                       </div>
                       <div className="order-1 min-w-0 md:order-none">
-                        <div data-testid="movement-item" className="break-words text-[15px] font-bold text-ink md:text-[13px]">
+                        <div data-testid="movement-item" title={e.itemName ?? e.note ?? undefined} className="break-words text-[15px] font-bold text-ink md:truncate md:text-[13px]">
                           {e.itemName ?? e.note}
                         </div>
                         {e.invoiceNumber && (
@@ -312,21 +352,23 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
                             {e.invoiceNumber}
                           </div>
                         )}
+                      </div>
+                      {!fixedProfessionalId && (
+                        <div data-testid="movement-professional" className="order-3 col-span-2 font-bold text-ink md:order-none md:col-span-1">
+                          {e.professionalName}
+                        </div>
+                      )}
+                      <div data-testid="movement-type" className="order-5 col-span-2 flex flex-col items-start gap-0.5 text-ink-2 md:order-none md:col-span-1">
+                        <span>{movementLabel(e)}</span>
+                        {e.note && e.sourceType !== "ADJUSTMENT" && !g.changed && <span className="text-ink-3">{e.note}</span>}
                         {g.changed && (
                           <span
                             data-testid="movement-tag"
-                            className={`mt-0.5 inline-flex rounded-full px-2.5 py-0.5 text-xs font-extrabold ${g.reason === "VOID" ? "bg-bg text-ink-2" : "bg-primary-lt text-primary-dk"}`}
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-extrabold ${g.reason === "VOID" ? "bg-bg text-ink-2" : "bg-primary-lt text-primary-dk"}`}
                           >
                             {changeTag(t, g)}
                           </span>
                         )}
-                      </div>
-                      <div data-testid="movement-professional" className="order-3 col-span-2 font-bold text-ink md:order-none md:col-span-1">
-                        {e.professionalName}
-                      </div>
-                      <div data-testid="movement-type" className="order-5 col-span-2 text-ink-2 md:order-none md:col-span-1">
-                        {movementLabel(e)}
-                        {e.note && e.sourceType !== "ADJUSTMENT" && <div className="text-ink-3">{e.note}</div>}
                       </div>
                       <div data-testid="movement-calc" className="order-7 col-span-2 min-w-0 md:order-none md:col-span-1">
                         <div data-testid="movement-calc-main" className="font-bold text-ink">
@@ -346,10 +388,10 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
                       <div data-testid="movement-status" className="order-6 col-span-2 md:order-none md:col-span-1">
                         <SettlementStatusBadge status={e.settlementStatus} />
                       </div>
-                      <div className="order-2 flex items-center justify-end gap-1 md:order-none">
+                      <div className="order-2 flex items-center justify-end gap-1 md:contents">
                         <span
                           data-testid="movement-amount"
-                          className={`text-right font-heading text-base font-extrabold tabular-nums ${g.net < 0 ? "text-danger" : g.changed && g.net === 0 ? "text-ink-3" : "text-ink"}`}
+                          className={`whitespace-nowrap text-right font-heading text-base font-extrabold tabular-nums ${g.net < 0 ? "text-danger" : g.changed && g.net === 0 ? "text-ink-3" : "text-ink"}`}
                         >
                           {formatGuaraniesGs(g.net)}
                         </span>
@@ -370,28 +412,11 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
                         )}
                       </div>
                     </div>
-                    {g.changed && (
-                      <div className="px-4 md:pl-[6.5rem]">
-                        <button
-                          type="button"
-                          aria-expanded={open}
-                          data-testid="movement-changes-toggle"
-                          onClick={() =>
-                            setOpenKeys((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(g.key)) next.delete(g.key);
-                              else next.add(g.key);
-                              return next;
-                            })
-                          }
-                          className="inline-flex min-h-11 items-center gap-1 text-[13px] font-extrabold text-primary-dk underline underline-offset-4"
-                        >
-                          {open ? t("femme.commissions.movements.group.hide") : t("femme.commissions.movements.group.show", { count: g.entries.length })}
-                          <span aria-hidden>{open ? "⌃" : "⌄"}</span>
-                        </button>
+                    {open && (
+                      <div className="md:pl-[7.5rem]">
+                        <MovementChangeSteps group={g} />
                       </div>
                     )}
-                    {open && <MovementChangeSteps group={g} />}
                   </li>
                 );
               })}
