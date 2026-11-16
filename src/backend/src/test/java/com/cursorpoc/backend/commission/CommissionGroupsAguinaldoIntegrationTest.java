@@ -67,6 +67,7 @@ class CommissionGroupsAguinaldoIntegrationTest {
   @Autowired private CommissionAccrualService accrualService;
   @Autowired private AguinaldoService aguinaldoService;
   @Autowired private CommissionOverviewService overviewService;
+  @Autowired private CommissionQueryService queryService;
   @Autowired private PlatformTransactionManager transactionManager;
 
   private TransactionTemplate tx;
@@ -426,6 +427,27 @@ class CommissionGroupsAguinaldoIntegrationTest {
                 .map(CommissionEntry::getRetentionAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add))
         .isEqualByComparingTo("5000");
+  }
+
+  @Test
+  void aRecalculatedLineIsOneSaleNotTwoOrThree() {
+    configureSalon();
+    accrue(invoice(brushingLargo, jorgelina, "100000")); // one invoice, one line
+    change(
+        "PERIOD_START",
+        new ConfigChange("RETENTION_PROFILE", null, jorgelina.getId(), null, "5", null));
+    // Behind the amount there are three rows (the commission, its reversal and the new
+    // commission)...
+    assertThat(entries()).hasSize(3);
+    // ...but it is still one invoiced line, in the summary card and in the settle list.
+    var preview = queryService.settlementPreview(tenant.getId(), jorgelina.getId(), null, null);
+    assertThat(preview.lines()).isEqualTo(1);
+    var row =
+        overviewService.overview(tenant.getId(), 0).rows().stream()
+            .filter(r -> r.professionalId().equals(jorgelina.getId()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(row.lineCount()).isEqualTo(1);
   }
 
   @Test
