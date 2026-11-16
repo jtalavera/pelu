@@ -166,7 +166,7 @@ test("AC4 · AC9 · lo único pendiente es un grupo sin su %: se ve en el menú,
   await openCommissions(page);
 
   // Home: «Para revisar» says it; the menu counts it.
-  await expect(page.getByTestId("home-review-noPercent")).toContainText("1 group without a %");
+  await expect(page.getByTestId("home-review-noPercent")).toContainText("1 group without its own %");
   await expect(page.getByTestId("commissions-nav-badge-setup")).toHaveText("1");
   await expect(page.getByTestId("home-review-noRules")).toHaveCount(0);
   await page.getByTestId("home-review-noPercent-action").click();

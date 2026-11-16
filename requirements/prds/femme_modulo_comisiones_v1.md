@@ -409,6 +409,13 @@ Historia completa y criterios: [HU-COM-20](../user_stories/HU-COM-20-comisiones-
 - **Configurar en tres pasos** (sin «Reglas por profesional»), nueva pantalla **Configurar › Comisiones** (% general, % por grupo y por servicio) y ficha de la profesional con «Donde cobra distinto» y su retención.
 - Migración V101 de las reglas existentes; `GET /api/commissions/rates`.
 
+### HU-COM-21 · «Para revisar» en tarjetas claras y «Sin grupo» que se entienda
+
+Historia completa y criterios: [HU-COM-21](../user_stories/HU-COM-21-inicio-para-revisar-y-sin-grupo.md). Resumen:
+
+- **«Para revisar»:** tarjetas con franja y etiqueta de la consecuencia, el número una sola vez, el % general real y un solo botón relleno (el primero); orden por lo que más afecta la plata.
+- **«Sin grupo»:** deja de verse como alarma («Pagan el % general»), contador en píldora con separador de miles, cabecera «N ítems · servicios · productos», filtro Todos / Servicios / Productos y filas sin la etiqueta repetida. Sin cambios de cálculo ni de API.
+
 ### HU-COM-19 · Anular borradores rápido desde Liquidar
 
 Historia completa y criterios: [HU-COM-19](../user_stories/HU-COM-19-anular-borradores-rapido.md). Resumen:
@@ -512,6 +519,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-18 | Configurar en pasos plegables: círculo y etiqueta por estado, resúmenes, abre solo el primer pendiente con un único botón principal, paso 4 según aguinaldo y quién retiene, contador del menú, excepciones y programados siempre a mano; `overview` con `professionalsRetaining`. |
 | HU-COM-20 | Cuatro capas y gana la última (profesional en ese servicio › servicio › grupo › por defecto); retención de la profesional que sale de la comisión (con tope, solo con aguinaldo activo, cambia → pide desde cuándo); Configurar en tres pasos y pendientes; Configurar › Comisiones (general, grupo, servicio, «propio», quitar, costo de producto, buscador); ficha «Donde cobra distinto» (grupo entero → una regla por servicio, incluir los nuevos, cambiar, quitar) y retención; sin «sin reglas» en Inicio y Equipo; conversión de lo existente; `rates`. |
 | HU-COM-19 | «Anular» por fila y en lote solo para borradores; motivo opcional y frecuentes; vuelve a «Sin liquidar» y «Generar de nuevo»; aviso de filas que no son borradores; motivo obligatorio en aprobada (API y detalle). |
+| HU-COM-21 | «Para revisar» en tarjetas (etiqueta, número una vez, % general real, solo la primera con botón relleno, plurales); «Sin grupo» neutral con «Pagan el % general», píldora 1.247, cabecera con conteos, filtro por tipo, filas sin etiqueta repetida y asignación en lote. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 

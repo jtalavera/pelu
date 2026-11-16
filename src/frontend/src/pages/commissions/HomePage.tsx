@@ -1,10 +1,12 @@
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Spinner } from "@design-system";
-import type { Overview } from "../../api/commissions";
+import { getSettings, type Overview } from "../../api/commissions";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
+import { formatPercent } from "./common";
 import { STATUS_META, periodLabel, setupProgress, summarize, useOverview } from "./overview";
 import { StatusChip } from "./StatusChip";
 
@@ -103,20 +105,41 @@ function SetupGuide({ overview }: { overview: Overview }) {
   );
 }
 
+/** How each notice of «Para revisar» looks: the stripe, the tag and the number say the kind (money lost / to set up / paperwork). */
+const REVIEW_TONE = {
+  lines: { name: "money", border: "border-t-warning", tag: "bg-warning-lt text-warning", count: "text-warning" },
+  noPercent: { name: "setup", border: "border-t-primary", tag: "bg-primary-lt text-primary", count: "text-primary" },
+  drafts: { name: "paperwork", border: "border-t-ink-3", tag: "bg-bg text-ink-2", count: "text-ink-2" },
+} as const;
+
 /** Comisiones › Inicio: the period's money split in what is paid and what is left, the 4 steps, and the team (HU-COM-17). */
 export default function HomePage() {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const navigate = useNavigate();
   const { overview: o } = useOverview();
+  /** The % a group without its own pays (the general one for services), to say it in the notice. */
+  const [generalService, setGeneralService] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    Promise.resolve(getSettings())
+      .then((s) => {
+        if (live && typeof s?.defaultPercentService === "number") setGeneralService(s.defaultPercentService);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
   if (!o) return <Spinner />;
   if (setupProgress(o).firstTime) return <SetupGuide overview={o} />;
 
   const sum = summarize(o);
+  // From what loses the most money to the least: the first one gets the filled button.
   const review = [
-    { key: "lines", n: o.linesWithoutProfessional, to: "/app/commissions/actividad?tab=reports" },
-    { key: "noPercent", n: o.groupsWithoutPercent, to: "/app/commissions/configurar/comisiones" },
-    { key: "drafts", n: o.drafts, to: "/app/commissions/liquidar?state=DRAFT" },
+    { key: "lines" as const, n: o.linesWithoutProfessional, to: "/app/commissions/actividad?tab=reports" },
+    { key: "noPercent" as const, n: o.groupsWithoutPercent, to: "/app/commissions/configurar/comisiones" },
+    { key: "drafts" as const, n: o.drafts, to: "/app/commissions/liquidar?state=DRAFT" },
   ].filter((r) => r.n > 0);
   const STEP_ACTION = { UNSETTLED: "GENERATE", DRAFT: "APPROVE", APPROVED: "PAY", PAID: "VIEW" } as const;
   const STEP_TONE = {
@@ -217,28 +240,53 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="flex flex-col gap-2.5" data-testid="home-review">
-        <h2 className="font-heading text-xl font-extrabold text-ink">{t("femme.commissions.home.reviewTitle")}</h2>
+      <section className="flex flex-col gap-3" data-testid="home-review">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-heading text-xl font-extrabold text-ink">{t("femme.commissions.home.reviewTitle")}</h2>
+          {review.length > 0 && <span className="text-[13px] text-ink-3">{t("femme.commissions.home.reviewCount", { count: review.length })}</span>}
+        </div>
         {review.length === 0 ? (
           <p className="rounded-card border border-line bg-surface p-4 text-ink-2" data-testid="home-review-empty">
             {t("femme.commissions.home.allGood")}
           </p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {review.map((r) => (
-              <div key={r.key} data-testid={`home-review-${r.key}`} className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-4">
-                <div className="flex items-baseline gap-2.5">
-                  <b className="font-heading text-3xl text-warning" data-testid="home-review-count">
-                    {r.n}
-                  </b>
-                  <span className="font-extrabold text-ink">{t(`femme.commissions.home.review.${r.key}.title`, { count: r.n })}</span>
-                </div>
-                <p className="min-h-9 text-[13px] text-ink-3">{t(`femme.commissions.home.review.${r.key}.help`)}</p>
-                <Button type="button" variant="secondary" className={`${ACTION_BUTTON} self-start`} onClick={() => navigate(r.to)} data-testid={`home-review-${r.key}-action`}>
-                  {t(`femme.commissions.home.review.${r.key}.action`)}
-                </Button>
-              </div>
-            ))}
+          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
+            {review.map((r, i) => {
+              const tone = REVIEW_TONE[r.key];
+              return (
+                <article
+                  key={r.key}
+                  data-testid={`home-review-${r.key}`}
+                  data-tone={tone.name}
+                  className={`flex flex-col gap-2.5 rounded-card border border-line border-t-[6px] bg-surface p-4 ${tone.border}`}
+                >
+                  <span data-testid="home-review-tag" className={`self-start rounded-full px-2.5 py-0.5 text-xs font-extrabold uppercase tracking-wide ${tone.tag}`}>
+                    {t(`femme.commissions.home.review.${r.key}.tag`)}
+                  </span>
+                  <div className="flex items-baseline gap-2" data-testid="home-review-title">
+                    <b className={`font-heading text-4xl leading-none ${tone.count}`} data-testid="home-review-count">
+                      {r.n}
+                    </b>{" "}
+                    <span className="font-extrabold leading-tight text-ink">{t(`femme.commissions.home.review.${r.key}.title`, { count: r.n })}</span>
+                  </div>
+                  <p className="flex-1 text-sm text-ink-2" data-testid="home-review-help">
+                    {r.key === "noPercent" && generalService !== null
+                      ? t("femme.commissions.home.review.noPercent.helpPercent", { percent: formatPercent(generalService) })
+                      : t(`femme.commissions.home.review.${r.key}.help`, { count: r.n })}
+                  </p>
+                  {/* Only the first notice carries the filled button: it is the one to do first. */}
+                  <Button
+                    type="button"
+                    variant={i === 0 ? "primary" : "outline"}
+                    className={`${ACTION_BUTTON} w-full`}
+                    onClick={() => navigate(r.to)}
+                    data-testid={`home-review-${r.key}-action`}
+                  >
+                    {t(`femme.commissions.home.review.${r.key}.action`)}
+                  </Button>
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
