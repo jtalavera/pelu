@@ -107,6 +107,24 @@ fi
 if [[ -n "$RESUME" ]]; then
   log "phase 1: skipped (--resume $OUT)"
 else
+  # Every tenant admin invite sends an e-mail to an @loadtest.invalid address: with the Azure
+  # managed ACS domain that hits its send limit (HTTP 429) after a few dozen tenants and would
+  # bounce anyway. ACS_ENABLED=false makes the app log the e-mail instead; restored on exit.
+  log "phase 1: disabling e-mail sending on the staging app (ACS_ENABLED=false) while provisioning"
+  trap 'az containerapp update -n "$CONTAINER_APP_NAME" -g "$STAGING_RG" --remove-env-vars ACS_ENABLED --only-show-errors -o none || true; rm -rf "$TMP"' EXIT
+  az containerapp update -n "$CONTAINER_APP_NAME" -g "$STAGING_RG" --set-env-vars ACS_ENABLED=false --only-show-errors -o none
+  # `update` returns before traffic moves to the new revision: wait until the latest revision is
+  # ready, takes 100 % of the traffic and answers /health (the old revision still has e-mail on).
+  new_revision_serving() {
+    local latest state
+    latest="$(az containerapp show -n "$CONTAINER_APP_NAME" -g "$STAGING_RG" --query properties.latestRevisionName -o tsv)"
+    # trafficWeight is configuration (100 while still "Activating"): require it to be running too,
+    # and that the older revisions have stopped taking requests.
+    state="$(az containerapp revision show -n "$CONTAINER_APP_NAME" -g "$STAGING_RG" --revision "$latest" \
+      --query "join(' ', [to_string(properties.trafficWeight), properties.runningState, properties.healthState])" -o tsv)"
+    [[ "$state" == "100 Running"* && "$state" == *Healthy && "$(http_status "$API_URL/health")" == "200" ]]
+  }
+  retry 40 15 new_revision_serving
   log "phase 1: provisioning tenants through the API ($API_URL)"
   node "$SEED_DIR/seed.mjs" "${SEED_ARGS[@]}"
 fi

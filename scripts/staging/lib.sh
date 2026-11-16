@@ -89,7 +89,7 @@ sql_file() { # sql_file <server-fqdn> <db> <file> [VAR=value ...]
 
 sql_query() { # sql_query <server-fqdn> <db> <query> — prints rows, no headers, tab-separated
   sqlcmd -S "tcp:${1},1433" -d "$2" --authentication-method ActiveDirectoryDefault \
-    -b -I -h -1 -W -s $'\t' -Q "SET NOCOUNT ON; $3"
+    -b -I -h -1 -W -y 0 -s $'\t' -Q "SET NOCOUNT ON; $3"
 }
 
 sql_access_token() { az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv; }
