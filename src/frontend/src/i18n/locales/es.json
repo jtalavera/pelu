@@ -50,6 +50,18 @@
         "searchPlaceholder": "Ítem, comprobante o nota",
         "type": {
           "LINE": "Comisión"
+        },
+        "retentionBreakdown": "{{kind}} {{total}} → se paga {{paid}} · aguinaldo {{retention}} ({{amount}})",
+        "ruleKind": {
+          "SERVICE": "Servicio",
+          "PRODUCT": "Producto",
+          "OTHER": "Regla"
+        },
+        "sort": {
+          "label": "Ordenar",
+          "aria": "Ordenar por fecha",
+          "desc": "Más recientes primero",
+          "asc": "Más antiguos primero"
         }
       },
       "preview": {

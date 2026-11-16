@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Input, KebabMenu, Label, MultiSelect, PageSizeSelect, Pagination, Text } from "@design-system";
+import { Alert, Button, Input, KebabMenu, Label, MultiSelect, PageSizeSelect, Pagination, Select, Text } from "@design-system";
 import { getEntries, type EntryFilters, type EntryView } from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { LocalizedDateInput } from "../../components/LocalizedDateInput";
@@ -35,6 +35,8 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(0);
   const [size, setSize] = useState(10);
+  /** Newest first by default (the list used to come oldest first, so the latest sat on the last page). */
+  const [order, setOrder] = useState<"desc" | "asc">("desc");
 
   const load = useCallback(
     async (filters?: EntryFilters) => {
@@ -67,12 +69,31 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
 
   const visible = useMemo(() => {
     const q = appliedQuery.trim().toLowerCase();
-    const list = entries ?? [];
-    if (!q) return list;
-    return list.filter(
-      (e) => (e.invoiceNumber ?? "").toLowerCase().includes(q) || (e.itemName ?? "").toLowerCase().includes(q),
+    const list = (entries ?? []).filter(
+      (e) => !q || (e.invoiceNumber ?? "").toLowerCase().includes(q) || (e.itemName ?? "").toLowerCase().includes(q),
     );
-  }, [entries, appliedQuery]);
+    // By date and time; at the same moment the last one registered goes first (so a reversal sits above its line).
+    const sign = order === "desc" ? -1 : 1;
+    return list.slice().sort((a, b) => {
+      const byDate = Date.parse(a.accrualAt) - Date.parse(b.accrualAt);
+      return sign * (byDate !== 0 ? byDate : a.id - b.id);
+    });
+  }, [entries, appliedQuery, order]);
+
+  /** «Service 50 % → paid 45 % · aguinaldo 5 % (Gs. 5.000)»: what the rule was and how it was split. */
+  function retentionText(e: EntryView): string {
+    if (e.percentApplied === null) {
+      return t("femme.commissions.settlement.lineRetention", { percent: formatPercent(e.retentionPercent), amount: formatGuaraniesGs(e.retentionAmount) });
+    }
+    const total = Number((e.percentApplied + e.retentionPercent).toFixed(2));
+    return t("femme.commissions.movements.retentionBreakdown", {
+      kind: t(`femme.commissions.movements.ruleKind.${e.itemKind ?? "OTHER"}`),
+      total: formatPercent(total),
+      paid: formatPercent(e.percentApplied),
+      retention: formatPercent(e.retentionPercent),
+      amount: formatGuaraniesGs(e.retentionAmount),
+    });
+  }
 
   function movementLabel(e: EntryView): string {
     if (e.sourceType === "INVOICE_LINE") return t("femme.commissions.movements.type.LINE");
@@ -112,19 +133,40 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
             {t("femme.commissions.common.search")}
           </Button>
         </div>
-        <button
-          type="button"
-          aria-expanded={filtersOpen}
-          aria-controls="movements-filters"
-          data-testid="movements-filters-toggle"
-          onClick={() => setFiltersOpen((o) => !o)}
-          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink"
-        >
-          {t("femme.commissions.movements.filtersToggle")}
-          <span aria-hidden className={`text-ink-3 transition-transform ${filtersOpen ? "rotate-180" : ""}`}>
-            ⌄
-          </span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            aria-controls="movements-filters"
+            data-testid="movements-filters-toggle"
+            onClick={() => setFiltersOpen((o) => !o)}
+            className="flex min-h-12 min-w-0 flex-1 basis-64 items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink"
+          >
+            {t("femme.commissions.movements.filtersToggle")}
+            <span aria-hidden className={`text-ink-3 transition-transform ${filtersOpen ? "rotate-180" : ""}`}>
+              ⌄
+            </span>
+          </button>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="mov-sort" className="whitespace-nowrap font-bold text-ink-2">
+              {t("femme.commissions.movements.sort.label")}
+            </Label>
+            <Select
+              id="mov-sort"
+              value={order}
+              className="h-12 min-h-12 w-52 sm:h-12"
+              data-testid="movements-sort"
+              aria-label={t("femme.commissions.movements.sort.aria")}
+              onChange={(e) => {
+                setOrder(e.target.value === "asc" ? "asc" : "desc");
+                setPage(0);
+              }}
+            >
+              <option value="desc">{t("femme.commissions.movements.sort.desc")}</option>
+              <option value="asc">{t("femme.commissions.movements.sort.asc")}</option>
+            </Select>
+          </div>
+        </div>
         {filtersOpen && (
           <div id="movements-filters" className="flex flex-col gap-3 rounded-card border border-line bg-surface p-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -197,16 +239,13 @@ export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: nu
                     <span>
                       {formatParaguayDateTime(e.accrualAt, dateLocale)}
                       {e.invoiceNumber ? ` · ${e.invoiceNumber}` : ""} · {movementLabel(e)}
-                      {e.note && e.sourceType !== "ADJUSTMENT" ? ` · ${e.note}` : ""} · {formatPercent(e.percentApplied)}
+                      {e.note && e.sourceType !== "ADJUSTMENT" ? ` · ${e.note}` : ""}
+                      {/* With a retention the breakdown below already says the paid %, so it is not repeated. */}
+                      {e.retentionAmount === 0 || e.percentApplied === null ? ` · ${formatPercent(e.percentApplied)}` : ""}
                       {e.fixedAmount !== 0 && e.fixedToProfessional
                         ? ` · ${t("femme.commissions.settlement.lineProductCost", { amount: formatGuaraniesGs(e.fixedAmount) })}`
                         : ""}
-                      {e.retentionAmount !== 0
-                        ? ` · ${t("femme.commissions.settlement.lineRetention", {
-                            percent: formatPercent(e.retentionPercent),
-                            amount: formatGuaraniesGs(e.retentionAmount),
-                          })}`
-                        : ""}
+                      {e.retentionAmount !== 0 ? ` · ${retentionText(e)}` : ""}
                     </span>
                     <SettlementStatusBadge status={e.settlementStatus} />
                   </div>
