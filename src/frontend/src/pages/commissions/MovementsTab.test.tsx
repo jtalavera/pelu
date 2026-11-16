@@ -101,15 +101,15 @@ describe("HU-COM-23 · Movimientos", () => {
     expect(within(screen.getByTestId("movements-sort")).getAllByRole("option").map((o) => o.textContent)).toEqual(["Más recientes primero", "Más antiguos primero"]);
   });
 
-  it("con retención dice «Servicio 50 % → se paga 45 % · aguinaldo 5 % (Gs. 5.000)» y no repite el % suelto", async () => {
+  it("con retención dice «Servicio 50 % → se paga 45 % · retención 5 % (Gs. 5.000)» y no repite el % suelto", async () => {
     mount();
     await screen.findAllByTestId("movement-row");
     const text = ids()[0].replace(/\s/g, " ");
-    expect(text).toContain("Servicio 50 % → se paga 45 % · aguinaldo 5 % (Gs. 5.000)");
+    expect(text).toContain("Servicio 50 % → se paga 45 % · retención 5 % (Gs. 5.000)");
     expect(text).not.toContain("Retención");
     expect(text).not.toContain("Comisión · 45 %");
     // The reversal shows its negative retention.
-    expect(ids()[1].replace(/\s/g, " ")).toContain("Servicio 45 % → se paga 40 % · aguinaldo 5 % (Gs. -5.000)");
+    expect(ids()[1].replace(/\s/g, " ")).toContain("Servicio 45 % → se paga 40 % · retención 5 % (Gs. -5.000)");
   });
 
   it("sin retención sigue diciendo solo la comisión y su %", async () => {

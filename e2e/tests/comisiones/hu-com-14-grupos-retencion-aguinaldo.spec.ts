@@ -402,14 +402,14 @@ test("AC8 · AC9 · Configuración: retención de aguinaldo, % por defecto, qui�
 
   // Her retention is shown on her page (HU-COM-20).
   await openProfessional(page, "gaby", "rules");
-  await expect(page.getByTestId("pro-retention-current")).toHaveText("Aguinaldo retention: 5 %");
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("Retention: 5 %");
 
   // The history lists the changes with what changed (Setup › Advanced).
   await page.getByTestId("commissions-nav-setup").click();
   await page.getByTestId("config-advanced-link").click();
   await page.getByTestId("commission-history-toggle").click();
   const history = page.getByTestId("commission-settings-history");
-  await expect(history).toContainText("Aguinaldo retention");
+  await expect(history).toContainText("Retention");
   await expect(history).toContainText("Fixed amount destination");
 });
 
@@ -617,10 +617,10 @@ test("AC12 · AC13 · AC14 · el fondo entra al aprobar; pagos parcial / por sal
   await page.getByTestId("aguinaldo-amount").fill("2500");
   await expect(page.getByTestId("aguinaldo-balance-after")).toContainText("4.000");
   await page.getByTestId("aguinaldo-pay-confirm").click();
-  await expect(page.getByTestId("aguinaldo-notice")).toHaveText("The aguinaldo payment was recorded.");
+  await expect(page.getByTestId("aguinaldo-notice")).toHaveText("The retention payment was recorded.");
   await expect(gabyRow.getByTestId("aguinaldo-balance")).toContainText("4.000");
   await expect(gabyRow).not.toContainText("No payments yet");
-  await expect(moves.first()).toContainText("Aguinaldo payment");
+  await expect(moves.first()).toContainText("Retention payment");
   await expect(moves.first().getByTestId("aguinaldo-movement-balance")).toContainText("4.000");
 
   // Manual adjustment: whole amount and reason required; it cannot leave the balance negative.
@@ -634,7 +634,7 @@ test("AC12 · AC13 · AC14 · el fondo entra al aprobar; pagos parcial / por sal
   await page.getByTestId("aguinaldo-adjust-reason").fill("factura anulada");
   await page.getByTestId("aguinaldo-adjust-amount").fill("-99999");
   await page.getByTestId("aguinaldo-adjust-confirm").click();
-  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("would leave the aguinaldo balance negative");
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("would leave the retention balance negative");
   await page.getByTestId("aguinaldo-adjust-amount").fill("-500");
   await page.getByTestId("aguinaldo-adjust-confirm").click();
   await expect(page.getByTestId("aguinaldo-notice")).toHaveText("The adjustment was recorded.");
@@ -647,7 +647,7 @@ test("AC12 · AC13 · AC14 · el fondo entra al aprobar; pagos parcial / por sal
   await page.getByTestId("aguinaldo-closes").check();
   await expect(page.getByTestId("aguinaldo-amount")).toHaveCount(0);
   await page.getByTestId("aguinaldo-pay-confirm").click();
-  await expect(page.getByTestId("aguinaldo-notice")).toHaveText("The aguinaldo payment was recorded.");
+  await expect(page.getByTestId("aguinaldo-notice")).toHaveText("The retention payment was recorded.");
   await expect(migueRow.getByTestId("aguinaldo-balance")).toContainText("0");
   await expect(migueRow.getByTestId("aguinaldo-pay")).toHaveCount(0);
 

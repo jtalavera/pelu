@@ -66,7 +66,7 @@ test("AC1 · Configurar: el paso «Comisión de cada servicio» muestra cuántos
   await expect(page.getByTestId("config-step-2-toggle")).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("config-group-chip")).toHaveText(["Color No %", "Manos y pies No %"]);
   // The other steps still show their values once opened; there is no «rules per professional» step.
-  await expect(page.getByTestId("config-step-3")).toContainText("Aguinaldo");
+  await expect(page.getByTestId("config-step-3")).toContainText("Retention");
   await openSetupStep(page, 1);
   await expect(page.getByTestId("config-step-1").getByTestId("commission-setting-BASE")).toBeVisible();
   await expect(page.getByTestId("config-exceptions")).toBeVisible();

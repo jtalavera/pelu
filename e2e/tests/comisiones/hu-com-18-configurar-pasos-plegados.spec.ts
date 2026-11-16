@@ -80,7 +80,7 @@ test("AC1 · cada paso tiene el mismo círculo: ✓ verde si está al día, núm
   await expect(step(page, 3)).toHaveAttribute("data-tone", "optional");
   await expect(page.getByTestId("config-step-3-badge")).toHaveText("3");
   await expect(page.getByTestId("config-step-3-pill")).toHaveText("Optional");
-  await expect(page.getByTestId("config-step-3-summary")).toHaveText("Aguinaldo off · the product cost goes to the professional");
+  await expect(page.getByTestId("config-step-3-summary")).toHaveText("Retention off · the product cost goes to the professional");
   await expect(step(page, 4)).toHaveCount(0);
 });
 
@@ -180,7 +180,7 @@ test("AC5 · paso 3: gris si el aguinaldo está apagado, ámbar (y cuenta en el 
   await expect(step(page, 3)).toHaveAttribute("data-tone", "pending");
   await expect(page.getByTestId("config-step-3-badge")).toHaveText("3");
   await expect(page.getByTestId("config-step-3-pill")).toHaveText("Nobody retains yet");
-  await expect(page.getByTestId("config-step-3-summary")).toHaveText("Aguinaldo on · no professional has a retention set");
+  await expect(page.getByTestId("config-step-3-summary")).toHaveText("Retention on · no professional has a retention set");
   await expect(page.getByTestId("commissions-nav-badge-setup")).toHaveText("1");
   await expect(expanded(page, 3)).toHaveAttribute("aria-expanded", "true");
 

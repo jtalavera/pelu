@@ -98,7 +98,7 @@ describe("HU-COM-14 · Aguinaldo", () => {
     const rows = await screen.findAllByTestId("aguinaldo-row");
     await userEvent.click(within(rows[1]).getByTestId("aguinaldo-view"));
     const moves = await screen.findAllByTestId("aguinaldo-movement");
-    expect(moves[0].textContent).toContain("Pago de aguinaldo");
+    expect(moves[0].textContent).toContain("Pago de retención");
     expect(within(moves[0]).getByTestId("aguinaldo-movement-amount").textContent).toContain("100.000");
     expect(moves[1].textContent).toContain("Liquidación");
     expect(within(moves[1]).getByTestId("aguinaldo-movement-balance").textContent).toContain("500.000");

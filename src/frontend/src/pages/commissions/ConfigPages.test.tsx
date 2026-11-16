@@ -108,7 +108,7 @@ describe("HU-COM-16 · Configurar", () => {
     expect(step(3).dataset.tone).toBe("optional");
     expect(screen.getByTestId("config-step-3-badge").textContent).toBe("3");
     expect(screen.getByTestId("config-step-3-pill").textContent).toBe("Opcional");
-    expect(screen.getByTestId("config-step-3-summary").textContent).toBe("Aguinaldo desactivado · el costo de producto va para la profesional");
+    expect(screen.getByTestId("config-step-3-summary").textContent).toBe("Retención desactivada · el costo de producto va para la profesional");
     expect(screen.queryByTestId("config-step-4")).toBeNull();
     expect(screen.getAllByTestId("config-group-chip").map((c) => c.textContent)).toEqual(["Color 40 %", "Manos Sin %"]);
     expect(screen.getAllByTestId("config-group-chip").map((c) => c.dataset.missing)).toEqual(["false", "true"]);
@@ -152,7 +152,7 @@ describe("HU-COM-16 · Configurar", () => {
     expect(screen.getByTestId("config-step-3").dataset.tone).toBe("pending");
     expect(screen.getByTestId("config-step-3-badge").textContent).toBe("3");
     expect(screen.getByTestId("config-step-3-pill").textContent).toBe("Nadie retiene todavía");
-    expect(screen.getByTestId("config-step-3-summary").textContent).toBe("Aguinaldo activado · ninguna profesional tiene retención cargada");
+    expect(screen.getByTestId("config-step-3-summary").textContent).toBe("Retención activada · ninguna profesional tiene retención cargada");
     // It is the only pending step, so it opens by itself, with the retention of each professional.
     expect(screen.getByTestId("config-step-3-toggle").getAttribute("aria-expanded")).toBe("true");
     expect(screen.getAllByTestId("commission-retention-row")).toHaveLength(2);
