@@ -50,6 +50,18 @@
         "searchPlaceholder": "Item, invoice or note",
         "type": {
           "LINE": "Commission"
+        },
+        "retentionBreakdown": "{{kind}} {{total}} → paid {{paid}} · aguinaldo {{retention}} ({{amount}})",
+        "ruleKind": {
+          "SERVICE": "Service",
+          "PRODUCT": "Product",
+          "OTHER": "Rule"
+        },
+        "sort": {
+          "label": "Sort",
+          "aria": "Sort by date",
+          "desc": "Newest first",
+          "asc": "Oldest first"
         }
       },
       "preview": {
