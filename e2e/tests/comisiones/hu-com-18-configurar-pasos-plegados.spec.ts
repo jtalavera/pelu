@@ -100,7 +100,8 @@ test("AC2 · se abre solo el primer paso pendiente y solo ese tiene el botón pr
   await expect(page.getByTestId("config-step-3-body")).toHaveCount(0);
 
   const primary = page.getByTestId("config-step-2-link").getByRole("button");
-  await expect(primary).toHaveText("Organize groups and services");
+  // HU-COM-20: the pending thing in step 2 is a group without its %, so the main button is «Set the %».
+  await expect(primary).toHaveText("Set the %");
   await expect(primary).toHaveClass(FILLED);
 
   // Opening another step does not give it a filled button: its «Change» buttons are secondary.
@@ -188,6 +189,9 @@ test("AC5 · paso 3: gris si el aguinaldo está apagado, ámbar (y cuenta en el 
   await row.getByTestId("commission-retention-change").click();
   await page.getByTestId("commission-retention-percent").fill("5");
   await page.getByTestId("commission-retention-save").click();
+  // HU-COM-20: the retention is part of the commission now, so changing it asks from when it applies.
+  await page.getByTestId("commission-apply-mode-IMMEDIATE").check();
+  await page.getByTestId("commission-apply-confirm").click();
   await expect(step(page, 3)).toHaveAttribute("data-tone", "done");
   await expect(page.getByTestId("config-step-3-badge")).toHaveText("✓");
   await expect(page.getByTestId("config-step-3-pill")).toHaveText("Up to date");

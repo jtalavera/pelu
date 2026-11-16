@@ -202,4 +202,19 @@ describe("HU-COM-20 · Configurar › Comisiones", () => {
     mount("/app/commissions/configurar/comisiones?q=manos");
     expect((await screen.findAllByTestId("rates-group")).map((g) => g.dataset.groupName)).toEqual(["Manos y pies"]);
   });
+
+  it("si lo buscado es el nombre de un grupo se ven todos sus servicios (no «sin servicios»), y «Sin grupo» no aparece si nada de lo que no tiene grupo coincide", async () => {
+    mount("/app/commissions/configurar/comisiones?q=manos%20y%20pies");
+    expect(await screen.findAllByTestId("rates-group")).toHaveLength(1);
+    expect(screen.getByTestId("rates-group-items").textContent).not.toContain("todavía no tiene servicios");
+    expect(screen.getAllByTestId("rates-item").map((r) => r.dataset.itemName)).toEqual(["MANICURA"]);
+    expect(screen.queryByTestId("rates-ungrouped")).toBeNull();
+  });
+
+  it("si lo buscado es un servicio, el grupo muestra solo los que coinciden y «Sin grupo» aparece si hay uno que coincide", async () => {
+    mount("/app/commissions/configurar/comisiones?q=ba%C3%B1o");
+    await screen.findByTestId("rates-ungrouped");
+    expect(screen.queryAllByTestId("rates-group")).toHaveLength(0);
+    expect(screen.getAllByTestId("rates-item").map((r) => r.dataset.itemName)).toEqual(["Baño de crema"]);
+  });
 });

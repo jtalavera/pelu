@@ -257,7 +257,8 @@ export function RatesPage() {
         <ul className="m-0 list-none p-0">
           {visibleGroups.map((g) => {
             const expanded = isOpen(g.id);
-            const items = needle ? g.items.filter(itemMatches) : g.items;
+            // A search that matches the group's name shows all of its services; otherwise only the ones that match.
+            const items = needle && !normalize(g.name).includes(needle) ? g.items.filter(itemMatches) : g.items;
             return (
               <li key={g.id} data-testid="rates-group" data-group-name={g.name} className="border-b border-line last:border-b-0">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-2.5 sm:px-5">
@@ -295,7 +296,7 @@ export function RatesPage() {
           })}
 
           {/* no group */}
-          {rates.ungrouped.length > 0 && (
+          {rates.ungrouped.length > 0 && (!needle || rates.ungrouped.some(itemMatches)) && (
             <li data-testid="rates-ungrouped" className="border-t border-dashed border-ink-3/40 bg-bg/60">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 sm:px-5">
                 <button type="button" aria-expanded={isOpen(0)} data-testid="rates-ungrouped-toggle" onClick={() => toggle(0)} className="min-h-11 min-w-0 text-left">
