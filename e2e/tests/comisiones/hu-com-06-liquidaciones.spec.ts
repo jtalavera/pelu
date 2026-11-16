@@ -35,7 +35,7 @@ test.beforeEach(async ({ request }) => {
   ]);
 });
 
-test("Borrador → Aprobada → Pagada desde la UI, con detalle por línea, subtotales por tipo, ajuste y auditoría", async ({
+test("Borrador → Aprobada → Pagada desde la UI, con detalle por línea, composición por tipo, ajuste y auditoría", async ({
   page,
   request,
 }) => {
@@ -60,9 +60,9 @@ test("Borrador → Aprobada → Pagada desde la UI, con detalle por línea, subt
   const detail = page.getByTestId("commission-settlement-detail");
   await expect(detail.getByTestId("settlement-line")).toHaveCount(2);
   await expect(detail.getByTestId("settlement-line").first()).toContainText("excl. VAT");
-  await page.getByTestId("settlement-subtotals-toggle").click();
-  await expect(detail.getByTestId("settlement-subtotals-kind")).toContainText(/Services\s*Gs\. 40\.000/);
-  await expect(detail.getByTestId("settlement-subtotals-kind")).toContainText(/Products\s*Gs\. 10\.000/);
+  // HU-COM-32: the sum that makes the total (no more «Subtotals by type and item»).
+  await expect(detail.getByTestId("settlement-comp-services")).toContainText("Gs. 40.000");
+  await expect(detail.getByTestId("settlement-comp-products")).toContainText("Gs. 10.000");
   await expect(detail.getByTestId("settlement-total")).toContainText("50.000");
 
   // Adjustment requires a reason (the form lives in a dialog).
@@ -72,7 +72,7 @@ test("Borrador → Aprobada → Pagada desde la UI, con detalle por línea, subt
   await expect(page.locator("#adj-error")).toContainText("reason is required");
   await page.locator("#adj-reason").fill("Bono por desempeño");
   await page.getByTestId("settlement-add-adjustment").click();
-  await expect(detail.getByTestId("settlement-adjustments")).toContainText("Bono por desempeño");
+  await expect(detail.getByTestId("settlement-adjustment")).toContainText("Bono por desempeño");
   await expect(detail.getByTestId("settlement-total")).toContainText("55.000");
 
   await page.getByTestId("settlement-approve").click();
