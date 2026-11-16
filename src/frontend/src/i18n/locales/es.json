@@ -51,17 +51,42 @@
         "type": {
           "LINE": "Comisión"
         },
-        "retentionBreakdown": "{{kind}} {{total}} → se paga {{paid}} · retención {{retention}} ({{amount}})",
         "ruleKind": {
           "SERVICE": "Servicio",
           "PRODUCT": "Producto",
           "OTHER": "Regla"
         },
         "sort": {
-          "label": "Ordenar",
-          "aria": "Ordenar por fecha",
           "desc": "Más recientes primero",
-          "asc": "Más antiguos primero"
+          "asc": "Más antiguos primero",
+          "ariaDesc": "Ordenado por fecha, más recientes primero. Tocá para ver los más antiguos primero",
+          "ariaAsc": "Ordenado por fecha, más antiguos primero. Tocá para ver los más recientes primero",
+          "mobile": "Fecha · {{order}}"
+        },
+        "col": {
+          "date": "Fecha",
+          "item": "Ítem",
+          "professional": "Profesional",
+          "type": "Tipo",
+          "calc": "Cálculo",
+          "status": "Estado",
+          "amount": "Monto"
+        },
+        "pay": {
+          "label": "Pago",
+          "aria": "Filtrar por pago",
+          "all": "Todas",
+          "unpaid": "Sin pagar",
+          "paid": "Pagadas",
+          "hint": "«Sin pagar» junta Sin liquidar, Borrador y Aprobada. Para ordenar, tocá FECHA."
+        },
+        "calc": {
+          "ruleToPaid": "{{kind}} {{total}} → {{paid}}",
+          "retention": "Retención {{percent}} · {{amount}}"
+        },
+        "totals": {
+          "total": "Total",
+          "retained": "Retenido"
         }
       },
       "preview": {

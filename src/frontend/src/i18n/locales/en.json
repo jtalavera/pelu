@@ -51,17 +51,42 @@
         "type": {
           "LINE": "Commission"
         },
-        "retentionBreakdown": "{{kind}} {{total}} → paid {{paid}} · retention {{retention}} ({{amount}})",
         "ruleKind": {
           "SERVICE": "Service",
           "PRODUCT": "Product",
           "OTHER": "Rule"
         },
         "sort": {
-          "label": "Sort",
-          "aria": "Sort by date",
           "desc": "Newest first",
-          "asc": "Oldest first"
+          "asc": "Oldest first",
+          "ariaDesc": "Sorted by date, newest first. Tap to see the oldest first",
+          "ariaAsc": "Sorted by date, oldest first. Tap to see the newest first",
+          "mobile": "Date · {{order}}"
+        },
+        "col": {
+          "date": "Date",
+          "item": "Item",
+          "professional": "Professional",
+          "type": "Type",
+          "calc": "Calculation",
+          "status": "Status",
+          "amount": "Amount"
+        },
+        "pay": {
+          "label": "Payment",
+          "aria": "Filter by payment",
+          "all": "All",
+          "unpaid": "Unpaid",
+          "paid": "Paid",
+          "hint": "«Unpaid» includes Unsettled, Draft and Approved. To sort, tap DATE."
+        },
+        "calc": {
+          "ruleToPaid": "{{kind}} {{total}} → {{paid}}",
+          "retention": "Retention {{percent}} · {{amount}}"
+        },
+        "totals": {
+          "total": "Total",
+          "retained": "Retained"
         }
       },
       "preview": {

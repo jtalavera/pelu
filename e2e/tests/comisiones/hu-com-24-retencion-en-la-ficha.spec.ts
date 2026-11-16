@@ -169,7 +169,8 @@ test("AC6 · AC7 · Movimientos abre en Comisiones y el interruptor Comisiones |
   await page.getByTestId("pro-movements-view-commissions").click();
   await expect(page.getByTestId("pro-movements-view-commissions")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("movement-row")).toHaveCount(1);
-  await expect(page.getByTestId("movement-row").first()).toContainText("Service 50 % → paid 45 % · retention 5 % (Gs. 5.000)");
+  await expect(page.getByTestId("movement-row").first().getByTestId("movement-calc-main")).toHaveText("Service 50 % → 45 %");
+  await expect(page.getByTestId("movement-row").first().getByTestId("movement-calc-extra")).toHaveText("Retention 5 % · Gs. 5.000");
 
   // By default (from the tab) it opens on the commissions.
   await page.getByTestId("pro-tab-summary").click();
