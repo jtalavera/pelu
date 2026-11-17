@@ -194,7 +194,7 @@ test("AC4 · una profesional sin nada cargado cobra lo normal y no hay un paso �
   await expect(page.getByTestId("commissions-nav-badge-setup")).toHaveCount(0);
   await page.getByTestId("commissions-nav-team").click();
   const ana = page.getByTestId("team-card").filter({ hasText: w.ana.name });
-  await expect(ana.getByTestId("team-card-rules")).toHaveText("Paid the usual % of each service");
+  await expect(ana.getByTestId("team-card-rules")).toHaveCount(0); // HU-COM-33: nothing to say when she is paid the usual
   await expect(page.getByTestId("team-filter-norules")).toHaveCount(0);
 });
 
@@ -266,7 +266,7 @@ test("AC7 · AC8 · la ficha dice que cobra lo normal; «Todo un grupo» carga u
   await loginAdminUi(page, w);
   await openCommissions(page);
   await openProfessional(page, "gaby", "rules");
-  await expect(page.getByTestId("pro-rates-usual")).toContainText("is paid the usual % of each service");
+  await expect(page.getByTestId("pro-rates-usual")).toContainText("The usual"); // HU-COM-33: the Commission card
   await expect(page.getByTestId("pro-differences-empty")).toBeVisible();
   await expect(page.getByTestId("pro-retention")).toHaveCount(0); // aguinaldo is off
 
@@ -311,7 +311,7 @@ test("AC7 · AC8 · la ficha dice que cobra lo normal; «Todo un grupo» carga u
   await page.getByTestId("pro-rate-save").click();
   await confirmImmediate(page);
   await expect(page.getByTestId("pro-rate-row")).toHaveCount(2);
-  await expect(page.getByTestId("pro-differences-count")).toHaveText("2 cases");
+  await expect(page.getByTestId("pro-differences-count")).toHaveText("2");
   await page.getByTestId("pro-rate-row").filter({ hasText: "Alisado pelo largo" }).getByTestId("pro-rate-remove").click();
   await confirmImmediate(page);
   await page.getByTestId("pro-rate-row").filter({ hasText: "Corte" }).getByTestId("pro-rate-remove").click();
@@ -332,7 +332,7 @@ test("AC7 · la retención se ve en la ficha solo con aguinaldo activo, se cambi
   await loginAdminUi(page, w);
   await openCommissions(page);
   await openProfessional(page, "gaby", "rules");
-  await expect(page.getByTestId("pro-retention-current")).toHaveText("Retention: 5 %");
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("5 %") // HU-COM-33: the Retention card shows only the %;
 
   // The example takes her retention out of the commission: 45 % of 100.000 → 40.000 paid, 5.000 to the fund.
   await page.getByTestId("pro-rates-add").click();
@@ -347,7 +347,7 @@ test("AC7 · la retención se ve en la ficha solo con aguinaldo activo, se cambi
   await page.getByTestId("pro-retention-percent").fill("7");
   await page.getByTestId("pro-retention-save").click();
   await confirmImmediate(page);
-  await expect(page.getByTestId("pro-retention-current")).toHaveText("Retention: 7 %");
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("7 %");
 });
 
 // ── AC10 · Grupos y servicios ──────────────────────────────────────────────────────────────────

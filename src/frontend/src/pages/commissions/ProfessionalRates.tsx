@@ -183,14 +183,43 @@ export function ProfessionalRates({ professionalId }: { professionalId: number }
 
   return (
     <section className="flex min-w-0 flex-col gap-3.5" data-testid="pro-rates">
-      <div className="rounded-card bg-primary-lt px-5 py-4" data-testid="pro-rates-usual">
-        <b className="block text-base text-ink">{t("femme.commissions.pro.rates.usualTitle", { name })}</b>
-        <span className="text-sm text-ink-2">
-          {t("femme.commissions.pro.rates.usualHelp")}{" "}
-          <Link to="/app/commissions/configurar/comisiones" className="font-bold text-primary underline" data-testid="pro-rates-link">
-            {t("femme.commissions.pro.rates.usualLink")}
+      {/* HU-COM-33: three small cards say how she charges at a glance (the light-blue notice is gone). */}
+      <div className={`grid gap-2.5 ${aguinaldoOn ? "sm:grid-cols-3" : "sm:grid-cols-2"}`} data-testid="pro-rates-summary">
+        <div className="flex flex-col gap-0.5 rounded-card border border-line bg-surface p-4 shadow-sm" data-testid="pro-rates-usual">
+          <span className="text-xs font-extrabold uppercase tracking-wider text-ink-3">{t("femme.commissions.pro.rates.tileCommission")}</span>
+          <b className="text-xl text-ink">{t("femme.commissions.pro.rates.tileCommissionValue")}</b>
+          <span className="text-[13px] text-ink-3">{t("femme.commissions.pro.rates.tileCommissionSub")}</span>
+          <Link to="/app/commissions/configurar/comisiones" className="inline-flex min-h-11 items-center text-sm font-extrabold text-primary underline underline-offset-4" data-testid="pro-rates-link">
+            {t("femme.commissions.pro.rates.usualLink")} →
           </Link>
-        </span>
+        </div>
+        {aguinaldoOn && (
+          <div className="flex flex-col gap-0.5 rounded-card border border-line bg-surface p-4 shadow-sm" data-testid="pro-retention">
+            <span className="text-xs font-extrabold uppercase tracking-wider text-ink-3">{t("femme.commissions.pro.rates.tileRetention")}</span>
+            <b className="text-xl text-ink" data-testid="pro-retention-current">
+              {retains ? formatPercent(retains) : t("femme.commissions.pro.rates.retentionNone")}
+            </b>
+            <span className="text-[13px] text-ink-3">{t("femme.commissions.pro.rates.tileRetentionSub")}</span>
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center self-start text-sm font-extrabold text-primary underline underline-offset-4"
+              data-testid="pro-retention-edit"
+              onClick={() => {
+                setNotice(null);
+                setRetention({ value: retains ? String(retains).replace(".", ",") : "", error: null });
+              }}
+            >
+              {t("femme.commissions.rules.change")}
+            </button>
+          </div>
+        )}
+        <div className="flex flex-col gap-0.5 rounded-card border border-line bg-surface p-4 shadow-sm" data-testid="pro-differences-summary">
+          <span className="text-xs font-extrabold uppercase tracking-wider text-ink-3">{t("femme.commissions.pro.rates.tileExceptions")}</span>
+          <b className="text-xl text-ink" data-testid="pro-differences-count">
+            {rows.length === 0 ? t("femme.commissions.pro.rates.exceptionsNone") : rows.length}
+          </b>
+          <span className="text-[13px] text-ink-3">{t("femme.commissions.pro.rates.tileExceptionsSub")}</span>
+        </div>
       </div>
 
       {notice && (
@@ -200,37 +229,9 @@ export function ProfessionalRates({ professionalId }: { professionalId: number }
       )}
       {error && <Alert variant="destructive">{error}</Alert>}
 
-      {aguinaldoOn && (
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-card border border-line bg-surface px-5 py-4" data-testid="pro-retention">
-          <span>
-            <b className="block text-[17px] text-ink" data-testid="pro-retention-current">
-              {retains ? t("femme.commissions.pro.rates.retention", { percent: formatPercent(retains) }) : t("femme.commissions.pro.rates.retentionNone")}
-            </b>
-            <span className="text-[13px] text-ink-3">{t("femme.commissions.pro.rates.retentionHelp")}</span>
-          </span>
-          <Button
-            type="button"
-            variant="secondary"
-            className="min-h-11"
-            data-testid="pro-retention-edit"
-            onClick={() => {
-              setNotice(null);
-              setRetention({ value: retains ? String(retains).replace(".", ",") : "", error: null });
-            }}
-          >
-            {t("femme.commissions.rules.change")}
-          </Button>
-        </div>
-      )}
-
       <div className="flex flex-col gap-1 rounded-card border border-line bg-surface px-5 py-4" data-testid="pro-differences">
         <div className="flex flex-wrap items-center gap-3 pb-1.5">
-          <span className="min-w-0 flex-1 basis-64">
-            <b className="block text-lg text-ink">{t("femme.commissions.pro.rates.differentTitle")}</b>
-            <span className="text-[13px] text-ink-3" data-testid="pro-differences-count">
-              {t("femme.commissions.pro.rates.differentCount", { count: rows.length })}
-            </span>
-          </span>
+          <b className="min-w-0 flex-1 basis-64 text-lg text-ink">{t("femme.commissions.pro.rates.differentTitle")}</b>
           <Button type="button" className={ACTION_BUTTON} data-testid="pro-rates-add" onClick={startAdd}>
             {t("femme.commissions.pro.rates.add")}
           </Button>

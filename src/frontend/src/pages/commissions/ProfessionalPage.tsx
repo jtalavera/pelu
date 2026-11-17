@@ -5,23 +5,26 @@ import { Alert, Button, Spinner, Text } from "@design-system";
 import {
   getAguinaldo,
   getProfessionalsSummary,
+  getSettlement,
   getSettlementPreview,
   type AguinaldoBalance,
+  type OverviewStatus,
+  type SettlementDetail,
   type SettlementPreview,
 } from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import { ACTION_BUTTON } from "../../components/actionButtons";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
-import { formatParaguayDate } from "../../lib/paraguayDateTime";
+import { formatParaguayDate, formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { AguinaldoTab } from "./AguinaldoTab";
 import { useFundActions } from "./FundActions";
 import { formatPercent } from "./common";
-import { Avatar } from "./HomePage";
 import { MovementsTab } from "./MovementsTab";
 import { ProfessionalRates } from "./ProfessionalRates";
 import { StatusChip } from "./StatusChip";
 import { useOverview } from "./overview";
+import { buildSettlementDays, compose, type Composition } from "./settlementDays";
 
 type TabId = "summary" | "rules" | "history";
 
@@ -63,7 +66,6 @@ export default function ProfessionalPage() {
       </Link>
       {row && (
         <header className="flex items-center gap-3">
-          <Avatar name={row.professionalName} />
           <div className="min-w-0">
             <h2 className="truncate font-heading text-xl font-extrabold text-ink" data-testid="pro-name">
               {row.professionalName}
@@ -145,6 +147,7 @@ function SummaryPane({ professionalId, retentionPercent }: { professionalId: num
   const dateLocale = useDateLocale();
   const { overview } = useOverview();
   const [preview, setPreview] = useState<SettlementPreview | null>(null);
+  const [detail, setDetail] = useState<SettlementDetail | null>(null);
   const [balance, setBalance] = useState<AguinaldoBalance | null>(null);
   const [error, setError] = useState<string | null>(null);
   const row = overview?.rows.find((r) => r.professionalId === professionalId) ?? null;
@@ -169,6 +172,18 @@ function SummaryPane({ professionalId, retentionPercent }: { professionalId: num
       .catch((err) => setError(translateApiError(err, t)));
   }, [overview, professionalId, from, to, t]);
 
+  // HU-COM-33: with a settlement (draft, approved or paid) the breakdown comes from it, so it adds up to the total shown.
+  const settlementId = row?.settlementId ?? null;
+  useEffect(() => {
+    if (settlementId === null) {
+      setDetail(null);
+      return;
+    }
+    getSettlement(settlementId)
+      .then(setDetail)
+      .catch((err) => setError(translateApiError(err, t)));
+  }, [settlementId, t]);
+
   useEffect(() => {
     if (!retention) return;
     void loadBalance();
@@ -176,12 +191,37 @@ function SummaryPane({ professionalId, retentionPercent }: { professionalId: num
   }, [retention, professionalId]);
 
   if (error) return <Alert variant="destructive">{error}</Alert>;
-  if (!preview || !row) return <Spinner />;
+  if (!preview || !row || (settlementId !== null && detail?.settlement.id !== settlementId)) return <Spinner />;
+  const comp: Composition = detail
+    ? compose(buildSettlementDays(detail.entries, detail.adjustments))
+    : (() => {
+        const adjustments = preview.entries.filter((e) => e.sourceType === "ADJUSTMENT");
+        const c = compose(buildSettlementDays(preview.entries.filter((e) => e.sourceType !== "ADJUSTMENT"), adjustments));
+        return {
+          services: { amount: preview.servicesTotal, count: c.services.count },
+          products: { amount: preview.productsTotal, count: c.products.count },
+          adjustments: { amount: preview.adjustmentsTotal, count: adjustments.length },
+        };
+      })();
+  const sales = comp.services.count + comp.products.count;
+  const lineCount = detail ? sales : preview.lines;
+  const settlement = detail?.settlement ?? null;
   const line = (label: string, value: number, testId: string, tone = "text-ink") => (
     <div className="flex items-center justify-between gap-3 text-sm">
       <span className="text-ink-2">{label}</span>
       <b className={`font-heading tabular-nums ${tone}`} data-testid={testId}>
         {formatGuaraniesGs(value)}
+      </b>
+    </div>
+  );
+  const tile = (label: string, count: number, amount: number, testId: string, tone = "text-ink") => (
+    <div className="flex flex-col gap-0.5 rounded-2xl bg-primary-lt/50 px-3 py-2.5">
+      <span className="text-[13px] text-ink-3">
+        <b className="text-ink">{label}</b> · {count}
+      </span>
+      <b className={`font-heading text-base tabular-nums ${tone}`} data-testid={testId}>
+        {amount > 0 && testId === "pro-summary-adjustments" ? "+" : ""}
+        {formatGuaraniesGs(amount)}
       </b>
     </div>
   );
@@ -200,25 +240,43 @@ function SummaryPane({ professionalId, retentionPercent }: { professionalId: num
     <section className="flex flex-col gap-4" data-testid="pro-summary">
       <div className={`grid gap-3.5 ${retention ? "sm:grid-cols-2" : ""}`}>
         <div className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-4 shadow-sm sm:p-5" data-testid="pro-pay-card">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
             <div className="text-sm font-bold text-ink-3">{t("femme.commissions.pro.summaryTotal")}</div>
-            <StatusChip status={row.status} />
+            {overview?.period.from && overview.period.to && (
+              <div className="text-xs text-ink-3">
+                {formatParaguayDate(overview.period.from + "T12:00:00", dateLocale)} – {formatParaguayDate(overview.period.to + "T12:00:00", dateLocale)}
+              </div>
+            )}
           </div>
-          <b className="font-heading text-3xl tabular-nums text-ink" data-testid="pro-summary-total">
+          {row.status === "NONE" ? <StatusChip status={row.status} /> : <Stepper status={row.status} />}
+          <b className="mt-2 font-heading text-3xl tabular-nums text-ink" data-testid="pro-summary-total">
             {formatGuaraniesGs(row.amount || preview.total)}
           </b>
           <Text variant="small" className="text-ink-3" data-testid="pro-summary-lines">
-            {t("femme.commissions.pro.summaryLines", { count: preview.lines })}
+            {t("femme.commissions.pro.summaryLines", { count: lineCount })}
+            {comp.adjustments.count > 0 ? ` · ${t("femme.commissions.settlement.adjCount", { count: comp.adjustments.count })}` : ""}
+            {row.status !== "NONE" ? ` · ${t(`femme.commissions.pro.stageHint.${row.status}`)}` : ""}
           </Text>
           {preview.carriedAmount !== 0 && (
             <Text variant="small" className="text-warning" data-testid="pro-summary-carried">
               {t("femme.commissions.pro.summaryCarried", { amount: formatGuaraniesGs(preview.carriedAmount) })}
             </Text>
           )}
-          <div className="mt-2 flex flex-col gap-1.5 border-t border-line pt-3">
-            {line(t("femme.commissions.pro.summaryServices"), preview.servicesTotal, "pro-summary-services")}
-            {line(t("femme.commissions.pro.summaryProducts"), preview.productsTotal, "pro-summary-products")}
-            {preview.adjustmentsTotal !== 0 && line(t("femme.commissions.pro.summaryAdjustments"), preview.adjustmentsTotal, "pro-summary-adjustments")}
+          {settlement?.paidAt && (
+            <Text variant="small" className="font-bold text-success" data-testid="pro-summary-paid-info">
+              {t("femme.commissions.settlement.paidInfo", {
+                date: formatParaguayDateTime(settlement.paidAt, dateLocale),
+                method: t(`femme.commissions.paymentMethod.${settlement.paymentMethod}`),
+                reference: settlement.paymentReference ?? "—",
+              })}
+            </Text>
+          )}
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            {tile(t("femme.commissions.pro.summaryServices"), comp.services.count, comp.services.amount, "pro-summary-services")}
+            {tile(t("femme.commissions.pro.summaryProducts"), comp.products.count, comp.products.amount, "pro-summary-products")}
+            {comp.adjustments.count > 0 || comp.adjustments.amount !== 0
+              ? tile(t("femme.commissions.pro.summaryAdjustments"), comp.adjustments.count, comp.adjustments.amount, "pro-summary-adjustments", "text-success")
+              : null}
           </div>
         </div>
 
@@ -258,7 +316,7 @@ function SummaryPane({ professionalId, retentionPercent }: { professionalId: num
             className="inline-flex min-h-11 items-center rounded-full bg-primary px-5 text-sm font-extrabold text-primary-fg"
             data-testid="pro-summary-open-settlement"
           >
-            {t("femme.commissions.pro.openSettlement")}
+            {t(row.status === "PAID" ? "femme.commissions.pro.viewSettlement" : "femme.commissions.pro.openSettlement")}
           </Link>
         ) : (
           <Link
@@ -305,5 +363,36 @@ function SummaryPane({ professionalId, retentionPercent }: { professionalId: num
       )}
       {fund.dialogs}
     </section>
+  );
+}
+
+const STEPS: OverviewStatus[] = ["UNSETTLED", "DRAFT", "APPROVED", "PAID"];
+
+/** HU-COM-33: where the period of this professional is in the cycle: to generate → draft → approved → paid. */
+function Stepper({ status }: { status: OverviewStatus }) {
+  const { t } = useTranslation();
+  const current = Math.max(0, STEPS.indexOf(status));
+  return (
+    <ol className="mt-2 flex items-start" data-testid="pro-stepper" aria-label={t("femme.commissions.pro.stepperAria")}>
+      {STEPS.map((step, i) => {
+        const state = i < current ? "done" : i === current ? "current" : "todo";
+        return (
+          <li key={step} data-testid="pro-step" data-step={step} data-state={state} aria-current={state === "current" ? "step" : undefined} className="flex min-w-0 flex-1 items-start">
+            <span className="flex w-16 shrink-0 flex-col items-center gap-1 text-center sm:w-20">
+              <span
+                aria-hidden
+                className={`inline-flex size-7 items-center justify-center rounded-full text-[13px] font-extrabold ${
+                  state === "done" ? "bg-primary text-primary-fg" : state === "current" ? "border-[2.5px] border-primary bg-surface text-primary" : "bg-line text-ink-3"
+                }`}
+              >
+                {state === "done" ? "✓" : i + 1}
+              </span>
+              <span className={`text-xs ${state === "current" ? "font-extrabold text-ink" : "font-semibold text-ink-3"}`}>{t(`femme.commissions.pro.stepper.${step}`)}</span>
+            </span>
+            {i < STEPS.length - 1 && <span aria-hidden className={`mt-3 h-[3px] min-w-2 flex-1 rounded ${i < current ? "bg-primary" : "bg-line"}`} />}
+          </li>
+        );
+      })}
+    </ol>
   );
 }

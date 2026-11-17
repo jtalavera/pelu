@@ -403,7 +403,7 @@ test("AC8 · AC9 · Configuración: retención de aguinaldo, % por defecto, qui�
 
   // Her retention is shown on her page (HU-COM-20).
   await openProfessional(page, "gaby", "rules");
-  await expect(page.getByTestId("pro-retention-current")).toHaveText("Retention: 5 %");
+  await expect(page.getByTestId("pro-retention-current")).toHaveText("5 %") // HU-COM-33: the Retention card shows only the %;
 
   // The history lists the changes with what changed (Setup › Advanced).
   await page.getByTestId("commissions-nav-setup").click();

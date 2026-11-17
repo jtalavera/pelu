@@ -22,7 +22,6 @@ import { MoreActionsMenu } from "../../components/MoreActionsMenu";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDate } from "../../lib/paraguayDateTime";
-import { Avatar } from "./HomePage";
 import { STATUS_META, periodLabel, useOverview } from "./overview";
 import { todayYmd } from "./common";
 
@@ -527,7 +526,6 @@ export default function LiquidarPage() {
                       />
                     )}
                     <span className="flex min-w-0 items-center gap-2.5">
-                      <Avatar name={r.professionalName} />
                       <span className="flex min-w-0 flex-col">
                         <Link to={`/app/commissions/equipo/${r.professionalId}`} className="min-w-0 truncate font-extrabold text-ink">
                           {r.professionalName}

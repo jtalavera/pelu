@@ -460,6 +460,10 @@ Historia completa y criterios: [HU-COM-31](../user_stories/HU-COM-31-csv-incluye
 
 Historia completa y criterios: [HU-COM-32](../user_stories/HU-COM-32-liquidacion-dia-a-dia.md). Resumen: el detalle de la liquidación se cuenta día por día, con una barra «Servicios + Productos + Ajustes = Total», una sola fila por venta (las recalculadas con «Ver cambios», como en Movimientos), los montos alineados y los ajustes en su día; se quitan los «Subtotales por tipo e ítem».
 
+### HU-COM-33 · Fichas y Movimientos: filas parejas, tarjeta con etapas, Reglas en tres cuadros y Equipo sin iniciales
+
+Historia completa y criterios: [HU-COM-33](../user_stories/HU-COM-33-fichas-y-movimientos.md). Resumen: Movimientos con filas de la misma altura (flecha a la izquierda, etiqueta en Tipo, sin columna Profesional en la ficha); la tarjeta «A pagar este período» muestra las etapas y su desglose sale de la liquidación (arregla el «0» de un Borrador); Reglas sin caja celeste y con tres cuadros; Equipo con tarjetas más bajas y sin iniciales.
+
 ### HU-COM-19 · Anular borradores rápido desde Liquidar
 
 Historia completa y criterios: [HU-COM-19](../user_stories/HU-COM-19-anular-borradores-rapido.md). Resumen:
@@ -575,6 +579,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-30 | Liquidar: «Descargar CSV» como ícono junto al total con menú (este período / períodos anteriores); `settlements.csv` acepta `from`/`to`. |
 | HU-COM-31 | CSV de Liquidar con las filas «Por generar» (sin ID, «Sin liquidar»); ícono de descargar sin círculo. |
 | HU-COM-32 | Liquidación: detalle día a día, composición del total, una fila por venta con «Ver cambios», montos alineados; sin subtotales por tipo e ítem. |
+| HU-COM-33 | Movimientos con filas parejas (flecha, etiqueta en Tipo, sin Profesional en la ficha); tarjeta «A pagar» con etapas y desglose desde la liquidación; Reglas en tres cuadros; Equipo sin iniciales. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 

@@ -85,7 +85,8 @@ test("AC1 · AC2 · la lista tiene siete columnas (fecha, ítem con comprobante,
 
   const head = page.getByTestId("movements-head");
   await expect(head).toBeVisible();
-  await expect(head.locator(":scope > *")).toHaveText([/Date/, "Item", "Professional", "Type", "Calculation", "Status", "Amount"]);
+  // HU-COM-33: an empty cell for the arrow before the date and another one for the ⋮ after the amount.
+  await expect(head.locator(":scope > *")).toHaveText(["", /Date/, "Item", "Professional", "Type", "Calculation", "Status", "Amount", ""]);
 
   const first = rows(page).first(); // the newest: Bea's 200.000 sale
   await expect(first.getByTestId("movement-item")).toHaveText(w.service.name, { ignoreCase: true });

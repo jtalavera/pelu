@@ -54,12 +54,12 @@ const entries = [
   entry(4, "2026-11-14T10:00:00Z", { professionalName: "Abby", itemName: "MANOS", percentApplied: 20, retentionPercent: 0, retentionAmount: 0, commissionAmount: 20000, invoiceNumber: "0001100", settlementStatus: "PAID" }),
 ];
 
-const mount = () =>
+const mount = (fixedProfessionalId?: number) =>
   render(
     <I18nextProvider i18n={i18n}>
       <ThemeProvider>
         <MemoryRouter>
-          <MovementsTab />
+          <MovementsTab fixedProfessionalId={fixedProfessionalId} />
         </MemoryRouter>
       </ThemeProvider>
     </I18nextProvider>,
@@ -109,7 +109,7 @@ describe("HU-COM-23 / HU-COM-25 · Movimientos", () => {
   it("la lista tiene columnas: fecha, ítem con comprobante, profesional, tipo, cálculo, estado y monto", async () => {
     mount();
     await screen.findAllByTestId("movement-row");
-    const heads = [...screen.getByTestId("movements-head").children].map((n) => n.textContent?.replace(/[↓↑]/g, "").trim());
+    const heads = [...screen.getByTestId("movements-head").children].map((n) => n.textContent?.replace(/[↓↑]/g, "").trim()).filter(Boolean);
     expect(heads).toEqual(["Fecha", "Ítem", "Profesional", "Tipo", "Cálculo", "Estado", "Monto"]);
     const first = rows()[0];
     expect(within(first).getByTestId("movement-item").textContent).toBe("BRUSHING PELO CORTO");
@@ -118,6 +118,14 @@ describe("HU-COM-23 / HU-COM-25 · Movimientos", () => {
     expect(within(first).getByTestId("movement-type").textContent).toBe("Comisión");
     expect(within(first).getByTestId("movement-date").textContent).toMatch(/\d{2}\/\d{2}\/\d{4}/);
     expect(within(rows()[1]).getByTestId("movement-type").textContent).toContain("recálculo");
+  });
+
+  it("HU-COM-33 · en la ficha de una profesional no hay columna Profesional (es siempre la misma)", async () => {
+    mount(1);
+    await screen.findAllByTestId("movement-row");
+    const heads = [...screen.getByTestId("movements-head").children].map((n) => n.textContent?.replace(/[↓↑]/g, "").trim()).filter(Boolean);
+    expect(heads).toEqual(["Fecha", "Ítem", "Tipo", "Cálculo", "Estado", "Monto"]);
+    expect(within(rows()[0]).queryByTestId("movement-professional")).toBeNull();
   });
 
   it("con retención el cálculo dice «Servicio 50 % → 45 %» y debajo «Retención 5 % · Gs. 5.000»", async () => {
@@ -192,6 +200,14 @@ describe("HU-COM-29 · líneas revertidas", () => {
     vi.clearAllMocks();
   });
   const rows = () => screen.getAllByTestId("movement-row");
+
+  it("HU-COM-33 · la etiqueta «Recalculada» va en la columna Tipo y la flecha abre el recorrido", async () => {
+    mount();
+    await screen.findAllByTestId("movement-row");
+    const changed = rows()[0];
+    expect(within(within(changed).getByTestId("movement-type")).getByTestId("movement-tag").textContent).toBe("Recalculada");
+    expect(within(changed).getByTestId("movement-changes-toggle").getAttribute("aria-label")).toContain("Ver cambios");
+  });
 
   it("una venta recalculada es UNA fila: la comisión vigente, su etiqueta y «antes 40 %»", async () => {
     mount();

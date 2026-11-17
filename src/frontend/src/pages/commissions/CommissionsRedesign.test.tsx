@@ -21,6 +21,7 @@ const api = vi.hoisted(() => ({
   getAguinaldoDetail: vi.fn(),
   getEntries: vi.fn(),
   getSettlementPreview: vi.fn(),
+  getSettlement: vi.fn(),
   getApplyModeOptions: vi.fn(),
   applyChanges: vi.fn(),
   generateSettlements: vi.fn(),
@@ -320,7 +321,7 @@ describe("HU-COM-15 · Equipo", () => {
     const byName = (n: string) => screen.getAllByTestId("team-card").find((c) => c.dataset.professional === n)!;
     expect(within(byName("Gaby")).getByTestId("team-card-rules").textContent).toBe("Cobra distinto en 2 servicios");
     // Nothing loaded for her: she is paid the usual % of each service (not a gap to fill).
-    expect(within(byName("Norma")).getByTestId("team-card-rules").textContent).toBe("Cobra lo normal de cada servicio");
+    expect(within(byName("Norma")).queryByTestId("team-card-rules")).toBeNull(); // HU-COM-33: the usual is not repeated on every card
     expect(screen.queryByTestId("team-filter-norules")).toBeNull();
   });
 
@@ -621,6 +622,37 @@ describe("HU-COM-15 · ficha de la profesional", () => {
     expect(screen.getByTestId("pro-summary-lines").textContent).toContain("3 líneas");
   });
 
+  it("HU-COM-33 · con una liquidación en borrador el desglose sale de ella (no queda en 0) y la tarjeta muestra la etapa", async () => {
+    // Migue has a draft of 80.000: nothing is left unsettled, so the preview is empty, but the breakdown must add up to the total.
+    api.getSettlementPreview.mockResolvedValue({
+      professionalId: 2, professionalName: "Migue", periodFrom: "2026-11-01", periodTo: "2026-11-15",
+      total: 0, servicesTotal: 0, productsTotal: 0, adjustmentsTotal: 0, retentionTotal: 0, lines: 0, entries: [],
+      draftSettlements: [], carriedAmount: 0, carriedEntryIds: [],
+    });
+    const entry = (id: number, kind: "SERVICE" | "PRODUCT", amount: number, name: string) => ({
+      id, professionalId: 2, professionalName: "Migue", sourceType: "INVOICE_LINE", revision: 1, reasonCode: null, invoiceId: 10, invoiceLineId: id,
+      invoiceNumber: "0000013", serviceId: id, itemName: name, itemKind: kind, baseType: "NET_OF_TAX", lineTotal: 0, taxAmount: 0, baseAmount: amount,
+      percentApplied: 40, ruleOrigin: "GROUP", commissionAmount: amount, fixedAmount: 0, fixedToProfessional: false, retentionPercent: 0,
+      retentionAmount: 0, accrualAt: "2026-11-05T15:00:00Z", reversesEntryId: null, settlementId: 7, settlementStatus: "DRAFT", note: null, reassignable: true,
+    });
+    api.getSettlement.mockResolvedValue({
+      settlement: { id: 7, professionalId: 2, professionalName: "Migue", periodFrom: "2026-11-01", periodTo: "2026-11-15", status: "DRAFT", totalAmount: 80000, retentionAmount: 0, fixedAmount: 0, createdAt: "2026-11-16T14:02:00Z", approvedAt: null, paidAt: null, paymentMethod: null, paymentReference: null, voidReason: null },
+      entries: [entry(1, "SERVICE", 60000, "Spa de pies"), entry(2, "PRODUCT", 5000, "Spray")],
+      adjustments: [{ ...entry(3, "SERVICE", 15000, "bono"), sourceType: "ADJUSTMENT", invoiceLineId: null, itemName: null, note: "bono" }],
+      byItem: [], byKind: [], mixedBases: false, history: [],
+    });
+    mount("/app/commissions/equipo/2");
+    expect((await screen.findByTestId("pro-summary-total")).textContent).toContain("80.000");
+    expect(screen.getByTestId("pro-summary-services").textContent).toContain("60.000");
+    expect(screen.getByTestId("pro-summary-products").textContent).toContain("5.000");
+    expect(screen.getByTestId("pro-summary-adjustments").textContent).toContain("15.000");
+    expect(screen.getByTestId("pro-summary-lines").textContent).toContain("2 líneas facturadas");
+    const steps = screen.getAllByTestId("pro-step");
+    expect(steps.map((x) => x.getAttribute("data-state"))).toEqual(["done", "current", "todo", "todo"]);
+    expect(steps[1].textContent).toContain("Borrador");
+    expect(screen.getByTestId("pro-summary-open-settlement").textContent).toBe("Abrir la liquidación");
+  });
+
   const previewOf = (over: Record<string, unknown> = {}) => ({
     professionalId: 1,
     professionalName: "Gaby",
@@ -818,7 +850,7 @@ describe("HU-COM-15 · ficha de la profesional", () => {
     expect(await screen.findByTestId("pro-rates-usual")).toBeTruthy();
     const rows = await screen.findAllByTestId("pro-rate-row");
     expect(rows.map((r) => r.dataset.name)).toEqual(["Corte", "Alisado pelo largo"]);
-    expect(screen.getByTestId("pro-differences-count").textContent).toBe("2 casos");
+    expect(screen.getByTestId("pro-differences-count").textContent).toBe("2");
     const corte = rows[0];
     expect(corte.dataset.kind).toBe("GROUP");
     expect(within(corte).getByTestId("pro-rate-title").textContent).toBe("Corte · 3 de 4 servicios");
@@ -895,7 +927,7 @@ describe("HU-COM-15 · ficha de la profesional", () => {
       professionals: [{ professionalId: 1, name: "Gaby", ruleCount: 2, retentionPercent: 5 }],
     });
     mount("/app/commissions/equipo/1?tab=rules", overview({ aguinaldoEnabled: true }));
-    expect((await screen.findByTestId("pro-retention-current")).textContent).toBe("Retención: 5 %");
+    expect((await screen.findByTestId("pro-retention-current")).textContent).toBe("5 %");
     await user.click(screen.getByTestId("pro-retention-edit"));
     const input = await screen.findByTestId("pro-retention-percent");
     await user.clear(input);

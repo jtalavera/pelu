@@ -57,7 +57,8 @@ test("muestra cuánto cobraría el profesional en el periodo vigente con las com
   await expect(page.getByTestId("pro-summary-services")).toContainText("40.000");
   await expect(page.getByTestId("pro-summary-products")).toContainText("10.000");
   await expect(page.getByTestId("pro-summary-lines")).toContainText("2 invoiced lines");
-  await expect(page.getByTestId("status-chip")).toContainText("Not settled");
+  // HU-COM-33: the stage is the current step of the path (To generate → Draft → Approved → Paid).
+  await expect(page.locator('[data-testid="pro-step"][data-state="current"]')).toContainText("To generate");
 
   // Bea only sees her own commissions (her exception: 50 %).
   await page.getByTestId("pro-back").click();
@@ -77,8 +78,12 @@ test("lo ya incluido en un borrador figura como Borrador y se llega a su liquida
   const [draft] = await generateSettlements(request, w.adminToken, [w.ana.id]);
   await loginAdminUi(page, w);
   await openSummary(page, w.ana.name);
-  await expect(page.getByTestId("status-chip")).toContainText("Draft");
+  await expect(page.locator('[data-testid="pro-step"][data-state="current"]')).toContainText("Draft");
   await expect(page.getByTestId("pro-summary-total")).toContainText("50.000");
+  // HU-COM-33: the breakdown comes from the draft itself, so it adds up to the total (it used to read 0 here).
+  await expect(page.getByTestId("pro-summary-services")).toContainText("40.000");
+  await expect(page.getByTestId("pro-summary-products")).toContainText("10.000");
+  await expect(page.getByTestId("pro-summary-lines")).toContainText("2 invoiced lines");
   await page.getByTestId("pro-summary-open-settlement").click();
   await expect(page).toHaveURL(new RegExp(`/app/commissions/settlements/${draft.id}$`));
 });

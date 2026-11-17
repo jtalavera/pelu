@@ -1062,7 +1062,6 @@
         "empty": "No hay profesionales que coincidan.",
         "noRulesYet": "Sin reglas: cobra el % por defecto",
         "missingRules": "Faltan reglas",
-        "thisPeriod": "Este período",
         "aguinaldo": "Retención acumulada",
         "footer": "Tocá una profesional para ver su resumen, sus reglas y su historial.",
         "detail": {
@@ -1073,10 +1072,10 @@
           "APPROVED": "Lista para pagar",
           "PAID": "Pagada el {{date}}"
         },
-        "usualPay": "Cobra lo normal de cada servicio",
         "differentIn": "Cobra distinto en {{count}} servicios",
         "differentIn_one": "Cobra distinto en {{count}} servicio",
-        "retainsPercent": "retiene {{percent}}"
+        "retainsPercent": "retiene {{percent}}",
+        "usualPay": "Cobra lo normal de cada servicio"
       },
       "pro": {
         "back": "Volver al equipo",
@@ -1127,15 +1126,9 @@
         "summaryCarried": "Incluye {{amount}} arrastrados de períodos anteriores.",
         "summaryLines_one": "{{count}} línea facturada",
         "rates": {
-          "usualTitle": "{{name}} cobra lo normal de cada servicio",
-          "usualHelp": "Es lo que paga el salón. Acá solo anotás donde cobra distinto.",
           "usualLink": "Ver las comisiones",
-          "retention": "Retención: {{percent}}",
           "retentionNone": "No retiene",
-          "retentionHelp": "Es de ella, no del servicio ni del grupo. Se descuenta de cada comisión y va a su saldo de retención.",
           "differentTitle": "Donde cobra distinto",
-          "differentCount": "{{count}} casos",
-          "differentCount_one": "1 caso",
           "add": "+ Agregar",
           "none": "{{name}} cobra lo normal en todo. Si en algún grupo o servicio cobra distinto, agregalo acá.",
           "groupTitle": "{{group}} · {{count}} de {{total}} servicios",
@@ -1164,7 +1157,15 @@
           "applyGroup": "Comisión de {{name}} en {{group}}: {{percent}}",
           "applyService": "Comisión de {{name}} en {{service}}: {{percent}}",
           "applyInclude": "Incluir {{count}} servicios de {{group}} en lo de {{name}}: {{percent}}",
-          "applyRemove": "Quitar lo que {{name}} cobra distinto en {{what}} (vuelve a lo normal)"
+          "applyRemove": "Quitar lo que {{name}} cobra distinto en {{what}} (vuelve a lo normal)",
+          "tileCommission": "Comisión",
+          "tileCommissionValue": "Lo normal",
+          "tileCommissionSub": "Lo que paga el salón",
+          "tileRetention": "Retención",
+          "tileRetentionSub": "De cada comisión, a su saldo",
+          "tileExceptions": "Excepciones",
+          "exceptionsNone": "Ninguna",
+          "tileExceptionsSub": "Donde cobra distinto"
         },
         "retentionPill": "{{percent}} de cada comisión",
         "retentionNote": "Se suma al saldo cuando se aprueba la liquidación",
@@ -1177,7 +1178,21 @@
         "movementsCommissions": "Comisiones",
         "movementsRetention": "Retención",
         "subtitleRetains": "Retiene {{percent}}",
-        "retentionNothingToPay": "Todavía no hay saldo para pagar: la retención se suma cuando se aprueba la liquidación."
+        "retentionNothingToPay": "Todavía no hay saldo para pagar: la retención se suma cuando se aprueba la liquidación.",
+        "viewSettlement": "Ver la liquidación",
+        "stepperAria": "Etapa de la liquidación de este período",
+        "stepper": {
+          "UNSETTLED": "Por generar",
+          "DRAFT": "Borrador",
+          "APPROVED": "Aprobada",
+          "PAID": "Pagada"
+        },
+        "stageHint": {
+          "UNSETTLED": "todavía no se generó la liquidación",
+          "DRAFT": "siguiente: aprobarla",
+          "APPROVED": "siguiente: marcarla como pagada",
+          "PAID": "ya está pagada"
+        }
       },
       "activity": {
         "intro": "Todo lo que pasó con las comisiones: cada movimiento y los reportes.",
