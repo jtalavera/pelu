@@ -127,11 +127,19 @@ export async function fillAppointmentDateIso(dialog: Locator, isoYmd: string): P
   // NOT a descendant of the appointment dialog — scope its controls to the page.
   const page = dialog.page();
   const monthNext = page.getByRole("button", { name: "Next month" });
+  const monthPrev = page.getByRole("button", { name: "Previous month" });
   const dayBtn = page.getByRole("button", { name: isoYmd, exact: true });
-  for (let i = 0; i < 14; i++) {
-    const visible = await dayBtn.first().isVisible().catch(() => false);
-    if (visible) break;
+  const isVisible = () => dayBtn.first().isVisible().catch(() => false);
+  // The popover opens on the month of the date the dialog starts with, which can be AFTER the day we want
+  // (the calendar may be showing a later week): look forward first, then walk back from where it opened.
+  let found = await isVisible();
+  for (let i = 0; i < 14 && !found; i++) {
     await monthNext.click();
+    found = await isVisible();
+  }
+  for (let i = 0; i < 28 && !found; i++) {
+    await monthPrev.click();
+    found = await isVisible();
   }
   await dayBtn.first().click({ timeout: 15_000 });
 }
