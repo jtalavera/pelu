@@ -552,7 +552,6 @@
         "retentionLine": "Retained {{amount}}"
       },
       "byProfessional": {
-        "intro": "Each row is a professional's rule for a group of services. The most specific wins: professional + service, professional + group, service, group and, last, the default %.",
         "professional": "Professional",
         "noProfessionals": "There are no active professionals yet.",
         "noGroups": "There are no commission groups yet. Create them in the «Groups» tab.",
@@ -1273,7 +1272,6 @@
         "precedence2": "% of the group",
         "precedence3": "% of the service",
         "precedence4": "% of the professional for that service",
-        "precedence5": "Default %",
         "precedenceHelp": "From the most general to the most specific: the last one that applies wins."
       },
       "workspace": {

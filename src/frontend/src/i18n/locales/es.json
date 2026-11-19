@@ -552,7 +552,6 @@
         "retentionLine": "Retenido {{amount}}"
       },
       "byProfessional": {
-        "intro": "Cada fila es una regla del profesional para un grupo de servicios. Gana la más específica: profesional + servicio, profesional + grupo, servicio, grupo y, por último, el % por defecto.",
         "professional": "Profesional",
         "noProfessionals": "Todavía no hay profesionales activos.",
         "noGroups": "Todavía no hay grupos de comisión. Creá los grupos en la solapa «Grupos».",
@@ -1273,7 +1272,6 @@
         "precedence2": "% del grupo",
         "precedence3": "% del servicio",
         "precedence4": "% de la profesional para ese servicio",
-        "precedence5": "% por defecto",
         "precedenceHelp": "De lo general a lo específico: gana la última que corresponda."
       },
       "workspace": {
