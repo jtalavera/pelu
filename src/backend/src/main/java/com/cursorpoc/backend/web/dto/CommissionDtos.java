@@ -290,7 +290,11 @@ public final class CommissionDtos {
       BigDecimal defaultPercent,
       List<VersionView> generalScheduled,
       List<ExceptionView> exceptions,
-      List<VersionView> history) {}
+      List<VersionView> history,
+      BigDecimal inheritedPercent,
+      /** Where {@code inheritedPercent} comes from: {@code GROUP} or {@code GENERAL}. */
+      String inheritedFrom,
+      String inheritedGroupName) {}
 
   /** Rules view (mockup): items grouped by category with their standard % and exceptions. */
   public record RuleException(

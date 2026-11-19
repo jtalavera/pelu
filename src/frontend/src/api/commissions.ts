@@ -262,6 +262,10 @@ export type ItemRules = {
   generalScheduled: VersionView[];
   exceptions: ExceptionView[];
   history: VersionView[];
+  /** % the item pays when it has none of its own: its group's, or the default of its kind. */
+  inheritedPercent: number;
+  inheritedFrom: "GROUP" | "GENERAL";
+  inheritedGroupName: string | null;
 };
 
 export type RuleException = { professionalId: number; professionalName: string; percent: number; delta: number };

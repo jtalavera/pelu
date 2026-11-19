@@ -642,6 +642,45 @@ class CommissionGroupsAguinaldoIntegrationTest {
   }
 
   @Test
+  void anItemWithoutOwnPercentButWithAGroupPercentIsNotReportedAsWithoutRule() {
+    configureSalon();
+    change("IMMEDIATE", new ConfigChange("DEFAULT_SERVICE", null, null, "10", null));
+
+    // Pestañas has no % of its own but its group pays 50 %: it does not fall back to the default.
+    var pestanasRules = configService.itemRules(tenant.getId(), pestanas.getId());
+    assertThat(pestanasRules.generalPercent()).isNull();
+    assertThat(pestanasRules.inheritedFrom()).isEqualTo("GROUP");
+    assertThat(pestanasRules.inheritedPercent()).isEqualByComparingTo("50");
+    assertThat(pestanasRules.inheritedGroupName()).isEqualTo("Pestañas");
+    var withoutRule =
+        configService.itemsWithoutGeneralRule(tenant.getId()).stream()
+            .map(i -> i.serviceId())
+            .toList();
+    assertThat(withoutRule).doesNotContain(pestanas.getId());
+
+    // Without a group it falls back to the default of its kind, and is reported.
+    var banoRules = configService.itemRules(tenant.getId(), banoDeCrema.getId());
+    assertThat(banoRules.inheritedFrom()).isEqualTo("GENERAL");
+    assertThat(banoRules.inheritedPercent()).isEqualByComparingTo("10");
+    assertThat(banoRules.inheritedGroupName()).isNull();
+    assertThat(
+            configService.itemsWithoutGeneralRule(tenant.getId()).stream()
+                .map(i -> i.serviceId())
+                .toList())
+        .contains(banoDeCrema.getId());
+
+    // A group without its own % falls back to the default again: reported, and says GENERAL.
+    change("IMMEDIATE", groupRule(lashesGroup, null, null));
+    assertThat(configService.itemRules(tenant.getId(), pestanas.getId()).inheritedFrom())
+        .isEqualTo("GENERAL");
+    assertThat(
+            configService.itemsWithoutGeneralRule(tenant.getId()).stream()
+                .map(i -> i.serviceId())
+                .toList())
+        .contains(pestanas.getId());
+  }
+
+  @Test
   void aRetentionProfileIsStoredAndListedInTheSettings() {
     change(
         "IMMEDIATE",
