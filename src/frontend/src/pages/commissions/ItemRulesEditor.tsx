@@ -107,7 +107,15 @@ export function ItemRulesEditor({ serviceId }: { serviceId: number }) {
           {notice}
         </Alert>
       )}
-      {rules.generalPercent === null && (
+      {rules.generalPercent === null && rules.inheritedFrom === "GROUP" && (
+        <Alert variant="info" data-testid="item-commission-uses-group">
+          {t("femme.commissions.rules.inheritsGroup", {
+            group: rules.inheritedGroupName ?? "",
+            value: formatPercent(rules.inheritedPercent),
+          })}
+        </Alert>
+      )}
+      {rules.generalPercent === null && rules.inheritedFrom !== "GROUP" && (
         <Alert variant="warning" data-testid="item-commission-no-general">
           {t("femme.commissions.rules.usesDefault", { value: formatPercent(rules.defaultPercent) })}
         </Alert>

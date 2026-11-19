@@ -555,18 +555,45 @@ public class CommissionConfigService {
         item.getKind() == ServiceKind.PRODUCT
             ? CommissionConfigScope.DEFAULT_PRODUCT
             : CommissionConfigScope.DEFAULT_SERVICE;
+    BigDecimal defaultPercent = snapshot.defaultPercentAt(defaultScope, now);
+    // Without a % of its own the item pays its group's (when the group has one), then the default
+    // of its kind — the same chain as CommissionCalculator.resolveRule.
+    Optional<CommissionConfigVersion> groupRule = groupRuleOf(snapshot, item, now);
+    BigDecimal inheritedPercent =
+        groupRule
+            .map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent())
+            .orElse(defaultPercent);
+    String inheritedFrom = groupRule.isPresent() ? "GROUP" : "GENERAL";
+    String inheritedGroupName =
+        groupRule.isPresent()
+            ? groupRepository
+                .findByIdAndTenantId(item.getCommissionGroupId(), tenantId)
+                .map(g -> g.getName())
+                .orElse(null)
+            : null;
     return new ItemRulesResponse(
         serviceId,
         item.getName(),
         item.getKind().name(),
         general.map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent()).orElse(null),
         general.map(CommissionConfigVersion::getId).orElse(null),
-        snapshot.defaultPercentAt(defaultScope, now),
+        defaultPercent,
         snapshot.scheduledAfter(ScopeKey.rule(serviceId, null), now).stream()
             .map(v -> view(v, snapshot, lookups, now))
             .toList(),
         exceptions,
-        history);
+        history,
+        inheritedPercent,
+        inheritedFrom,
+        inheritedGroupName);
+  }
+
+  /** The group % (non-null value) in force for the item's group, if it has a group. */
+  private static Optional<CommissionConfigVersion> groupRuleOf(
+      CommissionConfigSnapshot snapshot, SalonService item, Instant at) {
+    return item.getCommissionGroupId() == null
+        ? Optional.empty()
+        : snapshot.groupRuleAt(item.getCommissionGroupId(), null, at);
   }
 
   /**
@@ -712,13 +739,18 @@ public class CommissionConfigService {
     }
   }
 
-  /** HU-COM-02 / HU-COM-08: active items whose general percent is not defined. */
+  /**
+   * HU-COM-02 / HU-COM-08: active items that fall back to the default % of their kind, i.e. with no
+   * % of their own and none from their group either (a group's % is a valid source, see {@code
+   * CommissionCalculator.resolveRule}).
+   */
   @Transactional(readOnly = true)
   public List<ItemWithoutRule> itemsWithoutGeneralRule(long tenantId) {
     CommissionConfigSnapshot snapshot = ledger.snapshot(tenantId);
     Instant now = Instant.now();
     return serviceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(tenantId).stream()
         .filter(s -> snapshot.ruleAt(s.getId(), null, now).isEmpty())
+        .filter(s -> groupRuleOf(snapshot, s, now).isEmpty())
         .map(s -> new ItemWithoutRule(s.getId(), s.getName(), s.getKind().name()))
         .toList();
   }

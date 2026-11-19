@@ -418,6 +418,42 @@ test("AC14 · Excepciones por servicio muestra el % que paga cada servicio (el p
   await expect(page.getByTestId(`rules-standard-${free.id}`)).toContainText("10 %");
 });
 
+test("AC14 · el catálogo y el panel «Comisión» del ítem no dicen «sin % » si el ítem paga el % de su grupo; solo si cae al general", async ({
+  page,
+  request,
+}) => {
+  const s = await salon(request);
+  const free = await createCatalogItem(request, w.adminToken, w, "Baño de crema"); // no group
+  await applyChanges(request, w.adminToken, [{ scope: "DEFAULT_SERVICE", value: "10" }]);
+  await loginAdminUi(page, w);
+  await page.getByRole("link", { name: "Catalog" }).click();
+
+  // The group pays 40 %: no «Sin % de comisión» badge on it; the item without group does get it.
+  await expect(page.getByTestId(`svc-row-${s.mediano.id}`)).toBeVisible();
+  await expect(page.getByTestId(`svc-no-commission-${s.mediano.id}`)).toHaveCount(0);
+  await expect(page.getByTestId(`svc-no-commission-${free.id}`)).toBeVisible();
+
+  // Its «Commission» tab says it inherits the group's %, not the general one.
+  await page.getByTestId(`svc-row-${s.mediano.id}`).click();
+  await page.getByTestId("svc-tab-commission").click();
+  const section = page.getByTestId("item-commission-section");
+  await expect(section.getByTestId("item-commission-uses-group")).toContainText("Inherits the % of the group Alisado (40 %)");
+  await expect(section.getByTestId("item-commission-no-general")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // Without a group the warning says it falls back to the default % of its kind.
+  await page.getByTestId(`svc-row-${free.id}`).click();
+  await page.getByTestId("svc-tab-commission").click();
+  await expect(page.getByTestId("item-commission-no-general")).toContainText("no % of its own or from a group");
+  await expect(page.getByTestId("item-commission-no-general")).toContainText("10 %");
+  await expect(page.getByTestId("item-commission-uses-group")).toHaveCount(0);
+
+  // The API agrees: items without a rule do not include the one that has a group %.
+  const without = await apiGetJson<{ serviceId: number }[]>(request, w.adminToken, "/api/commissions/items-without-rule");
+  expect(without.map((i) => i.serviceId)).toContain(free.id);
+  expect(without.map((i) => i.serviceId)).not.toContain(s.mediano.id);
+});
+
 // ── AC12 · API ─────────────────────────────────────────────────────────────────────────────────
 
 test("AC12 · GET /rates trae cada grupo con su %, sus servicios y las excepciones; /overview cuenta los grupos sin %", async ({ request }) => {
