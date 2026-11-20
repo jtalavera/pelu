@@ -35,7 +35,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * HU-COM-20: the one-time conversion of the rules that already exist (Flyway V103) against the real
+ * HU-COM-20: the one-time conversion of the rules that already exist (Flyway V101) against the real
  * mapping (H2): the retention of a rule is folded into its %, a professional that retained through
  * her rules gets her own retention, and her rules by group become rules by service.
  */

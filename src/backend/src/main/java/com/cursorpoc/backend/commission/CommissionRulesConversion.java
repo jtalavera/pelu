@@ -19,7 +19,7 @@ import java.util.TreeMap;
 
 /**
  * HU-COM-20: converts the commission rules that exist to the simpler model, once (it runs from the
- * Flyway migration V103). It uses plain JDBC with standard SQL so it works on SQL Server and on H2.
+ * Flyway migration V101). It uses plain JDBC with standard SQL so it works on SQL Server and on H2.
  *
  * <ul>
  *   <li>The retention that a rule carried ({@code pago|retención|fijo|destino}) is folded into the

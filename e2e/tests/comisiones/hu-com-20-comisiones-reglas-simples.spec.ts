@@ -22,7 +22,7 @@ import {
 /**
  * HU-COM-20 · Comisiones con reglas simples
  * (requirements/user_stories/HU-COM-20-comisiones-reglas-simples.md).
- * La conversión de lo existente (AC11, migración V103) se prueba con el test de integración
+ * La conversión de lo existente (AC11, migración V101) se prueba con el test de integración
  * `CommissionRulesConversionTest` del backend: los e2e arrancan con Flyway apagado y sin datos viejos.
  */
 let w: CommissionWorld;

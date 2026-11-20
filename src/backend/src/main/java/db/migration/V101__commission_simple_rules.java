@@ -11,16 +11,16 @@ import org.slf4j.LoggerFactory;
  * belongs to the professional, and a professional's % is per service). The work is in {@link
  * CommissionRulesConversion}, which is tested on its own.
  */
-public class V103__commission_simple_rules extends BaseJavaMigration {
+public class V101__commission_simple_rules extends BaseJavaMigration {
 
-  private static final Logger log = LoggerFactory.getLogger(V103__commission_simple_rules.class);
+  private static final Logger log = LoggerFactory.getLogger(V101__commission_simple_rules.class);
 
   @Override
   public void migrate(Context context) throws Exception {
     CommissionRulesConversion.Result result =
         CommissionRulesConversion.convert(context.getConnection());
     log.info(
-        "V103 commission rules converted: foldedValues={} professionalsWithNewRetention={}"
+        "V101 commission rules converted: foldedValues={} professionalsWithNewRetention={}"
             + " expandedRules={} retiredGroupRules={}",
         result.foldedValues(),
         result.professionalsWithNewRetention(),

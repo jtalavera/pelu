@@ -407,7 +407,7 @@ Historia completa y criterios: [HU-COM-20](../user_stories/HU-COM-20-comisiones-
 - **Cuatro capas, gana la última:** % por defecto → % del grupo → % del servicio → % de la profesional para ese servicio. Se elimina la regla de la profesional por grupo (queda como atajo «Todo un grupo» al cargar, que escribe una regla por servicio).
 - **La retención de aguinaldo es de la profesional** y sale de la comisión (50 % con retención de 5 % → se paga 45 % y 5 % va al aguinaldo); las reglas ya no la llevan y cambiarla pide desde cuándo aplica.
 - **Configurar en tres pasos** (sin «Reglas por profesional»), nueva pantalla **Configurar › Comisiones** (% general, % por grupo y por servicio) y ficha de la profesional con «Donde cobra distinto» y su retención.
-- Migración V103 de las reglas existentes; `GET /api/commissions/rates`.
+- Migración V101 de las reglas existentes; `GET /api/commissions/rates`.
 
 ### HU-COM-21 · «Para revisar» en tarjetas claras y «Sin grupo» que se entienda
 
