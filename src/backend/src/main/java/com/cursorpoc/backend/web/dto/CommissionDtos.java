@@ -18,7 +18,18 @@ public final class CommissionDtos {
    * (default or rule; null closes a rule) or a periodicity.
    */
   public record ConfigChange(
-      String scope, Long serviceId, Long professionalId, String value, LocalDate validUntil) {}
+      String scope,
+      Long serviceId,
+      Long professionalId,
+      Long groupId,
+      String value,
+      LocalDate validUntil) {
+
+    public ConfigChange(
+        String scope, Long serviceId, Long professionalId, String value, LocalDate validUntil) {
+      this(scope, serviceId, professionalId, null, value, validUntil);
+    }
+  }
 
   public record ApplyChangesRequest(
       List<ConfigChange> changes, String applyMode, boolean replacePending, boolean preview) {}
@@ -55,6 +66,8 @@ public final class CommissionDtos {
       String itemKind,
       Long professionalId,
       String professionalName,
+      Long groupId,
+      String groupName,
       String value,
       String previousValue,
       Instant effectiveFrom,
@@ -71,7 +84,192 @@ public final class CommissionDtos {
       String periodicity,
       PeriodInfo currentPeriod,
       List<VersionView> scheduledChanges,
-      List<VersionView> history) {}
+      List<VersionView> history,
+      /* HU-COM-14 */
+      String fixedDestination,
+      boolean aguinaldoEnabled,
+      BigDecimal aguinaldoDefaultPercent,
+      List<RetentionProfile> retentionProfiles) {}
+
+  /** HU-COM-14: % retained for aguinaldo from a professional by default (null = she does not). */
+  public record RetentionProfile(
+      Long professionalId, String professionalName, boolean active, BigDecimal percent) {}
+
+  // ── Commission groups (HU-COM-14) ─────────────────────────────────────────────────────────
+
+  /** {@code percent}: the % the group pays to everybody (HU-COM-20); null when it has none. */
+  public record GroupView(
+      Long id, String name, int serviceCount, List<String> serviceNames, BigDecimal percent) {}
+
+  public record GroupRequest(String name) {}
+
+  public record GroupAssignment(Long serviceId, Long groupId) {}
+
+  public record AssignGroupsRequest(List<GroupAssignment> assignments) {}
+
+  /** What an assignment leaves: how many items changed and each one as the list shows it now. */
+  public record AssignGroupsResult(int changed, List<GroupServiceRow> rows) {}
+
+  public record GroupSuggestion(Long groupId, String groupName, String reason) {}
+
+  public record UngroupedService(Long serviceId, String name, GroupSuggestion suggestion) {}
+
+  /** One active catalog item with its current commission group (null = none) and a suggestion. */
+  public record GroupServiceRow(
+      Long serviceId,
+      String name,
+      String categoryName,
+      BigDecimal price,
+      Long groupId,
+      String groupName,
+      GroupSuggestion suggestion) {}
+
+  /** A professional with how many group rules she has and her usual retention %. */
+  public record ProfessionalRuleSummary(
+      Long professionalId, String name, int ruleCount, BigDecimal retentionPercent) {}
+
+  public record ProfessionalsRuleSummary(
+      boolean aguinaldoEnabled, List<ProfessionalRuleSummary> professionals) {}
+
+  // ── Commission rates: group → service → professional (HU-COM-20) ─────────────────────────
+
+  /** A professional that is paid a different % than usual for one service. */
+  public record RateException(
+      Long professionalId,
+      String professionalName,
+      BigDecimal percent,
+      BigDecimal fixedAmount,
+      /** PROFESSIONAL / SALON when the rule sets it, null when it follows the salon default. */
+      String fixedDestination,
+      boolean scheduled) {}
+
+  /**
+   * One service or product with what it normally pays. {@code source}: SERVICE (its own %), GROUP
+   * (the % of its group) or GENERAL (the default % of its kind). The {@code normal*} fields are the
+   * rule that applies to everybody (what an exception is compared with and copies its cost from).
+   */
+  public record RateItem(
+      Long serviceId,
+      String name,
+      String kind,
+      BigDecimal ownPercent,
+      BigDecimal ownFixedAmount,
+      String ownFixedDestination,
+      BigDecimal normalPercent,
+      BigDecimal normalFixedAmount,
+      String normalFixedDestination,
+      String source,
+      boolean scheduled,
+      List<RateException> exceptions) {}
+
+  /** A commission group with its own % (null = it has none) and its services. */
+  public record RateGroup(
+      Long id,
+      String name,
+      BigDecimal percent,
+      BigDecimal fixedAmount,
+      String fixedDestination,
+      boolean scheduled,
+      List<RateItem> items) {}
+
+  public record RatesView(
+      LocalDate date,
+      String baseType,
+      BigDecimal generalServicePercent,
+      BigDecimal generalProductPercent,
+      String defaultFixedDestination,
+      List<RateGroup> groups,
+      List<RateItem> ungrouped) {}
+
+  // ── Overview of a settlement period (HU-COM-15) ───────────────────────────────────────────
+
+  /**
+   * One professional in a period. {@code status}: UNSETTLED (accrued, no settlement yet), DRAFT,
+   * APPROVED, PAID or NONE (nothing to pay).
+   */
+  public record OverviewRow(
+      Long professionalId,
+      String professionalName,
+      String status,
+      BigDecimal amount,
+      BigDecimal retention,
+      Long settlementId,
+      int ruleCount,
+      /** Movements behind the amount: the settlement's, or the unsettled ones of the period. */
+      int lineCount,
+      /** Day the settlement was paid (PAID only). */
+      java.time.LocalDate paidOn) {}
+
+  public record Overview(
+      PeriodInfo period,
+      /** 0 = the current period, -1 = the one before… */
+      int offset,
+      List<OverviewRow> rows,
+      /** What the professionals earned in the period (paid or not). */
+      BigDecimal total,
+      BigDecimal retentionTotal,
+      int unsettled,
+      int drafts,
+      int approved,
+      int paid,
+      /* "Para revisar" */
+      int linesWithoutProfessional,
+      int ungroupedServices,
+      /* HU-COM-20: groups that do not have their % yet (they pay the general one) */
+      int groupsWithoutPercent,
+      int groupCount,
+      /* Aguinaldo */
+      boolean aguinaldoEnabled,
+      BigDecimal aguinaldoBalance,
+      /* HU-COM-18: active professionals with a retention % above zero (step 4 of «Configurar») */
+      int professionalsRetaining) {}
+
+  // ── Aguinaldo fund (HU-COM-14) ────────────────────────────────────────────────────────────
+
+  public record AguinaldoBalance(
+      Long professionalId,
+      String professionalName,
+      boolean active,
+      BigDecimal retained,
+      BigDecimal paid,
+      BigDecimal balance,
+      java.time.LocalDate lastPaymentOn) {}
+
+  public record AguinaldoSummary(
+      boolean enabled, BigDecimal totalBalance, List<AguinaldoBalance> balances) {}
+
+  public record AguinaldoMovementView(
+      /** ACCRUAL (from a settlement), PAYMENT or ADJUSTMENT. */
+      String kind,
+      java.time.LocalDate date,
+      String concept,
+      BigDecimal amount,
+      BigDecimal balance,
+      Long settlementId,
+      Long movementId,
+      String paymentMethod,
+      boolean closesFund,
+      String note) {}
+
+  public record AguinaldoDetail(
+      Long professionalId,
+      String professionalName,
+      BigDecimal balance,
+      List<AguinaldoMovementView> movements) {}
+
+  /** {@code amount} null = the whole balance. {@code closesFund}: payment on departure. */
+  public record AguinaldoPaymentRequest(
+      Long professionalId,
+      BigDecimal amount,
+      java.time.LocalDate paidOn,
+      String paymentMethod,
+      boolean closesFund,
+      String note) {}
+
+  public record AguinaldoBulkPaymentRequest(
+      java.time.LocalDate paidOn, String paymentMethod, String note) {}
+
+  public record AguinaldoAdjustmentRequest(Long professionalId, BigDecimal amount, String reason) {}
 
   // ── Rules (HU-COM-02) ─────────────────────────────────────────────────────────────────────
 
@@ -92,7 +290,11 @@ public final class CommissionDtos {
       BigDecimal defaultPercent,
       List<VersionView> generalScheduled,
       List<ExceptionView> exceptions,
-      List<VersionView> history) {}
+      List<VersionView> history,
+      BigDecimal inheritedPercent,
+      /** Where {@code inheritedPercent} comes from: {@code GROUP} or {@code GENERAL}. */
+      String inheritedFrom,
+      String inheritedGroupName) {}
 
   /** Rules view (mockup): items grouped by category with their standard % and exceptions. */
   public record RuleException(
@@ -108,6 +310,14 @@ public final class CommissionDtos {
       BigDecimal standardPercent,
       /** True when the item has its own % (differs from / overrides the general one). */
       boolean ownStandard,
+      /**
+       * What the item pays without a % of its own: its group's %, else the general % of its kind.
+       */
+      BigDecimal inheritedPercent,
+      /** Where {@code inheritedPercent} comes from: {@code GROUP} or {@code GENERAL}. */
+      String inheritedFrom,
+      /** Name of the group the inherited % comes from ({@code GROUP} only), else null. */
+      String inheritedGroupName,
       List<RuleException> exceptions,
       boolean scheduled) {}
 
@@ -137,6 +347,8 @@ public final class CommissionDtos {
       int revision,
       String reasonCode,
       Long invoiceId,
+      /** HU-COM-29: the invoice line an entry, its reversal and its new revision all share. */
+      Long invoiceLineId,
       String invoiceNumber,
       Long serviceId,
       String itemName,
@@ -148,6 +360,11 @@ public final class CommissionDtos {
       BigDecimal percentApplied,
       String ruleOrigin,
       BigDecimal commissionAmount,
+      /* HU-COM-14 */
+      BigDecimal fixedAmount,
+      boolean fixedToProfessional,
+      BigDecimal retentionPercent,
+      BigDecimal retentionAmount,
       Instant accrualAt,
       Long reversesEntryId,
       Long settlementId,
@@ -182,6 +399,7 @@ public final class CommissionDtos {
       BigDecimal servicesTotal,
       BigDecimal productsTotal,
       BigDecimal adjustmentsTotal,
+      BigDecimal retentionTotal,
       int lines,
       List<EntryView> entries,
       List<SettlementView> draftSettlements,
@@ -241,6 +459,9 @@ public final class CommissionDtos {
       LocalDate periodTo,
       String status,
       BigDecimal totalAmount,
+      /* HU-COM-14: retenido para aguinaldo y monto fijo incluido en totalAmount */
+      BigDecimal retentionAmount,
+      BigDecimal fixedAmount,
       Instant createdAt,
       Instant approvedAt,
       Instant paidAt,
@@ -293,6 +514,9 @@ public final class CommissionDtos {
       BigDecimal baseAmount,
       BigDecimal percentApplied,
       BigDecimal commissionAmount,
+      BigDecimal fixedAmount,
+      boolean fixedToProfessional,
+      BigDecimal retentionAmount,
       Instant accrualAt,
       String note) {}
 
@@ -302,7 +526,12 @@ public final class CommissionDtos {
       BigDecimal servicesTotal,
       BigDecimal productsTotal,
       List<MyEntryView> currentPeriodEntries,
-      List<SettlementView> settlements) {}
+      List<SettlementView> settlements,
+      /* HU-COM-14 */
+      BigDecimal currentPeriodRetention,
+      BigDecimal currentPeriodFixed,
+      boolean aguinaldoEnabled,
+      BigDecimal aguinaldoBalance) {}
 
   public record MySettlementDetail(
       SettlementView settlement, List<MyEntryView> entries, List<Subtotal> byKind) {}

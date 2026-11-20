@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import { Alert, Button, Input, Label, Modal, Radio, RadioGroup, Select, Spinner, Text } from "@design-system";
 import { applyChanges, getSettings, type ConfigChange, type SettingsResponse } from "../../api/commissions";
 import { translateApiError } from "../../api/parseApiErrorMessage";
@@ -7,10 +8,30 @@ import { FieldValidationError } from "../../components/FieldValidationError";
 import { useDateLocale } from "../../i18n/dateLocale";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ApplyChangeDialog } from "./ApplyChangeDialog";
+import { ConfigStep, type StepTone } from "./ConfigStep";
+import { useOverview } from "./overview";
 import { ScheduledChangesList, describeVersionValue } from "./ScheduledChangesList";
 import { TableWrap, formatPercent, parsePercentInput, tdClass, thClass } from "./common";
 
-type Editing = "BASE" | "DEFAULT_SERVICE" | "DEFAULT_PRODUCT" | "PERIODICITY" | null;
+type Editing =
+  | "BASE"
+  | "DEFAULT_SERVICE"
+  | "DEFAULT_PRODUCT"
+  | "PERIODICITY"
+  | "FIXED_DESTINATION"
+  | "AGUINALDO_ENABLED"
+  | "AGUINALDO_DEFAULT"
+  | null;
+
+/** A step whose content lives on another page: how it stands and what to show when opened. */
+export type StepSlot = {
+  tone: StepTone;
+  summary: ReactNode;
+  /** What is missing (tone «pending»). */
+  pill?: string;
+  /** `primary` is true for the step that should carry the one filled button. */
+  body?: (primary: boolean) => ReactNode;
+};
 
 const FOLD =
   "flex min-h-12 w-full items-center justify-between gap-3 rounded-card border border-line bg-surface px-4 text-left font-heading font-extrabold text-ink";
@@ -19,8 +40,17 @@ const FOLD =
  * HU-COM-01 / HU-COM-09: calculation base, default percentages and settlement periodicity (one row each,
  * changed from a small dialog), plus the scheduled changes and the change history, folded.
  */
-export function SettingsTab() {
+export function SettingsTab({
+  part = "setup",
+  slots,
+}: {
+  part?: "setup" | "advanced";
+  /** HU-COM-16/18/20: «Configurar» supplies step 2 (it lives on other pages) and its closing block. */
+  slots?: { step2?: StepSlot; after?: (ctx: { scheduledCount: number }) => ReactNode };
+} = {}) {
   const { t } = useTranslation();
+  const { refresh: refreshOverview } = useOverview();
+  const firstLoad = useRef(true);
   const dateLocale = useDateLocale();
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -32,15 +62,25 @@ export function SettingsTab() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [scheduledOpen, setScheduledOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  /** HU-COM-14: the professional whose usual retention % is being edited. */
+  const [retention, setRetention] = useState<{ professionalId: number; name: string; value: string } | null>(null);
+  const [retentionError, setRetentionError] = useState<string | null>(null);
+  /** HU-COM-18: steps the user opened or closed by hand; the rest follow «first pending step is open». */
+  const [toggled, setToggled] = useState<Record<number, boolean>>({});
+  /** The step that opened by itself when the screen appeared; it stays open while the user fixes it. */
+  const initialOpen = useRef<number | null | undefined>(undefined);
 
   const load = useCallback(async () => {
     try {
       setSettings(await getSettings());
       setLoadError(null);
+      // The rest of the screen (Aguinaldo tab, setup badge…) follows what was just changed.
+      if (firstLoad.current) firstLoad.current = false;
+      else void refreshOverview();
     } catch (err) {
       setLoadError(translateApiError(err, t));
     }
-  }, [t]);
+  }, [t, refreshOverview]);
 
   useEffect(() => {
     void load();
@@ -52,15 +92,24 @@ export function SettingsTab() {
   const rows: { scope: Exclude<Editing, null>; label: string; current: string }[] = [
     { scope: "BASE", label: t("femme.commissions.settings.baseTitle"), current: t(`femme.commissions.base.${settings.base}`) },
     {
-      scope: "DEFAULT_SERVICE",
-      label: t("femme.commissions.settings.DEFAULT_SERVICE"),
-      current: formatPercent(settings.defaultPercentService),
+      scope: "FIXED_DESTINATION",
+      label: t("femme.commissions.settings.FIXED_DESTINATION"),
+      current: t(`femme.commissions.settings.fixedDestinationValue.${settings.fixedDestination}`),
     },
     {
-      scope: "DEFAULT_PRODUCT",
-      label: t("femme.commissions.settings.DEFAULT_PRODUCT"),
-      current: formatPercent(settings.defaultPercentProduct),
+      scope: "AGUINALDO_ENABLED",
+      label: t("femme.commissions.settings.AGUINALDO_ENABLED"),
+      current: t(`femme.commissions.settings.aguinaldoValue.${settings.aguinaldoEnabled}`),
     },
+    ...(settings.aguinaldoEnabled
+      ? [
+          {
+            scope: "AGUINALDO_DEFAULT" as const,
+            label: t("femme.commissions.settings.AGUINALDO_DEFAULT"),
+            current: formatPercent(settings.aguinaldoDefaultPercent),
+          },
+        ]
+      : []),
     {
       scope: "PERIODICITY",
       label: t("femme.commissions.settings.periodicity"),
@@ -72,12 +121,21 @@ export function SettingsTab() {
     setFieldError(null);
     setSaveError(null);
     setNotice(null);
+    const percents = {
+      DEFAULT_SERVICE: settings!.defaultPercentService,
+      DEFAULT_PRODUCT: settings!.defaultPercentProduct,
+      AGUINALDO_DEFAULT: settings!.aguinaldoDefaultPercent,
+    } as const;
     setValue(
       scope === "BASE"
         ? settings!.base
         : scope === "PERIODICITY"
           ? settings!.periodicity
-          : String(scope === "DEFAULT_SERVICE" ? settings!.defaultPercentService : settings!.defaultPercentProduct).replace(".", ","),
+          : scope === "FIXED_DESTINATION"
+            ? settings!.fixedDestination
+            : scope === "AGUINALDO_ENABLED"
+              ? String(settings!.aguinaldoEnabled)
+              : String(percents[scope]).replace(".", ","),
     );
     setEditing(scope);
   }
@@ -112,9 +170,47 @@ export function SettingsTab() {
       });
       return setEditing(null);
     }
+    if (editing === "FIXED_DESTINATION") {
+      if (value === settings!.fixedDestination) return setEditing(null);
+      setApply({
+        change: { scope: "FIXED_DESTINATION", value },
+        summary: t("femme.commissions.settings.fixedDestinationSummary", {
+          value: t(`femme.commissions.settings.fixedDestinationValue.${value}`),
+        }),
+      });
+      return setEditing(null);
+    }
+    if (editing === "AGUINALDO_ENABLED") {
+      if (value === String(settings!.aguinaldoEnabled)) return setEditing(null);
+      setApply({
+        change: { scope: "AGUINALDO_ENABLED", value },
+        summary: t("femme.commissions.settings.aguinaldoEnabledSummary", {
+          value: t(`femme.commissions.settings.aguinaldoValue.${value}`),
+        }),
+      });
+      return setEditing(null);
+    }
     const parsed = parsePercentInput(value);
     if (parsed === null) {
       setFieldError(t("femme.commissions.validation.percent"));
+      return;
+    }
+    if (editing === "AGUINALDO_DEFAULT") {
+      if (Number(parsed) === Number(settings!.aguinaldoDefaultPercent)) return setEditing(null);
+      try {
+        // It only prefills new rules: no calculation changes, so no apply-mode question.
+        await applyChanges({
+          changes: [{ scope: "AGUINALDO_DEFAULT", value: parsed }],
+          applyMode: null,
+          replacePending: true,
+          preview: false,
+        });
+        setEditing(null);
+        setNotice(t("femme.commissions.applyDialog.applied"));
+        await load();
+      } catch (err) {
+        setFieldError(translateApiError(err, t));
+      }
       return;
     }
     const saved = editing === "DEFAULT_SERVICE" ? settings!.defaultPercentService : settings!.defaultPercentProduct;
@@ -130,39 +226,172 @@ export function SettingsTab() {
 
   const editingLabel = rows.find((r) => r.scope === editing)?.label ?? "";
 
+  /** The rows of a step, each with «Cambiar». */
+  function settingRows(scopes: Exclude<Editing, null>[]) {
+    return rows
+      .filter((r) => scopes.includes(r.scope))
+      .map((r) => (
+        <div
+          key={r.scope}
+          className="grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-line px-4 py-2 first:border-t-0 sm:px-5"
+          data-testid={`commission-setting-${r.scope}`}
+        >
+          <div className="min-w-0">
+            <div className="font-semibold text-ink">{r.label}</div>
+            <div className="text-sm text-ink-3">{r.current}</div>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            className="min-h-11"
+            onClick={() => openEdit(r.scope)}
+            data-testid={`commission-setting-change-${r.scope}`}
+            aria-label={`${t("femme.commissions.rules.change")}: ${r.label}`}
+          >
+            {t("femme.commissions.rules.change")}
+          </Button>
+        </div>
+      ));
+  }
+
+  /** HU-COM-14: who retains for aguinaldo, inside step 4. */
+  function retentionBlock() {
+    return (
+      <div className="border-t border-line" data-testid="commission-retention-profiles">
+        <div className="px-4 pt-3 sm:px-5">
+          <h3 className="font-heading font-extrabold text-ink">{t("femme.commissions.settings.retentionTitle")}</h3>
+          <p className="text-sm text-ink-3">{t("femme.commissions.settings.retentionHelp")}</p>
+        </div>
+        {settings!.retentionProfiles
+          .filter((p) => p.active)
+          .map((p) => (
+            <div
+              key={p.professionalId}
+              data-testid="commission-retention-row"
+              className="grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-line px-4 py-2 first:border-t-0 sm:px-5"
+            >
+              <div className="min-w-0">
+                <div className="font-semibold text-ink">{p.professionalName}</div>
+                <div className="text-sm text-ink-3" data-testid="commission-retention-current">
+                  {p.percent
+                    ? t("femme.commissions.settings.retentionRetains", { percent: formatPercent(p.percent) })
+                    : t("femme.commissions.settings.retentionNone")}
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11"
+                data-testid="commission-retention-change"
+                aria-label={`${t("femme.commissions.rules.change")}: ${p.professionalName}`}
+                onClick={() => {
+                  setRetentionError(null);
+                  setRetention({
+                    professionalId: p.professionalId,
+                    name: p.professionalName ?? "",
+                    value: p.percent ? String(p.percent).replace(".", ",") : "",
+                  });
+                }}
+              >
+                {t("femme.commissions.rules.change")}
+              </Button>
+            </div>
+          ))}
+      </div>
+    );
+  }
+
+  // ── HU-COM-18: the four steps, each with its tone ─────────────────────────────────────────────
+  const activeProfiles = settings.retentionProfiles.filter((p) => p.active);
+  const retaining = activeProfiles.filter((p) => Number(p.percent) > 0).length;
+  const destination = t(`femme.commissions.config.step4.destination.${settings.fixedDestination}`);
+  const step4Tone: StepTone = !settings.aguinaldoEnabled ? "optional" : retaining > 0 ? "done" : "pending";
+  const step4Summary = !settings.aguinaldoEnabled
+    ? t("femme.commissions.config.step4.summaryOff", { destination })
+    : retaining > 0
+      ? t("femme.commissions.config.step4.summaryOn", {
+          percent: formatPercent(settings.aguinaldoDefaultPercent),
+          count: retaining,
+          total: activeProfiles.length,
+          destination,
+        })
+      : t("femme.commissions.config.step4.summaryNobody");
+  const steps: { n: number; tone: StepTone }[] = [
+    { n: 1, tone: "done" },
+    { n: 2, tone: slots?.step2?.tone ?? "done" },
+    { n: 3, tone: step4Tone },
+  ];
+  /** The first step with something missing opens by itself (when the screen appears) and carries the one filled button. */
+  const firstPending = steps.find((x) => x.tone === "pending")?.n ?? null;
+  if (initialOpen.current === undefined) initialOpen.current = firstPending;
+  const isOpen = (n: number) => toggled[n] ?? n === initialOpen.current;
+  const toggle = (n: number) => setToggled((cur) => ({ ...cur, [n]: !(cur[n] ?? n === initialOpen.current) }));
+
+  /** `key` picks the texts of the step (the aguinaldo step keeps the block «step4»). */
+  const step = (n: number, key: number, tone: StepTone, summary: ReactNode, pill: string | undefined, body: ReactNode) => (
+    <ConfigStep
+      key={n}
+      n={n}
+      title={t(`femme.commissions.config.step${key}.title`)}
+      summary={summary}
+      tone={tone}
+      pill={pill}
+      open={isOpen(n)}
+      onToggle={() => toggle(n)}
+    >
+      {body}
+    </ConfigStep>
+  );
+
   return (
     <div className="flex flex-col gap-3" data-testid="commission-settings">
-      <p className="px-0.5 text-sm text-ink-3">{t("femme.commissions.settings.intro")}</p>
       {notice && (
-        <Alert variant="success" role="status">
+        <Alert variant="success" role="status" data-testid="commission-settings-notice">
           {notice}
         </Alert>
       )}
-      <div className="rounded-card border border-line bg-surface shadow-sm">
-        {rows.map((r) => (
-          <div
-            key={r.scope}
-            className="grid min-h-14 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-line px-4 py-2 first:border-t-0"
-            data-testid={`commission-setting-${r.scope}`}
-          >
-            <div className="min-w-0">
-              <div className="font-semibold text-ink">{r.label}</div>
-              <div className="text-sm text-ink-3">{r.current}</div>
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              className="min-h-11"
-              onClick={() => openEdit(r.scope)}
-              data-testid={`commission-setting-change-${r.scope}`}
-              aria-label={`${t("femme.commissions.rules.change")}: ${r.label}`}
+      {part === "setup" && (
+        <>
+          <p className="px-0.5 text-sm text-ink-3">{t("femme.commissions.settings.intro")}</p>
+          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+            {step(
+              1,
+              1,
+              "done",
+              t("femme.commissions.config.step1.summaryShort", {
+                base: t(`femme.commissions.base.${settings.base}`),
+                periodicity: t(`femme.commissions.periodicityShort.${settings.periodicity}`),
+              }),
+              undefined,
+              settingRows(["BASE", "PERIODICITY"]),
+            )}
+            {slots?.step2 && step(2, 2, slots.step2.tone, slots.step2.summary, slots.step2.pill, slots.step2.body?.(firstPending === 2))}
+            {step(
+              3,
+              4,
+              step4Tone,
+              step4Summary,
+              t("femme.commissions.config.step4.pill"),
+              <>
+                {settingRows(["AGUINALDO_ENABLED", "AGUINALDO_DEFAULT", "FIXED_DESTINATION"])}
+                {settings.aguinaldoEnabled && retentionBlock()}
+              </>,
+            )}
+          </ul>
+          {slots?.after?.({ scheduledCount: settings.scheduledChanges.length }) ?? (
+            <Link
+              to="/app/commissions/configurar/avanzado"
+              className="inline-flex min-h-11 items-center self-start font-bold text-primary"
+              data-testid="config-advanced-link"
             >
-              {t("femme.commissions.rules.change")}
-            </Button>
-          </div>
-        ))}
-      </div>
+              {t("femme.commissions.config.advancedLink")} →
+            </Link>
+          )}
+        </>
+      )}
 
+      {part === "advanced" && (
+        <>
       <button
         type="button"
         aria-expanded={scheduledOpen}
@@ -222,6 +451,7 @@ export function SettingsTab() {
                   <td className={tdClass}>
                     {t(`femme.commissions.scope.${v.scope}`)}
                     {v.serviceName ? ` · ${v.serviceName}` : ""}
+                    {v.groupName ? ` · ${v.groupName}` : ""}
                     {v.professionalName ? ` · ${v.professionalName}` : ""}
                   </td>
                   <td className={tdClass}>{describeVersionValue(t, v.scope, v.previousValue)}</td>
@@ -235,6 +465,9 @@ export function SettingsTab() {
             </tbody>
           </TableWrap>
         </div>
+      )}
+
+        </>
       )}
 
       <Modal
@@ -253,7 +486,9 @@ export function SettingsTab() {
               onClick={() => void submitEdit()}
               data-testid="commission-setting-save"
             >
-              {editing === "PERIODICITY" ? t("femme.commissions.common.save") : t("femme.commissions.rules.apply")}
+              {editing === "PERIODICITY" || editing === "AGUINALDO_DEFAULT"
+                ? t("femme.commissions.common.save")
+                : t("femme.commissions.rules.apply")}
             </Button>
           </>
         }
@@ -277,7 +512,40 @@ export function SettingsTab() {
               </Text>
             </>
           )}
-          {(editing === "DEFAULT_SERVICE" || editing === "DEFAULT_PRODUCT") && (
+          {editing === "FIXED_DESTINATION" && (
+            <>
+              <Text variant="small" className="text-ink-3">
+                {t("femme.commissions.settings.FIXED_DESTINATIONHelp")}
+              </Text>
+              <RadioGroup value={value} onChange={setValue} aria-label={t("femme.commissions.settings.FIXED_DESTINATION")}>
+                {(["PROFESSIONAL", "SALON"] as const).map((d) => (
+                  <label key={d} className="flex min-h-11 cursor-pointer items-start gap-2 text-sm">
+                    <Radio value={d} data-testid={`commission-fixed-${d}`} className="mt-1" />
+                    <span>
+                      <span className="font-medium">{t(`femme.commissions.settings.fixedDestinationValue.${d}`)}</span>
+                      <span className="block text-xs text-ink-3">{t(`femme.commissions.settings.fixedDestinationHelp.${d}`)}</span>
+                    </span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </>
+          )}
+          {editing === "AGUINALDO_ENABLED" && (
+            <>
+              <Text variant="small" className="text-ink-3">
+                {t("femme.commissions.settings.AGUINALDO_ENABLEDHelp")}
+              </Text>
+              <RadioGroup value={value} onChange={setValue} aria-label={t("femme.commissions.settings.AGUINALDO_ENABLED")}>
+                {(["true", "false"] as const).map((v) => (
+                  <label key={v} className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+                    <Radio value={v} data-testid={`commission-aguinaldo-${v}`} />
+                    <span className="font-medium">{t(`femme.commissions.settings.aguinaldoValue.${v}`)}</span>
+                  </label>
+                ))}
+              </RadioGroup>
+            </>
+          )}
+          {(editing === "DEFAULT_SERVICE" || editing === "DEFAULT_PRODUCT" || editing === "AGUINALDO_DEFAULT") && (
             <div className="flex flex-col gap-1">
               <Label htmlFor="commission-setting-percent">{editingLabel}</Label>
               <Input
@@ -311,6 +579,66 @@ export function SettingsTab() {
               {saveError && <Alert variant="destructive">{saveError}</Alert>}
             </div>
           )}
+        </div>
+      </Modal>
+
+      <Modal
+        open={retention !== null}
+        onClose={() => setRetention(null)}
+        title={t("femme.commissions.settings.retentionEditTitle", { name: retention?.name ?? "" })}
+        className="max-w-lg"
+        footer={
+          <>
+            <Button type="button" variant="secondary" className="min-h-11 w-full sm:w-auto" onClick={() => setRetention(null)}>
+              {t("femme.commissions.common.cancel")}
+            </Button>
+            <Button
+              type="button"
+              className="min-h-11 w-full sm:w-auto"
+              data-testid="commission-retention-save"
+              onClick={() => {
+                if (!retention) return;
+                const raw = retention.value.trim();
+                const parsed = raw === "" ? null : parsePercentInput(raw);
+                if (raw !== "" && parsed === null) {
+                  setRetentionError(t("femme.commissions.validation.percent"));
+                  return;
+                }
+                // HU-COM-20: the retention comes out of what she is paid, so it asks since when it applies.
+                setApply({
+                  change: { scope: "RETENTION_PROFILE", professionalId: retention.professionalId, value: parsed },
+                  summary:
+                    parsed === null
+                      ? t("femme.commissions.settings.retentionNoneSummary", { name: retention.name })
+                      : t("femme.commissions.settings.retentionSummary", { name: retention.name, value: formatPercent(parsed) }),
+                });
+                setRetention(null);
+              }}
+            >
+              {t("femme.commissions.rules.apply")}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="commission-retention-percent">{t("femme.commissions.settings.retentionInputLabel")}</Label>
+          <Input
+            id="commission-retention-percent"
+            inputMode="decimal"
+            value={retention?.value ?? ""}
+            invalid={!!retentionError}
+            aria-describedby={retentionError ? "commission-retention-error" : undefined}
+            className="max-w-[8rem]"
+            data-testid="commission-retention-percent"
+            onChange={(e) => {
+              setRetentionError(null);
+              setRetention((cur) => (cur ? { ...cur, value: e.target.value } : cur));
+            }}
+          />
+          <FieldValidationError id="commission-retention-error">{retentionError}</FieldValidationError>
+          <Text variant="small" className="text-ink-3">
+            {t("femme.commissions.settings.retentionInputHelp")}
+          </Text>
         </div>
       </Modal>
 

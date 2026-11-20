@@ -364,6 +364,122 @@ Reglas:
 - [ ] La línea deja de figurar en «Líneas sin profesional». Si después se anula la factura, la comisión se revierte como cualquier otra (HU-COM-05).
 - [ ] Solo se pueden asignar líneas de ítems del catálogo, de comprobantes emitidos no anulados y sin profesional (`COMMISSION_LINE_NOT_ASSIGNABLE`); otros errores: `INVOICE_LINE_NOT_FOUND`, `PROFESSIONAL_NOT_FOUND`, `COMMISSION_PROFESSIONAL_INACTIVE`.
 
+### HU-COM-14 · Comisiones por grupo, retención de aguinaldo y monto fijo por servicio
+
+Historia completa y criterios: [HU-COM-14](../user_stories/HU-COM-14-grupos-retencion-aguinaldo-y-monto-fijo.md). Resumen:
+
+- **Grupos de comisión** (Brushing, Color, Manos…): cada servicio está en uno como máximo; las reglas se cargan por profesional y grupo (`GROUP_RULE`) y ganan sobre la regla general del servicio: profesional + servicio › profesional + grupo › servicio › grupo › % por defecto.
+- **Regla = pago | retención | monto fijo | destino.** La retención (`retention_amount`) no se paga con la liquidación: entra al **fondo de aguinaldo** de la profesional cuando la liquidación se **aprueba** y sale si se anula.
+- **Monto fijo** (costo de producto): se descuenta del precio (según la base con o sin IVA) antes de calcular los %, por servicio; es **para la profesional** (se le paga completo, sin retención) o **para el salón** (solo baja la base). Destino por defecto del salón en Configuración, cambiable por regla.
+- **Fondo de aguinaldo**: pagos parciales, completos, «por salida de la profesional» y «a todas», ajustes manuales con motivo; vista de la profesional con lo retenido y su saldo.
+
+### HU-COM-15 · Rediseño de la experiencia de Comisiones
+
+Historia completa y criterios: [HU-COM-15](../user_stories/HU-COM-15-comisiones-experiencia-rediseno.md). Resumen:
+
+- La pantalla se organiza en cinco lugares: **Inicio · Liquidar · Equipo · Actividad · Configurar**, con el período en curso siempre visible y contadores de lo pendiente.
+- **Liquidar** concentra generar → aprobar → pagar (lo que era «Liquidaciones» y «Vista previa»); **Equipo** tiene la ficha de cada profesional (Resumen, Reglas en frases, Aguinaldo, Historial); **Configurar** es una lista de cuatro pasos con «Avanzado» para excepciones, cambios programados e historial.
+- **Aguinaldo** vive dentro de Equipo y solo se muestra si el salón activó la retención.
+- Funcionalmente no cambia: mismas reglas de cálculo, estados y permisos. Nuevo endpoint de lectura `GET /api/commissions/overview` con el resumen del período por profesional.
+
+### HU-COM-16 · Configurar: «Grupos y servicios» fácil de encontrar y ordenar
+
+Historia completa y criterios: [HU-COM-16](../user_stories/HU-COM-16-configurar-grupos-y-servicios.md). Resumen:
+
+- Configurar muestra el estado de cada paso (grupos, servicios con grupo, profesionales sin reglas) y tiene un buscador.
+- **Grupos y servicios**: lista de grupos con «Sin grupo» arriba y los servicios del grupo elegido al costado; buscar un servicio dice en qué grupo está y permite moverlo ahí; «Agregar servicios» con sugeridos por nombre.
+- Las **excepciones por servicio** son una solapa visible del mismo lugar; «Cambios programados e historial» tiene su pantalla.
+- Asignar es inmediato (una sola llamada que devuelve las filas afectadas). Sin cambios en el cálculo.
+
+### HU-COM-17 · Resumen claro de profesionales y liquidaciones
+
+Historia completa y criterios: [HU-COM-17](../user_stories/HU-COM-17-resumen-profesionales-liquidaciones.md). Resumen:
+
+- **Liquidar** lista a todas las profesionales activas (las «Sin movimientos» al final), agrupadas por estado con subtotal, y cada fila dice qué hay detrás de su monto; los pasos muestran personas y dinero.
+- **Inicio** separa «Ya pagado» de «Falta pagar», explica la barra (dinero por estado, con leyenda), muestra los 4 pasos con personas y plata y cuenta el equipo («N activas · X con comisiones · Y sin movimientos»).
+- **Equipo** muestra el estado de todas (también «Sin movimientos») y filtra Pagadas y Sin movimientos.
+- La API del resumen agrega `lineCount` y `paidOn` por fila. Sin cambios en el cálculo.
+
+### HU-COM-20 · Comisiones con reglas simples
+
+Historia completa y criterios: [HU-COM-20](../user_stories/HU-COM-20-comisiones-reglas-simples.md). Resumen:
+
+- **Cuatro capas, gana la última:** % por defecto → % del grupo → % del servicio → % de la profesional para ese servicio. Se elimina la regla de la profesional por grupo (queda como atajo «Todo un grupo» al cargar, que escribe una regla por servicio).
+- **La retención de aguinaldo es de la profesional** y sale de la comisión (50 % con retención de 5 % → se paga 45 % y 5 % va al aguinaldo); las reglas ya no la llevan y cambiarla pide desde cuándo aplica.
+- **Configurar en tres pasos** (sin «Reglas por profesional»), nueva pantalla **Configurar › Comisiones** (% general, % por grupo y por servicio) y ficha de la profesional con «Donde cobra distinto» y su retención.
+- Migración V101 de las reglas existentes; `GET /api/commissions/rates`.
+
+### HU-COM-21 · «Para revisar» en tarjetas claras y «Sin grupo» que se entienda
+
+Historia completa y criterios: [HU-COM-21](../user_stories/HU-COM-21-inicio-para-revisar-y-sin-grupo.md). Resumen:
+
+- **«Para revisar»:** tarjetas con franja y etiqueta de la consecuencia, el número una sola vez, el % general real y un solo botón relleno (el primero); orden por lo que más afecta la plata.
+- **«Sin grupo»:** deja de verse como alarma («Pagan el % general»), contador en píldora con separador de miles, cabecera «N ítems · servicios · productos», filtro Todos / Servicios / Productos y filas sin la etiqueta repetida. Sin cambios de cálculo ni de API.
+
+### HU-COM-22 · «Para revisar» como un solo panel de filas
+
+Historia completa y criterios: [HU-COM-22](../user_stories/HU-COM-22-para-revisar-panel-de-filas.md). Reemplaza las tarjetas de HU-COM-21: un panel de ancho completo con una fila por aviso (ícono, número una vez, consecuencia, botón), un solo botón relleno, y el caso «% general 0 %» dicho sin rodeos («Hoy no pagan comisión»). Sin cambios de cálculo ni de API.
+
+### HU-COM-23 · Movimientos: orden por fecha y retención explicada
+
+Historia completa y criterios: [HU-COM-23](../user_stories/HU-COM-23-movimientos-orden-y-retencion.md). Resumen: la lista de Movimientos sale de lo más reciente a lo más antiguo por defecto, con una lista desplegable «Ordenar» para invertirla; y las líneas con retención dicen «Servicio 50 % → se paga 45 % · aguinaldo 5 % (Gs. 5.000)». Sin cambios de cálculo ni de API.
+
+### HU-COM-24 · «Retención» en toda la aplicación y en la ficha de la profesional
+
+Historia completa y criterios: [HU-COM-24](../user_stories/HU-COM-24-retencion-en-la-ficha.md). Resumen: «Aguinaldo» pasa a llamarse «Retención» en todos los textos; la ficha de la profesional queda con Resumen · Reglas · Movimientos (sin la solapa «Aguinaldo»); el Resumen muestra dos tarjetas (lo que se paga y lo retenido, con el saldo, el último pago y las acciones de pagar y ajustar) y Movimientos tiene el interruptor Comisiones | Retención. Sin cambios de cálculo ni de API.
+
+### HU-COM-25 · Movimientos en columnas, orden desde la columna Fecha y filtro de pago
+
+Historia completa y criterios: [HU-COM-25](../user_stories/HU-COM-25-movimientos-columnas-y-pago.md). Resumen: la lista de Movimientos pasa a siete columnas (en el celular, tarjetas); se ordena tocando el encabezado FECHA (se quita la lista «Ordenar»); filtro «Pago» Todas · Sin pagar · Pagadas con su cantidad; y un pie con el total y lo retenido de lo que se ve. Sin cambios de cálculo ni de API.
+
+### HU-COM-26 · La retención pendiente se ve en Movimientos y la ficha siempre ofrece pagar y ajustar
+
+Historia completa y criterios: [HU-COM-26](../user_stories/HU-COM-26-retencion-pendiente-y-acciones.md). Resumen: «Movimientos › Retención» muestra lo retenido que espera aprobación como una línea gris «Pendiente» y, sin nada, un mensaje en lugar de la caja vacía; el Resumen de la ficha siempre ofrece «Pagar retención» (deshabilitado sin saldo) y «Ajustar el saldo», y el subtítulo dice «Retiene 5 %». Sin cambios de cálculo ni de API.
+
+### HU-COM-27 · Una línea recalculada se cuenta una sola vez
+
+Historia completa y criterios: [HU-COM-27](../user_stories/HU-COM-27-conteo-de-lineas-recalculadas.md). Resumen: «N líneas facturadas» (ficha) y «N movimientos» (Liquidar y Equipo) no cuentan la fila original anulada ni la reversión de una línea recalculada o reasignada. Sin cambios de importes.
+
+### HU-COM-28 · Liquidar más simple: una pestaña por etapa
+
+Historia completa y criterios: [HU-COM-28](../user_stories/HU-COM-28-liquidar-pestanas.md). Resumen: «Liquidar» pasa a una sola lista con pestañas (Por generar · Por aprobar · Por pagar · Pagadas) y un botón principal por etapa; desaparecen las tarjetas de paso, las píldoras de filtro, los encabezados de grupo y los avisos repetidos; quienes no tienen movimientos quedan en una línea al pie. Sin cambios de cálculo ni de API.
+
+### HU-COM-29 · Movimientos: las líneas revertidas se entienden
+
+Historia completa y criterios: [HU-COM-29](../user_stories/HU-COM-29-movimientos-lineas-revertidas.md). Resumen: una venta recalculada, reasignada, corregida o anulada se muestra como una sola fila (la comisión vigente, con su etiqueta y «antes …») y un «Ver cambios» abre el recorrido original → reversión → vigente con el neto; un interruptor abre todos. Sin cambios de importes; la fila expone `invoiceLineId`.
+
+### HU-COM-30 · Liquidar: descargar el CSV de este período o de períodos anteriores
+
+Historia completa y criterios: [HU-COM-30](../user_stories/HU-COM-30-liquidar-descargar-csv.md). Resumen: «Descargar CSV» pasa a ser un ícono junto al total de Liquidar que abre un menú con «este período» y «períodos anteriores» (desde / hasta); la API acepta `from`/`to` en `settlements.csv` y lee todas las páginas.
+
+### HU-COM-31 · El CSV de Liquidar incluye lo que está por generar; el ícono va sin círculo
+
+Historia completa y criterios: [HU-COM-31](../user_stories/HU-COM-31-csv-incluye-por-generar.md). Resumen: el CSV de un rango trae también una fila por cada profesional que está «Por generar» (sin ID, «Sin liquidar», con lo pendiente como total), antes de las liquidaciones; y el ícono de descargar pierde el círculo.
+
+### HU-COM-32 · Liquidación: el detalle día a día
+
+Historia completa y criterios: [HU-COM-32](../user_stories/HU-COM-32-liquidacion-dia-a-dia.md). Resumen: el detalle de la liquidación se cuenta día por día, con una barra «Servicios + Productos + Ajustes = Total», una sola fila por venta (las recalculadas con «Ver cambios», como en Movimientos), los montos alineados y los ajustes en su día; se quitan los «Subtotales por tipo e ítem».
+
+### HU-COM-33 · Fichas y Movimientos: filas parejas, tarjeta con etapas, Reglas en tres cuadros y Equipo sin iniciales
+
+Historia completa y criterios: [HU-COM-33](../user_stories/HU-COM-33-fichas-y-movimientos.md). Resumen: Movimientos con filas de la misma altura (flecha a la izquierda, etiqueta en Tipo, sin columna Profesional en la ficha); la tarjeta «A pagar este período» muestra las etapas y su desglose sale de la liquidación (arregla el «0» de un Borrador); Reglas sin caja celeste y con tres cuadros; Equipo con tarjetas más bajas y sin iniciales.
+
+### HU-COM-19 · Anular borradores rápido desde Liquidar
+
+Historia completa y criterios: [HU-COM-19](../user_stories/HU-COM-19-anular-borradores-rapido.md). Resumen:
+
+- Cada fila en **Borrador** de Liquidar tiene «Anular» junto a «Aprobar»; en lote, la casilla del tramo y una barra de selección con «Anular borradores».
+- El motivo es **opcional** (con tres frecuentes de un toque) en un borrador y sigue siendo obligatorio en una liquidación aprobada.
+- Al anular, las comisiones vuelven a «Sin liquidar» y un aviso ofrece «Generar de nuevo».
+
+### HU-COM-18 · Configurar con pasos plegados
+
+Historia completa y criterios: [HU-COM-18](../user_stories/HU-COM-18-configurar-pasos-plegados.md). Resumen:
+
+- Configurar es una lista de cuatro pasos plegables, cada uno con círculo (✓ al día · número ámbar pendiente · número gris opcional), resumen de una línea y etiqueta de lo que falta; se abre solo el primero pendiente, con el único botón principal.
+- El paso 4 es opcional si el aguinaldo está apagado y pendiente solo si está activo y nadie retiene; el contador del menú cuenta los tres pasos que pueden quedar pendientes.
+- `overview` agrega `professionalsRetaining`. Sin cambios en el cálculo.
+
 ---
 
 ## 6. Modelo de datos conceptual
@@ -417,7 +533,7 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 
 ## 8. Códigos de error (backend → i18n `femme.apiErrors.*`)
 
-`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `COMMISSION_RECALCULATION_FAILED`, `INVOICE_LINE_PROFESSIONAL_INACTIVE`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`, `COMMISSION_ENTRY_NOT_FOUND`, `COMMISSION_ENTRY_NOT_REASSIGNABLE`, `COMMISSION_REASSIGN_REASON_REQUIRED`, `COMMISSION_REASSIGN_SAME_PROFESSIONAL`, `INVOICE_LINE_NOT_FOUND`, `COMMISSION_LINE_NOT_ASSIGNABLE`.
+`FEATURE_NOT_ENABLED`, `COMMISSION_BASE_INVALID`, `COMMISSION_PERCENT_OUT_OF_RANGE`, `COMMISSION_RULE_OVERLAP`, `COMMISSION_RULE_NOT_FOUND`, `COMMISSION_CALCULATION_FAILED`, `COMMISSION_PERIOD_OVERLAP`, `COMMISSION_RECALCULATION_FAILED`, `INVOICE_LINE_PROFESSIONAL_INACTIVE`, `COMMISSION_CHANGE_APPLY_MODE_REQUIRED`, `COMMISSION_PENDING_CHANGE_NOT_FOUND`, `COMMISSION_PENDING_CHANGE_ALREADY_EFFECTIVE`, `SETTLEMENT_NOT_FOUND`, `SETTLEMENT_INVALID_STATE_TRANSITION`, `SETTLEMENT_ADJUSTMENT_REASON_REQUIRED`, `SETTLEMENT_NOT_EDITABLE`, `SETTLEMENT_EMPTY`, `COMMISSION_ENTRY_NOT_FOUND`, `COMMISSION_ENTRY_NOT_REASSIGNABLE`, `COMMISSION_REASSIGN_REASON_REQUIRED`, `COMMISSION_REASSIGN_SAME_PROFESSIONAL`, `INVOICE_LINE_NOT_FOUND`, `COMMISSION_LINE_NOT_ASSIGNABLE`, `COMMISSION_GROUP_NOT_FOUND`, `COMMISSION_GROUP_NAME_REQUIRED`, `COMMISSION_GROUP_NAME_TAKEN`, `COMMISSION_GROUP_HAS_RULES`, `COMMISSION_TOTAL_PERCENT_EXCEEDED`, `COMMISSION_FIXED_AMOUNT_INVALID`, `COMMISSION_FIXED_DESTINATION_INVALID`, `AGUINALDO_NOTHING_TO_PAY`, `AGUINALDO_AMOUNT_INVALID`, `AGUINALDO_AMOUNT_EXCEEDS_BALANCE`, `AGUINALDO_BALANCE_NEGATIVE`, `AGUINALDO_REASON_REQUIRED`, `AGUINALDO_PAYMENT_METHOD_INVALID`.
 
 ## 9. Requisitos transversales
 
@@ -444,6 +560,26 @@ Restricciones: clave única `(invoiceLineId, sourceType, revision)` para idempot
 | HU-COM-10 | Campo profesional por línea (servicio y producto); precarga desde registro de servicio; asignación manual en venta suelta; profesional inactivo rechazado; aviso de línea sin comisión; campo oculto con flag deshabilitada; **actualizar los specs existentes de HU-14**. |
 | HU-COM-12 | Reasignar desde Movimientos (validaciones, reversión + nueva comisión con las reglas del correcto); desde el detalle de un borrador; con liquidación aprobada: aviso, liquidación intacta, corrección en la próxima; códigos de error. |
 | HU-COM-13 | Asignar desde «Líneas sin profesional» (validación, comisión con las reglas del profesional a la fecha de la factura, sin liquidar, la línea deja de figurar, visible en Movimientos); anulación posterior revierte; errores con códigos; aislamiento entre tenants. |
+| HU-COM-14 | Grupos (crear/renombrar/eliminar, sugerencias por nombre, productos juntos); reglas por profesional con validaciones, ejemplo en vivo y copia; Configuración (retención, destino del monto fijo, quién retiene); cálculo con retención y monto fijo (profesional/salón) y precedencia; liquidación con costo de producto y retenido; fondo de aguinaldo (entra al aprobar, sale al anular, pagos parcial/salida/a todas, ajuste); vista de la profesional; historial y recálculo de reglas de grupo. |
+| HU-COM-15 | Cinco lugares y contadores; Inicio (resumen, «Para revisar», guía de primera vez); Liquidar (3 pasos, lote, estados, CSV, sin duplicar períodos); Equipo (lista, búsqueda, filtros); ficha de la profesional (Resumen, Reglas en frases, editor con ejemplo y validaciones, copiar, retención usual, Historial); Aguinaldo solo si está activo; Actividad; Configurar en pasos y Avanzado; endpoint `overview` por tenant. |
+| HU-COM-16 | Estado de cada paso y atajos en Configurar; buscador; lista de grupos + detalle con «Sin grupo» arriba; mover desde la fila, en lote y por sugerencia; buscar con resultados por grupo; agregar servicios; cambio inmediato y rechazo; crear/renombrar/eliminar; solapa de excepciones; celular. |
+| HU-COM-17 | Liquidar con todas las activas, tramos y subtotales, motivos por fila, «Sin movimientos» al final y su filtro; Inicio con pagado/por pagar, leyenda de la barra, 4 pasos y equipo; Equipo con estados y filtros; celular; `overview` con `lineCount` y `paidOn`. |
+| HU-COM-18 | Configurar en pasos plegables: círculo y etiqueta por estado, resúmenes, abre solo el primer pendiente con un único botón principal, paso 4 según aguinaldo y quién retiene, contador del menú, excepciones y programados siempre a mano; `overview` con `professionalsRetaining`. |
+| HU-COM-20 | Cuatro capas y gana la última (profesional en ese servicio › servicio › grupo › por defecto); retención de la profesional que sale de la comisión (con tope, solo con aguinaldo activo, cambia → pide desde cuándo); Configurar en tres pasos y pendientes; Configurar › Comisiones (general, grupo, servicio, «propio», quitar, costo de producto, buscador); ficha «Donde cobra distinto» (grupo entero → una regla por servicio, incluir los nuevos, cambiar, quitar) y retención; sin «sin reglas» en Inicio y Equipo; conversión de lo existente; `rates`. |
+| HU-COM-19 | «Anular» por fila y en lote solo para borradores; motivo opcional y frecuentes; vuelve a «Sin liquidar» y «Generar de nuevo»; aviso de filas que no son borradores; motivo obligatorio en aprobada (API y detalle). |
+| HU-COM-21 | «Para revisar» en tarjetas (etiqueta, número una vez, % general real, solo la primera con botón relleno, plurales); «Sin grupo» neutral con «Pagan el % general», píldora 1.247, cabecera con conteos, filtro por tipo, filas sin etiqueta repetida y asignación en lote. |
+| HU-COM-22 | «Para revisar» como panel de filas de ancho completo (ícono por tipo, número una vez, consecuencia, un solo botón relleno); «Hoy no pagan comisión» cuando el % general es 0 %; reemplaza los criterios 1 a 5 de HU-COM-21. |
+| HU-COM-23 | Movimientos de lo más reciente a lo más antiguo (desempate por el último registrado), «Ordenar» para invertir (toda la lista, vuelve a la página 1); la línea con retención dice servicio · se paga · aguinaldo con su monto. |
+| HU-COM-24 | «Retención» en lugar de «Aguinaldo» en toda la interfaz; ficha con Resumen · Reglas · Movimientos; Resumen en dos tarjetas (pagar / retenido, saldo, último pago, pagar y ajustar); Movimientos con el interruptor Comisiones \| Retención; sin retención no aparece nada de esto. |
+| HU-COM-25 | Movimientos en siete columnas (tarjetas en el celular); orden desde el encabezado FECHA (sin lista «Ordenar»); filtro de pago Todas · Sin pagar · Pagadas con cantidades; pie con total y retenido; el cálculo explica la retención. |
+| HU-COM-26 | Retención pendiente (sin liquidar / en borrador) como línea gris en Movimientos › Retención; mensaje cuando no hay nada; Pagar retención (deshabilitado sin saldo) y Ajustar el saldo siempre visibles; subtítulo «Retiene N %». |
+| HU-COM-27 | Conteo de líneas facturadas / movimientos sin contar la fila anulada ni la reversión de una línea recalculada. |
+| HU-COM-28 | Liquidar con pestañas por etapa, botón principal por etapa, sin carteles repetidos, «sin movimientos» al pie. |
+| HU-COM-29 | Movimientos: una fila por venta con su etiqueta, «Ver cambios» con el recorrido original → reversión → vigente, interruptor para ver todas; expone `invoiceLineId`. |
+| HU-COM-30 | Liquidar: «Descargar CSV» como ícono junto al total con menú (este período / períodos anteriores); `settlements.csv` acepta `from`/`to`. |
+| HU-COM-31 | CSV de Liquidar con las filas «Por generar» (sin ID, «Sin liquidar»); ícono de descargar sin círculo. |
+| HU-COM-32 | Liquidación: detalle día a día, composición del total, una fila por venta con «Ver cambios», montos alineados; sin subtotales por tipo e ítem. |
+| HU-COM-33 | Movimientos con filas parejas (flecha, etiqueta en Tipo, sin Profesional en la ficha); tarjeta «A pagar» con etapas y desglose desde la liquidación; Reglas en tres cuadros; Equipo sin iniciales. |
 | HU-COM-11 | Flag apagada por defecto: ningún tenant ve el módulo; habilitar por tier y por tenant con la resolución global Y tier Y tenant; efectos de la flag apagada (menú, campo de HU-COM-10, endpoints, sin entradas); datos conservados al deshabilitar y reactivar; auditoría; `ADMIN` de tenant no puede cambiarla. |
 | Aislamiento | Suite `mt-isolation`: reglas, entradas y liquidaciones de un tenant no visibles en otro; la base configurada es independiente por tenant. |
 

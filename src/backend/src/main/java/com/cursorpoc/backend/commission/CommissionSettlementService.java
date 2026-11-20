@@ -258,7 +258,10 @@ public class CommissionSettlementService {
     return s;
   }
 
-  /** Draft or Approved only. Entries go back to unsettled; a carry forward is undone. */
+  /**
+   * Draft or Approved only. Entries go back to unsettled; a carry forward is undone. The reason is
+   * optional for a Draft (HU-COM-19, quick void) and required for an Approved one.
+   */
   @Transactional
   public CommissionSettlement voidSettlement(
       long tenantId, long settlementId, String actorEmail, String reason) {
@@ -267,7 +270,8 @@ public class CommissionSettlementService {
         && s.getStatus() != CommissionSettlementStatus.APPROVED) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "SETTLEMENT_INVALID_STATE_TRANSITION");
     }
-    if (reason == null || reason.isBlank()) {
+    boolean noReason = reason == null || reason.isBlank();
+    if (noReason && s.getStatus() == CommissionSettlementStatus.APPROVED) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SETTLEMENT_VOID_REASON_REQUIRED");
     }
     for (CommissionEntry e :
@@ -290,7 +294,7 @@ public class CommissionSettlementService {
     }
     s.setVoidedAt(Instant.now());
     s.setVoidedByEmail(actorEmail);
-    s.setVoidReason(reason.trim());
+    s.setVoidReason(noReason ? null : reason.trim());
     transition(s, CommissionSettlementStatus.VOIDED, actorEmail);
     entryRepository.flush();
     ledger.recomputeTotal(s.getId());

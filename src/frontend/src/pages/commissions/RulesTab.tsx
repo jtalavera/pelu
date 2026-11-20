@@ -26,23 +26,24 @@ type SubTab = "SERVICE" | "PRODUCT";
 /** Unsaved changes, keyed by scope + item + professional ("Guardar cambios" applies them all). */
 type Pending = Record<string, ConfigChange>;
 
-const key = (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) =>
-  `${c.scope}|${c.serviceId ?? ""}|${c.professionalId ?? ""}`;
+const key = (c: Pick<ConfigChange, "scope" | "serviceId" | "professionalId" | "groupId">) =>
+  `${c.scope}|${c.serviceId ?? ""}|${c.professionalId ?? ""}|${c.groupId ?? ""}`;
 
 /** The item as it would look once the pending changes are saved. */
 /** Rows per page in the rules list (services / products). */
 const PAGE_SIZES = [10, 25, 50];
 const PAGE_SIZE_DEFAULT = 10;
 
-function effectiveItem(item: RuleItem, general: number, pending: Pending, professionals: { id: number; fullName: string }[]) {
+function effectiveItem(item: RuleItem, pending: Pending, professionals: { id: number; fullName: string }[]) {
   const own = pending[key({ scope: "RULE", serviceId: item.serviceId, professionalId: null })];
   let ownStandard = item.ownStandard;
   let standard = Number(item.standardPercent);
   if (own) {
     ownStandard = own.value !== null;
-    standard = own.value !== null ? Number(own.value) : general;
+    // Without a % of its own (or when it is taken away) it pays what it inherits: its group's, else the general one.
+    standard = own.value !== null ? Number(own.value) : Number(item.inheritedPercent);
   } else if (!item.ownStandard) {
-    standard = general;
+    standard = Number(item.inheritedPercent);
   }
   const exceptions = new Map<number, { percent: number; dirty: boolean }>();
   for (const e of item.exceptions) exceptions.set(e.professionalId, { percent: Number(e.percent), dirty: false });
@@ -55,7 +56,16 @@ function effectiveItem(item: RuleItem, general: number, pending: Pending, profes
   const dirty =
     !!own ||
     professionals.some((p) => !!pending[key({ scope: "RULE", serviceId: item.serviceId, professionalId: p.id })]);
-  return { standard, ownStandard, exceptions, dirty, ownDirty: !!own };
+  return {
+    standard,
+    ownStandard,
+    inherited: Number(item.inheritedPercent),
+    inheritedFrom: item.inheritedFrom,
+    inheritedGroupName: item.inheritedGroupName,
+    exceptions,
+    dirty,
+    ownDirty: !!own,
+  };
 }
 
 function deltaLabel(delta: number): string {
@@ -101,7 +111,7 @@ export function RulesTab() {
     setPending((prev) => ({ ...prev, [key(change)]: change }));
   }
 
-  function unstage(change: Pick<ConfigChange, "scope" | "serviceId" | "professionalId">) {
+  function unstage(change: Pick<ConfigChange, "scope" | "serviceId" | "professionalId" | "groupId">) {
     setPending((prev) => {
       const next = { ...prev };
       delete next[key(change)];
@@ -109,17 +119,11 @@ export function RulesTab() {
     });
   }
 
-  /** General % of a kind (changed from Configuración). */
-  function generalOf(kind: ItemKind): number {
-    return Number(views[kind]?.generalPercent ?? 0);
-  }
 
   const base: BaseType = (views.SERVICE?.baseType as BaseType | undefined) ?? "NET_OF_TAX";
 
   return (
     <div className="flex min-w-0 flex-col gap-3" data-testid="commission-rules">
-      <p className="px-0.5 text-sm text-ink-3">{t("femme.commissions.rules.intro")}</p>
-
       <div className="flex gap-2" role="group" aria-label={t("femme.commissions.tabs.rules")}>
         {(["SERVICE", "PRODUCT"] as const).map((k) => (
           <button
@@ -147,13 +151,13 @@ export function RulesTab() {
       )}
       {error && <Alert variant="destructive">{error}</Alert>}
 
-      {!views[tab] ? (
+      {(tab === "SERVICE" || tab === "PRODUCT") &&
+        (!views[tab] ? (
         <Spinner />
       ) : (
         <KindRules
           key={tab}
           view={views[tab]!}
-          general={generalOf(tab)}
           base={base}
           date={date}
           onDate={setDate}
@@ -169,7 +173,7 @@ export function RulesTab() {
             setSaving(true);
           }}
         />
-      )}
+      ))}
 
       {pendingList.length > 0 && (
         <>
@@ -213,7 +217,6 @@ export function RulesTab() {
 
 function KindRules({
   view,
-  general,
   base,
   date,
   onDate,
@@ -227,7 +230,6 @@ function KindRules({
   onSave,
 }: {
   view: RulesView;
-  general: number;
   base: BaseType;
   date: string;
   onDate: (v: string) => void;
@@ -246,9 +248,9 @@ function KindRules({
   const isProduct = view.kind === "PRODUCT";
   const effective = useMemo(() => {
     const map = new Map<number, ReturnType<typeof effectiveItem>>();
-    for (const c of view.categories) for (const i of c.items) map.set(i.serviceId, effectiveItem(i, general, pending, view.professionals));
+    for (const c of view.categories) for (const i of c.items) map.set(i.serviceId, effectiveItem(i, pending, view.professionals));
     return map;
-  }, [view, general, pending]);
+  }, [view, pending]);
   const hasException = (id: number) => {
     const e = effective.get(id)!;
     return e.ownStandard || e.exceptions.size > 0;
@@ -371,7 +373,11 @@ function KindRules({
                   </div>
                   <span className="text-right font-heading font-extrabold tabular-nums text-ink" data-testid={`rules-standard-${i.serviceId}`}>
                     {formatPercent(e.standard)}
-                    {!e.ownStandard && <span className="block text-xs font-normal text-ink-3">{t("femme.commissions.rules.generalShort")}</span>}
+                    {!e.ownStandard && (
+                      <span className="block text-xs font-normal text-ink-3" data-testid={`rules-source-${i.serviceId}`} data-source={e.inheritedFrom}>
+                        {t(e.inheritedFrom === "GROUP" ? "femme.commissions.rules.groupShort" : "femme.commissions.rules.generalShort")}
+                      </span>
+                    )}
                   </span>
                 </li>
               );
@@ -414,7 +420,6 @@ function KindRules({
           key={selectedItem.item.serviceId}
           item={selectedItem.item}
           category={selectedItem.category}
-          general={general}
           base={base}
           effective={effective.get(selectedItem.item.serviceId)!}
           professionals={view.professionals}
@@ -434,7 +439,6 @@ type PanelMode = { type: "standard" } | { type: "edit"; professionalId: number }
 function ItemPanel({
   item,
   category,
-  general,
   base,
   effective,
   professionals,
@@ -446,7 +450,6 @@ function ItemPanel({
 }: {
   item: RuleItem;
   category: string;
-  general: number;
   base: BaseType;
   effective: ReturnType<typeof effectiveItem>;
   professionals: { id: number; fullName: string }[];
@@ -491,8 +494,8 @@ function ItemPanel({
     }
     setFieldError(null);
     const change = { scope: "RULE" as const, serviceId: item.serviceId, professionalId: null };
-    // Back to what is already saved (own % or the inherited general) → nothing left to save.
-    if (item.ownStandard ? Number(parsed) === Number(item.standardPercent) : Number(parsed) === general) unstage(change);
+    // Back to what is already saved (own %, or what it inherits from its group / the general one) → nothing left to save.
+    if (item.ownStandard ? Number(parsed) === Number(item.standardPercent) : Number(parsed) === Number(item.inheritedPercent)) unstage(change);
     else stage({ ...change, value: parsed });
     setMode(null);
   }
@@ -595,7 +598,9 @@ function ItemPanel({
               <div className="text-[10px] text-[var(--color-ink-3)]">
                 {effective.ownStandard
                   ? t("femme.commissions.rules.ownStandard")
-                  : t("femme.commissions.rules.inheritsGeneral", { value: formatPercent(general) })}
+                  : effective.inheritedFrom === "GROUP"
+                    ? t("femme.commissions.rules.inheritsGroup", { group: effective.inheritedGroupName ?? "", value: formatPercent(effective.inherited) })
+                    : t("femme.commissions.rules.inheritsGeneral", { value: formatPercent(effective.inherited) })}
               </div>
             </div>
             {mode?.type !== "standard" && (
@@ -630,7 +635,9 @@ function ItemPanel({
               </Button>
               {effective.ownStandard && (
                 <Button type="button" size="sm" variant="outline" onClick={useGeneral}>
-                  {t("femme.commissions.rules.useGeneral", { value: formatPercent(general) })}
+                  {effective.inheritedFrom === "GROUP"
+                    ? t("femme.commissions.rules.useGroup", { value: formatPercent(effective.inherited) })
+                    : t("femme.commissions.rules.useGeneral", { value: formatPercent(effective.inherited) })}
                 </Button>
               )}
             </div>

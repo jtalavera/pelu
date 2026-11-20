@@ -24,6 +24,8 @@ class CommissionExportServiceTest {
           LocalDate.of(2026, 10, 31),
           "PAID",
           new BigDecimal("40000"),
+          BigDecimal.ZERO,
+          BigDecimal.ZERO,
           Instant.EPOCH,
           null,
           null,
@@ -48,6 +50,26 @@ class CommissionExportServiceTest {
         .contains(
             "Settlement ID,Professional,Period from,Period to,Status,Total,Payment method,Payment reference");
     assertThat(csv).contains(",Paid,");
+  }
+
+  @Test
+  void settlementsCsvListsWhatIsStillToGenerateFirstWithoutAnId() {
+    var pending =
+        List.of(
+            new CommissionExportService.PendingRow(
+                "Bea",
+                java.time.LocalDate.parse("2026-11-01"),
+                java.time.LocalDate.parse("2026-11-30"),
+                new BigDecimal("268636")));
+    String csv =
+        new String(service.settlementsCsv(pending, List.of(PAID), "en"), StandardCharsets.UTF_8);
+    // No id, «Unsettled», what is pending as its total and nothing as payment.
+    assertThat(csv).contains(",Bea,2026-11-01,2026-11-30,Unsettled,268636,,");
+    assertThat(csv).contains("7,Ana,2026-10-01,2026-10-31,Paid,40000,CASH,");
+    assertThat(csv.indexOf(",Bea,")).isLessThan(csv.indexOf("7,Ana,"));
+    String es =
+        new String(service.settlementsCsv(pending, List.of(), null), StandardCharsets.UTF_8);
+    assertThat(es).contains(",Bea,2026-11-01,2026-11-30,Sin liquidar,268636,,");
   }
 
   @Test

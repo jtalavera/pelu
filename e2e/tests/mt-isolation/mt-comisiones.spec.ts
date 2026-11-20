@@ -142,6 +142,17 @@ test.describe("mt-comisiones · aislamiento del módulo de comisiones", () => {
     expect(gen.ok(), await gen.text()).toBeTruthy();
     const [settlement] = (await gen.json()) as { id: number }[];
 
+    // HU-COM-15: the period overview of each tenant lists only its own professionals and settlements.
+    const overviewOf = async (token: string) =>
+      (await (await request.get(`${API_BASE}/api/commissions/overview`, { headers: authHeaders(token) })).json()) as {
+        rows: { professionalId: number; settlementId: number | null }[];
+      };
+    const overviewI = await overviewOf(tokenI);
+    const overviewO = await overviewOf(tokenO);
+    expect(overviewI.rows.find((r) => r.professionalId === professionalId)?.settlementId).toBe(settlement.id);
+    expect(overviewO.rows.some((r) => r.professionalId === professionalId)).toBe(false);
+    expect(overviewO.rows.every((r) => r.settlementId !== settlement.id)).toBe(true);
+
     const entriesO = (await (await request.get(`${API_BASE}/api/commissions/entries`, { headers: authHeaders(tokenO) })).json()) as {
       invoiceId: number;
     }[];

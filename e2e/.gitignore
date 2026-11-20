@@ -8,3 +8,4 @@ node_modules/
 !/evidence/ACCEPTANCE_MATRIX.md
 .mt-world.json
 .stock-world.json
+/node_modules

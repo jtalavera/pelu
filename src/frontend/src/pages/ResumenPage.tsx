@@ -13,13 +13,15 @@ import {
 } from "../api/serviceRecords";
 import { AppointmentFormModal } from "../components/AppointmentFormModal";
 import { ACTION_BUTTON } from "../components/actionButtons";
-import { deriveInvoiceState } from "../components/InvoiceStatePill";
+import { InvoiceDetailModal } from "../components/InvoiceDetailModal";
+import { deriveInvoiceState, InvoiceStatePill } from "../components/InvoiceStatePill";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { getDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal, formatGuaraniesGs } from "../lib/formatMoney";
 import { initialsOf } from "../lib/initials";
 import { formatParaguayDate, formatParaguayTime } from "../lib/paraguayDateTime";
 import { billServiceRecord } from "../lib/serviceRecordBilling";
+import { paymentMethodsLabel } from "./billing/billingShared";
 
 /** HU-77 · «Resumen»: how the salon is doing today, in four cards. */
 
@@ -30,6 +32,7 @@ const INVOICES_PAGE = 200;
 /** How many open fichas / next appointments the cards list. */
 const FICHAS_SHOWN = 3;
 const APPOINTMENTS_SHOWN = 4;
+const INVOICES_SHOWN = 4;
 
 type SummaryResponse = {
   appointmentsToday: { total: number; pending: number; confirmed: number };
@@ -43,7 +46,16 @@ type FichasState = {
   olderOpenCount: number;
 };
 
-type InvoicesState = { total: number; attention: number };
+type InvoicesState = {
+  total: number;
+  /** What the issued (not voided) invoices of the day add up to. */
+  amount: number;
+  approved: number;
+  processing: number;
+  attention: number;
+  /** The latest ones, newest first. */
+  recent: InvoiceListItem[];
+};
 
 function dayBoundsIso(d: Date): { from: string; to: string } {
   const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
@@ -105,6 +117,7 @@ export default function ResumenPage() {
   const [cash, setCash] = useState<CashSessionDetail | null | undefined>(undefined);
   const [fichas, setFichas] = useState<FichasState | null>(null);
   const [invoices, setInvoices] = useState<InvoicesState | null>(null);
+  const [invoiceId, setInvoiceId] = useState<number | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const [alertDismissed, setAlertDismissed] = useState(false);
@@ -137,9 +150,14 @@ export default function ResumenPage() {
         olderOpenCount: olderOpen.totalElements,
       });
       const issued = inv.content.filter((i: InvoiceListItem) => i.status === "ISSUED");
+      const stateCount = (state: ReturnType<typeof deriveInvoiceState>) => issued.filter((i) => deriveInvoiceState(i) === state).length;
       setInvoices({
         total: inv.totalElements,
-        attention: issued.filter((i) => deriveInvoiceState(i) === "attention").length,
+        amount: Number(inv.issuedTotal) || 0,
+        approved: stateCount("issued"),
+        processing: stateCount("processing"),
+        attention: stateCount("attention"),
+        recent: [...inv.content].sort((a, b) => b.issuedAt.localeCompare(a.issuedAt)).slice(0, INVOICES_SHOWN),
       });
       setFailed(false);
     } catch {
@@ -503,35 +521,127 @@ export default function ResumenPage() {
         <Card
           title={sifenEnabled ? t("femme.resumen.invoices.titleSifen") : t("femme.resumen.invoices.title")}
           testId="resumen-invoices"
+          action={
+            <Link to="/app/billing" className={cardLink} data-testid="resumen-view-invoices">
+              {t("femme.resumen.invoices.viewAll")}
+            </Link>
+          }
         >
-          <div className={`${bigNumber} text-[44px]`} data-testid="resumen-invoices-total">
-            {invoices?.total ?? 0}
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+            <div>
+              <div className={`${bigNumber} text-[44px]`} data-testid="resumen-invoices-total">
+                {invoices?.total ?? 0}
+              </div>
+              <div className="mt-1 text-sm text-ink-3">
+                {sifenEnabled ? t("femme.resumen.invoices.emittedSifen") : t("femme.resumen.invoices.emitted")}
+              </div>
+            </div>
+            {invoices && invoices.amount > 0 ? (
+              <div className="text-right">
+                <div className="font-heading text-[24px] font-extrabold leading-tight text-ink" data-testid="resumen-invoices-amount">
+                  {formatGuaraniesGs(invoices.amount)}
+                </div>
+                <div className="mt-1 text-sm text-ink-3">{t("femme.resumen.invoices.invoiced")}</div>
+              </div>
+            ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 text-sm text-ink-3">
-            {sifenEnabled ? t("femme.resumen.invoices.emittedSifen") : t("femme.resumen.invoices.emitted")}
-            {sifenEnabled ? (
-              invoices && invoices.attention > 0 ? (
+
+          {sifenEnabled && invoices && (invoices.approved > 0 || invoices.processing > 0 || invoices.attention > 0) ? (
+            <div className="flex flex-wrap gap-2">
+              {invoices.approved > 0 ? (
+                <span
+                  data-testid="resumen-invoices-approved"
+                  className="inline-flex min-h-7 items-center rounded-full bg-success-lt px-3 text-[13px] font-extrabold text-success"
+                >
+                  {t("femme.resumen.invoices.approved", { count: invoices.approved })}
+                </span>
+              ) : null}
+              {invoices.processing > 0 ? (
+                <span
+                  data-testid="resumen-invoices-processing"
+                  className="inline-flex min-h-7 items-center rounded-full bg-warning-lt px-3 text-[13px] font-extrabold text-warning"
+                >
+                  {t("femme.resumen.invoices.processing", { count: invoices.processing })}
+                </span>
+              ) : null}
+              {invoices.attention > 0 ? (
                 <span
                   data-testid="resumen-invoices-attention"
-                  className="inline-flex min-h-6 items-center rounded-full bg-danger-lt px-2.5 text-xs font-extrabold text-danger"
+                  className="inline-flex min-h-7 items-center rounded-full bg-danger-lt px-3 text-[13px] font-extrabold text-danger"
                 >
                   {t("femme.resumen.invoices.needAttention", { count: invoices.attention })}
                 </span>
-              ) : (
-                <span
-                  data-testid="resumen-invoices-ok"
-                  className="inline-flex min-h-6 items-center rounded-full bg-success-lt px-2.5 text-xs font-extrabold text-success"
-                >
-                  {t("femme.resumen.invoices.allUpToDate")}
-                </span>
-              )
-            ) : null}
-          </div>
-          <Link to="/app/billing" className={`${cardLink} mt-auto`} data-testid="resumen-view-invoices">
-            {t("femme.resumen.invoices.view")}
-          </Link>
+              ) : null}
+            </div>
+          ) : null}
+
+          {invoices && invoices.recent.length > 0 ? (
+            <ul className="m-0 flex list-none flex-col p-0" data-testid="resumen-invoices-list">
+              {invoices.recent.map((inv) => {
+                const state = deriveInvoiceState(inv);
+                const voided = state === "voided";
+                return (
+                  <li key={inv.id} data-testid="resumen-invoice" data-state={state} className="border-t border-line">
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceId(inv.id)}
+                      className="grid min-h-[3.75rem] w-full grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-x-3 py-1 text-left"
+                    >
+                      <span className="text-sm font-extrabold text-ink-2">{formatParaguayTime(inv.issuedAt, locale)}</span>
+                      <span className="min-w-0">
+                        <span className={`block truncate text-[14.5px] font-bold text-ink ${voided ? "line-through" : ""}`}>{inv.clientDisplayName}</span>
+                        <span className="block truncate text-[12.5px] text-ink-3">
+                          {[inv.invoiceNumberFormatted, inv.servicesSummary].filter(Boolean).join(" · ")}
+                        </span>
+                      </span>
+                      <span className="flex flex-col items-end gap-0.5">
+                        <b className={`text-[14.5px] tabular-nums ${voided ? "text-ink-3 line-through" : ""}`}>{formatAmountDecimal(inv.total)}</b>
+                        {sifenEnabled || voided ? (
+                          <InvoiceStatePill invoice={inv} />
+                        ) : inv.paymentMethodsSummary ? (
+                          <span className="text-[12.5px] text-ink-3" data-testid="resumen-invoice-payment">{paymentMethodsLabel(inv.paymentMethodsSummary, t)}</span>
+                        ) : null}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : invoices && invoices.total === 0 ? (
+            <>
+              <Text variant="muted" data-testid="resumen-invoices-empty">
+                {t("femme.resumen.invoices.empty")}
+              </Text>
+              <Button
+                type="button"
+                variant="outline"
+                className={`${ACTION_BUTTON} self-start`}
+                data-testid="resumen-invoices-new"
+                onClick={() => navigate("/app/billing", { state: { activeTab: "invoice" } })}
+              >
+                {t("femme.resumen.newInvoice")}
+              </Button>
+            </>
+          ) : null}
+          {invoices && invoices.total > invoices.recent.length ? (
+            <div className="-mt-1 text-[12.5px] text-ink-3" data-testid="resumen-invoices-more">
+              {t("femme.resumen.invoices.more", { count: invoices.total - invoices.recent.length })}
+            </div>
+          ) : null}
         </Card>
       </div>
+
+      {invoiceId !== null ? (
+        <InvoiceDetailModal
+          invoiceId={invoiceId}
+          onClose={() => setInvoiceId(null)}
+          onVoided={() => {
+            setInvoiceId(null);
+            void load();
+          }}
+          onCorrected={() => void load()}
+        />
+      ) : null}
 
       <AppointmentFormModal open={newApptOpen} onClose={() => setNewApptOpen(false)} onSaved={() => void load()} />
     </div>

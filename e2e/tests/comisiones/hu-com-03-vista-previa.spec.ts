@@ -10,7 +10,8 @@ import {
   provisionCommissionWorld,
   restoreCommissionsGlobal,
   type CommissionWorld,
-  openCommissionsMore,
+  openCommissions,
+  openProfessional,
 } from "../../fixtures/commissions";
 
 /** HU-COM-03 · Vista previa de la liquidación de un profesional en el periodo abierto. */
@@ -39,10 +40,11 @@ test.beforeEach(async ({ request }) => {
   await entriesOfInvoice(request, w.adminToken, inv.id, 3);
 });
 
-async function openPreview(page: import("@playwright/test").Page) {
-  await page.getByRole("link", { name: "Commissions" }).click();
-  await openCommissionsMore(page, "Preview");
-  await expect(page.getByTestId("commission-preview")).toBeVisible();
+/** HU-COM-15: the «Vista previa» is the «Resumen» tab of each professional (Equipo). */
+async function openSummary(page: import("@playwright/test").Page, name: string) {
+  await openCommissions(page);
+  await openProfessional(page, name, "summary");
+  await expect(page.getByTestId("pro-summary")).toBeVisible();
 }
 
 test("muestra cuánto cobraría el profesional en el periodo vigente con las comisiones registradas hasta hoy; no guarda nada", async ({
@@ -50,43 +52,40 @@ test("muestra cuánto cobraría el profesional en el periodo vigente con las com
   request,
 }) => {
   await loginAdminUi(page, w);
-  await openPreview(page);
-  await page.locator("#preview-professional").selectOption({ label: w.ana.name });
-  await page.getByTestId("preview-run").click();
-  await expect(page.getByTestId("preview-total")).toContainText("50.000");
-  await expect(page.getByTestId("preview-services")).toContainText("40.000");
-  await expect(page.getByTestId("preview-products")).toContainText("10.000");
-  await expect(page.getByTestId("preview-adjustments")).toContainText("0");
-  await expect(page.getByTestId("preview-entries").locator("li")).toHaveCount(2);
-  // Everything accrued inside the period: nothing is carried, so no split and no groups.
-  await expect(page.getByTestId("preview-split")).toHaveCount(0);
-  await expect(page.getByTestId("preview-group-carried")).toHaveCount(0);
+  await openSummary(page, w.ana.name);
+  await expect(page.getByTestId("pro-summary-total")).toContainText("50.000");
+  await expect(page.getByTestId("pro-summary-services")).toContainText("40.000");
+  await expect(page.getByTestId("pro-summary-products")).toContainText("10.000");
+  await expect(page.getByTestId("pro-summary-lines")).toContainText("2 invoiced lines");
+  // HU-COM-33: the stage is the current step of the path (To generate → Draft → Approved → Paid).
+  await expect(page.locator('[data-testid="pro-step"][data-state="current"]')).toContainText("To generate");
 
   // Bea only sees her own commissions (her exception: 50 %).
-  await page.locator("#preview-professional").selectOption({ label: w.bea.name });
-  await page.getByTestId("preview-run").click();
-  await expect(page.getByTestId("preview-total")).toContainText("50.000");
-  await expect(page.getByTestId("preview-entries").locator("li")).toHaveCount(1);
+  await page.getByTestId("pro-back").click();
+  await openProfessional(page, w.bea.name, "summary");
+  await expect(page.getByTestId("pro-summary-total")).toContainText("50.000");
+  await expect(page.getByTestId("pro-summary-lines")).toContainText("1 invoiced line");
 
   // Nothing persisted: no settlement was created.
   const settlements = await apiGetJson<{ total: number }>(request, w.adminToken, "/api/commissions/settlements");
   expect(settlements.total).toBe(0);
 });
 
-test("pide elegir un profesional; las comisiones ya incluidas en un borrador no se cuentan y se avisa", async ({
+test("lo ya incluido en un borrador figura como Borrador y se llega a su liquidación desde el resumen", async ({
   page,
   request,
 }) => {
+  const [draft] = await generateSettlements(request, w.adminToken, [w.ana.id]);
   await loginAdminUi(page, w);
-  await openPreview(page);
-  await page.getByTestId("preview-run").click();
-  await expect(page.locator("#preview-error")).toHaveText("Choose a professional from the list.");
-
-  await generateSettlements(request, w.adminToken, [w.ana.id]);
-  await page.locator("#preview-professional").selectOption({ label: w.ana.name });
-  await page.getByTestId("preview-run").click();
-  await expect(page.getByText("No unsettled commissions for that professional in the period.")).toBeVisible();
-  await expect(page.getByText(/already 1 draft settlement for this professional/)).toBeVisible();
+  await openSummary(page, w.ana.name);
+  await expect(page.locator('[data-testid="pro-step"][data-state="current"]')).toContainText("Draft");
+  await expect(page.getByTestId("pro-summary-total")).toContainText("50.000");
+  // HU-COM-33: the breakdown comes from the draft itself, so it adds up to the total (it used to read 0 here).
+  await expect(page.getByTestId("pro-summary-services")).toContainText("40.000");
+  await expect(page.getByTestId("pro-summary-products")).toContainText("10.000");
+  await expect(page.getByTestId("pro-summary-lines")).toContainText("2 invoiced lines");
+  await page.getByTestId("pro-summary-open-settlement").click();
+  await expect(page).toHaveURL(new RegExp(`/app/commissions/settlements/${draft.id}$`));
 });
 
 test("API: la vista previa respeta el rango pedido y valida el profesional", async ({ request }) => {
@@ -117,53 +116,14 @@ test("API: la vista previa respeta el rango pedido y valida el profesional", asy
   expect(await missing.text()).toContain("PROFESSIONAL_NOT_FOUND");
 });
 
-/** Picks a day in the date popover of a `LocalizedDateInput` (day buttons are labelled with the ISO date). */
-async function pickDay(page: import("@playwright/test").Page, inputId: string, iso: string) {
-  await page.locator(inputId).click();
-  const next = page.getByRole("button", { name: "Next month" });
-  const day = page.getByRole("button", { name: iso, exact: true });
-  // Wait for the popover to paint before looking for the day (an instant check paged past it).
-  await expect(next).toBeVisible();
-  const dayShown = () =>
-    day
-      .first()
-      .waitFor({ state: "visible", timeout: 1_000 })
-      .then(() => true)
-      .catch(() => false);
-  for (let i = 0; i < 14; i++) {
-    if (await dayShown()) break;
-    await next.click();
-  }
-  await day.first().click({ timeout: 15_000 });
-}
 
 function ymd(offsetDays: number): string {
   const d = new Date(Date.now() + offsetDays * 24 * 3600_000);
   return d.toLocaleDateString("sv-SE");
 }
 
-test("lo pendiente de antes del periodo se ve como «Arrastrado»: total partido, grupo propio y etiqueta por línea; el total no cambia", async ({
-  page,
-  request,
-}) => {
-  await loginAdminUi(page, w);
-  await openPreview(page);
-  await page.locator("#preview-professional").selectOption({ label: w.ana.name });
+test("API: lo pendiente de antes del periodo se informa como «Arrastrado» y el total no cambia", async ({ request }) => {
   // The period starts tomorrow: what Ana accrued today comes from before it.
-  await pickDay(page, "#preview-from", ymd(1));
-  await pickDay(page, "#preview-to", ymd(40));
-  await page.getByTestId("preview-run").click();
-
-  // Same total as the settlement would take (carried commissions are included).
-  await expect(page.getByTestId("preview-total")).toContainText("50.000");
-  await expect(page.getByTestId("preview-split")).toBeVisible();
-  await expect(page.getByTestId("preview-carried-amount")).toContainText("50.000");
-  await expect(page.getByTestId("preview-period-amount")).toContainText("0");
-  await expect(page.getByTestId("preview-group-carried")).toContainText("2 lines");
-  await expect(page.getByTestId("preview-before-period")).toHaveCount(2);
-  // Nothing of the period itself: no period group.
-  await expect(page.getByTestId("preview-group-period")).toHaveCount(0);
-
   // Still nothing persisted.
   const settlements = await apiGetJson<{ total: number }>(request, w.adminToken, "/api/commissions/settlements");
   expect(settlements.total).toBe(0);

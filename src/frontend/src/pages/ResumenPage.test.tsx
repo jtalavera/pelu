@@ -32,6 +32,17 @@ vi.mock("../api/serviceRecords", () => ({
   getServiceRecord: (...a: unknown[]) => getServiceRecord(...a),
 }));
 vi.mock("../api/invoices", () => ({ listInvoicesPaged: (...a: unknown[]) => listInvoicesPaged(...a) }));
+// The invoice detail is its own, big component: here a stand-in is enough to know it opens.
+vi.mock("../components/InvoiceDetailModal", () => ({
+  InvoiceDetailModal: ({ invoiceId, onClose }: { invoiceId: number; onClose: () => void }) => (
+    <div data-testid="invoice-detail-stub">
+      {invoiceId}
+      <button type="button" onClick={onClose}>
+        close
+      </button>
+    </div>
+  ),
+}));
 vi.mock("../lib/serviceRecordBilling", () => ({ billServiceRecord: (...a: unknown[]) => billServiceRecord(...a) }));
 vi.mock("../hooks/useFeatureFlags", () => ({ useFeatureFlag: () => sifenEnabled }));
 vi.mock("../components/AppointmentFormModal", () => ({
@@ -89,15 +100,32 @@ function setup(over: { cash?: boolean; attention?: boolean; fiscalAlert?: boolea
     if (p.status === "VOIDED") return Promise.resolve(paged([], 1));
     return Promise.resolve(paged([], 2)); // open from earlier days
   });
-  listInvoicesPaged.mockResolvedValue(
-    paged(
+  const inv = (id: number, over2: Record<string, unknown>) => ({
+    id,
+    invoiceNumber: id,
+    invoiceNumberFormatted: `001-001-000${1000 + id}`,
+    clientDisplayName: `CLIENTE ${id}`,
+    status: "ISSUED",
+    sifenSubmissionStatus: "APPROVED",
+    total: "50000",
+    issuedAt: `2026-11-13T12:0${id}:00Z`,
+    servicesSummary: `Servicio ${id}`,
+    paymentMethodsSummary: "CASH",
+    ...over2,
+  });
+  listInvoicesPaged.mockResolvedValue({
+    ...paged(
       [
-        { id: 1, status: "ISSUED", sifenSubmissionStatus: "APPROVED", total: "50000", issuedAt: "2026-11-13T12:00:00Z" },
-        { id: 2, status: "ISSUED", sifenSubmissionStatus: over.attention ? "REJECTED" : "APPROVED", total: "70000", issuedAt: "2026-11-13T12:10:00Z" },
+        inv(1, {}),
+        inv(2, { sifenSubmissionStatus: over.attention ? "REJECTED" : "APPROVED", total: "70000" }),
+        inv(3, { sifenSubmissionStatus: "PENDING", total: "30000" }),
+        inv(4, { status: "VOIDED", total: "20000" }),
+        inv(5, { total: "10000" }),
       ],
       24,
     ),
-  );
+    issuedTotal: 160000,
+  });
 }
 
 async function renderPage() {
@@ -230,28 +258,74 @@ describe("ResumenPage (HU-77)", () => {
     expect(billServiceRecord.mock.calls[0][1]).toEqual(detail);
   });
 
-  it("«Factura electrónica»: how many were issued today and that all are up to date", async () => {
+  it("«Factura electrónica»: how many were issued today, what they add up to and how many are approved or in process", async () => {
     setup();
     await renderPage();
     expect(within(screen.getByTestId("resumen-invoices")).getByRole("heading").textContent).toBe("Electronic invoices");
     expect(screen.getByTestId("resumen-invoices-total").textContent).toBe("24");
-    expect(screen.getByTestId("resumen-invoices-ok").textContent).toBe("All up to date");
+    expect(screen.getByTestId("resumen-invoices-amount").textContent).toBe("Gs. 160.000");
+    expect(screen.getByTestId("resumen-invoices-approved").textContent).toBe("3 approved");
+    expect(screen.getByTestId("resumen-invoices-processing").textContent).toBe("1 processing");
+    expect(screen.queryByTestId("resumen-invoices-attention")).toBeNull();
+    expect(screen.getByTestId("resumen-view-invoices").textContent).toBe("See all →");
+    expect(screen.getByTestId("resumen-view-invoices").getAttribute("href")).toBe("/app/billing");
+  });
+
+  it("lists the latest invoices (newest first) with time, client, number and services, amount and state", async () => {
+    setup();
+    await renderPage();
+    const rows = screen.getAllByTestId("resumen-invoice");
+    expect(rows).toHaveLength(4);
+    // The newest of the five is #5 (12:05), then #4, #3 and #2.
+    expect(rows[0].textContent).toContain("CLIENTE 5");
+    expect(rows[0].textContent).toContain("001-001-0001005 · Servicio 5");
+    expect(rows[0].textContent).toContain("10.000");
+    expect(rows.map((r) => r.getAttribute("data-state"))).toEqual(["issued", "voided", "processing", "issued"]);
+    // A voided invoice is struck through and says so.
+    expect(rows[1].textContent).toContain("Voided");
+    expect(rows[1].querySelector(".line-through")).not.toBeNull();
+    expect(screen.getByTestId("resumen-invoices-more").textContent).toBe("and 20 more");
+  });
+
+  it("an invoice row opens its detail", async () => {
+    setup();
+    await renderPage();
+    fireEvent.click(within(screen.getAllByTestId("resumen-invoice")[2]).getByRole("button"));
+    expect((await screen.findByTestId("invoice-detail-stub")).textContent).toContain("3");
+    fireEvent.click(screen.getByRole("button", { name: "close" }));
+    expect(screen.queryByTestId("invoice-detail-stub")).toBeNull();
   });
 
   it("«Factura electrónica» flags the invoices that need attention", async () => {
     setup({ attention: true });
     await renderPage();
     expect(screen.getByTestId("resumen-invoices-attention").textContent).toBe("1 needs attention");
-    expect(screen.queryByTestId("resumen-invoices-ok")).toBeNull();
+    expect(screen.getByTestId("resumen-invoices-approved").textContent).toBe("2 approved");
   });
 
-  it("without electronic invoicing the card is just «Invoices» and has no state", async () => {
+  it("without electronic invoicing the card is just «Invoices», with no state chips and the payment method instead", async () => {
     sifenEnabled = false;
     setup();
     await renderPage();
     expect(within(screen.getByTestId("resumen-invoices")).getByRole("heading").textContent).toBe("Invoices");
-    expect(screen.queryByTestId("resumen-invoices-ok")).toBeNull();
+    expect(screen.queryByTestId("resumen-invoices-approved")).toBeNull();
+    expect(screen.queryByTestId("resumen-invoices-processing")).toBeNull();
     expect(screen.queryByTestId("resumen-invoices-attention")).toBeNull();
+    const rows = screen.getAllByTestId("resumen-invoice");
+    // The payment method is translated (the server sends «CASH»).
+    expect(screen.getAllByTestId("resumen-invoice-payment")[0].textContent).toBe("Cash");
+    expect(rows[0].textContent).not.toContain("CASH");
+    expect(rows[0].textContent).not.toContain("Approved");
+  });
+
+  it("with no invoices today it says so and offers «+ New invoice»", async () => {
+    setup();
+    listInvoicesPaged.mockResolvedValue({ content: [], page: 0, size: 200, totalElements: 0, totalPages: 0, issuedTotal: 0 });
+    await renderPage();
+    expect(screen.getByTestId("resumen-invoices-empty").textContent).toContain("You have not issued any invoices today");
+    expect(screen.queryByTestId("resumen-invoices-list")).toBeNull();
+    fireEvent.click(screen.getByTestId("resumen-invoices-new"));
+    expect(navigate).toHaveBeenCalledWith("/app/billing", { state: { activeTab: "invoice" } });
   });
 
   it("«+ New appointment» opens the form and «+ New invoice» goes to a new invoice", async () => {
@@ -325,10 +399,12 @@ describe("ResumenPage (HU-77)", () => {
     expect(screen.getByTestId("resumen-fichas-more").textContent).toBe("y 1 ficha abierta más");
     expect(screen.getByTestId("resumen-fichas-older").textContent).toBe("2 abiertas de días anteriores");
     expect(screen.getByTestId("resumen-invoices-attention").textContent).toBe("1 requiere atención");
-    expect(screen.getByTestId("resumen-view-invoices").textContent).toBe("Ver comprobantes →");
+    expect(screen.getByTestId("resumen-view-invoices").textContent).toBe("Ver todos →");
+    expect(screen.getByTestId("resumen-invoices-approved").textContent).toBe("2 aprobados");
+    expect(screen.getByTestId("resumen-invoices-amount").textContent).toBe("Gs. 160.000");
     // No English left on the page (the data itself — names, services — is the user's).
     expect(screen.getByTestId("resumen-page").textContent).not.toMatch(
-      /\b(Hello|team|pending|confirmed|Open agenda|Collect|open records?|issued|attention|ago|All up to date)\b/i,
+      /\b(Hello|team|pending|confirmed|Open agenda|Collect|open records?|issued|attention|ago|approved|processing|invoiced|All up to date)\b/i,
     );
   });
 

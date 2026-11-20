@@ -7,7 +7,8 @@ import {
   restoreCommissionsGlobal,
   setTenantFlag,
   type CommissionWorld,
-  openCommissionsMore,
+  openCommissions,
+  openSetupStep,
 } from "../../fixtures/commissions";
 
 /** HU-COM-01 · Configurar el módulo de comisiones del negocio (base y comisión general en Reglas → Reglas generales). */
@@ -23,9 +24,9 @@ test.afterAll(async ({ request }) => {
 });
 
 async function openSettings(page: import("@playwright/test").Page) {
-  await page.getByRole("link", { name: "Commissions" }).click();
-  await openCommissionsMore(page, "Settings");
+  await openCommissions(page, "setup");
   await expect(page.getByTestId("commission-settings")).toBeVisible();
+  await openSetupStep(page, 1); // HU-COM-18: «Cómo se calcula» is folded until opened
 }
 
 async function applyImmediately(page: import("@playwright/test").Page) {
@@ -57,6 +58,8 @@ test("la base por defecto es «Sin IVA», con ayuda y ejemplo, en Configuración
   await applyImmediately(page);
   await expect(page.getByTestId("commission-setting-BASE")).toContainText("Including VAT");
 
+  // HU-COM-15: the change history lives in Setup › Advanced.
+  await page.getByTestId("config-advanced-link").click();
   await page.getByTestId("commission-history-toggle").click();
   const history = page.getByTestId("commission-settings-history");
   await expect(history.getByText("Calculation base").first()).toBeVisible();
@@ -64,27 +67,26 @@ test("la base por defecto es «Sin IVA», con ayuda y ejemplo, en Configuración
   await expect(history.getByText(w.adminEmail).first()).toBeVisible();
 });
 
-test("comisión general de servicios y de productos: valida el rango con ejemplo y se guarda con «Aplicar»", async ({
-  page,
-  request,
-}) => {
+test("comisión general de servicios y de productos: valida el rango y se guarda con «Aplicar»", async ({ page, request }) => {
   await loginAdminUi(page, w);
-  await openSettings(page);
-  await changeSetting(page, "DEFAULT_SERVICE");
-  await page.locator("#commission-setting-percent").fill("120");
-  await page.getByTestId("commission-setting-save").click();
-  const err = page.locator("#commission-setting-percent-error");
-  await expect(err).toHaveText(/between 0 and 100.*e\.g\. 40\.5/);
-  await expect(page.locator("#commission-setting-percent")).toHaveAttribute("aria-invalid", "true");
-
-  await page.locator("#commission-setting-percent").fill("35,5");
-  await page.getByTestId("commission-setting-save").click();
+  await openCommissions(page, "setup");
+  // HU-COM-20: the general % live in Setup › Commissions (not in step 1 any more).
+  await page.goto("/app/commissions/configurar/comisiones");
+  await expect(page.getByTestId("commission-rates")).toBeVisible();
+  await page.getByTestId("rates-general-SERVICE-edit").click();
+  await page.getByTestId("rates-percent").fill("120");
+  await page.getByTestId("rates-save").click();
+  await expect(page.locator("#rates-percent-error")).toHaveText(/between 0 and 100.*for example 40 or 37\.5/);
+  await page.getByTestId("rates-percent").fill("35,5");
+  await page.getByTestId("rates-save").click();
   await applyImmediately(page);
+  await expect(page.getByTestId("rates-general-SERVICE-percent")).toHaveText("35,5 %");
 
-  await changeSetting(page, "DEFAULT_PRODUCT");
-  await page.locator("#commission-setting-percent").fill("8");
-  await page.getByTestId("commission-setting-save").click();
+  await page.getByTestId("rates-general-PRODUCT-edit").click();
+  await page.getByTestId("rates-percent").fill("8");
+  await page.getByTestId("rates-save").click();
   await applyImmediately(page);
+  await expect(page.getByTestId("rates-general-PRODUCT-percent")).toHaveText("8 %");
 
   const s = await apiGetJson<{ defaultPercentService: number; defaultPercentProduct: number }>(
     request,
@@ -93,7 +95,6 @@ test("comisión general de servicios y de productos: valida el rango con ejemplo
   );
   expect(Number(s.defaultPercentService)).toBe(35.5);
   expect(Number(s.defaultPercentProduct)).toBe(8);
-  await expect(page.getByTestId("commission-setting-DEFAULT_SERVICE")).toContainText("35,5");
 });
 
 test("la periodicidad se elige entre semanal, quincenal, mensual y manual sin preguntar cómo aplicarla", async ({

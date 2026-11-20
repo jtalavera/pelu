@@ -43,9 +43,16 @@ public class CommissionRecalculationService {
       Map<Long, BigDecimal> deltaByProfessional,
       Long recalculationId) {}
 
-  static boolean affects(ScopeKey key, CommissionEntry e) {
+  static boolean affects(ScopeKey key, CommissionEntry e, Map<Long, Long> groupByService) {
     return switch (key.scope()) {
-      case BASE -> true;
+      case BASE, FIXED_DESTINATION, AGUINALDO_ENABLED -> true;
+      case GROUP_RULE ->
+          Objects.equals(key.groupId(), groupByService.get(e.getServiceId()))
+              && (key.professionalId() == null
+                  || Objects.equals(key.professionalId(), e.getProfessionalId()));
+      case AGUINALDO_DEFAULT -> false;
+      // HU-COM-20: the retention is the professional's and comes out of what she is paid.
+      case RETENTION_PROFILE -> Objects.equals(key.professionalId(), e.getProfessionalId());
       case DEFAULT_SERVICE -> e.getItemKind() != ServiceKind.PRODUCT;
       case DEFAULT_PRODUCT -> e.getItemKind() == ServiceKind.PRODUCT;
       case RULE ->
@@ -87,8 +94,9 @@ public class CommissionRecalculationService {
     int excluded = 0;
     BigDecimal delta = BigDecimal.ZERO;
     Map<Long, BigDecimal> byProfessional = new LinkedHashMap<>();
+    Map<Long, Long> groupByService = ledger.groupByService(tenantId);
     for (CommissionEntry e : entryRepository.findLiveLineEntriesSince(tenantId, from)) {
-      if (keys.stream().noneMatch(k -> affects(k, e))) {
+      if (keys.stream().noneMatch(k -> affects(k, e, groupByService))) {
         continue;
       }
       if (ledger.isClosed(e.getSettlementId())) {

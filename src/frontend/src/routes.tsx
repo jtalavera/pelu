@@ -25,7 +25,15 @@ import CalendarPage from "./pages/CalendarPage";
 import BillingPage from "./pages/BillingPage";
 import ServiceRecordsPage from "./pages/ServiceRecordsPage";
 import PropinasPage from "./pages/PropinasPage";
-import CommissionsPage from "./pages/commissions/CommissionsPage";
+import CommissionsLayout from "./pages/commissions/CommissionsLayout";
+import HomePage from "./pages/commissions/HomePage";
+import LiquidarPage from "./pages/commissions/LiquidarPage";
+import { AguinaldoGuard, TeamLayout, TeamList } from "./pages/commissions/TeamPage";
+import ProfessionalPage from "./pages/commissions/ProfessionalPage";
+import ActivityPage from "./pages/commissions/ActivityPage";
+import { AdvancedPage, ConfigPage, GroupsPage } from "./pages/commissions/ConfigPages";
+import { RatesPage } from "./pages/commissions/RatesPage";
+import { AguinaldoTab } from "./pages/commissions/AguinaldoTab";
 import CommissionSettlementPage from "./pages/commissions/CommissionSettlementPage";
 import MyCommissionsPage from "./pages/commissions/MyCommissionsPage";
 import SettingsLayout from "./pages/settings/SettingsLayout";
@@ -112,7 +120,29 @@ export function AppRoutes() {
           <Route path="/app/billing" element={<BillingPage />} />
           <Route path="/app/service-records" element={<ServiceRecordsPage />} />
           <Route path="/app/propinas" element={<PropinasPage />} />
-          <Route path="/app/commissions" element={<CommissionsPage />} />
+          {/* HU-COM-15: Inicio · Liquidar · Equipo · Actividad · Configurar. */}
+          <Route path="/app/commissions" element={<CommissionsLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="liquidar" element={<LiquidarPage />} />
+            <Route path="equipo" element={<TeamLayout />}>
+              <Route index element={<TeamList />} />
+              <Route
+                path="aguinaldo"
+                element={
+                  <AguinaldoGuard>
+                    <AguinaldoTab />
+                  </AguinaldoGuard>
+                }
+              />
+              <Route path=":professionalId" element={<ProfessionalPage />} />
+            </Route>
+            <Route path="actividad" element={<ActivityPage />} />
+            <Route path="configurar" element={<ConfigPage />} />
+            <Route path="configurar/grupos" element={<GroupsPage />} />
+            <Route path="configurar/comisiones" element={<RatesPage />} />
+            <Route path="configurar/avanzado" element={<AdvancedPage />} />
+            <Route path="*" element={<Navigate to="/app/commissions" replace />} />
+          </Route>
           <Route path="/app/commissions/settlements/:id" element={<CommissionSettlementPage />} />
           <Route path="/app/inactive-clients" element={<InactiveClientsPage />} />
           <Route path="/app/professionals" element={<Navigate to="/app/catalog?view=professionals" replace />} />

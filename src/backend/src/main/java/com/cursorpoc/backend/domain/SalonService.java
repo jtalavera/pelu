@@ -55,6 +55,10 @@ public class SalonService {
   @Column(length = 64)
   private String sku;
 
+  /** HU-COM-14: grupo de comisión del servicio (null = sin grupo). */
+  @Column(name = "commission_group_id")
+  private Long commissionGroupId;
+
   public Long getId() {
     return id;
   }
@@ -129,6 +133,14 @@ public class SalonService {
 
   public boolean isProduct() {
     return kind == ServiceKind.PRODUCT;
+  }
+
+  public Long getCommissionGroupId() {
+    return commissionGroupId;
+  }
+
+  public void setCommissionGroupId(Long commissionGroupId) {
+    this.commissionGroupId = commissionGroupId;
   }
 
   public String getSku() {

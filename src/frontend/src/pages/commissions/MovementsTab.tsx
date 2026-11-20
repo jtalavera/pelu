@@ -9,23 +9,25 @@ import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { formatParaguayDateTime } from "../../lib/paraguayDateTime";
 import { ReassignDialog } from "./ReassignDialog";
 import { SettlementStatusBadge, oneMonthAgoYmd, formatPercent, todayYmd, useProfessionals } from "./common";
+import { MovementChangeSteps } from "./MovementChangeSteps";
+import { changeNote, changeTag, groupMovements, type MovementGroup } from "./movementGroups";
 
-const initials = (name: string | null) =>
-  (name ?? "?")
-    .split(/\s+/)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+/**
+ * HU-COM-33: every row has the same shape (chevron · date · item · [professional] · type · calculation · status · amount · ⋮).
+ * Inside a professional\'s file the PROFESSIONAL column is redundant, so it is left out.
+ */
+const GRID_WITH_PROFESSIONAL =
+  "md:grid-cols-[2.5rem_5rem_minmax(0,1.3fr)_6.5rem_6.5rem_minmax(0,1fr)_6rem_6.5rem_2.5rem]";
+const GRID_WITHOUT_PROFESSIONAL = "md:grid-cols-[2.5rem_5rem_minmax(0,1.5fr)_6.5rem_minmax(0,1fr)_6rem_6.5rem_2.5rem]";
 
 /** Every commission movement, with «Cambiar profesional» on the live ones. */
-export function MovementsTab() {
+export function MovementsTab({ fixedProfessionalId }: { fixedProfessionalId?: number } = {}) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
   const professionals = useProfessionals();
   const [from, setFrom] = useState(oneMonthAgoYmd());
   const [to, setTo] = useState(todayYmd());
-  const [professionalIds, setProfessionalIds] = useState<number[]>([]);
+  const [professionalIds, setProfessionalIds] = useState<number[]>(fixedProfessionalId ? [fixedProfessionalId] : []);
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
   const [entries, setEntries] = useState<EntryView[] | null>(null);
@@ -34,7 +36,14 @@ export function MovementsTab() {
   const [notice, setNotice] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(0);
-  const [size, setSize] = useState(20);
+  const [size, setSize] = useState(10);
+  /** Newest first by default (the list used to come oldest first, so the latest sat on the last page). */
+  const [order, setOrder] = useState<"desc" | "asc">("desc");
+  /** Paid = already paid in a settlement; unpaid = everything else (not settled, draft, approved). */
+  const [pay, setPay] = useState<"all" | "unpaid" | "paid">("all");
+  /** HU-COM-29: «Mostrar también las líneas revertidas» opens the history of every sale; each one also opens on its own. */
+  const [showReversed, setShowReversed] = useState(false);
+  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
 
   const load = useCallback(
     async (filters?: EntryFilters) => {
@@ -50,7 +59,7 @@ export function MovementsTab() {
 
   /** Back to the defaults (this month, every professional, no text) and search again. */
   function clearFilters() {
-    const defaults = { from: oneMonthAgoYmd(), to: todayYmd(), professionalIds: [] as number[] };
+    const defaults = { from: oneMonthAgoYmd(), to: todayYmd(), professionalIds: (fixedProfessionalId ? [fixedProfessionalId] : []) as number[] };
     setFrom(defaults.from);
     setTo(defaults.to);
     setProfessionalIds(defaults.professionalIds);
@@ -65,14 +74,52 @@ export function MovementsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const visible = useMemo(() => {
+  // One movement per sale (HU-COM-29); then the text search (the payment filter shows how many each option would show),
+  // then payment and order.
+  const groups = useMemo(() => groupMovements(entries ?? []), [entries]);
+  const matching = useMemo(() => {
     const q = appliedQuery.trim().toLowerCase();
-    const list = entries ?? [];
-    if (!q) return list;
-    return list.filter(
-      (e) => (e.invoiceNumber ?? "").toLowerCase().includes(q) || (e.itemName ?? "").toLowerCase().includes(q),
+    return groups.filter(
+      (g) => !q || g.entries.some((e) => (e.invoiceNumber ?? "").toLowerCase().includes(q) || (e.itemName ?? "").toLowerCase().includes(q)),
     );
-  }, [entries, appliedQuery]);
+  }, [groups, appliedQuery]);
+  const isPaid = (g: MovementGroup) => g.rep.settlementStatus === "PAID";
+  const counts = useMemo(() => {
+    const paid = matching.filter(isPaid).length;
+    return { all: matching.length, paid, unpaid: matching.length - paid };
+  }, [matching]);
+  const visible = useMemo(() => {
+    // By date and time; at the same moment the last one registered goes first.
+    const sign = order === "desc" ? -1 : 1;
+    return matching
+      .filter((g) => pay === "all" || (pay === "paid") === isPaid(g))
+      .sort((a, b) => {
+        const byDate = Date.parse(a.rep.accrualAt) - Date.parse(b.rep.accrualAt);
+        return sign * (byDate !== 0 ? byDate : a.rep.id - b.rep.id);
+      });
+  }, [matching, order, pay]);
+  /** What the lines on screen add up to (all the pages, not just the one shown). */
+  const totals = useMemo(
+    () => ({ amount: visible.reduce((s, g) => s + g.net, 0), retained: visible.reduce((s, g) => s + g.retained, 0) }),
+    [visible],
+  );
+  const changedCount = visible.filter((g) => g.changed).length;
+
+  /** The «calculation» cell: the rule and how it was split (with a retention) or just the %, and the product cost. */
+  function calc(e: EntryView): { main: string; extra: string } {
+    const cost = e.fixedAmount !== 0 && e.fixedToProfessional ? t("femme.commissions.settlement.lineProductCost", { amount: formatGuaraniesGs(e.fixedAmount) }) : "";
+    if (e.retentionAmount === 0 || e.percentApplied === null) return { main: formatPercent(e.percentApplied), extra: cost };
+    const total = Number((e.percentApplied + e.retentionPercent).toFixed(2));
+    const retention = t("femme.commissions.movements.calc.retention", { percent: formatPercent(e.retentionPercent), amount: formatGuaraniesGs(e.retentionAmount) });
+    return {
+      main: t("femme.commissions.movements.calc.ruleToPaid", {
+        kind: t(`femme.commissions.movements.ruleKind.${e.itemKind ?? "OTHER"}`),
+        total: formatPercent(total),
+        paid: formatPercent(e.percentApplied),
+      }),
+      extra: cost ? `${retention} · ${cost}` : retention,
+    };
+  }
 
   function movementLabel(e: EntryView): string {
     if (e.sourceType === "INVOICE_LINE") return t("femme.commissions.movements.type.LINE");
@@ -80,6 +127,7 @@ export function MovementsTab() {
     return t(`femme.commissions.reason.${e.reasonCode ?? "MANUAL_ADJUSTMENT"}`);
   }
 
+  const gridClass = fixedProfessionalId ? GRID_WITHOUT_PROFESSIONAL : GRID_WITH_PROFESSIONAL;
   const pageItems = visible.slice(page * size, (page + 1) * size);
   const totalPages = Math.max(1, Math.ceil(visible.length / size));
 
@@ -137,6 +185,7 @@ export function MovementsTab() {
                 <LocalizedDateInput id="mov-to" value={to} onChange={setTo} />
               </div>
             </div>
+            {!fixedProfessionalId && (
             <MultiSelect
               id="mov-professional"
               label={t("femme.commissions.common.professionals")}
@@ -148,6 +197,7 @@ export function MovementsTab() {
               noResultsText={t("femme.commissions.common.noProfessionals")}
               summaryTemplate={t("femme.commissions.common.professionalsSelected")}
             />
+            )}
             <div className="flex flex-wrap gap-2">
               <Button type="submit" className="min-h-11">
                 {t("femme.commissions.common.search")}
@@ -159,6 +209,56 @@ export function MovementsTab() {
           </div>
         )}
       </form>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="text-sm font-extrabold text-ink-2">{t("femme.commissions.movements.pay.label")}</span>
+        <div role="group" aria-label={t("femme.commissions.movements.pay.aria")} className="inline-flex rounded-full bg-primary-lt p-1">
+          {(["all", "unpaid", "paid"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={pay === v}
+              data-testid={`movements-pay-${v}`}
+              onClick={() => {
+                setPay(v);
+                setPage(0);
+              }}
+              className={`min-h-11 rounded-full px-4 text-sm font-extrabold ${pay === v ? "bg-primary text-primary-fg" : "text-ink-2"}`}
+            >
+              {t(`femme.commissions.movements.pay.${v}`)} · {counts[v]}
+            </button>
+          ))}
+        </div>
+        <span className="text-[13px] text-ink-3" data-testid="movements-pay-hint">
+          {t("femme.commissions.movements.pay.hint")}
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={showReversed}
+          data-testid="movements-show-reversed"
+          onClick={() => setShowReversed((v) => !v)}
+          className="inline-flex min-h-11 items-center gap-2.5 text-sm font-bold text-ink"
+        >
+          <span aria-hidden className={`inline-flex h-6 w-10 shrink-0 items-center rounded-full p-0.5 ${showReversed ? "justify-end bg-primary" : "justify-start bg-line"}`}>
+            <span className="size-5 rounded-full bg-surface" />
+          </span>
+          {t("femme.commissions.movements.group.showReversed")}
+        </button>
+        <button
+          type="button"
+          data-testid="movements-sort-mobile"
+          data-order={order}
+          aria-label={t(order === "desc" ? "femme.commissions.movements.sort.ariaDesc" : "femme.commissions.movements.sort.ariaAsc")}
+          onClick={() => {
+            setOrder(order === "desc" ? "asc" : "desc");
+            setPage(0);
+          }}
+          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-full border border-line bg-surface px-4 text-left text-sm font-extrabold text-primary md:hidden"
+        >
+          {t("femme.commissions.movements.sort.mobile", { order: t(order === "desc" ? "femme.commissions.movements.sort.desc" : "femme.commissions.movements.sort.asc").toLowerCase() })}
+          <span aria-hidden>{order === "desc" ? "↓" : "↑"}</span>
+        </button>
+      </div>
       <Text variant="small" className="text-ink-3">
         {t("femme.commissions.movements.hint")}
       </Text>
@@ -174,57 +274,177 @@ export function MovementsTab() {
             {t("femme.commissions.movements.empty")}
           </Text>
         ) : (
-          <ul>
-            {pageItems.map((e) => (
-              <li
-                key={e.id}
-                data-testid="movement-row"
-                className="grid min-h-14 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-x-3 border-t border-line px-3 py-2 first:border-t-0"
+          <>
+            <div
+              className={`hidden items-center gap-x-2 border-b border-line bg-primary-lt/40 px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-ink-2 md:grid ${gridClass}`}
+              data-testid="movements-head"
+            >
+              <span aria-hidden />
+              <button
+                type="button"
+                data-testid="movements-sort"
+                data-order={order}
+                aria-label={t(order === "desc" ? "femme.commissions.movements.sort.ariaDesc" : "femme.commissions.movements.sort.ariaAsc")}
+                onClick={() => {
+                  setOrder(order === "desc" ? "asc" : "desc");
+                  setPage(0);
+                }}
+                className="inline-flex min-h-11 items-center gap-1 self-center text-left font-extrabold uppercase tracking-wide text-primary underline underline-offset-4"
               >
-                <span
-                  aria-hidden="true"
-                  className="flex size-9 items-center justify-center rounded-full bg-primary-lt text-xs font-heading font-extrabold text-primary"
-                >
-                  {initials(e.professionalName)}
+                {t("femme.commissions.movements.col.date")}
+                <span aria-hidden className="text-sm">
+                  {order === "desc" ? "↓" : "↑"}
                 </span>
-                <div className="min-w-0">
-                  <div className="truncate font-semibold text-ink">
-                    {e.itemName ?? e.note} · {e.professionalName}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-2 text-sm text-ink-3">
-                    <span>
-                      {formatParaguayDateTime(e.accrualAt, dateLocale)}
-                      {e.invoiceNumber ? ` · ${e.invoiceNumber}` : ""} · {movementLabel(e)}
-                      {e.note && e.sourceType !== "ADJUSTMENT" ? ` · ${e.note}` : ""} · {formatPercent(e.percentApplied)}
-                    </span>
-                    <SettlementStatusBadge status={e.settlementStatus} />
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span
-                    className={`text-right font-heading font-extrabold tabular-nums ${e.commissionAmount < 0 ? "text-danger" : "text-ink"}`}
-                  >
-                    {formatGuaraniesGs(e.commissionAmount)}
-                  </span>
-                  {e.reassignable ? (
-                    <KebabMenu
-                      id={`movement-${e.id}`}
-                      triggerAriaLabel={t("femme.commissions.movements.rowActions")}
-                      items={[
-                        {
-                          id: "reassign",
-                          label: t("femme.commissions.reassign.action"),
-                          onSelect: () => setToReassign(e),
-                        },
-                      ]}
-                    />
-                  ) : (
-                    <span className="w-11" aria-hidden />
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+              </button>
+              <span>{t("femme.commissions.movements.col.item")}</span>
+              {!fixedProfessionalId && <span>{t("femme.commissions.movements.col.professional")}</span>}
+              <span>{t("femme.commissions.movements.col.type")}</span>
+              <span>{t("femme.commissions.movements.col.calc")}</span>
+              <span>{t("femme.commissions.movements.col.status")}</span>
+              <span className="text-right">{t("femme.commissions.movements.col.amount")}</span>
+              <span aria-hidden />
+            </div>
+            <ul>
+              {pageItems.map((g) => {
+                const e = g.rep;
+                const c = calc(e);
+                const note = changeNote(t, g);
+                const open = g.changed && (showReversed || openKeys.has(g.key));
+                const label = open ? t("femme.commissions.movements.group.hide") : t("femme.commissions.movements.group.show", { count: g.entries.length });
+                const [datePart, ...timeParts] = formatParaguayDateTime(e.accrualAt, dateLocale).split(", ");
+                return (
+                  <li key={g.key} data-testid="movement-row" data-status={e.settlementStatus ?? ""} data-changed={g.changed} className="border-t border-line first:border-t-0">
+                    <div
+                      className={`grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-[13px] md:min-h-[4.75rem] md:gap-x-2 md:gap-y-0 md:px-3 md:py-2 ${gridClass}`}
+                    >
+                      {g.changed ? (
+                        <button
+                          type="button"
+                          aria-expanded={open}
+                          aria-label={label}
+                          title={label}
+                          data-testid="movement-changes-toggle"
+                          onClick={() =>
+                            setOpenKeys((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(g.key)) next.delete(g.key);
+                              else next.add(g.key);
+                              return next;
+                            })
+                          }
+                          className="order-8 col-span-2 inline-flex min-h-11 items-center gap-1 justify-self-start text-[13px] font-extrabold text-primary-dk underline underline-offset-4 md:order-none md:col-span-1 md:size-11 md:justify-center md:justify-self-auto md:rounded-xl md:bg-primary-lt md:text-lg md:no-underline"
+                        >
+                          <span className="md:hidden">{label}</span>
+                          <span aria-hidden>{open ? "⌃" : "⌄"}</span>
+                        </button>
+                      ) : (
+                        <span className="hidden size-11 md:block" aria-hidden />
+                      )}
+                      <div data-testid="movement-date" className="order-4 col-span-2 text-ink-3 md:order-none md:col-span-1 md:text-ink">
+                        <span className="font-bold md:block">{datePart}</span> <span className="text-ink-3">{timeParts.join(", ")}</span>
+                      </div>
+                      <div className="order-1 min-w-0 md:order-none">
+                        <div data-testid="movement-item" title={e.itemName ?? e.note ?? undefined} className="break-words text-[15px] font-bold text-ink md:truncate md:text-[13px]">
+                          {e.itemName ?? e.note}
+                        </div>
+                        {e.invoiceNumber && (
+                          <div data-testid="movement-invoice" className="text-ink-3">
+                            {e.invoiceNumber}
+                          </div>
+                        )}
+                      </div>
+                      {!fixedProfessionalId && (
+                        <div data-testid="movement-professional" className="order-3 col-span-2 font-bold text-ink md:order-none md:col-span-1">
+                          {e.professionalName}
+                        </div>
+                      )}
+                      <div data-testid="movement-type" className="order-5 col-span-2 flex flex-col items-start gap-0.5 text-ink-2 md:order-none md:col-span-1">
+                        <span>{movementLabel(e)}</span>
+                        {e.note && e.sourceType !== "ADJUSTMENT" && !g.changed && <span className="text-ink-3">{e.note}</span>}
+                        {g.changed && (
+                          <span
+                            data-testid="movement-tag"
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-extrabold ${g.reason === "VOID" ? "bg-bg text-ink-2" : "bg-primary-lt text-primary-dk"}`}
+                          >
+                            {changeTag(t, g)}
+                          </span>
+                        )}
+                      </div>
+                      <div data-testid="movement-calc" className="order-7 col-span-2 min-w-0 md:order-none md:col-span-1">
+                        <div data-testid="movement-calc-main" className="font-bold text-ink">
+                          {g.current || !g.changed ? c.main : "—"}
+                        </div>
+                        {(g.current || !g.changed) && c.extra && (
+                          <div data-testid="movement-calc-extra" className="text-ink-3">
+                            {c.extra}
+                          </div>
+                        )}
+                        {note && (
+                          <div data-testid="movement-calc-note" className="text-ink-3">
+                            {note}
+                          </div>
+                        )}
+                      </div>
+                      <div data-testid="movement-status" className="order-6 col-span-2 md:order-none md:col-span-1">
+                        <SettlementStatusBadge status={e.settlementStatus} />
+                      </div>
+                      <div className="order-2 flex items-center justify-end gap-1 md:contents">
+                        <span
+                          data-testid="movement-amount"
+                          className={`whitespace-nowrap text-right font-heading text-base font-extrabold tabular-nums ${g.net < 0 ? "text-danger" : g.changed && g.net === 0 ? "text-ink-3" : "text-ink"}`}
+                        >
+                          {formatGuaraniesGs(g.net)}
+                        </span>
+                        {e.reassignable ? (
+                          <KebabMenu
+                            id={`movement-${e.id}`}
+                            triggerAriaLabel={t("femme.commissions.movements.rowActions")}
+                            items={[
+                              {
+                                id: "reassign",
+                                label: t("femme.commissions.reassign.action"),
+                                onSelect: () => setToReassign(e),
+                              },
+                            ]}
+                          />
+                        ) : (
+                          <span className="w-11" aria-hidden />
+                        )}
+                      </div>
+                    </div>
+                    {open && (
+                      <div className="md:pl-[7.5rem]">
+                        <MovementChangeSteps group={g} />
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+        {visible.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-line bg-bg/60 px-4 py-3 text-sm text-ink-2" data-testid="movements-totals">
+            <span>
+              {t("femme.commissions.movements.totals.total")}{" "}
+              <b className="tabular-nums text-ink" data-testid="movements-total-amount">
+                {formatGuaraniesGs(totals.amount)}
+              </b>
+            </span>
+            {changedCount > 0 && (
+              <span className="text-ink-3" data-testid="movements-changed-count">
+                {t("femme.commissions.movements.group.changedCount", { count: changedCount })}
+              </span>
+            )}
+            {totals.retained !== 0 && (
+              <span>
+                {t("femme.commissions.movements.totals.retained")}{" "}
+                <b className="tabular-nums text-warning" data-testid="movements-total-retained">
+                  {formatGuaraniesGs(totals.retained)}
+                </b>
+              </span>
+            )}
+          </div>
         )}
         {visible.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-3 py-3">

@@ -3,6 +3,7 @@ package com.cursorpoc.backend.commission;
 import com.cursorpoc.backend.commission.CommissionConfigSnapshot.ScopeKey;
 import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.CommissionConfigVersion;
+import com.cursorpoc.backend.domain.CommissionGroup;
 import com.cursorpoc.backend.domain.Professional;
 import com.cursorpoc.backend.domain.SalonService;
 import com.cursorpoc.backend.domain.enums.CommissionApplyMode;
@@ -12,6 +13,7 @@ import com.cursorpoc.backend.domain.enums.CommissionPeriodicity;
 import com.cursorpoc.backend.domain.enums.CommissionVersionStatus;
 import com.cursorpoc.backend.domain.enums.ServiceKind;
 import com.cursorpoc.backend.repository.CommissionConfigVersionRepository;
+import com.cursorpoc.backend.repository.CommissionGroupRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ApplyChangesRequest;
@@ -24,6 +26,7 @@ import com.cursorpoc.backend.web.dto.CommissionDtos.ItemWithoutRule;
 import com.cursorpoc.backend.web.dto.CommissionDtos.PeriodInfo;
 import com.cursorpoc.backend.web.dto.CommissionDtos.ProfessionalAmount;
 import com.cursorpoc.backend.web.dto.CommissionDtos.RecalculationPreview;
+import com.cursorpoc.backend.web.dto.CommissionDtos.RetentionProfile;
 import com.cursorpoc.backend.web.dto.CommissionDtos.RuleCategory;
 import com.cursorpoc.backend.web.dto.CommissionDtos.RuleException;
 import com.cursorpoc.backend.web.dto.CommissionDtos.RuleItem;
@@ -61,9 +64,18 @@ public class CommissionConfigService {
 
   private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
+  /**
+   * Scopes that never change an amount already (or about to be) calculated. HU-COM-20: the
+   * retention of a professional is not one of them any more, it comes out of what she is paid.
+   */
+  private static final Set<String> NO_CALCULATION_EFFECT =
+      Set.of(
+          CommissionConfigScope.PERIODICITY.name(), CommissionConfigScope.AGUINALDO_DEFAULT.name());
+
   private final CommissionConfigVersionRepository versionRepository;
   private final SalonServiceRepository serviceRepository;
   private final ProfessionalRepository professionalRepository;
+  private final CommissionGroupRepository groupRepository;
   private final CommissionLedger ledger;
   private final CommissionRecalculationService recalculationService;
   private final FemmeTimeProperties timeProperties;
@@ -72,12 +84,14 @@ public class CommissionConfigService {
       CommissionConfigVersionRepository versionRepository,
       SalonServiceRepository serviceRepository,
       ProfessionalRepository professionalRepository,
+      CommissionGroupRepository groupRepository,
       CommissionLedger ledger,
       CommissionRecalculationService recalculationService,
       FemmeTimeProperties timeProperties) {
     this.versionRepository = versionRepository;
     this.serviceRepository = serviceRepository;
     this.professionalRepository = professionalRepository;
+    this.groupRepository = groupRepository;
     this.ledger = ledger;
     this.recalculationService = recalculationService;
     this.timeProperties = timeProperties;
@@ -136,9 +150,9 @@ public class CommissionConfigService {
     }
     CommissionConfigSnapshot snapshot = ledger.snapshot(tenantId);
     Instant now = Instant.now();
+    // C13: periodicity and the default retention do not change any calculation → no question.
     boolean onlyPeriodicity =
-        request.changes().stream()
-            .allMatch(c -> CommissionConfigScope.PERIODICITY.name().equals(c.scope()));
+        request.changes().stream().allMatch(c -> NO_CALCULATION_EFFECT.contains(c.scope()));
 
     CommissionApplyMode mode;
     Instant effectiveFrom;
@@ -166,9 +180,12 @@ public class CommissionConfigService {
       CommissionConfigScope scope = parseScope(change.scope());
       String value = validateValue(tenantId, scope, change);
       ScopeKey key =
-          scope == CommissionConfigScope.RULE
-              ? ScopeKey.rule(change.serviceId(), change.professionalId())
-              : ScopeKey.of(scope);
+          switch (scope) {
+            case RULE -> ScopeKey.rule(change.serviceId(), change.professionalId());
+            case GROUP_RULE -> ScopeKey.group(change.groupId(), change.professionalId());
+            case RETENTION_PROFILE -> ScopeKey.retentionProfile(change.professionalId());
+            default -> ScopeKey.of(scope);
+          };
       keys.add(key);
 
       List<CommissionConfigVersion> pending = snapshot.scheduledAfter(key, now);
@@ -193,7 +210,7 @@ public class CommissionConfigService {
       }
       versionRepository.save(newVersion(tenantId, key, value, effectiveFrom, mode, actorEmail));
       if (change.validUntil() != null) {
-        if (scope != CommissionConfigScope.RULE) {
+        if (scope != CommissionConfigScope.RULE && scope != CommissionConfigScope.GROUP_RULE) {
           throw new ResponseStatusException(
               HttpStatus.BAD_REQUEST, "COMMISSION_VALID_UNTIL_INVALID");
         }
@@ -279,6 +296,7 @@ public class CommissionConfigService {
     v.setScope(key.scope());
     v.setServiceId(key.serviceId());
     v.setProfessionalId(key.professionalId());
+    v.setGroupId(key.groupId());
     v.setConfigValue(value);
     v.setEffectiveFrom(effectiveFrom);
     v.setApplyMode(mode);
@@ -330,6 +348,54 @@ public class CommissionConfigService {
                 HttpStatus.CONFLICT, "COMMISSION_PROFESSIONAL_INACTIVE");
           }
         }
+        return raw == null || raw.isEmpty() ? null : parseRuleValue(raw);
+      }
+      case GROUP_RULE -> {
+        if (change.groupId() == null
+            || groupRepository.findByIdAndTenantId(change.groupId(), tenantId).isEmpty()) {
+          throw new ResponseStatusException(HttpStatus.NOT_FOUND, "COMMISSION_GROUP_NOT_FOUND");
+        }
+        if (change.professionalId() != null) {
+          Professional p =
+              professionalRepository
+                  .findByIdAndTenant_Id(change.professionalId(), tenantId)
+                  .orElseThrow(
+                      () ->
+                          new ResponseStatusException(
+                              HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
+          if (raw != null && !raw.isEmpty() && !p.isActive()) {
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT, "COMMISSION_PROFESSIONAL_INACTIVE");
+          }
+        }
+        return raw == null || raw.isEmpty() ? null : parseRuleValue(raw);
+      }
+      case FIXED_DESTINATION -> {
+        try {
+          return CommissionRuleValue.FixedDestination.valueOf(raw).name();
+        } catch (RuntimeException e) {
+          throw new ResponseStatusException(
+              HttpStatus.BAD_REQUEST, "COMMISSION_FIXED_DESTINATION_INVALID");
+        }
+      }
+      case AGUINALDO_ENABLED -> {
+        if (!"true".equals(raw) && !"false".equals(raw)) {
+          throw new ResponseStatusException(
+              HttpStatus.BAD_REQUEST, "COMMISSION_AGUINALDO_FLAG_INVALID");
+        }
+        return raw;
+      }
+      case AGUINALDO_DEFAULT -> {
+        return parsePercent(raw).toPlainString();
+      }
+      case RETENTION_PROFILE -> {
+        if (change.professionalId() == null) {
+          throw new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND");
+        }
+        professionalRepository
+            .findByIdAndTenant_Id(change.professionalId(), tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND"));
         return raw == null || raw.isEmpty() ? null : parsePercent(raw).toPlainString();
       }
       default ->
@@ -347,6 +413,28 @@ public class CommissionConfigService {
     } catch (RuntimeException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_PERCENT_OUT_OF_RANGE");
     }
+  }
+
+  /**
+   * Validates a rule value (plain percent or {@code %|0|fijo|destino}; the retention is ignored).
+   */
+  static String parseRuleValue(String raw) {
+    CommissionRuleValue value;
+    try {
+      value = CommissionRuleValue.parse(raw);
+    } catch (RuntimeException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_PERCENT_OUT_OF_RANGE");
+    }
+    BigDecimal percent = parsePercent(value.percent().toPlainString());
+    // HU-COM-20: the retention for aguinaldo is the professional's, not part of a rule any more.
+    BigDecimal retention = BigDecimal.ZERO.setScale(2);
+    BigDecimal fixed = value.fixedAmount();
+    if (fixed.signum() < 0
+        || fixed.compareTo(BigDecimal.valueOf(999_999_999L)) > 0
+        || fixed.stripTrailingZeros().scale() > 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "COMMISSION_FIXED_AMOUNT_INVALID");
+    }
+    return new CommissionRuleValue(percent, retention, fixed, value.fixedDestination()).serialize();
   }
 
   private static CommissionApplyMode parseMode(String raw) {
@@ -396,7 +484,20 @@ public class CommissionConfigService {
         snapshot.periodicityAt(now).name(),
         currentPeriod(snapshot, now),
         scheduled,
-        history);
+        history,
+        snapshot.fixedDestinationAt(now).name(),
+        snapshot.aguinaldoEnabledAt(now),
+        snapshot.aguinaldoDefaultAt(now),
+        lookups.professionals().values().stream()
+            .sorted(Comparator.comparing(Professional::getDisplayName))
+            .map(
+                p ->
+                    new RetentionProfile(
+                        p.getId(),
+                        p.getDisplayName(),
+                        p.isActive(),
+                        snapshot.retentionProfileAt(p.getId(), now)))
+            .toList());
   }
 
   @Transactional(readOnly = true)
@@ -434,7 +535,9 @@ public class CommissionConfigService {
               pid,
               p == null ? null : p.getDisplayName(),
               p != null && p.isActive(),
-              current.map(v -> new BigDecimal(v.getConfigValue())).orElse(null),
+              current
+                  .map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent())
+                  .orElse(null),
               current.map(CommissionConfigVersion::getId).orElse(null),
               scheduled));
     }
@@ -452,18 +555,45 @@ public class CommissionConfigService {
         item.getKind() == ServiceKind.PRODUCT
             ? CommissionConfigScope.DEFAULT_PRODUCT
             : CommissionConfigScope.DEFAULT_SERVICE;
+    BigDecimal defaultPercent = snapshot.defaultPercentAt(defaultScope, now);
+    // Without a % of its own the item pays its group's (when the group has one), then the default
+    // of its kind — the same chain as CommissionCalculator.resolveRule.
+    Optional<CommissionConfigVersion> groupRule = groupRuleOf(snapshot, item, now);
+    BigDecimal inheritedPercent =
+        groupRule
+            .map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent())
+            .orElse(defaultPercent);
+    String inheritedFrom = groupRule.isPresent() ? "GROUP" : "GENERAL";
+    String inheritedGroupName =
+        groupRule.isPresent()
+            ? groupRepository
+                .findByIdAndTenantId(item.getCommissionGroupId(), tenantId)
+                .map(g -> g.getName())
+                .orElse(null)
+            : null;
     return new ItemRulesResponse(
         serviceId,
         item.getName(),
         item.getKind().name(),
-        general.map(v -> new BigDecimal(v.getConfigValue())).orElse(null),
+        general.map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent()).orElse(null),
         general.map(CommissionConfigVersion::getId).orElse(null),
-        snapshot.defaultPercentAt(defaultScope, now),
+        defaultPercent,
         snapshot.scheduledAfter(ScopeKey.rule(serviceId, null), now).stream()
             .map(v -> view(v, snapshot, lookups, now))
             .toList(),
         exceptions,
-        history);
+        history,
+        inheritedPercent,
+        inheritedFrom,
+        inheritedGroupName);
+  }
+
+  /** The group % (non-null value) in force for the item's group, if it has a group. */
+  private static Optional<CommissionConfigVersion> groupRuleOf(
+      CommissionConfigSnapshot snapshot, SalonService item, Instant at) {
+    return item.getCommissionGroupId() == null
+        ? Optional.empty()
+        : snapshot.groupRuleAt(item.getCommissionGroupId(), null, at);
   }
 
   /**
@@ -498,6 +628,10 @@ public class CommissionConfigService {
         professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
             .filter(Professional::isActive)
             .toList();
+    Map<Long, String> groupNames = new java.util.HashMap<>();
+    groupRepository
+        .findByTenantIdOrderByNameAsc(tenantId)
+        .forEach(g -> groupNames.put(g.getId(), g.getName()));
     Map<Long, RuleCategoryBuilder> categories = new java.util.LinkedHashMap<>();
     int itemCount = 0;
     int withExceptions = 0;
@@ -510,14 +644,24 @@ public class CommissionConfigService {
             .toList();
     for (SalonService s : items) {
       Optional<CommissionConfigVersion> own = snapshot.ruleAt(s.getId(), null, at);
-      BigDecimal standard = own.map(v -> new BigDecimal(v.getConfigValue())).orElse(general);
+      // HU-COM-20: without a % of its own a service pays its group's, then the general of its kind.
+      BigDecimal viaGroup =
+          s.getCommissionGroupId() == null
+              ? null
+              : snapshot
+                  .groupRuleAt(s.getCommissionGroupId(), null, at)
+                  .map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent())
+                  .orElse(null);
+      BigDecimal inherited = viaGroup != null ? viaGroup : general;
+      BigDecimal standard =
+          own.map(v -> CommissionRuleValue.parse(v.getConfigValue()).percent()).orElse(inherited);
       List<RuleException> exceptions = new ArrayList<>();
       for (Professional p : professionals) {
         snapshot
             .ruleAt(s.getId(), p.getId(), at)
             .ifPresent(
                 v -> {
-                  BigDecimal pct = new BigDecimal(v.getConfigValue());
+                  BigDecimal pct = CommissionRuleValue.parse(v.getConfigValue()).percent();
                   exceptions.add(
                       new RuleException(
                           p.getId(), p.getDisplayName(), pct, pct.subtract(standard)));
@@ -544,6 +688,9 @@ public class CommissionConfigService {
               base.setScale(0, java.math.RoundingMode.HALF_UP),
               standard,
               own.isPresent(),
+              inherited,
+              viaGroup != null ? "GROUP" : "GENERAL",
+              viaGroup != null ? groupNames.get(s.getCommissionGroupId()) : null,
               exceptions,
               scheduled);
       itemCount++;
@@ -592,13 +739,18 @@ public class CommissionConfigService {
     }
   }
 
-  /** HU-COM-02 / HU-COM-08: active items whose general percent is not defined. */
+  /**
+   * HU-COM-02 / HU-COM-08: active items that fall back to the default % of their kind, i.e. with no
+   * % of their own and none from their group either (a group's % is a valid source, see {@code
+   * CommissionCalculator.resolveRule}).
+   */
   @Transactional(readOnly = true)
   public List<ItemWithoutRule> itemsWithoutGeneralRule(long tenantId) {
     CommissionConfigSnapshot snapshot = ledger.snapshot(tenantId);
     Instant now = Instant.now();
     return serviceRepository.findByTenant_IdAndActiveTrueOrderByNameAsc(tenantId).stream()
         .filter(s -> snapshot.ruleAt(s.getId(), null, now).isEmpty())
+        .filter(s -> groupRuleOf(snapshot, s, now).isEmpty())
         .map(s -> new ItemWithoutRule(s.getId(), s.getName(), s.getKind().name()))
         .toList();
   }
@@ -615,6 +767,13 @@ public class CommissionConfigService {
             .collect(Collectors.toMap(Professional::getId, Function.identity())));
   }
 
+  public List<Long> activeProfessionalIds(long tenantId) {
+    return professionalRepository.findByTenant_IdOrderByFullNameAsc(tenantId).stream()
+        .filter(Professional::isActive)
+        .map(Professional::getId)
+        .toList();
+  }
+
   public Map<Long, String> professionalNames(long tenantId) {
     Map<Long, String> names = new HashMap<>();
     professionalRepository
@@ -628,6 +787,8 @@ public class CommissionConfigService {
     SalonService s = v.getServiceId() == null ? null : lookups.services().get(v.getServiceId());
     Professional p =
         v.getProfessionalId() == null ? null : lookups.professionals().get(v.getProfessionalId());
+    CommissionGroup group =
+        v.getGroupId() == null ? null : groupRepository.findById(v.getGroupId()).orElse(null);
     String previous =
         snapshot
             .versionAt(ScopeKey.of(v), v.getEffectiveFrom().minusMillis(1))
@@ -642,6 +803,8 @@ public class CommissionConfigService {
         s == null ? null : s.getKind().name(),
         v.getProfessionalId(),
         p == null ? null : p.getDisplayName(),
+        v.getGroupId(),
+        group == null ? null : group.getName(),
         v.getConfigValue(),
         previous,
         v.getEffectiveFrom(),

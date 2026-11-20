@@ -11,7 +11,10 @@ import {
   restoreCommissionsGlobal,
   todayYmd,
   type CommissionWorld,
-  openGenerateSettlements,
+  liquidarRow,
+  liquidarTab,
+  openCommissions,
+  openExceptions,
   openCommissionsMore,
 } from "../../fixtures/commissions";
 
@@ -43,9 +46,9 @@ async function accrue(request: Parameters<typeof issueInvoice>[0], professionalI
   await entriesOfInvoice(request, w.adminToken, inv.id, 1);
 }
 
-async function openTab(page: Page, name: "Settlements" | "Movements" | "Rules" | "Reports") {
-  await page.getByRole("link", { name: "Commissions" }).click();
-  await page.getByRole("tab", { name, exact: true }).click();
+/** Opens the exceptions by service or product (HU-COM-16: a tab of Setup › Groups and services). */
+async function openAdvanced(page: Page) {
+  await openExceptions(page);
 }
 
 /** Picks options of a design-system MultiSelect (checkbox dropdown) by their visible label. */
@@ -103,15 +106,16 @@ test("exportaciones: columnas y valores del CSV y del PDF en el idioma elegido p
 
   // The UI (English in e2e) asks for its own language on every export.
   await loginAdminUi(page, w);
-  await openTab(page, "Settlements");
-  await page.getByTestId("settlements-filters-toggle").click();
+  await openCommissions(page, "settle");
+  await page.getByTestId("liquidar-csv").click();
   const [settlementsCsv] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByRole("button", { name: "Export CSV" }).click(),
+    page.getByTestId("liquidar-csv-period").click(),
   ]);
   const settlementsText = await (await settlementsCsv.createReadStream()).toArray();
   expect(Buffer.concat(settlementsText).toString("utf8")).toContain("Settlement ID,Professional,Period from");
 
+  await page.getByRole("link", { name: "Commissions" }).click();
   await openCommissionsMore(page, "Reports");
   const [entriesCsv] = await Promise.all([
     page.waitForEvent("download"),
@@ -127,7 +131,7 @@ test("exportaciones: columnas y valores del CSV y del PDF en el idioma elegido p
   expect((await pdfRequest).url()).toContain("lang=en");
 });
 
-test("generar para todas con una liquidación Pagada: popup para generar las restantes", async ({ page, request }) => {
+test("con una liquidación Pagada en el período: «Generar» crea solo las de quienes faltan", async ({ page, request }) => {
   await accrue(request, w.ana.id);
   const [paid] = await generateSettlements(request, w.adminToken, [w.ana.id]);
   await apiPostJson(request, w.adminToken, `/api/commissions/settlements/${paid.id}/approve`, {});
@@ -141,71 +145,49 @@ test("generar para todas con una liquidación Pagada: popup para generar las res
   await accrue(request, w.bea.id);
 
   await loginAdminUi(page, w);
-  await openTab(page, "Settlements");
-  await expect(page.getByTestId("commission-settlement-row")).toHaveCount(1);
+  await openCommissions(page, "settle");
+  await liquidarTab(page, "PAID");
+  await expect(liquidarRow(page, w.ana.name)).toHaveAttribute("data-status", "PAID");
+  await liquidarTab(page, "UNSETTLED");
+  await expect(liquidarRow(page, w.bea.name)).toHaveAttribute("data-status", "UNSETTLED");
+  // Paid ones are not offered again: the tab counts only who is missing.
+  await expect(page.getByTestId("liquidar-tab-UNSETTLED-count")).toHaveText("1");
 
-  await openGenerateSettlements(page);
-  await page.getByTestId("commission-generate-settlements").click();
-  const popup = page.getByTestId("settlements-conflict");
-  await expect(popup).toBeVisible();
-  const row = popup.getByTestId("settlements-conflict-row");
-  await expect(row).toHaveCount(1);
-  await expect(row).toContainText(w.ana.name);
-  await expect(row).toContainText("Paid");
-  await expect(popup).toContainText("generate the settlement for the remaining professional");
-
-  // «Generate none» closes it without creating anything; Cancel-like option is the leftmost.
-  await expectCancelLook(page, page.getByTestId("settlements-conflict-none"), [
-    page.getByTestId("settlements-conflict-remaining"),
-  ]);
-  await page.getByTestId("settlements-conflict-none").click();
-  await expect(popup).toHaveCount(0);
-  await expect(page.getByTestId("commission-settlement-row")).toHaveCount(1);
-
-  // Again, now generating for the remaining one (Bea) only.
-  await openGenerateSettlements(page);
-  await page.getByTestId("commission-generate-settlements").click();
-  await expect(page.getByTestId("settlements-conflict-remaining")).toHaveText("Generate for the remaining one");
-  await page.getByTestId("settlements-conflict-remaining").click();
-  await expect(page.getByRole("status").filter({ hasText: "1 settlement generated." })).toBeVisible();
-  await expect(page.getByTestId("commission-settlement-row")).toHaveCount(2);
+  await page.getByTestId("liquidar-main-action").click();
+  await expect(page.getByRole("dialog")).toContainText("Generate 1 settlement");
+  await page.getByTestId("liquidar-confirm").click();
+  await expect(page.getByTestId("liquidar-notice")).toContainText("1 settlement was generated.");
+  await expect(liquidarRow(page, w.bea.name)).toHaveAttribute("data-status", "DRAFT");
   const list = await apiGetJson<{ items: { professionalId: number; status: string }[] }>(
     request,
     w.adminToken,
     "/api/commissions/settlements",
   );
   expect(list.items.filter((i) => i.professionalId === w.bea.id).map((i) => i.status)).toEqual(["DRAFT"]);
+  expect(list.items.filter((i) => i.professionalId === w.ana.id).map((i) => i.status)).toEqual(["PAID"]);
 });
 
-test("Liquidaciones: varios profesionales a la vez (generar y filtrar) y «Limpiar filtros»", async ({ page, request }) => {
+test("Liquidar: varios profesionales a la vez (elegir, generar y ver las pestañas por estado)", async ({ page, request }) => {
   await accrue(request, w.ana.id);
   await accrue(request, w.bea.id);
   await loginAdminUi(page, w);
-  await openTab(page, "Settlements");
+  await openCommissions(page, "settle");
 
-  // Generate for both selected professionals at once.
-  await openGenerateSettlements(page);
-  await pickProfessionals(page, "settle-professional", [w.ana.name, w.bea.name]);
-  await expect(page.locator("#settle-professional")).toHaveValue("2 selected");
-  await page.getByTestId("commission-generate-settlements").click();
-  await expect(page.getByRole("status").filter({ hasText: "2 settlements generated." })).toBeVisible();
-  await expect(page.getByTestId("commission-settlement-row")).toHaveCount(2);
+  // Pick both and generate them at once.
+  await liquidarRow(page, w.ana.name).getByTestId("liquidar-row-check").check();
+  await liquidarRow(page, w.bea.name).getByTestId("liquidar-row-check").check();
+  await expect(page.getByTestId("liquidar-main-action")).toHaveText("Generate 2");
+  await page.getByTestId("liquidar-main-action").click();
+  await page.getByTestId("liquidar-confirm").click();
+  await expect(page.getByTestId("liquidar-notice")).toContainText("2 settlements were generated.");
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
 
-  // Filter by one, then by both.
-  await page.getByTestId("settlements-filters-toggle").click();
-  await pickProfessionals(page, "settle-filter-professional", [w.ana.name]);
-  await expect(page.getByTestId("commission-settlement-row")).toHaveCount(1);
-  await expect(page.getByTestId("commission-settlement-row")).toContainText(w.ana.name);
-  await pickProfessionals(page, "settle-filter-professional", [w.bea.name]);
-  await expect(page.getByTestId("commission-settlement-row")).toHaveCount(2);
-  await page.getByTestId("settlements-chip-PAID").click();
-  await expect(page.getByTestId("commission-settlement-row")).toHaveCount(0);
-
-  await page.getByTestId("settlements-clear-filters").click();
-  await expect(page.locator("#settle-filter-professional")).toHaveValue("");
-  await expect(page.getByTestId("settlements-chip-ALL")).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("commission-settlement-row")).toHaveCount(2);
-  await expect(page.getByTestId("settlements-clear-filters")).toBeDisabled();
+  // By stage: both are drafts, nobody is paid yet.
+  await liquidarTab(page, "PAID");
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(0);
+  await expect(page.getByTestId("liquidar-empty")).toBeVisible();
+  await liquidarTab(page, "DRAFT");
+  await expect(page.getByTestId("liquidar-row")).toHaveCount(2);
 
   // The API filters by several professionals too.
   const both = await apiGetJson<{ total: number }>(
@@ -220,7 +202,7 @@ test("Movimientos: filtro por varios profesionales y «Limpiar filtros»", async
   await accrue(request, w.ana.id);
   await accrue(request, w.bea.id);
   await loginAdminUi(page, w);
-  await openTab(page, "Movements");
+  await openCommissions(page, "activity");
   await expect(page.getByTestId("movement-row")).toHaveCount(2);
 
   await page.getByTestId("movements-filters-toggle").click();
@@ -242,7 +224,8 @@ test("Movimientos: filtro por varios profesionales y «Limpiar filtros»", async
 
 async function openItemPanel(page: Page) {
   await loginAdminUi(page, w);
-  await openTab(page, "Rules");
+  await openAdvanced(page);
+  await page.getByTestId("rules-kind-SERVICE").click();
   await page.getByTestId(`rules-row-${w.service.id}`).click();
   return page.getByTestId("rules-panel");
 }

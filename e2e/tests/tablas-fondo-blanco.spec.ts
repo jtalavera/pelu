@@ -11,7 +11,7 @@ import { loginAsDemo } from "../fixtures/auth";
 import {
   enableCommissionsGlobally,
   generateSettlements,
-  openCommissionsMore,
+  openCommissions,
   entriesOfInvoice,
   issueInvoice,
   loginAdminUi,
@@ -76,14 +76,17 @@ test.describe("Tablas con fondo blanco", () => {
       await generateSettlements(request, w.adminToken, [w.ana.id]);
 
       await loginAdminUi(page, w);
-      await page.getByRole("link", { name: "Commissions" }).click();
-      await expectWhiteSurface(page, page.getByTestId("commission-settlements-table"));
-      await page.getByRole("tab", { name: "Movements", exact: true }).click();
+      await openCommissions(page, "settle");
+      await expectWhiteSurface(page, page.getByTestId("liquidar-table"));
+      await page.getByTestId("commissions-nav-activity").click();
       await expectWhiteSurface(page, page.getByTestId("movements-table"));
-      await page.getByRole("tab", { name: "Rules", exact: true }).click();
+      await page.getByTestId("commissions-nav-setup").click();
+      await page.getByTestId("config-exceptions-link").click();
+      await page.getByTestId("rules-kind-SERVICE").click();
       await expectWhiteSurface(page, page.getByTestId("rules-table"));
-      // The reference list (inside a card) keeps its white background.
-      await openCommissionsMore(page, "Settings");
+      // The reference list (inside a card) keeps its white background (Setup › scheduled changes and history).
+      await page.getByTestId("commissions-nav-setup").click();
+      await page.getByTestId("config-advanced-link").click();
       await page.getByTestId("commission-history-toggle").click();
       await expectWhiteTable(page, page.getByTestId("commission-settings-history").locator("table"));
     } finally {

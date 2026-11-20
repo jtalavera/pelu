@@ -126,14 +126,22 @@ export async function fillAppointmentDateIso(dialog: Locator, isoYmd: string): P
   // The date popover renders in a body-level portal (FloatingDropdown), so it is
   // NOT a descendant of the appointment dialog — scope its controls to the page.
   const page = dialog.page();
-  const monthNext = page.getByRole("button", { name: "Next month" });
-  const dayBtn = page.getByRole("button", { name: isoYmd, exact: true });
-  for (let i = 0; i < 14; i++) {
-    const visible = await dayBtn.first().isVisible().catch(() => false);
-    if (visible) break;
-    await monthNext.click();
+  const popup = page.getByRole("dialog", { name: "Calendar", exact: true });
+  const monthNext = popup.getByRole("button", { name: "Next month" });
+  const monthPrev = popup.getByRole("button", { name: "Previous month" });
+  const dayBtn = popup.getByRole("button", { name: isoYmd, exact: true });
+  // The popup opens on the month of the date the form is prefilled with, which can be before OR after
+  // the target (e.g. the agenda was paged forward), so read the visible month off any day's ISO
+  // `aria-label` and walk toward the target in the right direction.
+  const anyDay = popup.getByRole("button", { name: /^\d{4}-\d{2}-\d{2}$/ }).first();
+  const monthIndex = (ymd: string) => Number(ymd.slice(0, 4)) * 12 + Number(ymd.slice(5, 7)) - 1;
+  const target = monthIndex(isoYmd);
+  for (let i = 0; i < 36; i++) {
+    const shown = monthIndex((await anyDay.getAttribute("aria-label")) ?? isoYmd);
+    if (shown === target) break;
+    await (shown < target ? monthNext : monthPrev).click();
   }
-  await dayBtn.first().click({ timeout: 15_000 });
+  await dayBtn.click({ timeout: 15_000 });
 }
 
 /** Same interaction pattern as calendar `appointment-time-input` (`TimeCombobox`). */

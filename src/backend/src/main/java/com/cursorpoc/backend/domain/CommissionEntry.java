@@ -88,6 +88,22 @@ public class CommissionEntry {
   @Column(name = "rule_origin", length = 32)
   private CommissionRuleOrigin ruleOrigin;
 
+  /** Monto fijo (costo de producto) descontado de la base; con signo en las reversiones. */
+  @Column(name = "fixed_amount", nullable = false, precision = 19, scale = 2)
+  private BigDecimal fixedAmount = BigDecimal.ZERO;
+
+  /** True: el monto fijo se le paga a la profesional (va dentro de commissionAmount). */
+  @Column(name = "fixed_to_professional", nullable = false)
+  private boolean fixedToProfessional = true;
+
+  @Column(name = "retention_percent", nullable = false, precision = 5, scale = 2)
+  private BigDecimal retentionPercent = BigDecimal.ZERO;
+
+  /** Retenido para aguinaldo (no se paga con la liquidación); con signo en las reversiones. */
+  @Column(name = "retention_amount", nullable = false, precision = 19, scale = 2)
+  private BigDecimal retentionAmount = BigDecimal.ZERO;
+
+  /** Lo que se le paga a la profesional por la línea: % de comisión + monto fijo si es suyo. */
   @Column(name = "commission_amount", nullable = false, precision = 19, scale = 2)
   private BigDecimal commissionAmount;
 
@@ -267,6 +283,38 @@ public class CommissionEntry {
 
   public void setRuleOrigin(CommissionRuleOrigin ruleOrigin) {
     this.ruleOrigin = ruleOrigin;
+  }
+
+  public BigDecimal getFixedAmount() {
+    return fixedAmount;
+  }
+
+  public void setFixedAmount(BigDecimal fixedAmount) {
+    this.fixedAmount = fixedAmount;
+  }
+
+  public boolean isFixedToProfessional() {
+    return fixedToProfessional;
+  }
+
+  public void setFixedToProfessional(boolean fixedToProfessional) {
+    this.fixedToProfessional = fixedToProfessional;
+  }
+
+  public BigDecimal getRetentionPercent() {
+    return retentionPercent;
+  }
+
+  public void setRetentionPercent(BigDecimal retentionPercent) {
+    this.retentionPercent = retentionPercent;
+  }
+
+  public BigDecimal getRetentionAmount() {
+    return retentionAmount;
+  }
+
+  public void setRetentionAmount(BigDecimal retentionAmount) {
+    this.retentionAmount = retentionAmount;
   }
 
   public BigDecimal getCommissionAmount() {
