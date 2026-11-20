@@ -39,8 +39,8 @@ metric_table() { # metric_table <resource id> <metric> <aggregation> <label> <sc
   # Azure Monitor intermittently answers "Failed to find metric configuration" (BadRequest) for a
   # valid metric right after a resource was recreated: retry, and degrade to "n/a" instead of
   # aborting the whole report.
-  local json="" attempt
-  for attempt in 1 2 3 4 5; do
+  local json=""
+  for _ in 1 2 3 4 5; do
     json="$(az monitor metrics list --resource "$1" --metrics "$2" --aggregation "$3" --interval PT1M \
       --start-time "$START" --end-time "$END" -o json 2>/dev/null)" && break
     json=""; sleep 15
