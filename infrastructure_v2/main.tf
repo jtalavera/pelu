@@ -60,14 +60,32 @@ locals {
 # Resource provider registrations (one-time per subscription)
 # ---------------------------------------------------------------------------
 
+# Registrations are subscription-wide, so only one state per subscription may own them:
+# dev and prod do (manage_resource_providers = true); staging shares the dev subscription and
+# does not, or its destroy would unregister Microsoft.App under the dev environment.
+
 # Required for Container Apps (Microsoft.App).
 resource "azurerm_resource_provider_registration" "app" {
-  name = "Microsoft.App"
+  count = var.manage_resource_providers ? 1 : 0
+  name  = "Microsoft.App"
 }
 
 # Required for Azure Communication Services.
 resource "azurerm_resource_provider_registration" "communication" {
-  name = "Microsoft.Communication"
+  count = var.manage_resource_providers ? 1 : 0
+  name  = "Microsoft.Communication"
+}
+
+# The registrations used to be unconditional; these keep the existing dev/prod states from
+# planning a destroy + create when they gained `count`. No-op in a fresh (staging) state.
+moved {
+  from = azurerm_resource_provider_registration.app
+  to   = azurerm_resource_provider_registration.app[0]
+}
+
+moved {
+  from = azurerm_resource_provider_registration.communication
+  to   = azurerm_resource_provider_registration.communication[0]
 }
 
 # ---------------------------------------------------------------------------
@@ -78,6 +96,16 @@ resource "azurerm_resource_group" "main" {
   name     = "${var.name_prefix}-${var.environment}-rg"
   location = var.location
   tags     = local.tags
+}
+
+# CI/CD deploy rights on this RG (deploy-azure.yml: az containerapp update, SWA deploy). Only set
+# for staging: its RG is deleted and recreated per run, so the grant has to live with it.
+resource "azurerm_role_assignment" "ci_deployer_contributor" {
+  count                = var.ci_deployer_principal_id != "" ? 1 : 0
+  scope                = azurerm_resource_group.main.id
+  role_definition_name = "Contributor"
+  principal_id         = var.ci_deployer_principal_id
+  principal_type       = "ServicePrincipal"
 }
 
 # ---------------------------------------------------------------------------

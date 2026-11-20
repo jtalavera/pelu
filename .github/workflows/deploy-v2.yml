@@ -2,6 +2,8 @@
 # Triggers:
 #   develop → v2-test environment (subscription 677a6eab…)
 #   main    → v2-production environment (subscription 9e394b80…)
+#   manual  → v2-staging only, never on push (disposable prod-parity env, docs/staging-env.md;
+#             dispatched by scripts/staging/up.sh)
 name: Deploy v2
 
 on:
@@ -18,6 +20,7 @@ on:
         options:
           - v2-test
           - v2-production
+          - v2-staging
 
 concurrency:
   group: deploy-v2-${{ github.ref }}

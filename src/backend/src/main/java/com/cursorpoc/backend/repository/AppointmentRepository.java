@@ -42,7 +42,11 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
 
   @Query(
       """
-      SELECT a FROM Appointment a WHERE a.tenant.id = :tenantId
+      SELECT a FROM Appointment a
+      LEFT JOIN FETCH a.client
+      JOIN FETCH a.professional
+      JOIN FETCH a.salonService
+      WHERE a.tenant.id = :tenantId
       AND a.startAt >= :from AND a.startAt < :to
       AND (:professionalId IS NULL OR a.professional.id = :professionalId)
       AND (:clientId IS NULL OR (a.client IS NOT NULL AND a.client.id = :clientId))

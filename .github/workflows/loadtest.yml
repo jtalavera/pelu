@@ -1,0 +1,130 @@
+# T7 (docs/staging-env.md): k6 load test against the disposable staging environment.
+# workflow_dispatch ONLY (never push/PR) and bound to the v2-staging GitHub Environment, whose
+# required reviewer approves every run. Forks and outside PRs can't read environment secrets.
+#
+# PUBLIC REPO: anyone can read these logs and download artifacts. So: secrets only via
+# environment secrets (masked), the scripts never log bodies/tokens/e-mails, the job prints only
+# the k6 summary, and the detailed report goes to the PRIVATE staging storage account
+# (loadtest-reports/), never to a workflow artifact.
+name: Load test (staging)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref that is deployed in staging (recorded in the report)"
+        required: true
+        type: string
+      bacpac:
+        description: "Golden DB in use, e.g. loadtest-V120-t10-s2 (records N/M in the report)"
+        required: true
+        type: string
+      profile:
+        description: "Ramp profile (ignored when vus + duration are set)"
+        required: true
+        type: choice
+        default: ramp
+        options: [smoke, ramp, soak]
+      vus:
+        description: "Flat run: virtual users (optional)"
+        required: false
+        type: string
+      duration:
+        description: "Flat run: duration, e.g. 10m (optional)"
+        required: false
+        type: string
+      sifen_rate:
+        description: "SIFEN invoices per minute across all SIFEN tenants (0 = off)"
+        required: true
+        type: string
+        default: "2"
+
+concurrency:
+  group: loadtest-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  k6:
+    name: k6 against v2-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    environment: v2-staging
+    steps:
+      - name: Checkout (scripts at the dispatched ref)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Validate inputs
+        env:
+          BACPAC: ${{ inputs.bacpac }}
+          VUS: ${{ inputs.vus }}
+          DURATION: ${{ inputs.duration }}
+          SIFEN_RATE: ${{ inputs.sifen_rate }}
+        run: |
+          set -euo pipefail
+          [[ "$BACPAC" =~ ^loadtest-V[0-9]+-t([0-9]+)-s([0-9]+)$ ]] || { echo "bacpac must look like loadtest-V<v>-t<N>-s<M>"; exit 1; }
+          [[ -z "$VUS" || "$VUS" =~ ^[0-9]+$ ]] || { echo "vus must be a number"; exit 1; }
+          [[ -z "$DURATION" || "$DURATION" =~ ^[0-9]+[smh]$ ]] || { echo "duration must look like 10m"; exit 1; }
+          [[ "$SIFEN_RATE" =~ ^[0-9]+$ ]] || { echo "sifen_rate must be a whole number per minute"; exit 1; }
+
+      - name: Set up k6
+        uses: grafana/setup-k6-action@ffe7d7290dfa715e48c2ccc924d068444c94bde2 # v1.1.0
+
+      - name: Run k6
+        env:
+          BASE_URL: ${{ secrets.LOADTEST_BASE_URL }}
+          USERS_JSON: ${{ secrets.LOADTEST_USERS_JSON }}
+          PROFILE: ${{ inputs.profile }}
+          VUS: ${{ inputs.vus }}
+          DURATION: ${{ inputs.duration }}
+          SIFEN_RATE: ${{ inputs.sifen_rate }}
+          REPORT_DIR: ${{ runner.temp }}/k6
+        run: |
+          set -euo pipefail
+          [[ -n "$BASE_URL" && -n "$USERS_JSON" ]] || { echo "LOADTEST_BASE_URL / LOADTEST_USERS_JSON missing: run scripts/staging/up.sh --data=loadtest"; exit 1; }
+          mkdir -p "$REPORT_DIR"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$REPORT_DIR/started_at"
+          # --quiet: no progress bar; only the end-of-test summary reaches the (public) log.
+          # Threshold failures exit non-zero; keep going so the report is still uploaded.
+          set +e
+          k6 run --quiet --no-color --out "json=$REPORT_DIR/raw.json.gz" loadtest/scenarios/main.js
+          echo "$?" > "$REPORT_DIR/exit_code"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$REPORT_DIR/ended_at"
+
+      - name: Azure login (OIDC)
+        if: always()
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload detailed report to private storage
+        if: always()
+        env:
+          REPORT_DIR: ${{ runner.temp }}/k6
+          INPUT_REF: ${{ inputs.ref }}
+          BACPAC: ${{ inputs.bacpac }}
+        run: |
+          set -euo pipefail
+          source scripts/staging/staging.env
+          [[ "$BACPAC" =~ -t([0-9]+)-s([0-9]+)$ ]] && N="${BASH_REMATCH[1]}" M="${BASH_REMATCH[2]}"
+          jq -n --arg ref "$INPUT_REF" --arg bacpac "$BACPAC" --arg n "$N" --arg m "$M" \
+            --arg run "$GITHUB_RUN_ID" --arg started "$(cat "$REPORT_DIR/started_at" 2>/dev/null)" \
+            --arg ended "$(cat "$REPORT_DIR/ended_at" 2>/dev/null)" \
+            '{ref: $ref, bacpac: $bacpac, tenants: ($n|tonumber), sifen_tenants: ($m|tonumber), run_id: $run, started_at: $started, ended_at: $ended}' \
+            > "$REPORT_DIR/run.json"
+          PREFIX="$(date -u +%Y%m%d)-run${GITHUB_RUN_ID}-${BACPAC}"
+          az storage blob upload-batch --auth-mode login --account-name "$STAGING_DATA_ACCOUNT" \
+            -d "$REPORTS_CONTAINER" --destination-path "$PREFIX" -s "$REPORT_DIR" --only-show-errors -o none
+          echo "Report stored privately at $REPORTS_CONTAINER/$PREFIX/ (N=$N tenants, M=$M SIFEN tenants)."
+          echo "Collect server-side metrics: scripts/staging/collect-loadtest-metrics.sh --run=$PREFIX"
+
+      - name: Fail on threshold breach
+        if: always()
+        env:
+          REPORT_DIR: ${{ runner.temp }}/k6
+        run: exit "$(cat "$REPORT_DIR/exit_code" 2>/dev/null || echo 1)"

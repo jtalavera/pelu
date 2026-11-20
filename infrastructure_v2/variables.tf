@@ -4,13 +4,25 @@ variable "subscription_id" {
 }
 
 variable "environment" {
-  description = "Environment name ('test' or 'prod'). Used in resource naming and tags."
+  description = "Environment name ('test', 'prod' or 'staging'). Used in resource naming and tags. 'staging' is the disposable prod-parity environment (docs/staging-env.md)."
   type        = string
 
   validation {
-    condition     = contains(["test", "prod"], var.environment)
-    error_message = "environment must be 'test' or 'prod'."
+    condition     = contains(["test", "prod", "staging"], var.environment)
+    error_message = "environment must be 'test', 'prod' or 'staging'."
   }
+}
+
+variable "manage_resource_providers" {
+  description = "Whether this state owns the subscription-wide Microsoft.App / Microsoft.Communication provider registrations. Keep true for dev and prod. Staging shares the dev subscription, so it sets false: otherwise its apply fails (registration already exists) and its destroy would unregister Microsoft.App for the whole subscription and break dev."
+  type        = bool
+  default     = true
+}
+
+variable "ci_deployer_principal_id" {
+  description = "Object ID of the CI/CD service principal (the deploy workflow's OIDC app) to grant Contributor on this environment's resource group. Empty (default) creates no role assignment. Staging sets it because its RG is recreated on every run, so a hand-made RG-scoped grant would disappear with it."
+  type        = string
+  default     = ""
 }
 
 variable "location" {
