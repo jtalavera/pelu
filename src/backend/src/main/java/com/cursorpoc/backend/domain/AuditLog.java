@@ -58,6 +58,10 @@ public class AuditLog {
   @Column(name = "status_code", nullable = false)
   private int statusCode;
 
+  /** Where the action came from: null for a direct API call, {@code ASSISTANT} for the chat. */
+  @Column(length = 16)
+  private String source;
+
   @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
@@ -156,5 +160,13 @@ public class AuditLog {
 
   public void setCreatedAt(Instant createdAt) {
     this.createdAt = createdAt;
+  }
+
+  public String getSource() {
+    return source;
+  }
+
+  public void setSource(String source) {
+    this.source = source;
   }
 }

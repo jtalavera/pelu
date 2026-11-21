@@ -70,4 +70,27 @@ describe("locale files", () => {
     expect([...enBase].filter((k) => !esBase.has(k))).toEqual([]);
     expect([...esBase].filter((k) => !enBase.has(k))).toEqual([]);
   });
+
+  it("the assistant strings and error codes have the same keys in Spanish and English", () => {
+    // Plain JSON.parse: the duplicate-key scanner in load() is slow and already runs above.
+    const parsed = { es: JSON.parse(esRaw), en: JSON.parse(enRaw) } as Record<
+      "es" | "en",
+      { femme: Record<string, unknown> }
+    >;
+    const femme = (lang: "es" | "en") => parsed[lang].femme;
+    const assistantKeys = (lang: "es" | "en") =>
+      new Set(flatKeys(femme(lang).assistant, "assistant"));
+    const errorKeys = (lang: "es" | "en") =>
+      new Set(
+        Object.keys(femme(lang).apiErrors as Record<string, unknown>).filter((k) =>
+          k.startsWith("ASSISTANT_"),
+        ),
+      );
+    expect(assistantKeys("es").size).toBeGreaterThan(10);
+    expect([...assistantKeys("en")].filter((k) => !assistantKeys("es").has(k))).toEqual([]);
+    expect([...assistantKeys("es")].filter((k) => !assistantKeys("en").has(k))).toEqual([]);
+    expect(errorKeys("es").size).toBeGreaterThanOrEqual(7);
+    expect([...errorKeys("en")].filter((k) => !errorKeys("es").has(k))).toEqual([]);
+    expect([...errorKeys("es")].filter((k) => !errorKeys("en").has(k))).toEqual([]);
+  });
 });

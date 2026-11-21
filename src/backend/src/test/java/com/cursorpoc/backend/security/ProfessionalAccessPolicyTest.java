@@ -61,6 +61,9 @@ class ProfessionalAccessPolicyTest {
     "PUT, /api/service-records/8",
     "GET, /api/commissions/me",
     "GET, /api/commissions/me/settlements/5",
+    "GET, /api/assistant/conversations/current",
+    "POST, /api/assistant/conversations",
+    "POST, /api/assistant/messages",
   })
   void professional_reachesCalendarProfileAndOwnCommissions(String method, String uri) {
     assertThat(allowed(auth(PROFESSIONAL), method, uri)).isTrue();
@@ -132,5 +135,14 @@ class ProfessionalAccessPolicyTest {
     assertThat(allowed(auth(pin), "PUT", "/api/clients/3/technical-sheet")).isTrue();
     assertThat(allowed(auth(pin), "GET", "/api/clients/3")).isFalse();
     assertThat(allowed(auth(pin), "GET", "/api/clients/3/summary")).isFalse();
+  }
+
+  @Test
+  void pinSession_cannotUseTheAssistant() {
+    // A PIN session has no real user row to own a conversation (userId 0 breaks the FK).
+    FemmeUserPrincipal pin =
+        new FemmeUserPrincipal(3L, 7L, "pro@salon.test", UserRole.PROFESSIONAL, 9L, false, 4L, 1);
+    assertThat(allowed(auth(pin), "GET", "/api/assistant/conversations/current")).isFalse();
+    assertThat(allowed(auth(pin), "POST", "/api/assistant/messages")).isFalse();
   }
 }

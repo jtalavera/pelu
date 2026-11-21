@@ -1,0 +1,119 @@
+package com.cursorpoc.backend.assistant;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+/**
+ * The validated JSON stored in {@code assistant_draft.payload}. The card is drawn from THIS, never
+ * from text the model wrote: prices, totals and names are the backend's.
+ */
+public final class AssistantDraftPayloads {
+
+  private AssistantDraftPayloads() {}
+
+  /**
+   * An invoice waiting for confirmation. {@code serviceRecordId} / {@code appointmentId} say what
+   * it charges (an open service record, or one appointment); with neither, it is catalog services.
+   * {@code paymentMethod}, {@code cardBrand} and {@code email} start null and are completed from
+   * the card ({@code PATCH}); {@code receiverIdentified} tells whether SIFEN would need an e-mail.
+   */
+  public record InvoiceDraftPayload(
+      Long clientId,
+      String clientName,
+      boolean receiverIdentified,
+      List<Line> lines,
+      Long serviceRecordId,
+      Long appointmentId,
+      String paymentMethod,
+      String cardBrand,
+      String email,
+      BigDecimal total) {
+
+    public record Line(
+        Long serviceId,
+        String name,
+        int quantity,
+        BigDecimal unitPrice,
+        BigDecimal lineTotal,
+        Long professionalId,
+        String professionalName,
+        /** True when the person typed this price on the card (it survives re-pricing). */
+        Boolean priceEdited) {
+
+      /** The same line at another unit price, typed by the person. */
+      public Line withEditedPrice(BigDecimal newUnitPrice, BigDecimal newLineTotal) {
+        return new Line(
+            serviceId,
+            name,
+            quantity,
+            newUnitPrice,
+            newLineTotal,
+            professionalId,
+            professionalName,
+            Boolean.TRUE);
+      }
+    }
+
+    public InvoiceDraftPayload withPayment(String method, String brand) {
+      return new InvoiceDraftPayload(
+          clientId,
+          clientName,
+          receiverIdentified,
+          lines,
+          serviceRecordId,
+          appointmentId,
+          method,
+          brand,
+          email,
+          total);
+    }
+
+    public InvoiceDraftPayload withEmail(String newEmail) {
+      return new InvoiceDraftPayload(
+          clientId,
+          clientName,
+          receiverIdentified,
+          lines,
+          serviceRecordId,
+          appointmentId,
+          paymentMethod,
+          cardBrand,
+          newEmail,
+          total);
+    }
+
+    public InvoiceDraftPayload withLines(List<Line> newLines, BigDecimal newTotal) {
+      return new InvoiceDraftPayload(
+          clientId,
+          clientName,
+          receiverIdentified,
+          newLines,
+          serviceRecordId,
+          appointmentId,
+          paymentMethod,
+          cardBrand,
+          email,
+          newTotal);
+    }
+  }
+
+  /**
+   * An appointment waiting for confirmation. {@code startAt} is the instant (ISO) the appointment
+   * is created with; {@code date}, {@code time} and {@code endTime} are the same moment in the
+   * salon's zone, ready to show. {@code outsideWorkingHours} only warns (the agenda does not block
+   * it either).
+   */
+  public record AppointmentDraftPayload(
+      Long clientId,
+      String clientName,
+      Long serviceId,
+      String serviceName,
+      Long professionalId,
+      String professionalName,
+      String startAt,
+      String date,
+      String time,
+      String endTime,
+      int durationMinutes,
+      boolean outsideWorkingHours) {}
+}

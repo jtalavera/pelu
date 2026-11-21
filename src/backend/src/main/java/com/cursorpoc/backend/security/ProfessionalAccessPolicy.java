@@ -61,7 +61,11 @@ public final class ProfessionalAccessPolicy
           PATHS.matcher(HttpMethod.PUT, "/api/service-records/{id:\\d+}"),
           // HU-COM-07: own commissions (CommissionAccess still enforces own-data-only).
           PATHS.matcher(HttpMethod.GET, "/api/commissions/me"),
-          PATHS.matcher(HttpMethod.GET, "/api/commissions/me/settlements/{id:\\d+}"));
+          PATHS.matcher(HttpMethod.GET, "/api/commissions/me/settlements/{id:\\d+}"),
+          // Conversational assistant: read-only questions about her own salon (ASSISTANT_CHATBOT
+          // flag, enforced by AssistantAccess). Deliberately NOT in PIN_SESSION_ALLOWED: a PIN
+          // session has no real user row to own a conversation.
+          PATHS.matcher("/api/assistant/**"));
 
   /**
    * HU-66: a PIN session on a shared device is calendar-only — no profile, password, commissions or

@@ -428,6 +428,133 @@ resource "azurerm_monitor_diagnostic_setting" "key_vault" {
 }
 
 # ---------------------------------------------------------------------------
+# Conversational assistant (requirements/asistente/plan_asistente.md, phase 0): Azure AI Foundry
+# (kind AIServices — also hosts Speech and Content Safety). The backend orchestrates the agent
+# loop itself, so only the model endpoint is needed, not a Foundry Agent Service project.
+# Access is Entra ID only (Managed Identity / `az login`): no API keys exist.
+# ---------------------------------------------------------------------------
+
+resource "azurerm_cognitive_account" "foundry" { # nosemgrep: terraform.azure.security.cognitiveservices.cognitiveservices-public-network-access.cognitiveservices-public-network-access
+  name                = "${var.name_prefix}-foundry-${random_string.suffix.result}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  kind                = "AIServices"
+  sku_name            = "S0"
+
+  # Required for Entra ID (token) authentication against the data plane; also makes the endpoint
+  # https://<subdomain>.cognitiveservices.azure.com/.
+  custom_subdomain_name = "${var.name_prefix}-foundry-${random_string.suffix.result}"
+
+  # Same trade-off as the Key Vault above: Container Apps runs outside a VNet, so access control
+  # is RBAC + Managed Identity, not network isolation. API keys are disabled entirely.
+  local_auth_enabled            = false
+  public_network_access_enabled = true
+
+  tags = local.tags
+}
+
+# Content filter with Prompt Shields (user-prompt jailbreak + indirect/document attacks) on top of
+# the default harm categories. Indirect-attack detection matters here: salon data (client names,
+# notes) flows into the model through tool results.
+resource "azurerm_cognitive_account_rai_policy" "assistant" {
+  name                 = "femme-assistant-policy"
+  cognitive_account_id = azurerm_cognitive_account.foundry.id
+  base_policy_name     = "Microsoft.DefaultV2"
+
+  dynamic "content_filter" {
+    for_each = setproduct(["Hate", "Sexual", "SelfHarm", "Violence"], ["Prompt", "Completion"])
+    content {
+      name               = content_filter.value[0]
+      filter_enabled     = true
+      block_enabled      = true
+      severity_threshold = "Medium"
+      source             = content_filter.value[1]
+    }
+  }
+
+  content_filter {
+    name               = "Jailbreak"
+    filter_enabled     = true
+    block_enabled      = true
+    severity_threshold = "High"
+    source             = "Prompt"
+  }
+
+  content_filter {
+    name               = "Indirect Attack"
+    filter_enabled     = true
+    block_enabled      = true
+    severity_threshold = "High"
+    source             = "Prompt"
+  }
+
+  tags = local.tags
+}
+
+resource "azurerm_cognitive_deployment" "assistant" {
+  name                   = var.assistant_model_deployment_name
+  cognitive_account_id   = azurerm_cognitive_account.foundry.id
+  rai_policy_name        = azurerm_cognitive_account_rai_policy.assistant.name
+  version_upgrade_option = "NoAutoUpgrade"
+
+  model {
+    format  = "OpenAI"
+    name    = var.assistant_model_name
+    version = var.assistant_model_version
+  }
+
+  sku {
+    name     = var.assistant_model_sku
+    capacity = var.assistant_model_capacity
+  }
+}
+
+# The backend calls the model (OpenAI User) and, from phase 4, issues Speech tokens (Cognitive
+# Services User). The same grants go to the developer group so the backend can run locally
+# against the real dev Foundry (see CLAUDE.md), mirroring the Key Vault / Service Bus pattern.
+resource "azurerm_role_assignment" "backend_ai_openai_user" {
+  scope                = azurerm_cognitive_account.foundry.id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = azurerm_container_app.backend.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "backend_ai_cognitive_user" {
+  scope                = azurerm_cognitive_account.foundry.id
+  role_definition_name = "Cognitive Services User"
+  principal_id         = azurerm_container_app.backend.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "deployer_ai_openai_user" {
+  scope                = azurerm_cognitive_account.foundry.id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = var.entra_sql_admin_object_id
+}
+
+resource "azurerm_role_assignment" "deployer_ai_cognitive_user" {
+  scope                = azurerm_cognitive_account.foundry.id
+  role_definition_name = "Cognitive Services User"
+  principal_id         = var.entra_sql_admin_object_id
+}
+
+resource "azurerm_monitor_diagnostic_setting" "foundry" {
+  name                       = "foundry-diag"
+  target_resource_id         = azurerm_cognitive_account.foundry.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_log {
+    category = "Audit"
+  }
+
+  enabled_log {
+    category = "RequestResponse"
+  }
+
+  enabled_metric {
+    category = "AllMetrics"
+  }
+}
+
+# ---------------------------------------------------------------------------
 # Service Bus — RT-20 (Hardening_SIFEN.md): asynchronous SIFEN transmission. The issue request
 # never calls SIFEN synchronously; it signs the document and enqueues a transmit attempt here
 # instead. Basic tier: queues + scheduled messages only — no topics, no sessions, no duplicate
@@ -727,6 +854,23 @@ resource "azurerm_container_app" "backend" {
       env {
         name  = "FEMME_REPORT_WARMUP_ENABLED"
         value = tostring(var.backend_report_warmup_enabled)
+      }
+
+      # Conversational assistant (plan_asistente.md): Foundry endpoint + model deployment. No
+      # secrets — the backend authenticates with its Managed Identity (Entra ID).
+      env {
+        name  = "FEMME_AI_ENDPOINT"
+        value = azurerm_cognitive_account.foundry.endpoint
+      }
+
+      env {
+        name  = "FEMME_AI_DEPLOYMENT"
+        value = azurerm_cognitive_deployment.assistant.name
+      }
+
+      env {
+        name  = "FEMME_SPEECH_REGION"
+        value = azurerm_cognitive_account.foundry.location
       }
 
       # Issue #268: minimum log level the App Insights Java agent captures into `traces`

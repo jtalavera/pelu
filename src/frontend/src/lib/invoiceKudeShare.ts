@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import { fetchInvoicePdfBlob } from "../api/downloadInvoicePdf";
 import { fetchSifenKudeBlob, triggerBrowserDownload } from "../api/downloadSifenKude";
 import { formatGuaraniesGs } from "./formatMoney";
 import { toWhatsAppPhone } from "./paraguayPhone";
@@ -44,7 +45,35 @@ export async function sendKudeByWhatsapp(invoice: KudeWhatsappInvoice, t: TFunct
     number: invoice.invoiceNumberFormatted,
     amount: formatGuaraniesGs(invoice.total),
   });
-  const whatsappPhone = toWhatsAppPhone(invoice.clientPhone);
+  await handOffToWhatsapp(blob, filename, message, invoice.clientPhone);
+}
+
+/**
+ * «Compartir con el cliente» by WhatsApp for a NON-fiscal receipt (no SIFEN): the same hand-off as
+ * the KuDE's, with the receipt PDF and its own message.
+ */
+export async function sendReceiptByWhatsapp(
+  invoice: KudeWhatsappInvoice,
+  t: TFunction,
+): Promise<void> {
+  const { blob, filename } = await fetchInvoicePdfBlob(invoice.id);
+  const clientName =
+    invoice.clientDisplayName || t("femme.billing.history.detail.receiptShare.whatsappGenericClient");
+  const message = t("femme.billing.history.detail.receiptShare.whatsappMessage", {
+    client: clientName,
+    number: invoice.invoiceNumberFormatted,
+    amount: formatGuaraniesGs(invoice.total),
+  });
+  await handOffToWhatsapp(blob, filename, message, invoice.clientPhone);
+}
+
+async function handOffToWhatsapp(
+  blob: Blob,
+  filename: string,
+  message: string,
+  clientPhone: string | null | undefined,
+): Promise<void> {
+  const whatsappPhone = toWhatsAppPhone(clientPhone);
   const mobile = isMobileDevice();
 
   if (mobile) {
