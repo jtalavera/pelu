@@ -1553,6 +1553,37 @@
       "errorNetwork": "Error de red. Verificá que el servicio esté en ejecución.",
       "errorPasswordWeak": "La contraseña debe tener al menos 8 caracteres, ej.: Abc1@xyz."
     },
+    "assistant": {
+      "title": "Asistente",
+      "open": "Abrir asistente",
+      "close": "Cerrar asistente",
+      "openWithShortcut": "Asistente (Ctrl/⌘ K)",
+      "back": "Volver",
+      "newConversation": "Nueva conversación",
+      "conversationLabel": "Conversación con el asistente",
+      "loadingHistory": "Cargando la conversación…",
+      "welcomeTitle": "¿En qué te ayudo?",
+      "welcomeBody": "Preguntame por turnos, clientes, servicios o profesionales. Por ahora solo puedo consultar datos.",
+      "suggestionsLabel": "Probá preguntar",
+      "suggestions": {
+        "appointmentsToday": "¿Qué turnos hay hoy?",
+        "services": "¿Qué servicios tenemos?",
+        "professionals": "¿Qué profesionales hay?"
+      },
+      "inputLabel": "Mensaje para el asistente",
+      "inputPlaceholder": "Preguntá algo…",
+      "send": "Enviar",
+      "youSaid": "Vos",
+      "assistantSaid": "Asistente",
+      "typing": "El asistente está escribiendo…",
+      "tool": {
+        "buscar_clientes": "Buscando clientes…",
+        "listar_servicios": "Consultando servicios…",
+        "listar_profesionales": "Consultando profesionales…",
+        "turnos_del_dia": "Revisando la agenda…",
+        "generic": "Consultando…"
+      }
+    },
     "topbar": {
       "notifications": "Notificaciones",
       "userMenuTriggerAria": "Abrir menú de usuario",
@@ -3519,6 +3550,13 @@
       }
     },
     "apiErrors": {
+      "ASSISTANT_DISABLED": "El asistente no está habilitado para tu salón.",
+      "ASSISTANT_MODEL_UNAVAILABLE": "El asistente no está disponible en este momento. Probá de nuevo en un momento.",
+      "ASSISTANT_CONVERSATION_NOT_FOUND": "Esta conversación ya no está disponible. Empezá una nueva.",
+      "ASSISTANT_MESSAGE_EMPTY": "Escribí un mensaje primero. Ejemplo: ¿Qué turnos hay hoy?",
+      "ASSISTANT_MESSAGE_TOO_LONG": "El mensaje es demasiado largo: el máximo es de 2000 caracteres.",
+      "ASSISTANT_TOO_MANY_STEPS": "El asistente no pudo terminar esta consulta. Probá preguntar de forma más simple.",
+      "ASSISTANT_INTERNAL_ERROR": "El asistente tuvo un problema. Probá de nuevo.",
       "LATE_TIP_REQUIRED": "Ingresá al menos una propina.",
       "LATE_TIP_AMOUNT_INVALID": "El monto debe ser mayor a 0. Ejemplo: 20.000",
       "LATE_TIP_PROFESSIONAL_INACTIVE": "Esta profesional está inactiva: reactivala para agregarle propinas.",
