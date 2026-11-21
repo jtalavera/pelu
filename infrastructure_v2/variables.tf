@@ -278,3 +278,41 @@ variable "stock_client_id" {
   type        = string
   default     = "pelu"
 }
+
+# Conversational assistant (requirements/asistente/plan_asistente.md). Sizing variables are shared
+# by prod and staging on purpose (scripts/staging/parity.py): override them in tfvars only for dev
+# and update prod/staging together.
+variable "assistant_model_deployment_name" {
+  description = "Name of the Foundry model deployment (FEMME_AI_DEPLOYMENT)."
+  type        = string
+  default     = "femme-assistant"
+}
+
+variable "assistant_model_name" {
+  description = "Foundry catalogue model for the assistant: a small, cheap model with tool calling."
+  type        = string
+  default     = "gpt-5-mini"
+}
+
+variable "assistant_model_version" {
+  description = "Version of assistant_model_name. Confirm the current version in the Foundry catalogue for the region before applying."
+  type        = string
+  default     = "2025-08-07"
+}
+
+variable "assistant_model_sku" {
+  description = "Deployment SKU. Prefer a regional SKU (\"Standard\") when the model is offered in var.location; otherwise \"DataZoneStandard\" (US data zone). Confirm availability before the first apply."
+  type        = string
+  default     = "Standard"
+
+  validation {
+    condition     = contains(["Standard", "DataZoneStandard", "GlobalStandard"], var.assistant_model_sku)
+    error_message = "assistant_model_sku must be Standard, DataZoneStandard or GlobalStandard."
+  }
+}
+
+variable "assistant_model_capacity" {
+  description = "Tokens-per-minute quota of the deployment, in thousands (10 = 10K TPM). Kept low: it caps cost until per-tenant quotas exist."
+  type        = number
+  default     = 30
+}
