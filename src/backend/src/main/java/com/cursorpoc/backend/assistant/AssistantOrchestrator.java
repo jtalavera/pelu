@@ -132,7 +132,7 @@ public class AssistantOrchestrator {
           "assistant model unavailable tenantId={} conversationId={} cause={}",
           ctx.tenantId(),
           conversationId,
-          e.getMessage());
+          rootCause(e));
       safeSend(sink, EVENT_ERROR, Map.of("code", outcome));
     } catch (RuntimeException e) {
       outcome = "ASSISTANT_INTERNAL_ERROR";
@@ -220,6 +220,22 @@ public class AssistantOrchestrator {
             today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.forLanguageTag("es")))
         .replace(
             "{{currentPage}}", ctx.currentPage().isEmpty() ? "desconocida" : ctx.currentPage());
+  }
+
+  /**
+   * Class and (truncated) message of the innermost cause — enough to tell a 404 deployment from a
+   * 403 role from a timeout. Provider errors do not echo the prompt; the conversation text is never
+   * logged.
+   */
+  static String rootCause(Throwable e) {
+    Throwable root = e;
+    while (root.getCause() != null && root.getCause() != root) {
+      root = root.getCause();
+    }
+    String message = root.getMessage() == null ? "" : root.getMessage().replaceAll("\\s+", " ");
+    return root.getClass().getSimpleName()
+        + ": "
+        + (message.length() > 300 ? message.substring(0, 300) + "…" : message);
   }
 
   private static void safeSend(AssistantEventSink sink, String event, Object payload) {

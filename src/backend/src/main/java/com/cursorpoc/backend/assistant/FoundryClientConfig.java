@@ -25,7 +25,7 @@ public class FoundryClientConfig {
   @Bean
   AssistantModelClient assistantModelClient(AssistantProperties props) {
     return new FoundryAssistantModelClient(
-        () -> buildChatModel(props), props.getMaxCompletionTokens());
+        () -> buildChatModel(props), props.getDeployment(), props.getMaxCompletionTokens());
   }
 
   static OpenAiChatModel buildChatModel(AssistantProperties props) {

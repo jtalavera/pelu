@@ -301,9 +301,9 @@ variable "assistant_model_version" {
 }
 
 variable "assistant_model_sku" {
-  description = "Deployment SKU. Prefer a regional SKU (\"Standard\") when the model is offered in var.location; otherwise \"DataZoneStandard\" (US data zone). Confirm availability before the first apply."
+  description = "Deployment SKU. gpt-5-mini has no regional (\"Standard\") SKU in centralus (checked with `az cognitiveservices model list`), so the default is \"DataZoneStandard\" (US data zone). GlobalStandard would let Azure route the data outside the US."
   type        = string
-  default     = "Standard"
+  default     = "DataZoneStandard"
 
   validation {
     condition     = contains(["Standard", "DataZoneStandard", "GlobalStandard"], var.assistant_model_sku)

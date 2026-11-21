@@ -17,7 +17,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
@@ -36,12 +36,19 @@ public class FoundryAssistantModelClient implements AssistantModelClient {
   private static final Logger log = LoggerFactory.getLogger(FoundryAssistantModelClient.class);
 
   private final Supplier<ChatModel> chatModelSupplier;
+  private final String deployment;
   private final int maxCompletionTokens;
   private volatile ChatModel chatModel;
 
+  /**
+   * @param deployment name of the Foundry deployment; sent as the model of EVERY request, because
+   *     per-request options otherwise fall back to Spring AI's default model name (a deployment
+   *     that does not exist: 404)
+   */
   public FoundryAssistantModelClient(
-      Supplier<ChatModel> chatModelSupplier, int maxCompletionTokens) {
+      Supplier<ChatModel> chatModelSupplier, String deployment, int maxCompletionTokens) {
     this.chatModelSupplier = chatModelSupplier;
+    this.deployment = deployment;
     this.maxCompletionTokens = maxCompletionTokens;
   }
 
@@ -145,10 +152,16 @@ public class FoundryAssistantModelClient implements AssistantModelClient {
     }
     List<ToolCallback> callbacks =
         request.tools().stream().<ToolCallback>map(FoundryAssistantModelClient::declare).toList();
-    ToolCallingChatOptions options =
-        ToolCallingChatOptions.builder()
+    // OpenAiChatOptions, not the generic ToolCallingChatOptions: OpenAiChatModel casts to it.
+    // max_completion_tokens (not max_tokens, which gpt-5 models reject); streamUsage reports
+    // tokens.
+    OpenAiChatOptions options =
+        OpenAiChatOptions.builder()
+            .model(deployment)
+            .deploymentName(deployment)
             .toolCallbacks(callbacks)
-            .maxTokens(maxCompletionTokens)
+            .maxCompletionTokens(maxCompletionTokens)
+            .streamUsage(true)
             .build();
     return new Prompt(messages, options);
   }

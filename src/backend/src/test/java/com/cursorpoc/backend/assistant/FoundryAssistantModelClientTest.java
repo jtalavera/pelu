@@ -43,7 +43,7 @@ class FoundryAssistantModelClientTest {
   }
 
   private static FoundryAssistantModelClient client(ChatModel model) {
-    return new FoundryAssistantModelClient(() -> model, 1000);
+    return new FoundryAssistantModelClient(() -> model, "femme-assistant", 1000);
   }
 
   private static List<ModelEvent> run(FoundryAssistantModelClient c, ModelRequest r) {
@@ -135,6 +135,9 @@ class FoundryAssistantModelClientTest {
                     List.of(new ToolResult("c1", "buscar_clientes", "{\"data\":{}}")))));
 
     assertThat(prompt.getInstructions()).hasSize(4); // system + user + assistant + tool result
+    // Without it OpenAiChatModel asks for Spring AI's default model, a deployment that is not
+    // there.
+    assertThat(prompt.getOptions().getModel()).isEqualTo("femme-assistant");
     ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions();
     assertThat(options.getToolCallbacks()).hasSize(1);
     var callback = options.getToolCallbacks().get(0);
@@ -155,7 +158,9 @@ class FoundryAssistantModelClientTest {
   void aMissingConfiguration_isAnAssistantModelException_notAStartupFailure() {
     FoundryAssistantModelClient c =
         new FoundryAssistantModelClient(
-            () -> FoundryClientConfig.buildChatModel(new AssistantProperties()), 1000);
+            () -> FoundryClientConfig.buildChatModel(new AssistantProperties()),
+            "femme-assistant",
+            1000);
 
     assertThatThrownBy(() -> run(c, request(ChatTurn.user("hola"))))
         .isInstanceOf(AssistantModelException.class);
