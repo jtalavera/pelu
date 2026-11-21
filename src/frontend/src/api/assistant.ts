@@ -33,6 +33,8 @@ export type InvoiceDraftPayload = {
     lineTotal: number;
     professionalId: number | null;
     professionalName: string | null;
+    /** True when the person typed this unit price on the card. */
+    priceEdited?: boolean | null;
   }[];
   serviceRecordId: number | null;
   appointmentId: number | null;
@@ -272,6 +274,8 @@ export type DraftPatch = {
   paymentMethod?: string;
   cardBrand?: string;
   email?: string;
+  /** Invoice: unit prices typed on the card, by line position (whole guaraníes). */
+  linePrices?: { index: number; unitPrice: number }[];
   /** Appointment: move the draft to another slot (ISO instant) and, optionally, professional. */
   startAt?: string;
   professionalId?: number;

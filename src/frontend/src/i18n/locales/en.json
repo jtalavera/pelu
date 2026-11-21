@@ -1578,6 +1578,10 @@
       "assistantSaid": "Assistant",
       "typing": "The assistant is writing…",
       "draft": {
+        "unitPrice": "Unit price",
+        "unitPriceOf": "Unit price of {{name}}",
+        "priceEdited": "Edited",
+        "priceInvalid": "Enter a whole amount greater than zero, for example 50.000.",
         "invoiceTitle": "Invoice draft",
         "status": {
           "DRAFT": "Draft",
@@ -3631,6 +3635,7 @@
       }
     },
     "apiErrors": {
+      "ASSISTANT_DRAFT_INVALID_PRICE": "That price is not valid. Enter a whole amount greater than zero, for example 50.000.",
       "ASSISTANT_SLOT_TAKEN": "That time was just taken. Pick another free time below.",
       "ASSISTANT_DRAFT_NOT_FOUND": "That draft no longer exists.",
       "ASSISTANT_DRAFT_EXPIRED": "This draft expired (drafts are valid for 24 hours). Ask the assistant for a new one.",

@@ -37,6 +37,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Component;
@@ -60,6 +61,9 @@ public class AssistantInvoiceDrafts {
           PaymentMethod.TRANSFER.name());
 
   /** Card brands the card offers (OTHER would need a free-text description: not offered). */
+  /** Largest unit price a person can type on a card (Gs. 999.999.999). */
+  private static final BigDecimal MAX_UNIT_PRICE = new BigDecimal("999999999");
+
   public static final Set<String> CARD_BRANDS =
       Set.of("VISA", "MASTERCARD", "AMEX", "MAESTRO", "PANAL", "CABAL");
 
@@ -208,7 +212,28 @@ public class AssistantInvoiceDrafts {
       }
       lines = repriced;
     }
+    lines = keepEditedPrices(old.lines(), lines);
     return old.withLines(lines, total(lines));
+  }
+
+  /**
+   * A price the person typed on the card stays: re-pricing only refreshes what they did not touch
+   * (so a catalog change never overwrites their edit, and never raises a false «price changed»).
+   */
+  private static List<Line> keepEditedPrices(List<Line> old, List<Line> fresh) {
+    List<Line> out = new ArrayList<>();
+    for (int i = 0; i < fresh.size(); i++) {
+      Line f = fresh.get(i);
+      Line o = i < old.size() ? old.get(i) : null;
+      boolean sameLine =
+          o != null
+              && Boolean.TRUE.equals(o.priceEdited())
+              && Objects.equals(o.serviceId(), f.serviceId())
+              && o.quantity() == f.quantity();
+      out.add(
+          sameLine ? f.withEditedPrice(o.unitPrice(), lineTotal(o.unitPrice(), f.quantity())) : f);
+    }
+    return out;
   }
 
   /** Fingerprint of what the draft charges and at what price (not of payment or e-mail). */
@@ -257,10 +282,20 @@ public class AssistantInvoiceDrafts {
     return missing;
   }
 
-  /** Applies what the card sends ({@code PATCH}); validates every value. */
+  /** Same as the full version, with no unit-price edits. */
   public InvoiceDraftPayload complete(
       InvoiceDraftPayload p, String paymentMethod, String cardBrand, String email) {
-    InvoiceDraftPayload out = p;
+    return complete(p, paymentMethod, cardBrand, email, null);
+  }
+
+  /** Applies what the card sends ({@code PATCH}); validates every value. */
+  public InvoiceDraftPayload complete(
+      InvoiceDraftPayload p,
+      String paymentMethod,
+      String cardBrand,
+      String email,
+      List<AssistantDraftService.LinePrice> linePrices) {
+    InvoiceDraftPayload out = applyLinePrices(p, linePrices);
     if (paymentMethod != null) {
       String method = normalizeMethod(paymentMethod);
       if (method == null) {
@@ -288,6 +323,35 @@ public class AssistantInvoiceDrafts {
       out = out.withEmail(trimmed.isEmpty() ? null : trimmed);
     }
     return out;
+  }
+
+  /**
+   * The person edits unit prices on the card, like the billing screen allows. Whole guaraníes,
+   * greater than zero; the totals are recalculated here (the card never sends a total).
+   */
+  private static InvoiceDraftPayload applyLinePrices(
+      InvoiceDraftPayload p, List<AssistantDraftService.LinePrice> linePrices) {
+    if (linePrices == null || linePrices.isEmpty()) {
+      return p;
+    }
+    List<Line> lines = new ArrayList<>(p.lines());
+    for (AssistantDraftService.LinePrice change : linePrices) {
+      BigDecimal price = change.unitPrice();
+      if (change.index() == null
+          || change.index() < 0
+          || change.index() >= lines.size()
+          || price == null
+          || price.signum() <= 0
+          || price.stripTrailingZeros().scale() > 0
+          || price.compareTo(MAX_UNIT_PRICE) > 0) {
+        throw new AssistantDraftException(
+            org.springframework.http.HttpStatus.BAD_REQUEST, "ASSISTANT_DRAFT_INVALID_PRICE");
+      }
+      Line l = lines.get(change.index());
+      BigDecimal whole = price.setScale(0, RoundingMode.UNNECESSARY);
+      lines.set(change.index(), l.withEditedPrice(whole, lineTotal(whole, l.quantity())));
+    }
+    return p.withLines(lines, total(lines));
   }
 
   /**
@@ -445,7 +509,8 @@ public class AssistantInvoiceDrafts {
               unit,
               lineTotal(unit, qty),
               l.getProfessional() == null ? null : l.getProfessional().getId(),
-              l.getProfessional() == null ? null : l.getProfessional().getDisplayName()));
+              l.getProfessional() == null ? null : l.getProfessional().getDisplayName(),
+              null));
     }
     return lines;
   }
@@ -470,7 +535,7 @@ public class AssistantInvoiceDrafts {
   private static Line line(
       ServiceResponse s, int qty, BigDecimal unit, Long professionalId, String professionalName) {
     return new Line(
-        s.id(), s.name(), qty, unit, lineTotal(unit, qty), professionalId, professionalName);
+        s.id(), s.name(), qty, unit, lineTotal(unit, qty), professionalId, professionalName, null);
   }
 
   private static BigDecimal lineTotal(BigDecimal unit, int qty) {

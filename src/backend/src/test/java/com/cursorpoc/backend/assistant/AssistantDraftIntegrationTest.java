@@ -285,6 +285,56 @@ class AssistantDraftIntegrationTest {
   }
 
   @Test
+  void aPriceTypedOnTheCard_isTheOneIssued_evenIfTheCatalogChangesAfterwards() throws Exception {
+    long conv = currentConversation(admin);
+    String id = proposeInvoice(admin, conv).get("id").asString();
+
+    HttpResponse<String> edited =
+        patch(
+            "/api/assistant/drafts/" + id,
+            admin,
+            "{\"paymentMethod\":\"CASH\",\"linePrices\":[{\"index\":0,\"unitPrice\":45000}]}");
+    assertThat(edited.statusCode()).as(edited.body()).isEqualTo(200);
+    JsonNode payload = json(edited).get("payload");
+    assertThat(payload.get("total").asLong()).isEqualTo(45_000);
+    assertThat(payload.get("lines").get(0).get("priceEdited").asBoolean()).isTrue();
+
+    // The catalog moves afterwards: the person's price is not overwritten, and it is not a
+    // «price changed» for them either.
+    service.setPriceMinor(BigDecimal.valueOf(130_000));
+    serviceRepository.save(service);
+    HttpResponse<String> res = post("/api/assistant/drafts/" + id + "/confirm", admin, null, id);
+
+    assertThat(res.statusCode()).as(res.body()).isEqualTo(200);
+    assertThat(
+            invoiceRepository
+                .findById(json(res).get("invoiceId").asLong())
+                .orElseThrow()
+                .getTotal())
+        .isEqualByComparingTo("45000");
+  }
+
+  @Test
+  void anInvalidTypedPrice_isRefused_andTheDraftKeepsItsPrice() throws Exception {
+    long conv = currentConversation(admin);
+    JsonNode draft = proposeInvoice(admin, conv);
+    String id = draft.get("id").asString();
+    long before = draft.get("payload").get("total").asLong();
+
+    for (String bad : List.of("0", "-1", "12.5", "1000000000")) {
+      HttpResponse<String> res =
+          patch(
+              "/api/assistant/drafts/" + id,
+              admin,
+              "{\"linePrices\":[{\"index\":0,\"unitPrice\":" + bad + "}]}");
+      assertThat(res.statusCode()).as(bad).isEqualTo(400);
+      assertThat(res.body()).contains("ASSISTANT_DRAFT_INVALID_PRICE");
+    }
+    HttpResponse<String> reread = patch("/api/assistant/drafts/" + id, admin, "{}");
+    assertThat(json(reread).get("payload").get("total").asLong()).isEqualTo(before);
+  }
+
+  @Test
   void whenIssuingFails_everythingRollsBack_andTheDraftIsStillADraft() throws Exception {
     long conv = currentConversation(admin);
     String id = proposeInvoice(admin, conv).get("id").asString();

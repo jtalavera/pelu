@@ -383,6 +383,79 @@ class AssistantInvoiceDraftsTest {
     assertThat(Map.of("kept", fresh.clientName())).containsEntry("kept", "MARIA GOMEZ");
   }
 
+  private static List<AssistantDraftService.LinePrice> price(int index, String unitPrice) {
+    return List.of(new AssistantDraftService.LinePrice(index, new BigDecimal(unitPrice)));
+  }
+
+  @Test
+  void editingAUnitPrice_recalculatesTheLineAndTheTotal_andMarksItAsEdited() {
+    InvoiceDraftPayload p = build(req(42L, List.of(1L, 2L))); // 50.000 + 120.000
+
+    InvoiceDraftPayload edited = drafts.complete(p, null, null, null, price(1, "100000"));
+
+    assertThat(edited.lines().get(1).unitPrice()).isEqualByComparingTo("100000");
+    assertThat(edited.lines().get(1).lineTotal()).isEqualByComparingTo("100000");
+    assertThat(edited.lines().get(1).priceEdited()).isTrue();
+    assertThat(edited.lines().get(0).priceEdited()).isNull();
+    assertThat(edited.total()).isEqualByComparingTo("150000");
+    // The payment the card will issue follows the total (toRequest uses it).
+    assertThat(
+            drafts.toRequest(TENANT, edited.withPayment("CASH", null)).payments().get(0).amount())
+        .isEqualByComparingTo("150000");
+    assertThat(AssistantInvoiceDrafts.fingerprint(edited))
+        .isNotEqualTo(AssistantInvoiceDrafts.fingerprint(p));
+  }
+
+  @Test
+  void aUnitPrice_mustBeAWholePositiveAmountOnAnExistingLine() {
+    InvoiceDraftPayload p = build(req(42L, List.of(1L)));
+
+    for (List<AssistantDraftService.LinePrice> bad :
+        List.of(
+            price(0, "0"),
+            price(0, "-5000"),
+            price(0, "1500.50"),
+            price(0, "1000000000"),
+            price(3, "5000"),
+            price(-1, "5000"),
+            List.of(new AssistantDraftService.LinePrice(null, new BigDecimal("5000"))),
+            List.of(new AssistantDraftService.LinePrice(0, null)))) {
+      assertThatThrownBy(() -> drafts.complete(p, null, null, null, bad))
+          .isInstanceOf(AssistantDraftException.class)
+          .hasMessage("ASSISTANT_DRAFT_INVALID_PRICE");
+    }
+    assertThat(drafts.complete(p, null, null, null, price(0, "50000.00")).total())
+        .isEqualByComparingTo("50000");
+  }
+
+  @Test
+  void repricing_keepsAPriceThePersonTyped_whileRefreshingTheRest() {
+    InvoiceDraftPayload edited =
+        drafts.complete(build(req(42L, List.of(1L, 2L))), null, null, null, price(0, "45000"));
+    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), eq("SERVICE")))
+        .thenReturn(
+            List.of(service(1, "Corte", 65_000, true), service(2, "Tintura", 130_000, true)));
+
+    InvoiceDraftPayload fresh = drafts.reprice(TENANT, edited);
+
+    assertThat(fresh.lines().get(0).unitPrice()).isEqualByComparingTo("45000"); // theirs
+    assertThat(fresh.lines().get(0).priceEdited()).isTrue();
+    assertThat(fresh.lines().get(1).unitPrice()).isEqualByComparingTo("130000"); // the catalog's
+    assertThat(fresh.total()).isEqualByComparingTo("175000");
+  }
+
+  @Test
+  void repricing_withNothingNewInTheCatalog_isStableAfterAnEdit() {
+    InvoiceDraftPayload edited =
+        drafts.complete(build(req(42L, List.of(1L))), null, null, null, price(0, "45000"));
+
+    InvoiceDraftPayload fresh = drafts.reprice(TENANT, edited);
+
+    // No false «the price changed» just because the person's price differs from the catalog's.
+    assertThat(AssistantInvoiceDrafts.fingerprint(fresh))
+        .isEqualTo(AssistantInvoiceDrafts.fingerprint(edited));
+  }
+
   // ---------------------------------------------------------------------------------------------
 
   private static ServiceRecordLine recordLine(

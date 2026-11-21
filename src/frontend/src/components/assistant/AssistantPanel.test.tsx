@@ -357,6 +357,90 @@ describe("Assistant (provider + button + panel)", () => {
     expect((within(card).getByTestId("assistant-draft-confirm") as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("each line shows its unit price as an editable field with the guaraní mask, like billing", async () => {
+    const card = await proposeDraft();
+
+    const price = within(card).getByTestId("assistant-draft-line-price-0") as HTMLInputElement;
+    expect(price.value).toBe("55.000");
+    expect(price.getAttribute("aria-label")).toBe("Precio unitario de Corte");
+    expect(within(card).queryByTestId("assistant-draft-line-edited-0")).toBeNull();
+
+    await userEvent.clear(price);
+    await userEvent.type(price, "45000");
+    expect(price.value).toBe("45.000"); // the mask regroups what is typed
+  });
+
+  it("saving a typed price sends it to the backend; the card then shows the recalculated line and total", async () => {
+    const card = await proposeDraft();
+    const base = draft();
+    const edited = draft({
+      payload: {
+        ...(base.payload as object),
+        lines: [
+          {
+            serviceId: 1,
+            name: "Corte",
+            quantity: 2,
+            unitPrice: 45000,
+            lineTotal: 90000,
+            professionalId: null,
+            professionalName: null,
+            priceEdited: true,
+          },
+        ],
+        total: 90000,
+      } as AssistantDraft["payload"],
+    });
+    api.complete.mockResolvedValue(edited);
+
+    const price = within(card).getByTestId("assistant-draft-line-price-0");
+    await userEvent.clear(price);
+    await userEvent.type(price, "45000{Enter}");
+
+    expect(api.complete).toHaveBeenCalledWith("d-1", { linePrices: [{ index: 0, unitPrice: 45000 }] });
+    await waitFor(() => expect(within(card).getByTestId("assistant-draft-total").textContent).toBe("Gs. 90.000"));
+    expect(within(card).getByTestId("assistant-draft-line-total-0").textContent).toBe("Gs. 90.000");
+    expect((within(card).getByTestId("assistant-draft-line-price-0") as HTMLInputElement).value).toBe("45.000");
+    expect(within(card).getByTestId("assistant-draft-line-edited-0").textContent).toBe("Editado");
+  });
+
+  it("an unchanged price is not sent, and an empty or zero price shows the rule with an example", async () => {
+    const card = await proposeDraft();
+    const price = within(card).getByTestId("assistant-draft-line-price-0");
+
+    await userEvent.click(price);
+    await userEvent.tab(); // blur without changing anything
+    expect(api.complete).not.toHaveBeenCalled();
+
+    await userEvent.clear(price);
+    await userEvent.tab();
+    const error = await within(card).findByRole("alert");
+    expect(error.textContent).toContain("50.000");
+    expect(price.getAttribute("aria-invalid")).toBe("true");
+    expect(api.complete).not.toHaveBeenCalled();
+
+    await userEvent.type(price, "0{Enter}");
+    expect(api.complete).not.toHaveBeenCalled();
+    expect(within(card).getByRole("alert")).toBeTruthy();
+  });
+
+  it("a refused price (backend error) is shown translated on the card", async () => {
+    const card = await proposeDraft();
+    api.complete.mockRejectedValue(new AssistantApiError(JSON.stringify({ error: "ASSISTANT_DRAFT_INVALID_PRICE" })));
+
+    const price = within(card).getByTestId("assistant-draft-line-price-0");
+    await userEvent.clear(price);
+    await userEvent.type(price, "1{Enter}");
+
+    expect((await within(card).findByTestId("assistant-draft-error")).textContent).toContain("no es válido");
+  });
+
+  it("an issued or dimmed card has no editable prices", async () => {
+    const card = await proposeDraft(draft({ status: "DISCARDED" }));
+
+    expect(within(card).queryByTestId("assistant-draft-line-price-0")).toBeNull();
+  });
+
   it("completes the payment method on the card and then allows confirming", async () => {
     const card = await proposeDraft();
     api.complete.mockResolvedValue(

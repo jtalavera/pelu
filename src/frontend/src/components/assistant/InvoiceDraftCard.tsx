@@ -5,6 +5,8 @@ import { translateApiError } from "../../api/parseApiErrorMessage";
 import type { AssistantDraftCard } from "../../assistant/AssistantContext";
 import type { AssistantDraftStatus, DraftPatch, InvoiceDraftPayload } from "../../api/assistant";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
+import { maskMoneyInput, parseMaskedMoney } from "../../lib/moneyInputMask";
+import { FieldValidationError } from "../FieldValidationError";
 import { ACTION_BUTTON } from "../actionButtons";
 
 const PAYMENT_METHODS = ["CASH", "DEBIT_CARD", "CREDIT_CARD", "TRANSFER"] as const;
@@ -47,6 +49,79 @@ function Chip({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * The unit price of one line, editable like in the billing screen (same guaraní mask). It saves on
+ * blur or Enter, only when it is a whole amount greater than zero, and the BACKEND recalculates the
+ * line and the total. Remounted (by key) whenever the draft's price changes, so it always shows it.
+ */
+function LinePriceField({
+  index,
+  line,
+  disabled,
+  onSave,
+}: {
+  index: number;
+  line: InvoiceDraftPayload["lines"][number];
+  disabled: boolean;
+  onSave: (index: number, unitPrice: number) => void;
+}) {
+  const { t } = useTranslation();
+  const [text, setText] = useState(maskMoneyInput(String(Math.round(line.unitPrice))));
+  const [invalid, setInvalid] = useState(false);
+  const id = `draft-price-${index}`;
+
+  const commit = () => {
+    const value = parseMaskedMoney(text);
+    if (value <= 0) {
+      setInvalid(true);
+      return;
+    }
+    setInvalid(false);
+    if (value !== Math.round(line.unitPrice)) onSave(index, value);
+  };
+
+  return (
+    <form
+      className="flex flex-col gap-1 pl-2"
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        commit();
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <Label htmlFor={id} className="text-xs font-semibold text-ink-3">
+          {t("femme.assistant.draft.unitPrice")}
+        </Label>
+        <Input
+          id={id}
+          data-testid={`assistant-draft-line-price-${index}`}
+          inputMode="numeric"
+          className="w-36"
+          value={text}
+          disabled={disabled}
+          aria-label={t("femme.assistant.draft.unitPriceOf", { name: line.name })}
+          aria-invalid={invalid}
+          aria-describedby={invalid ? `${id}-err` : undefined}
+          onChange={(e) => {
+            setText(maskMoneyInput(e.target.value));
+            setInvalid(false);
+          }}
+          onBlur={commit}
+        />
+        {line.priceEdited && (
+          <Badge variant="secondary" data-testid={`assistant-draft-line-edited-${index}`}>
+            {t("femme.assistant.draft.priceEdited")}
+          </Badge>
+        )}
+      </div>
+      {invalid && (
+        <FieldValidationError id={`${id}-err`}>{t("femme.assistant.draft.priceInvalid")}</FieldValidationError>
+      )}
+    </form>
   );
 }
 
@@ -129,12 +204,25 @@ export function InvoiceDraftCard({
 
       <ul className="flex flex-col gap-1" data-testid="assistant-draft-lines">
         {payload.lines.map((l, i) => (
-          <li key={`${l.serviceId}-${i}`} className="flex items-baseline justify-between gap-3">
-            <span className="min-w-0 break-words">
-              {l.name}
-              {l.quantity > 1 ? ` × ${l.quantity}` : ""}
-            </span>
-            <span className="shrink-0 tabular-nums">{formatGuaraniesGs(l.lineTotal)}</span>
+          <li key={`${l.serviceId}-${i}`} className="flex flex-col gap-1">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="min-w-0 break-words">
+                {l.name}
+                {l.quantity > 1 ? ` × ${l.quantity}` : ""}
+              </span>
+              <span className="shrink-0 tabular-nums" data-testid={`assistant-draft-line-total-${i}`}>
+                {formatGuaraniesGs(l.lineTotal)}
+              </span>
+            </div>
+            {open && (
+              <LinePriceField
+                key={`${i}-${l.unitPrice}-${l.quantity}`}
+                index={i}
+                line={l}
+                disabled={!!busy}
+                onSave={(index, unitPrice) => onComplete(draft.id, { linePrices: [{ index, unitPrice }] })}
+              />
+            )}
           </li>
         ))}
       </ul>

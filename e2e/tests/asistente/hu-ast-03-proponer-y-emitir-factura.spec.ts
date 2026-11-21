@@ -323,6 +323,62 @@ test.describe("HU-AST-03 · Proponer y emitir una factura desde el chat", () => 
     expect(Number(invoices[0].total)).toBe(65000);
   });
 
+  test("AC15 · los precios de las líneas se editan como en Facturación y lo emitido usa el precio escrito", async ({
+    page,
+    request,
+  }) => {
+    // A service of its own, so changing its catalog price cannot disturb the other tests.
+    const category = await apiPostJson<{ id: number }>(request, token, "/api/service-categories", {
+      name: `E2E Cat Editar ${SUFFIX}`,
+      accentKey: "stone",
+    });
+    const serviceName = `E2E Svc Editar ${SUFFIX}`;
+    const service = await apiPostJson<{ id: number }>(request, token, "/api/services", {
+      name: serviceName,
+      categoryId: category.id,
+      priceMinor: 50000,
+      durationMinutes: 60,
+    });
+    const client = await newClient(request);
+    await open(page);
+    await askAssistantUi(page, `invoice ${client.fullName} for ${serviceName}`);
+    const card = lastDraftCard(page);
+    await expect(card).toBeVisible({ timeout: 20_000 });
+    const price = card.getByTestId("assistant-draft-line-price-0");
+    await expect(price).toHaveValue("50.000"); // same mask as the billing screen
+    await expect(card.getByTestId("assistant-draft-total")).toHaveText("Gs. 50.000");
+    await expect(card.getByTestId("assistant-draft-line-edited-0")).toHaveCount(0);
+
+    // An invalid price shows the rule with an example and changes nothing.
+    await price.fill("0");
+    await price.press("Enter");
+    await expect(card.getByRole("alert").filter({ hasText: "50.000" })).toBeVisible();
+    await expect(card.getByTestId("assistant-draft-total")).toHaveText("Gs. 50.000");
+
+    // A valid one: the backend recalculates the line and the total; the line is marked «Edited».
+    await price.fill("45000");
+    await expect(price).toHaveValue("45.000");
+    await price.press("Enter");
+    await expect(card.getByTestId("assistant-draft-total")).toHaveText("Gs. 45.000");
+    await expect(card.getByTestId("assistant-draft-line-total-0")).toHaveText("Gs. 45.000");
+    await expect(card.getByTestId("assistant-draft-line-edited-0")).toBeVisible();
+    await expect(price).toHaveValue("45.000");
+    await expect(card.getByRole("alert").filter({ hasText: "50.000" })).toHaveCount(0);
+
+    // The catalog moves afterwards: the person's price stays and it is not a «price changed».
+    await card.getByTestId("assistant-draft-payment-CASH").click();
+    await updateServicePriceApi(request, token, { id: service.id, name: serviceName, categoryId: category.id }, 80000);
+    await card.getByTestId("assistant-draft-confirm").click();
+
+    await expect(card).toHaveAttribute("data-status", "CONFIRMED", { timeout: 20_000 });
+    await expect(card.getByTestId("assistant-draft-price-changed")).toHaveCount(0);
+    const invoices = await clientInvoicesApi(request, token, client.id);
+    expect(invoices).toHaveLength(1);
+    expect(Number(invoices[0].total)).toBe(45000);
+    // Once issued, the card has no editable prices.
+    await expect(card.getByTestId("assistant-draft-line-price-0")).toHaveCount(0);
+  });
+
   test("AC11 · escribir «sí», «dale» o «confirmá» no emite nada", async ({ page, request }) => {
     const client = await newClient(request);
     await open(page);

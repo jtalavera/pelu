@@ -44,6 +44,7 @@ Principio de todo el asistente: **el modelo propone, la persona confirma**. El m
 12. **Solo administración.** Una profesional que pide facturar recibe la explicación de que es solo para administración, no se crea ningún borrador y tampoco puede confirmar uno.
 13. **Persistencia — Al recargar.** Al recargar la página y reabrir el asistente, la tarjeta del borrador (o la de la factura emitida) sigue ahí, con su estado.
 14. **Aislamiento — Por salón y por persona.** Un borrador es de quien lo pidió, en su salón: nadie puede confirmarlo, completarlo ni descartarlo con solo conocer su identificador, y el asistente no arma borradores con clientes de otro salón.
+15. **Precios editables — Como en Facturación.** En el borrador, cada línea muestra su precio unitario en un campo editable (mismo formato de guaraníes que Facturación: `50.000`). Al guardarlo (salir del campo o Enter) el sistema recalcula la línea y el total, y la línea queda marcada «Editado». El precio debe ser un monto entero mayor a cero: si no, se muestra el error con un ejemplo (`50.000`) y no se envía nada. Lo emitido usa el precio escrito aunque el catálogo cambie después (no cuenta como «cambió el precio»), y la tarjeta ya emitida o atenuada no se puede editar.
 
 ---
 

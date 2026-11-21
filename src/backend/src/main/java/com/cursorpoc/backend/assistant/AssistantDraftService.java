@@ -7,6 +7,7 @@ import com.cursorpoc.backend.service.AppointmentService;
 import com.cursorpoc.backend.service.InvoiceEmissionService;
 import com.cursorpoc.backend.web.dto.AppointmentResponse;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -167,7 +168,12 @@ public class AssistantDraftService {
       String email,
       /** APPOINTMENT: another slot (ISO instant) and, optionally, another professional. */
       String startAt,
-      Long professionalId) {}
+      Long professionalId,
+      /** INVOICE: unit prices typed on the card, by line position. */
+      List<LinePrice> linePrices) {}
+
+  /** A unit price the person typed for the line at {@code index} (whole guaraníes). */
+  public record LinePrice(Integer index, BigDecimal unitPrice) {}
 
   /**
    * @param ownProfessionalId set for a PROFESSIONAL: she can only move an appointment onto herself
@@ -185,8 +191,12 @@ public class AssistantDraftService {
               fromJson(d, InvoiceDraftPayload.class),
               completion.paymentMethod(),
               completion.cardBrand(),
-              completion.email());
+              completion.email(),
+              completion.linePrices());
       d.setPayload(toJson(updated));
+      // What the draft charges changed: the stored fingerprint must follow, or confirming would
+      // mistake the person's own edit for «the price changed».
+      d.setPayloadHash(AssistantInvoiceDrafts.fingerprint(updated));
     } else if (completion.startAt() != null) {
       AppointmentDraftPayload old = fromJson(d, AppointmentDraftPayload.class);
       Long professionalId =

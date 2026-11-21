@@ -36,7 +36,23 @@ public final class AssistantDraftPayloads {
         BigDecimal unitPrice,
         BigDecimal lineTotal,
         Long professionalId,
-        String professionalName) {}
+        String professionalName,
+        /** True when the person typed this price on the card (it survives re-pricing). */
+        Boolean priceEdited) {
+
+      /** The same line at another unit price, typed by the person. */
+      public Line withEditedPrice(BigDecimal newUnitPrice, BigDecimal newLineTotal) {
+        return new Line(
+            serviceId,
+            name,
+            quantity,
+            newUnitPrice,
+            newLineTotal,
+            professionalId,
+            professionalName,
+            Boolean.TRUE);
+      }
+    }
 
     public InvoiceDraftPayload withPayment(String method, String brand) {
       return new InvoiceDraftPayload(

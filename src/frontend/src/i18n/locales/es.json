@@ -1578,6 +1578,10 @@
       "assistantSaid": "Asistente",
       "typing": "El asistente está escribiendo…",
       "draft": {
+        "unitPrice": "Precio unitario",
+        "unitPriceOf": "Precio unitario de {{name}}",
+        "priceEdited": "Editado",
+        "priceInvalid": "Ingresá un monto entero mayor a cero, por ejemplo 50.000.",
         "invoiceTitle": "Borrador de factura",
         "status": {
           "DRAFT": "Borrador",
@@ -3631,6 +3635,7 @@
       }
     },
     "apiErrors": {
+      "ASSISTANT_DRAFT_INVALID_PRICE": "Ese precio no es válido. Ingresá un monto entero mayor a cero, por ejemplo 50.000.",
       "ASSISTANT_SLOT_TAKEN": "Ese horario se acaba de ocupar. Elegí otro horario libre.",
       "ASSISTANT_DRAFT_NOT_FOUND": "Ese borrador ya no existe.",
       "ASSISTANT_DRAFT_EXPIRED": "Este borrador venció (los borradores valen 24 horas). Pedile uno nuevo al asistente.",
