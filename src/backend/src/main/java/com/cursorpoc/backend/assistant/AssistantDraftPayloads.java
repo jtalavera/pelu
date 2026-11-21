@@ -80,4 +80,24 @@ public final class AssistantDraftPayloads {
           newTotal);
     }
   }
+
+  /**
+   * An appointment waiting for confirmation. {@code startAt} is the instant (ISO) the appointment
+   * is created with; {@code date}, {@code time} and {@code endTime} are the same moment in the
+   * salon's zone, ready to show. {@code outsideWorkingHours} only warns (the agenda does not block
+   * it either).
+   */
+  public record AppointmentDraftPayload(
+      Long clientId,
+      String clientName,
+      Long serviceId,
+      String serviceName,
+      Long professionalId,
+      String professionalName,
+      String startAt,
+      String date,
+      String time,
+      String endTime,
+      int durationMinutes,
+      boolean outsideWorkingHours) {}
 }

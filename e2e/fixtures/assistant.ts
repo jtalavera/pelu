@@ -282,5 +282,87 @@ export async function updateServicePriceApi(
   });
 }
 
+// ── Agenda: availability and appointment drafts (HU-AST-05/06) ──────────────────────────────────
+
+/** Scripted model: «availability <day> [morning|afternoon] for <service> [with <pro>]» and
+ *  «book <client> for <service> <day> at HH:mm [with <pro>]». */
+export type AppointmentDraftDto = {
+  id: string;
+  type: string;
+  status: string;
+  payload: {
+    clientName: string;
+    serviceName: string;
+    professionalId: number;
+    professionalName: string;
+    startAt: string;
+    date: string;
+    time: string;
+    endTime: string;
+    outsideWorkingHours: boolean;
+  };
+};
+
+/** The salon's tomorrow as `YYYY-MM-DD` (what «tomorrow» means to the assistant). */
+export function businessTomorrow(): string {
+  const [y, m, d] = businessDate(new Date()).split("-").map(Number);
+  return businessDate(new Date(Date.UTC(y, m - 1, d + 1, 12)));
+}
+
+/** The instant of `HH:mm` on `date` in the salon's zone (no hard-coded UTC offset). */
+export function businessInstant(date: string, hhmm: string): Date {
+  const [y, m, d] = date.split("-").map(Number);
+  const [h, mi] = hhmm.split(":").map(Number);
+  const guess = Date.UTC(y, m - 1, d, h, mi);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Asuncion",
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+      .formatToParts(new Date(guess))
+      .map((p) => [p.type, p.value]),
+  );
+  const asLocal = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute);
+  return new Date(guess - (asLocal - guess));
+}
+
+/** ISO weekday (Monday=1 … Sunday=7) of a `YYYY-MM-DD`. */
+export function isoWeekday(date: string): number {
+  const d = new Date(`${date}T12:00:00Z`).getUTCDay();
+  return d === 0 ? 7 : d;
+}
+
+/** 09:00–17:00 every day of the week (or every day but `except`). */
+export function workingWeek(except?: number) {
+  return [1, 2, 3, 4, 5, 6, 7]
+    .filter((day) => day !== except)
+    .map((dayOfWeek) => ({ dayOfWeek, startTime: "09:00", endTime: "17:00" }));
+}
+
+/** Asks the assistant through the API and returns the appointment draft it produced, if any. */
+export async function proposeAppointmentViaApi(
+  request: APIRequestContext,
+  token: string,
+  text: string,
+): Promise<{ draft: AppointmentDraftDto | null; answer: AssistantAnswer }> {
+  const { conversationId } = await currentConversationApi(request, token);
+  const answer = await askAssistantApi(request, token, conversationId, text);
+  const card = answer.events.find((e) => e.event === "card.draft");
+  return { draft: card ? (card.data as unknown as AppointmentDraftDto) : null, answer };
+}
+
+/** Labels of the tappable options (free times) the answer carried. */
+export function optionLabels(answer: AssistantAnswer): string[] {
+  const card = answer.events.find((e) => e.event === "card.options");
+  return card ? (card.data.options as Array<{ label: string }>).map((o) => o.label) : [];
+}
+
+export const optionChips = (page: Page) => page.getByTestId("assistant-option");
+
 export const draftCards = (page: Page) => page.getByTestId("assistant-draft-card");
 export const lastDraftCard = (page: Page) => draftCards(page).last();

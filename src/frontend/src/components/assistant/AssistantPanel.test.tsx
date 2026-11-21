@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
 import i18n from "../../i18n";
 import {
@@ -63,10 +63,17 @@ function setViewport(width: number) {
   }) as typeof window.matchMedia;
 }
 
+/** Shows where the app navigated to (path + state), to assert deep links. */
+function LocationProbe() {
+  const loc = useLocation();
+  return <output data-testid="location">{`${loc.pathname}|${JSON.stringify(loc.state)}`}</output>;
+}
+
 function renderAssistant(path = "/app/hoy") {
   return render(
     <I18nextProvider i18n={i18n}>
       <MemoryRouter initialEntries={[path]}>
+        <LocationProbe />
         <AssistantProvider>
           <AssistantButton isPhone={false} />
           <AssistantPanel />
@@ -512,6 +519,162 @@ describe("Assistant (provider + button + panel)", () => {
     const card = await screen.findByTestId("assistant-draft-card");
     const assistantMessage = screen.getAllByTestId("assistant-message")[1];
     expect(assistantMessage.contains(card)).toBe(true);
+  });
+
+  // ── Phase 3: free times as chips, and the appointment draft ───────────────────────────────────
+
+  function apptDraft(over: Partial<AssistantDraft> = {}): AssistantDraft {
+    return {
+      id: "a-1",
+      type: "APPOINTMENT",
+      status: "DRAFT",
+      createdAt: "2026-11-20T10:00:00Z",
+      expiresAt: "2026-11-21T10:00:00Z",
+      missing: [],
+      resultType: null,
+      resultId: null,
+      payload: {
+        clientId: 42,
+        clientName: "MARIA GOMEZ",
+        serviceId: 7,
+        serviceName: "Corte",
+        professionalId: 3,
+        professionalName: "Lucia",
+        startAt: "2026-11-21T13:00:00Z",
+        date: "2026-11-21",
+        time: "10:00",
+        endTime: "10:30",
+        durationMinutes: 30,
+        outsideWorkingHours: false,
+      },
+      ...over,
+    };
+  }
+
+  async function proposeAppointment(d: AssistantDraft = apptDraft()) {
+    scriptAnswer((emit) => {
+      emit({ type: "card.draft", draft: d });
+      emit({ type: "message.delta", text: "Preparé el borrador del turno." });
+      emit({ type: "message.done", messageId: 1 });
+    });
+    renderAssistant();
+    await openPanel();
+    await ask("agendá a maria mañana a las 10");
+    return screen.findByTestId("assistant-draft-card");
+  }
+
+  it("draws an appointment draft with client, service, day and time, professional and duration", async () => {
+    const card = await proposeAppointment();
+
+    expect(card.getAttribute("data-type")).toBe("APPOINTMENT");
+    expect(within(card).getByTestId("assistant-draft-client").textContent).toBe("MARIA GOMEZ");
+    expect(within(card).getByTestId("assistant-draft-service").textContent).toBe("Corte");
+    expect(within(card).getByTestId("assistant-draft-when").textContent).toContain("10:00 – 10:30");
+    expect(within(card).getByTestId("assistant-draft-when").textContent).toMatch(/21/);
+    expect(within(card).getByTestId("assistant-draft-professional").textContent).toBe("Lucia");
+    expect(card.textContent).toContain("30 min");
+    expect(within(card).queryByTestId("assistant-draft-outside-hours")).toBeNull();
+    expect(within(card).getByTestId("assistant-draft-confirm").textContent).toBe("Confirmar y agendar");
+  });
+
+  it("warns, without blocking, when the time is outside the professional's working hours", async () => {
+    const base = apptDraft();
+    const card = await proposeAppointment({
+      ...base,
+      payload: { ...(base.payload as object), outsideWorkingHours: true } as AssistantDraft["payload"],
+    });
+
+    expect(within(card).getByTestId("assistant-draft-outside-hours").textContent).toContain("Lucia");
+    expect((within(card).getByTestId("assistant-draft-confirm") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("confirming books it, and «Ver en la agenda» opens the agenda on that day with the appointment", async () => {
+    const card = await proposeAppointment();
+    api.confirm.mockResolvedValue({
+      type: "APPOINTMENT",
+      invoiceId: null,
+      invoiceNumberFormatted: null,
+      sifenSubmissionStatus: null,
+      appointmentId: 901,
+      startAt: "2026-11-21T13:00:00Z",
+      professionalId: 3,
+      draft: apptDraft({ status: "CONFIRMED", resultType: "APPOINTMENT", resultId: 901 }),
+    });
+
+    await userEvent.click(within(card).getByTestId("assistant-draft-confirm"));
+
+    await waitFor(() => expect(card.getAttribute("data-status")).toBe("CONFIRMED"));
+    expect(card.textContent).toContain("Turno agendado");
+    await userEvent.click(within(card).getByTestId("assistant-draft-view-agenda"));
+    const where = screen.getByTestId("location").textContent ?? "";
+    expect(where.startsWith("/app/calendar|")).toBe(true);
+    expect(JSON.parse(where.split("|")[1])).toEqual({ selectedDate: "2026-11-21", openAppointmentId: 901 });
+    // The panel stays open next to the agenda on a wide screen.
+    expect(screen.getByTestId("assistant-panel")).toBeTruthy();
+  });
+
+  it("a time taken meanwhile keeps the draft and offers free times; tapping one moves the draft", async () => {
+    const card = await proposeAppointment();
+    api.confirm.mockRejectedValue(
+      new AssistantApiError(
+        JSON.stringify({
+          error: "ASSISTANT_SLOT_TAKEN",
+          draft: apptDraft(),
+          alternatives: [
+            { time: "10:30", professionalId: 3, professionalName: "Lucia", startAt: "2026-11-21T13:30:00Z" },
+            { time: "11:00", professionalId: 4, professionalName: "Hugo", startAt: "2026-11-21T14:00:00Z" },
+          ],
+        }),
+      ),
+    );
+
+    await userEvent.click(within(card).getByTestId("assistant-draft-confirm"));
+
+    const alternatives = await within(card).findAllByTestId("assistant-draft-alternative");
+    expect(alternatives.map((a) => a.textContent)).toEqual(["10:30 · Lucia", "11:00 · Hugo"]);
+    expect(within(card).getByTestId("assistant-draft-error").textContent).toContain("se acaba de ocupar");
+    expect(card.getAttribute("data-status")).toBe("DRAFT");
+
+    api.complete.mockResolvedValue(apptDraft());
+    await userEvent.click(alternatives[1]);
+
+    expect(api.complete).toHaveBeenCalledWith("a-1", {
+      startAt: "2026-11-21T14:00:00Z",
+      professionalId: 4,
+    });
+    await waitFor(() => expect(within(card).queryAllByTestId("assistant-draft-alternative")).toHaveLength(0));
+  });
+
+  it("free times arrive as chips; tapping one sends it as the person's message", async () => {
+    scriptAnswer((emit) => {
+      emit({
+        type: "card.options",
+        kind: "SLOT",
+        options: [
+          { label: "09:00", value: "Quiero el turno del 2026-11-21 a las 09:00 con Lucia (profesional 3, servicio 7)" },
+          { label: "09:30", value: "Quiero el turno del 2026-11-21 a las 09:30 con Lucia (profesional 3, servicio 7)" },
+        ],
+      });
+      emit({ type: "message.delta", text: "Estos horarios hay." });
+      emit({ type: "message.done", messageId: 1 });
+    });
+    renderAssistant();
+    await openPanel();
+    await ask("disponibilidad mañana para corte");
+
+    const group = await screen.findByTestId("assistant-options");
+    expect(group.getAttribute("data-kind")).toBe("SLOT");
+    expect(within(group).getByText("Elegí un horario")).toBeTruthy();
+    const chips = within(group).getAllByTestId("assistant-option");
+    expect(chips.map((c) => c.textContent)).toEqual(["09:00", "09:30"]);
+
+    scriptAnswer((emit) => emit({ type: "message.done", messageId: 2 }));
+    await userEvent.click(chips[1]);
+
+    await waitFor(() => expect(api.stream).toHaveBeenCalledTimes(2));
+    expect(api.stream.mock.calls[1][0].text).toBe(
+      "Quiero el turno del 2026-11-21 a las 09:30 con Lucia (profesional 3, servicio 7)",
+    );
   });
 
   it.each([

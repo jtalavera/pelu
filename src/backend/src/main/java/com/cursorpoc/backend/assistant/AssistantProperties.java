@@ -24,8 +24,12 @@ public class AssistantProperties {
   /** Last USER/ASSISTANT messages of the conversation sent to the model as context. */
   private int historyMaxMessages = 20;
 
-  /** Max model↔tool round trips for one user message (guards against tool loops). */
-  private int maxToolIterations = 4;
+  /**
+   * Max model↔tool round trips for one user message (guards against tool loops). Booking with a
+   * named professional chains four tools (client, service, professional, proposal) plus the final
+   * answer.
+   */
+  private int maxToolIterations = 6;
 
   /** Upper bound on a whole model request (all tool round trips). */
   private int requestTimeoutSeconds = 90;

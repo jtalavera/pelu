@@ -1625,6 +1625,25 @@
         "priceChanged": "Cambió un precio desde que se preparó este borrador. Revisá el nuevo total y confirmá de nuevo.",
         "inactive": "Este borrador ya no está activo."
       },
+      "appointmentDraft": {
+        "title": "Borrador de turno",
+        "bookedTitle": "Turno agendado",
+        "bookedBadge": "Agendado",
+        "client": "Cliente",
+        "service": "Servicio",
+        "when": "Cuándo",
+        "professional": "Profesional",
+        "duration": "Duración",
+        "minutes": "{{count}} min",
+        "outsideHours": "Este horario queda fuera del horario de trabajo de {{professional}}. Igual lo podés agendar.",
+        "confirm": "Confirmar y agendar",
+        "confirming": "Agendando…",
+        "pickAnother": "Ese horario está ocupado. Elegí otro:",
+        "viewInAgenda": "Ver en la agenda"
+      },
+      "options": {
+        "SLOT": "Elegí un horario"
+      },
       "tool": {
         "buscar_clientes": "Buscando clientes…",
         "listar_servicios": "Consultando servicios…",
@@ -3612,6 +3631,7 @@
       }
     },
     "apiErrors": {
+      "ASSISTANT_SLOT_TAKEN": "Ese horario se acaba de ocupar. Elegí otro horario libre.",
       "ASSISTANT_DRAFT_NOT_FOUND": "Ese borrador ya no existe.",
       "ASSISTANT_DRAFT_EXPIRED": "Este borrador venció (los borradores valen 24 horas). Pedile uno nuevo al asistente.",
       "ASSISTANT_DRAFT_NOT_ACTIVE": "Este borrador fue reemplazado o descartado y ya no se puede confirmar.",

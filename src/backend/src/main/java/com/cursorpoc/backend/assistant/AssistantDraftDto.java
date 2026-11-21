@@ -22,6 +22,21 @@ public record AssistantDraftDto(
     Long resultId,
     Long messageId) {
 
+  /** The state the person will see: a refused confirmation rolls back to DRAFT. */
+  public AssistantDraftDto withStatus(String newStatus) {
+    return new AssistantDraftDto(
+        id,
+        type,
+        newStatus,
+        createdAt,
+        expiresAt,
+        missing,
+        payload,
+        resultType,
+        resultId,
+        messageId);
+  }
+
   public AssistantDraftDto withMessageId(Long newMessageId) {
     return new AssistantDraftDto(
         id,

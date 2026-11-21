@@ -3,6 +3,9 @@ import { useTranslation } from "react-i18next";
 import { Alert, Heading, Spinner, Text } from "@design-system";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import type { AssistantUiMessage } from "../../assistant/AssistantContext";
+import type { DraftPatch } from "../../api/assistant";
+import { AppointmentDraftCard } from "./AppointmentDraftCard";
+import { AssistantOptionChips } from "./AssistantOptionChips";
 import { InvoiceDraftCard } from "./InvoiceDraftCard";
 
 const SUGGESTIONS = ["appointmentsToday", "services", "professionals"] as const;
@@ -74,12 +77,10 @@ export function AssistantMessageList({
   draftActions: {
     onConfirm: (id: string) => void;
     onDiscard: (id: string) => void;
-    onComplete: (
-      id: string,
-      patch: { paymentMethod?: string; cardBrand?: string; email?: string },
-    ) => void;
+    onComplete: (id: string, patch: DraftPatch) => void;
     onViewInvoice: (invoiceId: number) => void;
     onShareInvoice: (invoiceId: number) => void;
+    onViewAppointment: (appointmentId: number, date: string) => void;
   };
 }) {
   const { t } = useTranslation();
@@ -156,9 +157,20 @@ export function AssistantMessageList({
                 {toolLabel}
               </span>
             )}
-            {m.cards?.map((card) => (
-              <InvoiceDraftCard key={card.draft.id} card={card} {...draftActions} />
-            ))}
+            {m.cards?.map((card) =>
+              card.kind === "options" ? (
+                <AssistantOptionChips
+                  key={`options-${card.optionsKind}`}
+                  card={card}
+                  disabled={busy}
+                  onPick={onSend}
+                />
+              ) : card.draft.type === "APPOINTMENT" ? (
+                <AppointmentDraftCard key={card.draft.id} card={card} {...draftActions} />
+              ) : (
+                <InvoiceDraftCard key={card.draft.id} card={card} {...draftActions} />
+              ),
+            )}
             {m.error && (
               <Alert variant="destructive" data-testid="assistant-error" className="max-w-[95%]">
                 {translateApiError(m.error, t)}

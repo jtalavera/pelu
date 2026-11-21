@@ -54,7 +54,8 @@ class AssistantToolsTest {
           appointments,
           time,
           json,
-          mock(AssistantProposalTools.class));
+          mock(AssistantProposalTools.class),
+          mock(AssistantAgendaTools.class));
 
   private static AssistantContext admin() {
     return new AssistantContext(TENANT, 1L, UserRole.ADMIN, null, "hoy");

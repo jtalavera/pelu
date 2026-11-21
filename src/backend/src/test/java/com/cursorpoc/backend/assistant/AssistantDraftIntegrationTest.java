@@ -377,8 +377,10 @@ class AssistantDraftIntegrationTest {
         .isEqualTo(404);
 
     AppUser pro = user(tenant, UserRole.PROFESSIONAL);
+    // Someone else's draft does not exist for her (404 — and even if she owned it, invoices are
+    // administration's: FORBIDDEN).
     assertThat(post("/api/assistant/drafts/" + id + "/confirm", pro, null, id).statusCode())
-        .isEqualTo(403);
+        .isEqualTo(404);
     // An id that is not even a UUID is a clean 400, not a stack trace.
     assertThat(post("/api/assistant/drafts/no-es-un-uuid/confirm", admin, null, null).statusCode())
         .isEqualTo(400);

@@ -57,6 +57,7 @@ public class AssistantTools {
   private final FemmeTimeProperties timeProperties;
   private final ObjectMapper objectMapper;
   private final AssistantProposalTools proposals;
+  private final AssistantAgendaTools agenda;
 
   public AssistantTools(
       ClientService clientService,
@@ -65,7 +66,8 @@ public class AssistantTools {
       AppointmentService appointmentService,
       FemmeTimeProperties timeProperties,
       ObjectMapper objectMapper,
-      AssistantProposalTools proposals) {
+      AssistantProposalTools proposals,
+      AssistantAgendaTools agenda) {
     this.clientService = clientService;
     this.serviceCatalogService = serviceCatalogService;
     this.professionalDirectoryService = professionalDirectoryService;
@@ -73,6 +75,7 @@ public class AssistantTools {
     this.timeProperties = timeProperties;
     this.objectMapper = objectMapper;
     this.proposals = proposals;
+    this.agenda = agenda;
   }
 
   /** True for a tool this class implements — bounds the cardinality of the tool metric. */
@@ -81,6 +84,8 @@ public class AssistantTools {
         || LISTAR_SERVICIOS.equals(name)
         || LISTAR_PROFESIONALES.equals(name)
         || TURNOS_DEL_DIA.equals(name)
+        || AssistantAgendaTools.CONSULTAR_DISPONIBILIDAD.equals(name)
+        || AssistantAgendaTools.PROPONER_TURNO.equals(name)
         || AssistantProposalTools.PROPONER_FACTURA.equals(name)
         || AssistantProposalTools.DESCARTAR_BORRADOR.equals(name);
   }
@@ -88,6 +93,7 @@ public class AssistantTools {
   /** The tools offered to this user. All four are read-only and open to ADMIN and PROFESSIONAL. */
   public List<ToolSpec> specsFor(AssistantContext ctx) {
     List<ToolSpec> all = new java.util.ArrayList<>(readSpecs(ctx));
+    all.addAll(agenda.specsFor(ctx));
     all.addAll(proposals.specsFor(ctx));
     return all;
   }
@@ -142,6 +148,9 @@ public class AssistantTools {
               : objectMapper.readTree(argumentsJson);
       if (proposals.handles(name)) {
         return proposals.run(ctx, name, args);
+      }
+      if (agenda.handles(name)) {
+        return agenda.run(ctx, name, args);
       }
       Object data =
           switch (name) {
@@ -271,7 +280,7 @@ public class AssistantTools {
   /**
    * Accepts ISO dates plus {@code hoy}/{@code mañana} (and English) resolved in the business zone.
    */
-  LocalDate resolveDate(String raw, ZoneId zone) {
+  static LocalDate resolveDate(String raw, ZoneId zone) {
     if (raw == null || raw.isBlank()) {
       throw new ToolException("INVALID_DATE");
     }

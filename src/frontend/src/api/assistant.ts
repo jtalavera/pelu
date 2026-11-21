@@ -42,6 +42,33 @@ export type InvoiceDraftPayload = {
   total: number;
 };
 
+/** An appointment the assistant proposed; date/time are the salon's, ready to show. */
+export type AppointmentDraftPayload = {
+  clientId: number;
+  clientName: string;
+  serviceId: number;
+  serviceName: string;
+  professionalId: number;
+  professionalName: string;
+  /** ISO instant the appointment is created with. */
+  startAt: string;
+  /** yyyy-MM-dd, HH:mm and HH:mm in the salon's zone. */
+  date: string;
+  time: string;
+  endTime: string;
+  durationMinutes: number;
+  /** Only warns: the agenda does not block booking outside the working hours either. */
+  outsideWorkingHours: boolean;
+};
+
+/** Another free time offered when the one asked for is taken. */
+export type SlotAlternative = {
+  time: string;
+  professionalId: number;
+  professionalName: string;
+  startAt: string;
+};
+
 /** A proposal waiting for the person's confirmation (the card draws it from this). */
 export type AssistantDraft = {
   id: string;
@@ -51,7 +78,8 @@ export type AssistantDraft = {
   expiresAt: string;
   /** What must still be completed before «Confirmar» works: PAYMENT_METHOD, CARD_BRAND, EMAIL. */
   missing: string[];
-  payload: InvoiceDraftPayload;
+  /** An {@link InvoiceDraftPayload} for `INVOICE`, an {@link AppointmentDraftPayload} for `APPOINTMENT`. */
+  payload: InvoiceDraftPayload | AppointmentDraftPayload;
   resultType: string | null;
   resultId: number | null;
   /** Set when the conversation is reloaded: the assistant message this card belongs to. */
@@ -75,6 +103,7 @@ export type AssistantMessageRequest = {
 export type AssistantStreamEvent =
   | { type: "message.delta"; text: string }
   | { type: "tool.status"; tool: string; state: "running" | "done" }
+  | { type: "card.options"; kind: string; options: { label: string; value: string }[] }
   | { type: "card.draft"; draft: AssistantDraft }
   | { type: "card.draft.updated"; id: string; status: AssistantDraftStatus }
   | { type: "message.done"; messageId: number }
@@ -107,6 +136,10 @@ export function toAssistantStreamEvent(message: SseMessage): AssistantStreamEven
     case "tool.status":
       return typeof p.tool === "string" && (p.state === "running" || p.state === "done")
         ? { type: "tool.status", tool: p.tool, state: p.state }
+        : null;
+    case "card.options":
+      return typeof p.kind === "string" && Array.isArray(p.options)
+        ? { type: "card.options", kind: p.kind, options: p.options as { label: string; value: string }[] }
         : null;
     case "card.draft":
       return typeof p.id === "string" ? { type: "card.draft", draft: payload as AssistantDraft } : null;
@@ -235,9 +268,15 @@ export function discardAssistantDraft(id: string): Promise<AssistantDraft> {
 }
 
 /** Completes what the card asks for (payment method, card brand, e-mail). */
-export function completeAssistantDraft(
-  id: string,
-  patch: { paymentMethod?: string; cardBrand?: string; email?: string },
-): Promise<AssistantDraft> {
+export type DraftPatch = {
+  paymentMethod?: string;
+  cardBrand?: string;
+  email?: string;
+  /** Appointment: move the draft to another slot (ISO instant) and, optionally, professional. */
+  startAt?: string;
+  professionalId?: number;
+};
+
+export function completeAssistantDraft(id: string, patch: DraftPatch): Promise<AssistantDraft> {
   return draftRequest<AssistantDraft>("PATCH", `/api/assistant/drafts/${id}`, patch);
 }

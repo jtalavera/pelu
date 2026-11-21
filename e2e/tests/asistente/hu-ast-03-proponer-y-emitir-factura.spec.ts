@@ -353,9 +353,9 @@ test.describe("HU-AST-03 · Proponer y emitir una factura desde el chat", () => 
     const pro = await professionalWithAccess(request, token, `E2E Asistente Fact Pro ${SUFFIX}`);
     const proToken = await loginApi(request, pro.email);
 
-    // She cannot confirm the administrator's draft.
+    // She cannot confirm the administrator's draft: it is not hers, so for her it does not exist.
     const refused = await confirmDraftApi(request, proToken, draft!.id);
-    expect(refused.status()).toBe(403);
+    expect(refused.status()).toBe(404);
 
     // And asking to invoice gets an explanation, no card.
     await loginAs(page, pro.email, PASSWORD);

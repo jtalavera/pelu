@@ -57,6 +57,14 @@ public class AssistantDraftController {
           String.valueOf(result.invoiceId()),
           AuditLogService.SOURCE_ASSISTANT);
     }
+    if (result.appointmentId() != null) {
+      auditLogService.recordBusinessAction(
+          principal,
+          "appointments",
+          "create",
+          String.valueOf(result.appointmentId()),
+          AuditLogService.SOURCE_ASSISTANT);
+    }
     return result;
   }
 
@@ -77,6 +85,7 @@ public class AssistantDraftController {
     if (completion == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_REQUEST");
     }
-    return drafts.complete(principal.getTenantId(), principal.getUserId(), id, completion);
+    Long own = principal.isProfessional() ? principal.getProfessionalId() : null;
+    return drafts.complete(principal.getTenantId(), principal.getUserId(), own, id, completion);
   }
 }

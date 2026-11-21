@@ -1,8 +1,11 @@
 package com.cursorpoc.backend.assistant;
 
+import com.cursorpoc.backend.assistant.AssistantDraftPayloads.AppointmentDraftPayload;
 import com.cursorpoc.backend.assistant.AssistantDraftPayloads.InvoiceDraftPayload;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
+import com.cursorpoc.backend.service.AppointmentService;
 import com.cursorpoc.backend.service.InvoiceEmissionService;
+import com.cursorpoc.backend.web.dto.AppointmentResponse;
 import com.cursorpoc.backend.web.dto.InvoiceResponse;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -41,19 +45,25 @@ public class AssistantDraftService {
 
   private final AssistantDraftRepository drafts;
   private final AssistantInvoiceDrafts invoiceDrafts;
+  private final AssistantAppointmentDrafts appointmentDrafts;
   private final InvoiceEmissionService emissionService;
+  private final AppointmentService appointmentService;
   private final ObjectMapper objectMapper;
   private final TransactionTemplate tx;
 
   public AssistantDraftService(
       AssistantDraftRepository drafts,
       AssistantInvoiceDrafts invoiceDrafts,
+      AssistantAppointmentDrafts appointmentDrafts,
       InvoiceEmissionService emissionService,
+      AppointmentService appointmentService,
       ObjectMapper objectMapper,
       PlatformTransactionManager transactionManager) {
     this.drafts = drafts;
     this.invoiceDrafts = invoiceDrafts;
+    this.appointmentDrafts = appointmentDrafts;
     this.emissionService = emissionService;
+    this.appointmentService = appointmentService;
     this.objectMapper = objectMapper;
     this.tx = new TransactionTemplate(transactionManager);
   }
@@ -78,6 +88,21 @@ public class AssistantDraftService {
   /** Only one active draft per conversation: a new proposal supersedes the previous one. */
   @Transactional
   public Created createInvoiceDraft(AssistantContext ctx, InvoiceDraftPayload payload) {
+    return create(
+        ctx, AssistantDraftType.INVOICE, payload, AssistantInvoiceDrafts.fingerprint(payload));
+  }
+
+  @Transactional
+  public Created createAppointmentDraft(AssistantContext ctx, AppointmentDraftPayload payload) {
+    return create(
+        ctx,
+        AssistantDraftType.APPOINTMENT,
+        payload,
+        AssistantAppointmentDrafts.fingerprint(payload));
+  }
+
+  private Created create(
+      AssistantContext ctx, AssistantDraftType type, Object payload, String fingerprint) {
     List<String> superseded = supersedeActive(ctx.conversationId());
     Instant now = Instant.now();
     AssistantDraft draft =
@@ -85,9 +110,9 @@ public class AssistantDraftService {
             ctx.tenantId(),
             ctx.userId(),
             ctx.conversationId(),
-            AssistantDraftType.INVOICE,
+            type,
             toJson(payload),
-            AssistantInvoiceDrafts.fingerprint(payload),
+            fingerprint,
             now,
             now.plus(TTL));
     drafts.save(draft);
@@ -136,10 +161,20 @@ public class AssistantDraftService {
   }
 
   /** What the card sends to complete missing data. */
-  public record Completion(String paymentMethod, String cardBrand, String email) {}
+  public record Completion(
+      String paymentMethod,
+      String cardBrand,
+      String email,
+      /** APPOINTMENT: another slot (ISO instant) and, optionally, another professional. */
+      String startAt,
+      Long professionalId) {}
 
+  /**
+   * @param ownProfessionalId set for a PROFESSIONAL: she can only move an appointment onto herself
+   */
   @Transactional
-  public AssistantDraftDto complete(long tenantId, long userId, UUID id, Completion completion) {
+  public AssistantDraftDto complete(
+      long tenantId, long userId, Long ownProfessionalId, UUID id, Completion completion) {
     AssistantDraft d = load(tenantId, userId, id);
     if (effective(d) != AssistantDraftStatus.DRAFT) {
       throw new AssistantDraftException(HttpStatus.CONFLICT, notActiveCode(d));
@@ -152,6 +187,19 @@ public class AssistantDraftService {
               completion.cardBrand(),
               completion.email());
       d.setPayload(toJson(updated));
+    } else if (completion.startAt() != null) {
+      AppointmentDraftPayload old = fromJson(d, AppointmentDraftPayload.class);
+      Long professionalId =
+          ownProfessionalId != null ? ownProfessionalId : completion.professionalId();
+      try {
+        AppointmentDraftPayload moved =
+            appointmentDrafts.reschedule(
+                tenantId, old, Instant.parse(completion.startAt()), professionalId, Instant.now());
+        d.setPayload(toJson(moved));
+        d.setPayloadHash(AssistantAppointmentDrafts.fingerprint(moved));
+      } catch (AssistantTools.ToolException e) {
+        throw refused(e, d);
+      }
     }
     d.setUpdatedAt(Instant.now());
     drafts.save(d);
@@ -170,16 +218,11 @@ public class AssistantDraftService {
 
   /**
    * Confirms a draft. Errors are {@link AssistantDraftException}s (or the codes the regular
-   * invoicing road already throws); a refused confirmation leaves the draft as it was.
+   * invoicing / booking roads already throw); a refused confirmation leaves the draft as it was.
    */
   public ConfirmResult confirm(FemmeUserPrincipal principal, UUID id) {
-    if (!principal.isAdmin()) {
-      // Today only invoices exist as drafts and /api/invoices is ADMIN-only for everyone.
-      throw new AssistantDraftException(HttpStatus.FORBIDDEN, "FORBIDDEN");
-    }
     long tenantId = principal.getTenantId();
-    long userId = principal.getUserId();
-    Outcome outcome = tx.execute(status -> confirmInTransaction(tenantId, userId, id));
+    Outcome outcome = tx.execute(status -> confirmInTransaction(principal, tenantId, id));
     if (outcome instanceof Repriced r) {
       // Committed (the draft now carries the new prices): tell the person, who must look again.
       throw new AssistantDraftException(
@@ -188,8 +231,16 @@ public class AssistantDraftService {
     return ((Confirmed) outcome).result();
   }
 
-  private Outcome confirmInTransaction(long tenantId, long userId, UUID id) {
+  private Outcome confirmInTransaction(FemmeUserPrincipal principal, long tenantId, UUID id) {
+    long userId = principal.getUserId();
     AssistantDraft d = load(tenantId, userId, id);
+    // Invoices are administration's; an appointment is administration's or the professional's own.
+    if (d.getType() == AssistantDraftType.INVOICE && !principal.isAdmin()) {
+      throw new AssistantDraftException(HttpStatus.FORBIDDEN, "FORBIDDEN");
+    }
+    if (d.getType() == AssistantDraftType.APPOINTMENT) {
+      requireMayBook(principal, fromJson(d, AppointmentDraftPayload.class));
+    }
     switch (d.getStatus()) {
       case CONFIRMED -> throw alreadyConfirmed(d);
       case DRAFT -> {
@@ -202,6 +253,94 @@ public class AssistantDraftService {
       default ->
           throw new AssistantDraftException(HttpStatus.CONFLICT, "ASSISTANT_DRAFT_NOT_ACTIVE");
     }
+    return d.getType() == AssistantDraftType.INVOICE
+        ? confirmInvoice(tenantId, userId, d)
+        : confirmAppointment(principal, tenantId, userId, d);
+  }
+
+  private static void requireMayBook(FemmeUserPrincipal principal, AppointmentDraftPayload p) {
+    if (principal.isAdmin()) {
+      return;
+    }
+    if (!principal.isProfessional() || principal.getProfessionalId() == null) {
+      throw new AssistantDraftException(HttpStatus.FORBIDDEN, "FORBIDDEN");
+    }
+    if (!principal.getProfessionalId().equals(p.professionalId())) {
+      throw new AssistantDraftException(
+          HttpStatus.FORBIDDEN, "APPOINTMENT_NOT_OWNED_BY_PROFESSIONAL");
+    }
+  }
+
+  private Outcome confirmAppointment(
+      FemmeUserPrincipal principal, long tenantId, long userId, AssistantDraft d) {
+    AppointmentDraftPayload payload = fromJson(d, AppointmentDraftPayload.class);
+    if (drafts.claim(d.getId(), tenantId, userId, Instant.now()) == 0) {
+      AssistantDraft current = load(tenantId, userId, d.getId());
+      throw current.getStatus() == AssistantDraftStatus.CONFIRMED
+          ? alreadyConfirmed(current)
+          : new AssistantDraftException(HttpStatus.CONFLICT, notActiveCode(current));
+    }
+    AssistantDraft claimed = load(tenantId, userId, d.getId());
+    AppointmentResponse appointment;
+    try {
+      // Still bookable now? (inactive professional/service, slot taken meanwhile)
+      appointmentDrafts.revalidate(tenantId, payload, Instant.now());
+      appointment = appointmentService.create(tenantId, appointmentDrafts.toRequest(payload));
+    } catch (AssistantTools.ToolException e) {
+      throw refused(e, claimed);
+    } catch (ResponseStatusException e) {
+      if ("APPOINTMENT_OVERLAP".equals(e.getReason())) {
+        // Lost the race between the check and the insert: same answer, with alternatives.
+        throw refused(
+            new AssistantTools.ToolException(
+                "SLOT_TAKEN",
+                Map.of(
+                    "alternatives",
+                    appointmentDrafts.alternatives(
+                        tenantId,
+                        java.time.LocalDate.parse(payload.date()),
+                        payload.durationMinutes(),
+                        payload.professionalId(),
+                        Instant.now()))),
+            claimed);
+      }
+      throw e;
+    }
+    claimed.setStatus(AssistantDraftStatus.CONFIRMED);
+    claimed.setResult("APPOINTMENT", appointment.id());
+    claimed.setUpdatedAt(Instant.now());
+    drafts.save(claimed);
+    log.info(
+        "assistant draft confirmed tenantId={} type=APPOINTMENT appointmentId={}",
+        tenantId,
+        appointment.id());
+    return new Confirmed(
+        new ConfirmResult(
+            "APPOINTMENT",
+            null,
+            null,
+            null,
+            appointment.id(),
+            appointment.startAt(),
+            appointment.professionalId(),
+            toDto(claimed)));
+  }
+
+  /**
+   * A refusal of a draft operation: {@code SLOT_TAKEN} becomes 409 {@code ASSISTANT_SLOT_TAKEN}
+   * with the alternatives and the draft; any other tool code is a plain 409 with that code.
+   */
+  private AssistantDraftException refused(AssistantTools.ToolException e, AssistantDraft d) {
+    if ("SLOT_TAKEN".equals(e.getMessage())) {
+      Map<String, Object> extra = new LinkedHashMap<>(e.extra());
+      extra.put("draft", toDto(d).withStatus("DRAFT"));
+      return new AssistantDraftException(HttpStatus.CONFLICT, "ASSISTANT_SLOT_TAKEN", extra);
+    }
+    return new AssistantDraftException(HttpStatus.CONFLICT, e.getMessage());
+  }
+
+  private Outcome confirmInvoice(long tenantId, long userId, AssistantDraft d) {
+    UUID id = d.getId();
     InvoiceDraftPayload payload = fromJson(d, InvoiceDraftPayload.class);
     List<String> missing = invoiceDrafts.missing(tenantId, payload);
     if (!missing.isEmpty()) {

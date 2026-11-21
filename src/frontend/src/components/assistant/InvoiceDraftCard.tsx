@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Alert, Badge, Button, Input, Label } from "@design-system";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import type { AssistantDraftCard } from "../../assistant/AssistantContext";
-import type { AssistantDraftStatus } from "../../api/assistant";
+import type { AssistantDraftStatus, DraftPatch, InvoiceDraftPayload } from "../../api/assistant";
 import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { ACTION_BUTTON } from "../actionButtons";
 
@@ -67,16 +67,15 @@ export function InvoiceDraftCard({
   card: AssistantDraftCard;
   onConfirm: (id: string) => void;
   onDiscard: (id: string) => void;
-  onComplete: (
-    id: string,
-    patch: { paymentMethod?: string; cardBrand?: string; email?: string },
-  ) => void;
+  onComplete: (id: string, patch: DraftPatch) => void;
   onViewInvoice: (invoiceId: number) => void;
   onShareInvoice: (invoiceId: number) => void;
+  /** Not used by invoices; the shared card actions carry it. */
+  onViewAppointment?: (appointmentId: number, date: string) => void;
 }) {
   const { t } = useTranslation();
   const { draft, busy, error, result, priceChanged } = card;
-  const payload = draft.payload;
+  const payload = draft.payload as InvoiceDraftPayload;
   const [email, setEmail] = useState(payload.email ?? "");
 
   const issued = draft.status === "CONFIRMED" && result != null;

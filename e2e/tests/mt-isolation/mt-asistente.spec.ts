@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-import { API_BASE, apiBaseUrl, authHeaders, loginPlatformAdminApi } from "../../fixtures/api";
+import {
+  API_BASE,
+  apiBaseUrl,
+  authHeaders,
+  loginPlatformAdminApi,
+  putProfessionalSchedules,
+} from "../../fixtures/api";
 import {
   ASSISTANT_FLAG,
   askAssistantApi,
@@ -10,8 +16,11 @@ import {
   confirmDraftApi,
   currentConversationApi,
   enableAssistantGlobally,
+  optionLabels,
+  proposeAppointmentViaApi,
   proposeViaApi,
   restoreAssistantGlobal,
+  workingWeek,
 } from "../../fixtures/assistant";
 import { setTenantFlag } from "../../fixtures/commissions";
 import { getMtWorld, mtLoginToken, type MtTenant } from "../../fixtures/mt/world";
@@ -175,6 +184,69 @@ test.describe("mt-asistente · aislamiento del asistente conversacional", () => 
     });
     const otherService = await proposeViaApi(request, tokenA, `invoice ${names.A} for ${privateName}`);
     expect(otherService.draft).toBeNull();
+  });
+
+  test("HU-AST-05 AC8 · la disponibilidad solo incluye profesionales del propio salón", async ({ request }) => {
+    const proA = world.tenantA.professionalIds[0];
+    const proB = world.tenantB.professionalIds[0];
+    await putProfessionalSchedules(request, tokenA, proA, workingWeek());
+    await putProfessionalSchedules(request, tokenB, proB, workingWeek());
+    const serviceA = world.tenantA.catalog.serviceNames[0];
+    const convA = await currentConversationApi(request, tokenA);
+
+    const res = await askAssistantApi(request, tokenA, convA.conversationId, `availability tomorrow for ${serviceA}`);
+
+    expect(res.status).toBe(200);
+    expect(optionLabels(res).length).toBeGreaterThan(0);
+    const chips = JSON.stringify(res.events.filter((e) => e.event === "card.options"));
+    // Every chip carries a professional id: none of them is salon B's.
+    expect(chips).not.toMatch(new RegExp(`profesional ${proB}[,)]`));
+    expect(chips).toMatch(new RegExp(`profesional ${proA}[,)]`));
+  });
+
+  test("HU-AST-06 AC14 · un borrador de turno es de su salón: otro salón no puede confirmarlo, completarlo ni descartarlo", async ({
+    request,
+  }) => {
+    const serviceA = world.tenantA.catalog.serviceNames[0];
+    const { draft } = await proposeAppointmentViaApi(
+      request,
+      tokenA,
+      `book ${names.A} for ${serviceA} tomorrow at 10:00`,
+    );
+    expect(draft, "salon A gets its own appointment draft").not.toBeNull();
+
+    expect((await confirmDraftApi(request, tokenB, draft!.id)).status()).toBe(404);
+    const patch = await request.patch(`${API_BASE}/api/assistant/drafts/${draft!.id}`, {
+      headers: authHeaders(tokenB),
+      data: { startAt: new Date(Date.now() + 3 * 86_400_000).toISOString() },
+    });
+    expect(patch.status()).toBe(404);
+    const discard = await request.post(`${API_BASE}/api/assistant/drafts/${draft!.id}/discard`, {
+      headers: authHeaders(tokenB),
+    });
+    expect(discard.status()).toBe(404);
+  });
+
+  test("HU-AST-06 AC14 · el asistente no arma turnos con clientes ni profesionales de otro salón", async ({ request }) => {
+    const serviceA = world.tenantA.catalog.serviceNames[0];
+
+    const otherClient = await proposeAppointmentViaApi(
+      request,
+      tokenA,
+      `book ${names.B} for ${serviceA} tomorrow at 10:00`,
+    );
+    expect(otherClient.draft).toBeNull();
+    expect(otherClient.answer.text).toContain("No encontré");
+
+    // The professional of salon A is the only one A can book: an unknown name finds nobody.
+    const { conversationId } = await currentConversationApi(request, tokenA);
+    const ghost = await askAssistantApi(
+      request,
+      tokenA,
+      conversationId,
+      `book ${names.A} for ${serviceA} tomorrow at 10:00 with Profesional Inexistente ${tag}`,
+    );
+    expect(ghost.events.some((e) => e.event === "card.draft")).toBe(false);
   });
 
   test("sin sesión no hay asistente", async ({ request }) => {

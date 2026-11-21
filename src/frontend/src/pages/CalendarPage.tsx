@@ -405,6 +405,28 @@ export default function CalendarPage() {
     }
   }, [appointments, pendingOpenApptId, navigate, location.pathname]);
 
+  // The same route navigated to AGAIN with a new target (e.g. «Ver en la agenda» from the assistant
+  // while the agenda is already open): the state initializers above only run on mount, so follow
+  // the new state here.
+  const appliedLocationKey = useRef(location.key);
+  useEffect(() => {
+    if (appliedLocationKey.current === location.key) return;
+    appliedLocationKey.current = location.key;
+    const target = location.state as { selectedDate?: string; openAppointmentId?: number } | null;
+    if (!target) return;
+    if (target.selectedDate) {
+      const d = new Date(target.selectedDate + "T00:00:00");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (!isNaN(d.getTime())) setCursor(d);
+    }
+    if (target.openAppointmentId != null) {
+      setPendingOpenApptId(target.openAppointmentId);
+      // The week may already be loaded without an appointment created a moment ago (the assistant
+      // just booked it): reload so the pending id can be found.
+      fetchAppointments();
+    }
+  }, [location.key, location.state, fetchAppointments]);
+
   // ── Navigation ──────────────────────────────────────────────────────────────
   const activeView: "day" | "week" = isMobile ? "day" : view;
   const stepDays = activeView === "week" ? 7 : 1;

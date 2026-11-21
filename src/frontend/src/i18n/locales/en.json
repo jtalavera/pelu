@@ -1625,6 +1625,25 @@
         "priceChanged": "A price changed since this draft was prepared. Review the new total and confirm again.",
         "inactive": "This draft is no longer active."
       },
+      "appointmentDraft": {
+        "title": "Appointment draft",
+        "bookedTitle": "Appointment booked",
+        "bookedBadge": "Booked",
+        "client": "Client",
+        "service": "Service",
+        "when": "When",
+        "professional": "Professional",
+        "duration": "Duration",
+        "minutes": "{{count}} min",
+        "outsideHours": "This time is outside {{professional}}'s working hours. You can still book it.",
+        "confirm": "Confirm and book",
+        "confirming": "Booking…",
+        "pickAnother": "That time is taken. Pick another:",
+        "viewInAgenda": "View in the agenda"
+      },
+      "options": {
+        "SLOT": "Pick a time"
+      },
       "tool": {
         "buscar_clientes": "Searching clients…",
         "listar_servicios": "Looking up services…",
@@ -3612,6 +3631,7 @@
       }
     },
     "apiErrors": {
+      "ASSISTANT_SLOT_TAKEN": "That time was just taken. Pick another free time below.",
       "ASSISTANT_DRAFT_NOT_FOUND": "That draft no longer exists.",
       "ASSISTANT_DRAFT_EXPIRED": "This draft expired (drafts are valid for 24 hours). Ask the assistant for a new one.",
       "ASSISTANT_DRAFT_NOT_ACTIVE": "This draft was replaced or discarded and can no longer be confirmed.",

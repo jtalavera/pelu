@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Button, Heading } from "@design-system";
 import { useAssistant } from "../../assistant/AssistantContext";
@@ -36,6 +37,7 @@ export function AssistantPanel() {
   const isTabletUp = useMediaQuery("(min-width: 768px)");
   // The issued invoice opens in its own dialog (over the panel): «Ver factura», and «Compartir con
   // el cliente», which opens straight into its Compartir panel.
+  const navigate = useNavigate();
   const [invoiceModal, setInvoiceModal] = useState<{ id: number; share: boolean } | null>(null);
   if (!a.enabled || !a.open) return null;
 
@@ -109,6 +111,12 @@ export function AssistantPanel() {
           onComplete: (id, patch) => void a.completeDraft(id, patch),
           onViewInvoice: (id) => setInvoiceModal({ id, share: false }),
           onShareInvoice: (id) => setInvoiceModal({ id, share: true }),
+          // «Ver en la agenda»: the agenda opens on that day with the appointment's detail. On a
+          // phone the panel covers the whole screen, so it steps aside; elsewhere it stays open.
+          onViewAppointment: (id, date) => {
+            navigate("/app/calendar", { state: { selectedDate: date, openAppointmentId: id } });
+            if (fullScreen) a.setOpen(false);
+          },
         }}
       />
       <AssistantComposer

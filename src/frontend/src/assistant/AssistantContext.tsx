@@ -22,6 +22,8 @@ import {
   type AssistantDraftStatus,
   type AssistantStreamEvent,
   type DraftConfirmResult,
+  type DraftPatch,
+  type SlotAlternative,
 } from "../api/assistant";
 import { isPinSession } from "../auth/sharedDevice";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
@@ -40,9 +42,18 @@ export type AssistantDraftCard = {
   result?: DraftConfirmResult | null;
   /** The price changed since the proposal: the card shows the new total and asks to review. */
   priceChanged?: boolean;
+  /** The slot was taken: other free times to move the draft to. */
+  alternatives?: SlotAlternative[];
 };
 
-export type AssistantCard = AssistantDraftCard;
+/** Tappable options (free times…): tapping one sends its `value` as the person's message. */
+export type AssistantOptionsCard = {
+  kind: "options";
+  optionsKind: string;
+  options: { label: string; value: string }[];
+};
+
+export type AssistantCard = AssistantDraftCard | AssistantOptionsCard;
 
 export type AssistantUiMessage = {
   key: string;
@@ -78,10 +89,7 @@ export type AssistantState = {
   /** The card's buttons: nothing else in the system turns a draft into data. */
   confirmDraft: (id: string) => Promise<void>;
   discardDraft: (id: string) => Promise<void>;
-  completeDraft: (
-    id: string,
-    patch: { paymentMethod?: string; cardBrand?: string; email?: string },
-  ) => Promise<void>;
+  completeDraft: (id: string, patch: DraftPatch) => Promise<void>;
 };
 
 const DISABLED: AssistantState = {
@@ -134,9 +142,10 @@ function mapDraftCard(
   id: string,
   fn: (card: AssistantDraftCard) => AssistantDraftCard,
 ): AssistantUiMessage[] {
+  const isIt = (c: AssistantCard): c is AssistantDraftCard => c.kind === "draft" && c.draft.id === id;
   return messages.map((m) =>
-    m.cards?.some((c) => c.draft.id === id)
-      ? { ...m, cards: m.cards.map((c) => (c.draft.id === id ? fn(c) : c)) }
+    m.cards?.some(isIt)
+      ? { ...m, cards: m.cards.map((c) => (isIt(c) ? fn(c) : c)) }
       : m,
   );
 }
@@ -269,8 +278,28 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
                     ? {
                         ...m,
                         cards: [
-                          ...(m.cards ?? []).filter((c) => c.draft.id !== event.draft.id),
+                          ...(m.cards ?? []).filter(
+                            (c) => c.kind !== "draft" || c.draft.id !== event.draft.id,
+                          ),
                           { kind: "draft" as const, draft: event.draft },
+                        ],
+                      }
+                    : m,
+                ),
+              );
+              break;
+            case "card.options":
+              // Tappable options (free times…) join the answer; a newer set replaces the older one.
+              setMessages((all) =>
+                all.map((m) =>
+                  m.key === answerKey
+                    ? {
+                        ...m,
+                        cards: [
+                          ...(m.cards ?? []).filter(
+                            (c) => c.kind !== "options" || c.optionsKind !== event.kind,
+                          ),
+                          { kind: "options" as const, optionsKind: event.kind, options: event.options },
                         ],
                       }
                     : m,
@@ -367,6 +396,17 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
             }));
             return;
           }
+          if (e.code === "ASSISTANT_SLOT_TAKEN" && draft) {
+            // Someone took the time meanwhile: the draft is still there, with other free times.
+            patchCard(id, (c) => ({
+              ...c,
+              busy: false,
+              draft,
+              error: e,
+              alternatives: (body.alternatives as SlotAlternative[] | undefined) ?? [],
+            }));
+            return;
+          }
           if (e.code === "ASSISTANT_PRICE_CHANGED" && draft) {
             patchCard(id, (c) => ({ ...c, busy: false, draft, priceChanged: true }));
             return;
@@ -408,12 +448,28 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   );
 
   const completeDraft = useCallback(
-    async (id: string, patch: { paymentMethod?: string; cardBrand?: string; email?: string }) => {
+    async (id: string, patch: DraftPatch) => {
       patchCard(id, (c) => ({ ...c, busy: true, error: null }));
       try {
         const draft = await completeAssistantDraft(id, patch);
-        patchCard(id, (c) => ({ ...c, busy: false, draft, priceChanged: false }));
+        patchCard(id, (c) => ({
+          ...c,
+          busy: false,
+          draft,
+          priceChanged: false,
+          alternatives: undefined,
+        }));
       } catch (e) {
+        if (e instanceof AssistantApiError && e.code === "ASSISTANT_SLOT_TAKEN") {
+          const body = e.body;
+          patchCard(id, (c) => ({
+            ...c,
+            busy: false,
+            error: e,
+            alternatives: (body.alternatives as SlotAlternative[] | undefined) ?? [],
+          }));
+          return;
+        }
         patchCard(id, (c) => ({ ...c, busy: false, error: asError(e) }));
       }
     },
@@ -423,7 +479,9 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const pendingDraft = useMemo(
     () =>
       messages.some((m) =>
-        m.cards?.some((c) => ACTIVE.includes(c.draft.status) && c.result == null),
+        m.cards?.some(
+          (c) => c.kind === "draft" && ACTIVE.includes(c.draft.status) && c.result == null,
+        ),
       ),
     [messages],
   );

@@ -288,7 +288,7 @@ test.describe("HU-AST-02 · Consultar datos por chat", () => {
     await expect(assistantAnswers(page).last()).toContainText("turnos del día");
   });
 
-  test("AC10 · sin confirmación el asistente no cambia ningún dato: pedir facturar solo prepara un borrador", async ({
+  test("AC10 · sin confirmación el asistente no cambia ningún dato: pedir facturar o agendar solo prepara un borrador", async ({
     page,
     request,
   }) => {
@@ -317,6 +317,13 @@ test.describe("HU-AST-02 · Consultar datos por chat", () => {
     await askAssistantUi(page, `invoice ${clientOne.fullName} for ${salon.serviceFullName}`);
     await expect(assistantAnswers(page).last()).toContainText("Preparé el borrador", { timeout: 20_000 });
     // It is a draft on a card, waiting for a person to confirm.
+    await expect(page.getByTestId("assistant-draft-card").last()).toHaveAttribute("data-status", "DRAFT");
+
+    // Booking an appointment is also only a draft (HU-AST-06).
+    await askAssistantUi(page, `book ${clientOne.fullName} for ${salon.serviceFullName} tomorrow at 10:00`);
+    await expect(page.getByTestId("assistant-draft-card").last()).toHaveAttribute("data-type", "APPOINTMENT", {
+      timeout: 20_000,
+    });
     await expect(page.getByTestId("assistant-draft-card").last()).toHaveAttribute("data-status", "DRAFT");
 
     expect(await listTomorrow()).toEqual(appointmentsBefore);
