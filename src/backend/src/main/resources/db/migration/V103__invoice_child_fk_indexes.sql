@@ -3,7 +3,7 @@
 -- CPU consumers in the staging load test (loadtest-V99-t10-s0 ramp, 2026-11-15), run once per
 -- invoice by the invoice list, PDF and issue flows. invoice_tips already has the equivalent index
 -- (V88, ix_invoice_tips_invoice).
--- Versioned V101: develop already holds V100 (commission groups).
+-- Versioned V103: V101 (commission simple rules, Java) and V102 (appointments index) are taken.
 IF NOT EXISTS (SELECT 1 FROM sys.indexes
                WHERE name = N'ix_invoice_lines_invoice' AND object_id = OBJECT_ID(N'invoice_lines'))
   CREATE INDEX ix_invoice_lines_invoice ON invoice_lines(invoice_id);
