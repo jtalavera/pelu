@@ -278,4 +278,34 @@ test.describe("HU-AST-01 · Abrir el asistente desde cualquier pantalla", () => 
       expect(box.height).toBeGreaterThanOrEqual(43.9);
     }
   });
+
+  test("AC11 · la caja de texto crece hasta 5 líneas, luego se desplaza, y vuelve a una línea al enviar", async ({
+    page,
+  }) => {
+    await loginAsDemo(page);
+    await expect(page.getByTestId("topbar-assistant")).toBeVisible();
+    await openAssistantPanel(page);
+    await startNewConversationUi(page);
+    const input = page.getByTestId("assistant-input");
+    const metrics = () =>
+      input.evaluate((el) => ({ height: el.clientHeight + 2, overflows: el.scrollHeight > el.clientHeight }));
+
+    const oneLine = (await metrics()).height;
+    expect(oneLine).toBeLessThan(50);
+
+    await input.fill("uno\ndos\ntres\ncuatro\ncinco");
+    const five = await metrics();
+    expect(five.height).toBeGreaterThan(oneLine + 60);
+    expect(five.overflows).toBe(false);
+
+    await input.fill("1\n2\n3\n4\n5\n6\n7\n8");
+    const eight = await metrics();
+    expect(eight.height).toBeLessThanOrEqual(five.height + 1);
+    expect(eight.overflows).toBe(true);
+
+    await input.fill("professionals");
+    await page.getByTestId("assistant-send").click();
+    await expect(input).toHaveValue("");
+    expect((await metrics()).height).toBeLessThan(50);
+  });
 });

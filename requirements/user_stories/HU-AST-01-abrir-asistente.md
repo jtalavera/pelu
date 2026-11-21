@@ -40,6 +40,7 @@ El asistente es un panel lateral que se abre desde la cabecera. En esta fase es 
 8. **Nueva conversación — Empezar de cero.** El botón «Nueva conversación» vacía el panel y vuelve a mostrar la bienvenida. La conversación anterior ya no se puede continuar.
 9. **Historial — Al recargar.** Al recargar la página y volver a abrir el asistente se ve la conversación actual con sus mensajes anteriores.
 10. **Táctil — Objetivos de 44 px.** En teléfono, el botón de la cabecera, «Volver», «Nueva conversación», las sugerencias y «Enviar» miden al menos 44 × 44 px.
+11. **Caja de texto — Crece hasta 5 líneas.** La caja de mensaje arranca de una línea y crece al escribir (o dictar) varias líneas con Shift + Enter, hasta mostrar 5 líneas completas sin barra de desplazamiento. Pasadas las 5 líneas deja de crecer y se desplaza por dentro. Al enviar vuelve a una línea.
 
 ---
 

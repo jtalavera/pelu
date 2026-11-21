@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Button, Textarea } from "@design-system";
-import type { DictationEngine, DictationErrorCode } from "../../assistant/dictation";
+import {
+  prewarmDictation,
+  type DictationEngine,
+  type DictationErrorCode,
+} from "../../assistant/dictation";
 import { useSpeechDictation } from "../../hooks/useSpeechDictation";
 import { MicIcon, SendIcon, StopIcon } from "./AssistantIcons";
 
@@ -59,6 +63,23 @@ export function AssistantComposer({
   useEffect(() => {
     if (!disabled) inputRef.current?.focus();
   }, [disabled]);
+
+  // The box grows with the message up to 5 lines (CSS max-h caps it; past that it scrolls), and goes
+  // back to one line once it is emptied (sent). Dictation fills it too, so this follows `text`.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    if (el.scrollHeight > 0) el.style.height = `${el.scrollHeight + (el.offsetHeight - el.clientHeight)}px`;
+  }, [text]);
+
+  // Dictating starts faster if the voice SDK and token are already here: get them ready as soon as
+  // the panel opens and again when the person nears the microphone button (both are cached, so
+  // repeating this costs nothing). Tests that inject their own engine have nothing to prepare.
+  const prewarm = () => {
+    if (!dictationEngine) prewarmDictation();
+  };
+  useEffect(prewarm, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The assistant is answering (or the conversation is being replaced): the microphone goes off.
   useEffect(() => {
@@ -137,7 +158,7 @@ export function AssistantComposer({
             put(e.target.value);
           }}
           onKeyDown={onKeyDown}
-          className="min-h-11 max-h-32 min-w-0 flex-1 resize-none py-2.5"
+          className="max-h-[122px] min-h-11 min-w-0 flex-1 resize-none py-2.5"
         />
         <Button
           type="button"
@@ -145,6 +166,9 @@ export function AssistantComposer({
           data-testid="assistant-mic"
           aria-label={listening ? t("femme.assistant.dictation.stop") : t("femme.assistant.dictation.start")}
           aria-pressed={listening}
+          onPointerEnter={prewarm}
+          onFocus={prewarm}
+          onTouchStart={prewarm}
           disabled={disabled || starting}
           onClick={toggleDictation}
           className="min-h-11 min-w-11 shrink-0 px-3 sm:h-11 sm:min-h-11 sm:min-w-11"

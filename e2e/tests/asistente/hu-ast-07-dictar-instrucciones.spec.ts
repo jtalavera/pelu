@@ -7,6 +7,7 @@ import {
   assistantPanel,
   currentConversationApi,
   dictatedMarks,
+  dictationPrewarms,
   dictationStarts,
   enableAssistantGlobally,
   failDictation,
@@ -249,6 +250,26 @@ test.describe("HU-AST-07 · Dictar instrucciones al asistente", () => {
 
     await expect.poll(() => microphoneOpen(page)).toBe(false);
     expect(await dictationStarts(page)).toBe(starts);
+  });
+
+  test("AC10 · el dictado se precalienta al abrir el panel y al acercarse al micrófono, sin abrirlo ni escuchar", async ({
+    page,
+  }) => {
+    await open(page);
+
+    await expect.poll(() => dictationPrewarms(page)).toBeGreaterThanOrEqual(1);
+    const afterOpen = await dictationPrewarms(page);
+
+    await micButton(page).hover();
+    await expect.poll(() => dictationPrewarms(page)).toBeGreaterThan(afterOpen);
+
+    // Getting ready never opens the microphone nor starts listening: only the tap does.
+    expect(await microphoneOpen(page)).toBe(false);
+    expect(await dictationStarts(page)).toBe(0);
+    await expect(micButton(page)).toHaveAttribute("aria-pressed", "false");
+
+    await startDictating(page);
+    expect(await dictationStarts(page)).toBe(1);
   });
 
   test("AC9 · el token de voz lo emite el backend a quien puede usar el asistente, sin caché", async ({ request }) => {

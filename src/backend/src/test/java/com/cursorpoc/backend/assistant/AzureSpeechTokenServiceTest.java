@@ -9,6 +9,11 @@ import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +27,7 @@ class AzureSpeechTokenServiceTest {
   private final AtomicReference<String> method = new AtomicReference<>();
   private final AtomicReference<String> path = new AtomicReference<>();
   private final AtomicReference<String> authorization = new AtomicReference<>();
+  private final AtomicInteger calls = new AtomicInteger();
   private volatile int status = 200;
   private volatile String body = "speech.jwt.token\n";
 
@@ -31,6 +37,7 @@ class AzureSpeechTokenServiceTest {
     server.createContext(
         "/",
         exchange -> {
+          calls.incrementAndGet();
           method.set(exchange.getRequestMethod());
           path.set(exchange.getRequestURI().getPath());
           authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
@@ -127,5 +134,78 @@ class AzureSpeechTokenServiceTest {
 
     assertThatThrownBy(() -> service("centralus").issue())
         .isInstanceOf(SpeechUnavailableException.class);
+  }
+
+  /** A clock the test moves by hand. */
+  private static final class MutableClock extends Clock {
+    private Instant now = Instant.parse("2026-11-21T12:00:00Z");
+
+    void advance(Duration d) {
+      now = now.plus(d);
+    }
+
+    @Override
+    public java.time.ZoneId getZone() {
+      return ZoneOffset.UTC;
+    }
+
+    @Override
+    public Clock withZone(java.time.ZoneId zone) {
+      return this;
+    }
+
+    @Override
+    public Instant instant() {
+      return now;
+    }
+  }
+
+  private AzureSpeechTokenService cachedService(MutableClock clock) {
+    return new AzureSpeechTokenService(
+        endpoint, "centralus", () -> "entra-token", HttpClient.newHttpClient(), clock);
+  }
+
+  @Test
+  void theTokenIsKept_soDictatingAgainDoesNotCallAzureAgain() {
+    MutableClock clock = new MutableClock();
+    AzureSpeechTokenService service = cachedService(clock);
+
+    SpeechToken first = service.issue();
+    clock.advance(Duration.ofMinutes(2));
+    SpeechToken second = service.issue();
+
+    assertThat(calls.get()).isEqualTo(1);
+    assertThat(second.token()).isEqualTo(first.token());
+    // Told how much is LEFT (9 min issued - 2 min elapsed), never the full 9 minutes again.
+    assertThat(first.expiresInSeconds()).isEqualTo(540);
+    assertThat(second.expiresInSeconds()).isEqualTo(420);
+  }
+
+  @Test
+  void aTokenWithLessThanFourMinutesLeft_isRenewed() {
+    MutableClock clock = new MutableClock();
+    AzureSpeechTokenService service = cachedService(clock);
+
+    service.issue();
+    clock.advance(Duration.ofSeconds(540 - 239)); // 239 s left: not enough to listen 2 minutes
+    body = "second.token";
+    SpeechToken renewed = service.issue();
+
+    assertThat(calls.get()).isEqualTo(2);
+    assertThat(renewed.token()).isEqualTo("second.token");
+    assertThat(renewed.expiresInSeconds()).isEqualTo(540);
+  }
+
+  @Test
+  void aFailure_isNotKept_andTheNextCallTriesAgain() {
+    MutableClock clock = new MutableClock();
+    AzureSpeechTokenService service = cachedService(clock);
+    status = 503;
+
+    assertThatThrownBy(service::issue).isInstanceOf(SpeechUnavailableException.class);
+    status = 200;
+
+    assertThat(service.issue().token()).isEqualTo("speech.jwt.token");
+    assertThat(calls.get()).isEqualTo(2);
   }
 }

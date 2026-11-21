@@ -5,7 +5,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +19,12 @@ import org.slf4j.LoggerFactory;
  *
  * <p>The issued token lasts 10 minutes; the browser is told 9 so it renews before it expires. The
  * token is never logged.
+ *
+ * <p>The token is kept for a few minutes and handed to every caller: asking Azure on each dictation
+ * (an Entra token plus a round trip to {@code issueToken}) is what made the microphone slow to
+ * start. It is a Speech-only token that carries no tenant or user data, and every request to the
+ * endpoint is still authenticated and flag-checked before reaching this service. Each caller is
+ * told how much time the token has <em>left</em>, never the full 9 minutes.
  */
 public class AzureSpeechTokenService implements SpeechTokenProvider {
 
@@ -28,7 +36,17 @@ public class AzureSpeechTokenService implements SpeechTokenProvider {
   private final String endpoint;
   private final String region;
   private final Supplier<String> entraToken;
+
+  /**
+   * A cached token is only handed out while at least this long is left, so the browser can listen
+   * for its 2-minute maximum (plus margin) with it.
+   */
+  static final Duration MIN_REMAINING = Duration.ofMinutes(4);
+
   private final HttpClient http;
+  private final Clock clock;
+  private SpeechToken cached;
+  private Instant cachedExpiresAt = Instant.EPOCH;
 
   /**
    * @param endpoint the Foundry account endpoint ({@code
@@ -39,6 +57,12 @@ public class AzureSpeechTokenService implements SpeechTokenProvider {
    */
   public AzureSpeechTokenService(
       String endpoint, String region, Supplier<String> entraToken, HttpClient http) {
+    this(endpoint, region, entraToken, http, Clock.systemUTC());
+  }
+
+  AzureSpeechTokenService(
+      String endpoint, String region, Supplier<String> entraToken, HttpClient http, Clock clock) {
+    this.clock = clock;
     this.endpoint = endpoint == null ? "" : endpoint.trim();
     this.region = region == null ? "" : region.trim();
     this.entraToken = entraToken;
@@ -46,11 +70,25 @@ public class AzureSpeechTokenService implements SpeechTokenProvider {
   }
 
   @Override
-  public SpeechToken issue() {
+  public synchronized SpeechToken issue() {
     if (endpoint.isEmpty() || region.isEmpty()) {
       throw new SpeechUnavailableException(
           "speech not configured (FEMME_AI_ENDPOINT / FEMME_SPEECH_REGION)");
     }
+    Instant now = clock.instant();
+    if (cached != null && Duration.between(now, cachedExpiresAt).compareTo(MIN_REMAINING) >= 0) {
+      return new SpeechToken(
+          cached.token(),
+          cached.region(),
+          (int) Duration.between(now, cachedExpiresAt).toSeconds());
+    }
+    SpeechToken fresh = requestToken();
+    cached = fresh;
+    cachedExpiresAt = now.plusSeconds(fresh.expiresInSeconds());
+    return fresh;
+  }
+
+  private SpeechToken requestToken() {
     String base = endpoint.endsWith("/") ? endpoint : endpoint + "/";
     try {
       HttpRequest request =

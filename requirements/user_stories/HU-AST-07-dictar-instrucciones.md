@@ -41,6 +41,7 @@ Un mensaje en el que se usó el micrófono se guarda como **«Dictado»** (`inpu
 7. **Errores — Traducidos y sin perder el texto.** Permiso de micrófono denegado, micrófono ausente o en uso, falta de soporte del navegador, servicio de voz no disponible y pérdida de conexión muestran un mensaje traducido en el cuadro de mensaje. El texto escrito o dictado hasta ahí se conserva, se puede seguir escribiendo y reintentar el dictado (el error desaparece al reintentar).
 8. **Micrófono apagado — Nunca queda abierto.** El micrófono se apaga al detener el dictado, al enviar el mensaje, al escribir con el teclado, cuando el asistente empieza a responder, al empezar una conversación nueva, al cerrar el panel y, como límite, a los 2 minutos de escucha.
 9. **Token — Solo con el asistente habilitado.** `GET /api/assistant/speech-token` responde con `{ token, region, expiresInSeconds }` (sin caché) a quien puede usar el asistente (administración y profesionales); sin sesión no responde, con el flag apagado para el salón responde 403 `ASSISTANT_DISABLED`, y si Azure Speech no está disponible 503 `ASSISTANT_SPEECH_UNAVAILABLE`.
+10. **Arranque rápido — Precalentado.** Para que el dictado empiece enseguida, al abrir el panel y al acercarse al botón del micrófono (mouse, foco o toque) la pantalla deja listos el reconocimiento de voz y el token de Voz. Precalentar nunca abre el micrófono ni empieza a escuchar: eso solo ocurre al tocar el botón.
 
 ---
 
@@ -53,6 +54,7 @@ Un mensaje en el que se usó el micrófono se guarda como **«Dictado»** (`inpu
 ## Notas
 
 - **Pruebas automáticas:** Playwright no puede hablar. Los tests usan un dictado simulado (`window.__assistantDictation`, solo en la build de Playwright con `VITE_PLAYWRIGHT=1`) que inyecta texto parcial, frases finales y errores; cubre toda la lógica de la pantalla. La **calidad del reconocimiento real** (micrófono, acento, ruido) no se puede cubrir con un test automático y se prueba a mano.
-- Tests unitarios cubren el intercambio del token de Speech con el backend (`AzureSpeechTokenService`) y la lógica de la pantalla (compositor y hook de dictado).
+- **Rapidez del arranque:** el backend reutiliza el token de Speech unos minutos (informa el tiempo que le queda, nunca el total) y la pantalla lo guarda en memoria mientras alcance para los 2 minutos de escucha; el micrófono, el token y el SDK se piden a la vez y el micrófono se abre una sola vez (se le pasa al SDK el mismo `MediaStream`). En desarrollo, la consola del navegador muestra `[dictation] ready` con los milisegundos de cada tramo. La precarga se cubre con Playwright (contador `prewarms` del dictado simulado); los tiempos reales se miden a mano.
+- Tests unitarios cubren el intercambio y la reutilización del token de Speech con el backend (`AzureSpeechTokenService`), el token en memoria (`speechToken.test.ts`) y la lógica de la pantalla (compositor y hook de dictado).
 - El reconocimiento real se verificó contra el Foundry de dev con audio sintético (inglés `en-US` y español `es-PY`), con un token emitido por el mismo intercambio que hace el backend. Falta la prueba con un micrófono y una persona reales (permiso del navegador, acento, ruido).
 - La infraestructura ya incluye Speech en la cuenta de Foundry y los roles *Cognitive Services User*; el Container App recibe `FEMME_SPEECH_REGION`.

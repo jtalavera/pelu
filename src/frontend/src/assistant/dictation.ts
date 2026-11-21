@@ -1,4 +1,4 @@
-import { getAssistantSpeechToken } from "../api/assistant";
+import { getSpeechToken } from "./speechToken";
 
 /**
  * Dictation (HU-AST-07). One «session» = the microphone listening until it is stopped. The real
@@ -49,12 +49,11 @@ export function speechLocale(language: string): string {
 
 // ── Real engine (Azure AI Speech) ───────────────────────────────────────────────────────────────
 
-/** Asks for the microphone first, so a refusal is told apart from a network/service failure. */
-async function requireMicrophone(): Promise<void> {
+/** Opens the microphone; a refusal is told apart from a network/service failure. */
+async function openMicrophone(): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) throw new DictationError("UNSUPPORTED");
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach((track) => track.stop());
+    return await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch (e) {
     const name = (e as { name?: string } | null)?.name;
     throw new DictationError(
@@ -63,26 +62,64 @@ async function requireMicrophone(): Promise<void> {
   }
 }
 
+type Sdk = typeof import("microsoft-cognitiveservices-speech-sdk");
+
+let sdkLoad: Promise<Sdk> | null = null;
+
+/** The SDK chunk, downloaded once; a failed download is retried on the next attempt. */
+function loadSdk(): Promise<Sdk> {
+  sdkLoad ??= import("microsoft-cognitiveservices-speech-sdk").catch((e) => {
+    sdkLoad = null;
+    throw e;
+  });
+  return sdkLoad;
+}
+
+/**
+ * Gets ready before the person taps the microphone (panel opened, pointer or focus on the
+ * button): the SDK is downloaded and the token requested, so tapping only has to open the
+ * microphone and connect. Never throws, never opens the microphone.
+ */
+export function prewarmDictation(): void {
+  if (SIMULATED) {
+    if (window.__assistantDictation) window.__assistantDictation.prewarms += 1;
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) return;
+  void loadSdk().catch(() => {});
+  void getSpeechToken().catch(() => {});
+}
+
 const azureEngine: DictationEngine = async (language, handlers) => {
-  await requireMicrophone();
-  let speech: { token: string; region: string };
-  try {
-    speech = await getAssistantSpeechToken();
-  } catch {
+  const t0 = performance.now();
+  // Microphone, token and SDK are independent: they start together and the slowest one sets the
+  // pace (before, each waited for the previous one). The microphone's own failure is reported
+  // first, since «no permission» says more than «no network».
+  const [mic, tokenResult, sdkResult] = await Promise.allSettled([
+    openMicrophone(),
+    getSpeechToken(),
+    loadSdk(),
+  ]);
+  const stream = mic.status === "fulfilled" ? mic.value : null;
+  const releaseStream = () => stream?.getTracks().forEach((track) => track.stop());
+  if (mic.status === "rejected") throw mic.reason;
+  if (tokenResult.status === "rejected" || sdkResult.status === "rejected") {
+    releaseStream();
     throw new DictationError("UNAVAILABLE");
   }
-  const sdk = await import("microsoft-cognitiveservices-speech-sdk").catch(() => {
-    throw new DictationError("UNAVAILABLE");
-  });
+  const speech = tokenResult.value;
+  const sdk = sdkResult.value;
+  const t1 = performance.now();
 
   const config = sdk.SpeechConfig.fromAuthorizationToken(speech.token, speech.region);
   config.speechRecognitionLanguage = speechLocale(language);
-  const recognizer = new sdk.SpeechRecognizer(config, sdk.AudioConfig.fromDefaultMicrophoneInput());
+  const recognizer = new sdk.SpeechRecognizer(config, sdk.AudioConfig.fromStreamInput(stream!));
   let closed = false;
   const close = () => {
     if (!closed) {
       closed = true;
       recognizer.close();
+      releaseStream();
     }
   };
 
@@ -114,6 +151,14 @@ const azureEngine: DictationEngine = async (language, handlers) => {
       reject(new DictationError("NETWORK"));
     }),
   );
+  if (import.meta.env.DEV) {
+    // Where the time goes between tapping the microphone and listening (ms).
+    console.debug("[dictation] ready", {
+      microphoneTokenSdk: Math.round(t1 - t0),
+      connect: Math.round(performance.now() - t1),
+      total: Math.round(performance.now() - t0),
+    });
+  }
   return {
     stop: () =>
       new Promise<void>((resolve) => {
@@ -148,6 +193,8 @@ export type SimulatedDictationControl = {
   failNextStart: (code: DictationErrorCode) => void;
   /** How many times a session was started (to assert nothing restarts by itself). */
   starts: number;
+  /** How many times the engine was asked to get ready before a tap (SDK + token). */
+  prewarms: number;
 };
 
 declare global {
@@ -165,6 +212,7 @@ if (SIMULATED && typeof window !== "undefined") {
   const control: SimulatedDictationControl = {
     listening: false,
     starts: 0,
+    prewarms: 0,
     partial: (text) => activeHandlers?.onPartial(text),
     final: (text) => activeHandlers?.onFinal(text),
     fail: (code) => {

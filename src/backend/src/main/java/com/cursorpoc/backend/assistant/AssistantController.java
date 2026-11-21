@@ -80,7 +80,8 @@ public class AssistantController {
 
   /**
    * Dictation (HU-AST-07): a short-lived Speech token so the browser talks to Azure AI Speech
-   * directly. Same access as the rest of the assistant (flag on, salon user); never cached.
+   * directly. Same access as the rest of the assistant (flag on, salon user). The HTTP answer is
+   * never cached by the browser; the service reuses one Azure token for a few minutes.
    */
   @GetMapping("/speech-token")
   public ResponseEntity<Map<String, Object>> speechToken(

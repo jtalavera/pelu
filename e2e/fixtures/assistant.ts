@@ -377,6 +377,7 @@ export const lastDraftCard = (page: Page) => draftCards(page).last();
 type Dictation = {
   listening: boolean;
   starts: number;
+  prewarms: number;
   partial: (text: string) => void;
   final: (text: string) => void;
   fail: (code: string) => void;
@@ -404,6 +405,10 @@ export const microphoneOpen = (page: Page) =>
   page.evaluate(() => (window as WithDictation).__assistantDictation!.listening);
 export const dictationStarts = (page: Page) =>
   page.evaluate(() => (window as WithDictation).__assistantDictation!.starts);
+
+/** How many times the panel got the dictation ready before a tap (SDK + token). */
+export const dictationPrewarms = (page: Page) =>
+  page.evaluate(() => (window as WithDictation).__assistantDictation!.prewarms);
 
 /** Taps the microphone and waits until it is really listening. */
 export async function startDictating(page: Page) {
