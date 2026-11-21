@@ -10,6 +10,7 @@ import com.cursorpoc.backend.security.JwtService;
 import com.cursorpoc.backend.security.ProfessionalAccessPolicy;
 import com.cursorpoc.backend.stock.IntegrationAuthenticationFilter;
 import com.cursorpoc.backend.stock.IntegrationTokenService;
+import jakarta.servlet.DispatcherType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -75,7 +76,14 @@ public class SecurityConfig {
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers(
+                auth
+                    // An async re-dispatch (the assistant's SSE stream completing) carries no JWT:
+                    // JwtAuthenticationFilter is a OncePerRequestFilter and skips it. The request
+                    // was already authorized on its initial dispatch, so without this the finished
+                    // stream is cut with "Access Denied" after the response is committed.
+                    .dispatcherTypeMatchers(DispatcherType.ASYNC)
+                    .permitAll()
+                    .requestMatchers(
                         "/health",
                         "/health/**",
                         "/v3/api-docs",

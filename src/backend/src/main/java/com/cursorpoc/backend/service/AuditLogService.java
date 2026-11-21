@@ -52,7 +52,11 @@ public class AuditLogService {
           "/api/admin/seed",
           "/api/whatsapp/webhook",
           "/api/me/tour-state",
-          "/api/sso/");
+          "/api/sso/",
+          // Assistant chat traffic: every message would be an audit row, and its content is not a
+          // business change. Draft confirmation (phase 2) stays audited.
+          "/api/assistant/messages",
+          "/api/assistant/conversations");
 
   /** Routing prefixes that say who may call, not what is touched: skipped to find the resource. */
   private static final Set<String> PREFIX_SEGMENTS = Set.of("platform", "admin");

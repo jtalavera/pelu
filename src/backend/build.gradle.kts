@@ -1,6 +1,6 @@
 plugins {
     java
-    id("org.springframework.boot") version "4.0.4"
+    id("org.springframework.boot") version "4.2.0"
     id("io.spring.dependency-management") version "1.1.7"
     id("com.diffplug.spotless") version "6.25.0"
 }
@@ -18,6 +18,15 @@ repositories {
     mavenCentral()
 }
 
+// Conversational assistant (requirements/asistente/plan_asistente.md): Spring AI is only the
+// transport to the Azure AI Foundry model (AssistantModelClient); the tool loop is our own.
+// spring-ai 2.1.x is built against Spring Boot 4.2.x — keep both in step.
+dependencyManagement {
+    imports {
+        mavenBom("org.springframework.ai:spring-ai-bom:2.1.0")
+    }
+}
+
 dependencies {
     developmentOnly("org.springframework.boot:spring-boot-devtools")
     implementation("org.springframework.boot:spring-boot-starter-web")
@@ -28,7 +37,11 @@ dependencies {
     implementation("org.flywaydb:flyway-sqlserver")
     implementation("com.microsoft.sqlserver:mssql-jdbc")
     implementation("com.microsoft.azure:msal4j:1.17.2")
-    implementation("com.azure:azure-identity:1.15.4")
+    implementation("com.azure:azure-identity:1.19.0")
+    // The OpenAI model module alone (no starter): the Foundry client is wired by hand in
+    // FoundryClientConfig because it authenticates with Entra ID, not an API key, and must not
+    // auto-configure in profiles that run the scripted model.
+    implementation("org.springframework.ai:spring-ai-openai")
     // RT-12/RT-18 (Hardening_SIFEN.md): per-tenant SIFEN certificate secrets + the app JWT secret
     // live in Azure Key Vault outside the e2e profile, resolved via the DefaultAzureCredential
     // (Managed Identity) already pulled in by azure-identity above.

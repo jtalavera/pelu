@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.config;
 
+import com.cursorpoc.backend.assistant.AssistantProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -18,7 +19,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
   FemmePlatformAdminProperties.class,
   SifenConnectionProperties.class,
   SifenQrProperties.class,
-  StockProperties.class
+  StockProperties.class,
+  AssistantProperties.class
 })
 @EnableScheduling
 public class FemmeConfiguration {}

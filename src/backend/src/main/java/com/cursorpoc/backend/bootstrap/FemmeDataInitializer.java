@@ -120,6 +120,13 @@ public class FemmeDataInitializer {
           "Commissions module (rules, accrual on invoice issue, settlements). Off -> API answers"
               + " 403 FEATURE_NOT_ENABLED.");
 
+      // Asistente conversacional: same flag as V105, OFF globally until a Platform Admin enables it
+      // (Flyway is disabled for `e2e`).
+      seedFlag(
+          "ASSISTANT_CHATBOT",
+          false,
+          "Conversational assistant in the side panel (queries; later invoicing and booking).");
+
       // Comprobante no fiscal (tier Estándar): same flag as V97 (Flyway is disabled for `e2e`).
       seedFlag(
           "NON_FISCAL_RECEIPT",
