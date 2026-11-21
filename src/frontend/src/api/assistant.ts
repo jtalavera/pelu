@@ -12,9 +12,56 @@ export type AssistantHistoryMessage = {
   createdAt: string;
 };
 
+export type AssistantDraftStatus =
+  | "DRAFT"
+  | "SUPERSEDED"
+  | "DISCARDED"
+  | "EXPIRED"
+  | "CONFIRMING"
+  | "CONFIRMED";
+
+/** What an invoice draft would charge; every amount is the backend's, not the model's. */
+export type InvoiceDraftPayload = {
+  clientId: number;
+  clientName: string;
+  receiverIdentified: boolean;
+  lines: {
+    serviceId: number | null;
+    name: string;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+    professionalId: number | null;
+    professionalName: string | null;
+  }[];
+  serviceRecordId: number | null;
+  appointmentId: number | null;
+  paymentMethod: string | null;
+  cardBrand: string | null;
+  email: string | null;
+  total: number;
+};
+
+/** A proposal waiting for the person's confirmation (the card draws it from this). */
+export type AssistantDraft = {
+  id: string;
+  type: "INVOICE" | "APPOINTMENT";
+  status: AssistantDraftStatus;
+  createdAt: string;
+  expiresAt: string;
+  /** What must still be completed before «Confirmar» works: PAYMENT_METHOD, CARD_BRAND, EMAIL. */
+  missing: string[];
+  payload: InvoiceDraftPayload;
+  resultType: string | null;
+  resultId: number | null;
+  /** Set when the conversation is reloaded: the assistant message this card belongs to. */
+  messageId?: number | null;
+};
+
 export type AssistantConversation = {
   conversationId: number;
   messages: AssistantHistoryMessage[];
+  drafts?: AssistantDraft[];
 };
 
 export type AssistantMessageRequest = {
@@ -28,6 +75,8 @@ export type AssistantMessageRequest = {
 export type AssistantStreamEvent =
   | { type: "message.delta"; text: string }
   | { type: "tool.status"; tool: string; state: "running" | "done" }
+  | { type: "card.draft"; draft: AssistantDraft }
+  | { type: "card.draft.updated"; id: string; status: AssistantDraftStatus }
   | { type: "message.done"; messageId: number }
   | { type: "error"; code: string };
 
@@ -58,6 +107,12 @@ export function toAssistantStreamEvent(message: SseMessage): AssistantStreamEven
     case "tool.status":
       return typeof p.tool === "string" && (p.state === "running" || p.state === "done")
         ? { type: "tool.status", tool: p.tool, state: p.state }
+        : null;
+    case "card.draft":
+      return typeof p.id === "string" ? { type: "card.draft", draft: payload as AssistantDraft } : null;
+    case "card.draft.updated":
+      return typeof p.id === "string" && typeof p.status === "string"
+        ? { type: "card.draft.updated", id: p.id, status: p.status as AssistantDraftStatus }
         : null;
     case "message.done":
       return { type: "message.done", messageId: Number(p.messageId) };
@@ -107,4 +162,82 @@ export async function streamAssistantMessage(
     parser.push(decoder.decode(value, { stream: true }));
   }
   parser.push(decoder.decode());
+}
+
+// ── Drafts: what a person does with the card ─────────────────────────────────────────────────────
+
+/**
+ * A refused draft call. `message` is the raw body (so `translateApiError` keeps working); `body`
+ * is that JSON parsed — some errors carry what the card needs to recover (the recalculated draft
+ * after `ASSISTANT_PRICE_CHANGED`, the original result after `ASSISTANT_DRAFT_ALREADY_CONFIRMED`).
+ */
+export class AssistantApiError extends Error {
+  readonly body: Record<string, unknown>;
+
+  constructor(raw: string) {
+    super(raw);
+    let parsed: Record<string, unknown> = {};
+    try {
+      const value: unknown = JSON.parse(raw);
+      if (typeof value === "object" && value !== null) parsed = value as Record<string, unknown>;
+    } catch {
+      // not JSON: the message stays the raw text
+    }
+    this.body = parsed;
+  }
+
+  get code(): string | null {
+    return typeof this.body.error === "string" ? this.body.error : null;
+  }
+}
+
+export type DraftConfirmResult = {
+  type: "INVOICE" | "APPOINTMENT";
+  invoiceId: number | null;
+  invoiceNumberFormatted: string | null;
+  sifenSubmissionStatus: string | null;
+  appointmentId?: number | null;
+  startAt?: string | null;
+  professionalId?: number | null;
+  draft: AssistantDraft;
+};
+
+async function draftRequest<T>(
+  method: "POST" | "PATCH",
+  path: string,
+  body?: unknown,
+  headers?: Record<string, string>,
+): Promise<T> {
+  const res = await fetch(`${apiBaseUrl()}${path}`, {
+    method,
+    headers: {
+      ...authHeaders({ json: true }),
+      "Accept-Language": i18n.resolvedLanguage ?? i18n.language ?? "es",
+      ...headers,
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new AssistantApiError((await res.text()) || res.statusText);
+  }
+  return (await res.json()) as T;
+}
+
+/** The button: issues the invoice through the regular road. `Idempotency-Key` = the draft id. */
+export function confirmAssistantDraft(id: string): Promise<DraftConfirmResult> {
+  return draftRequest<DraftConfirmResult>("POST", `/api/assistant/drafts/${id}/confirm`, undefined, {
+    "Idempotency-Key": id,
+  });
+}
+
+export function discardAssistantDraft(id: string): Promise<AssistantDraft> {
+  return draftRequest<AssistantDraft>("POST", `/api/assistant/drafts/${id}/discard`);
+}
+
+/** Completes what the card asks for (payment method, card brand, e-mail). */
+export function completeAssistantDraft(
+  id: string,
+  patch: { paymentMethod?: string; cardBrand?: string; email?: string },
+): Promise<AssistantDraft> {
+  return draftRequest<AssistantDraft>("PATCH", `/api/assistant/drafts/${id}`, patch);
 }

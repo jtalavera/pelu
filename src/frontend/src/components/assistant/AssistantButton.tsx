@@ -8,7 +8,7 @@ import { SparklesIcon } from "./AssistantIcons";
  */
 export function AssistantButton({ isPhone }: { isPhone: boolean }) {
   const { t } = useTranslation();
-  const { enabled, open, toggle } = useAssistant();
+  const { enabled, open, toggle, pendingDraft } = useAssistant();
   if (!enabled) return null;
   return (
     <button
@@ -31,9 +31,19 @@ export function AssistantButton({ isPhone }: { isPhone: boolean }) {
         justifyContent: "center",
         cursor: "pointer",
         flexShrink: 0,
+        position: "relative",
       }}
     >
       <SparklesIcon />
+      {/* A draft is waiting for confirmation and the panel is closed. */}
+      {pendingDraft && !open && (
+        <span
+          data-testid="assistant-pending-dot"
+          role="status"
+          aria-label={t("femme.assistant.pendingDraft")}
+          className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border border-white bg-warning"
+        />
+      )}
     </button>
   );
 }

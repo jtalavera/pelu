@@ -6,8 +6,11 @@ import {
   askAssistantApi,
   bookAppointmentTomorrow,
   createClientWithPhone,
+  completeDraftApi,
+  confirmDraftApi,
   currentConversationApi,
   enableAssistantGlobally,
+  proposeViaApi,
   restoreAssistantGlobal,
 } from "../../fixtures/assistant";
 import { setTenantFlag } from "../../fixtures/commissions";
@@ -123,6 +126,55 @@ test.describe("mt-asistente · aislamiento del asistente conversacional", () => 
       headers: authHeaders(tokenB),
     });
     expect(back.status()).toBe(200);
+  });
+
+  test("HU-AST-03 AC14 · un borrador es de su salón: otro salón no puede confirmarlo, completarlo ni descartarlo", async ({
+    request,
+  }) => {
+    const serviceA = world.tenantA.catalog.serviceNames[0];
+    const { draft } = await proposeViaApi(request, tokenA, `invoice ${names.A} for ${serviceA}`);
+    expect(draft, "salon A gets its own draft").not.toBeNull();
+    expect(draft!.payload.clientName).toMatch(new RegExp(names.A, "i"));
+
+    // Salon B knows the id but it is not its draft: 404 everywhere, nothing changes.
+    const confirm = await confirmDraftApi(request, tokenB, draft!.id);
+    expect(confirm.status()).toBe(404);
+    const patch = await request.patch(`${API_BASE}/api/assistant/drafts/${draft!.id}`, {
+      headers: authHeaders(tokenB),
+      data: { paymentMethod: "CASH" },
+    });
+    expect(patch.status()).toBe(404);
+    const discard = await request.post(`${API_BASE}/api/assistant/drafts/${draft!.id}/discard`, {
+      headers: authHeaders(tokenB),
+    });
+    expect(discard.status()).toBe(404);
+
+    // The owner still has it intact (and can complete it).
+    await completeDraftApi(request, tokenA, draft!.id, { paymentMethod: "CASH" });
+  });
+
+  test("HU-AST-03 AC14 · el asistente no arma borradores con clientes ni servicios de otro salón", async ({
+    request,
+  }) => {
+    const serviceA = world.tenantA.catalog.serviceNames[0];
+
+    const otherClient = await proposeViaApi(request, tokenA, `invoice ${names.B} for ${serviceA}`);
+    expect(otherClient.draft).toBeNull();
+    expect(otherClient.answer.text).toContain("No encontré");
+
+    // A service that only exists in the other salon (its own copy of the shared names is fine).
+    const privateName = `MT Servicio privado ${tag}`;
+    const created = await request.post(`${API_BASE}/api/service-categories`, {
+      headers: authHeaders(tokenB),
+      data: { name: `MT Cat privada ${tag}`, accentKey: "stone" },
+    });
+    const category = (await created.json()) as { id: number };
+    await request.post(`${API_BASE}/api/services`, {
+      headers: authHeaders(tokenB),
+      data: { name: privateName, categoryId: category.id, priceMinor: 12000, durationMinutes: 30 },
+    });
+    const otherService = await proposeViaApi(request, tokenA, `invoice ${names.A} for ${privateName}`);
+    expect(otherService.draft).toBeNull();
   });
 
   test("sin sesión no hay asistente", async ({ request }) => {

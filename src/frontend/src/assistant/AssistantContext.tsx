@@ -10,11 +10,18 @@ import {
 } from "react";
 import { useLocation } from "react-router-dom";
 import {
+  AssistantApiError,
+  completeAssistantDraft,
+  confirmAssistantDraft,
+  discardAssistantDraft,
   getCurrentAssistantConversation,
   startAssistantConversation,
   streamAssistantMessage,
   type AssistantConversation,
+  type AssistantDraft,
+  type AssistantDraftStatus,
   type AssistantStreamEvent,
+  type DraftConfirmResult,
 } from "../api/assistant";
 import { isPinSession } from "../auth/sharedDevice";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
@@ -22,11 +29,28 @@ import { deriveAssistantPage } from "./currentPage";
 
 export const ASSISTANT_FLAG = "ASSISTANT_CHATBOT";
 
+/** A draft drawn under an assistant message, with what the person is doing to it right now. */
+export type AssistantDraftCard = {
+  kind: "draft";
+  draft: AssistantDraft;
+  /** A confirm / discard / completion call is in flight. */
+  busy?: boolean;
+  error?: Error | null;
+  /** Set once confirmed: what was issued. */
+  result?: DraftConfirmResult | null;
+  /** The price changed since the proposal: the card shows the new total and asks to review. */
+  priceChanged?: boolean;
+};
+
+export type AssistantCard = AssistantDraftCard;
+
 export type AssistantUiMessage = {
   key: string;
   role: "USER" | "ASSISTANT";
   content: string;
   inputMode?: string | null;
+  /** Cards the backend sent with this answer (drafts…): never text written by the model. */
+  cards?: AssistantCard[];
   /** The assistant is still answering this one. */
   streaming?: boolean;
   /** Why this answer failed; the text already received (if any) is kept. */
@@ -47,8 +71,17 @@ export type AssistantState = {
   busy: boolean;
   /** Tool the assistant is running right now («Buscando clientes…»), if any. */
   activeTool: string | null;
+  /** A draft waits for confirmation (shows a dot on the button while the panel is closed). */
+  pendingDraft: boolean;
   send: (text: string, inputMode?: "TEXT" | "VOICE") => Promise<void>;
   newConversation: () => Promise<void>;
+  /** The card's buttons: nothing else in the system turns a draft into data. */
+  confirmDraft: (id: string) => Promise<void>;
+  discardDraft: (id: string) => Promise<void>;
+  completeDraft: (
+    id: string,
+    patch: { paymentMethod?: string; cardBrand?: string; email?: string },
+  ) => Promise<void>;
 };
 
 const DISABLED: AssistantState = {
@@ -61,8 +94,12 @@ const DISABLED: AssistantState = {
   historyError: null,
   busy: false,
   activeTool: null,
+  pendingDraft: false,
   send: async () => {},
   newConversation: async () => {},
+  confirmDraft: async () => {},
+  discardDraft: async () => {},
+  completeDraft: async () => {},
 };
 
 const AssistantContext = createContext<AssistantState>(DISABLED);
@@ -73,12 +110,35 @@ export function useAssistant(): AssistantState {
 }
 
 function fromHistory(c: AssistantConversation): AssistantUiMessage[] {
-  return c.messages.map((m) => ({
+  const messages: AssistantUiMessage[] = c.messages.map((m) => ({
     key: `h-${m.id}`,
     role: m.role,
     content: m.content,
     inputMode: m.inputMode,
   }));
+  // Redraw the cards after a reload: each draft under the assistant message it was proposed in.
+  for (const draft of c.drafts ?? []) {
+    const target =
+      messages.find((m) => draft.messageId != null && m.key === `h-${draft.messageId}`) ??
+      [...messages].reverse().find((m) => m.role === "ASSISTANT");
+    if (target) target.cards = [...(target.cards ?? []), { kind: "draft", draft }];
+  }
+  return messages;
+}
+
+const ACTIVE: AssistantDraftStatus[] = ["DRAFT", "CONFIRMING"];
+
+/** Applies `fn` to the card of draft `id`, wherever it is. */
+function mapDraftCard(
+  messages: AssistantUiMessage[],
+  id: string,
+  fn: (card: AssistantDraftCard) => AssistantDraftCard,
+): AssistantUiMessage[] {
+  return messages.map((m) =>
+    m.cards?.some((c) => c.draft.id === id)
+      ? { ...m, cards: m.cards.map((c) => (c.draft.id === id ? fn(c) : c)) }
+      : m,
+  );
 }
 
 function asError(e: unknown): Error {
@@ -201,6 +261,31 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
             case "tool.status":
               setActiveTool(event.state === "running" ? event.tool : null);
               break;
+            case "card.draft":
+              // A new proposal replaces a card with the same id (a reconnect); otherwise it joins.
+              setMessages((all) =>
+                all.map((m) =>
+                  m.key === answerKey
+                    ? {
+                        ...m,
+                        cards: [
+                          ...(m.cards ?? []).filter((c) => c.draft.id !== event.draft.id),
+                          { kind: "draft" as const, draft: event.draft },
+                        ],
+                      }
+                    : m,
+                ),
+              );
+              break;
+            case "card.draft.updated":
+              // An older draft was replaced / discarded: dim its card wherever it is.
+              setMessages((all) =>
+                mapDraftCard(all, event.id, (c) => ({
+                  ...c,
+                  draft: { ...c.draft, status: event.status, missing: [] },
+                })),
+              );
+              break;
             case "message.done":
               finished = true;
               break;
@@ -250,6 +335,99 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const patchCard = useCallback(
+    (id: string, fn: (card: AssistantDraftCard) => AssistantDraftCard) =>
+      setMessages((all) => mapDraftCard(all, id, fn)),
+    [],
+  );
+
+  const confirmDraft = useCallback(
+    async (id: string) => {
+      patchCard(id, (c) => ({ ...c, busy: true, error: null, priceChanged: false }));
+      try {
+        const result = await confirmAssistantDraft(id);
+        patchCard(id, (c) => ({ ...c, busy: false, draft: result.draft, result }));
+      } catch (e) {
+        if (e instanceof AssistantApiError) {
+          const body = e.body;
+          const draft = body.draft as AssistantDraft | undefined;
+          if (e.code === "ASSISTANT_DRAFT_ALREADY_CONFIRMED" && draft) {
+            // The second tap of a double tap: it is issued, once — show the original result.
+            patchCard(id, (c) => ({
+              ...c,
+              busy: false,
+              draft,
+              result: {
+                type: "INVOICE",
+                invoiceId: (body.invoiceId as number | null) ?? draft.resultId,
+                invoiceNumberFormatted: null,
+                sifenSubmissionStatus: null,
+                draft,
+              },
+            }));
+            return;
+          }
+          if (e.code === "ASSISTANT_PRICE_CHANGED" && draft) {
+            patchCard(id, (c) => ({ ...c, busy: false, draft, priceChanged: true }));
+            return;
+          }
+          if (draft) {
+            patchCard(id, (c) => ({ ...c, busy: false, draft, error: e }));
+            return;
+          }
+          // The draft is no longer confirmable (24 h passed, or it was replaced / discarded from
+          // another tab): dim the card, keep the translated reason.
+          if (e.code === "ASSISTANT_DRAFT_EXPIRED" || e.code === "ASSISTANT_DRAFT_NOT_ACTIVE") {
+            const status = e.code === "ASSISTANT_DRAFT_EXPIRED" ? "EXPIRED" : "SUPERSEDED";
+            patchCard(id, (c) => ({
+              ...c,
+              busy: false,
+              error: e,
+              draft: { ...c.draft, status, missing: [] },
+            }));
+            return;
+          }
+        }
+        patchCard(id, (c) => ({ ...c, busy: false, error: asError(e) }));
+      }
+    },
+    [patchCard],
+  );
+
+  const discardDraft = useCallback(
+    async (id: string) => {
+      patchCard(id, (c) => ({ ...c, busy: true, error: null }));
+      try {
+        const draft = await discardAssistantDraft(id);
+        patchCard(id, (c) => ({ ...c, busy: false, draft }));
+      } catch (e) {
+        patchCard(id, (c) => ({ ...c, busy: false, error: asError(e) }));
+      }
+    },
+    [patchCard],
+  );
+
+  const completeDraft = useCallback(
+    async (id: string, patch: { paymentMethod?: string; cardBrand?: string; email?: string }) => {
+      patchCard(id, (c) => ({ ...c, busy: true, error: null }));
+      try {
+        const draft = await completeAssistantDraft(id, patch);
+        patchCard(id, (c) => ({ ...c, busy: false, draft, priceChanged: false }));
+      } catch (e) {
+        patchCard(id, (c) => ({ ...c, busy: false, error: asError(e) }));
+      }
+    },
+    [patchCard],
+  );
+
+  const pendingDraft = useMemo(
+    () =>
+      messages.some((m) =>
+        m.cards?.some((c) => ACTIVE.includes(c.draft.status) && c.result == null),
+      ),
+    [messages],
+  );
+
   const value = useMemo<AssistantState>(
     () =>
       enabled
@@ -263,8 +441,12 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
             historyError,
             busy,
             activeTool,
+            pendingDraft,
             send,
             newConversation,
+            confirmDraft,
+            discardDraft,
+            completeDraft,
           }
         : DISABLED,
     [
@@ -275,8 +457,12 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
       historyError,
       busy,
       activeTool,
+      pendingDraft,
       send,
       newConversation,
+      confirmDraft,
+      discardDraft,
+      completeDraft,
     ],
   );
 

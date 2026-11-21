@@ -89,8 +89,8 @@ public class AssistantController {
     conversations.requireOpen(request.conversationId(), tenantId, userId);
 
     // Everything the worker needs is captured now: it must not touch the security context.
-    AssistantContext ctx = AssistantContext.from(principal, request.currentPage());
     long conversationId = request.conversationId();
+    AssistantContext ctx = AssistantContext.from(principal, request.currentPage(), conversationId);
     String inputMode = request.inputMode();
 
     SseEmitter emitter =

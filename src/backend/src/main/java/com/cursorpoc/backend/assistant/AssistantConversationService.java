@@ -30,14 +30,17 @@ public class AssistantConversationService {
   private final AssistantConversationRepository conversations;
   private final AssistantMessageRepository messages;
   private final AssistantProperties properties;
+  private final AssistantDraftService draftService;
 
   public AssistantConversationService(
       AssistantConversationRepository conversations,
       AssistantMessageRepository messages,
-      AssistantProperties properties) {
+      AssistantProperties properties,
+      AssistantDraftService draftService) {
     this.conversations = conversations;
     this.messages = messages;
     this.properties = properties;
+    this.draftService = draftService;
   }
 
   /** The user's open conversation; created on first use. */
@@ -131,7 +134,28 @@ public class AssistantConversationService {
                         m.getInputMode(),
                         m.getCreatedAt().toString()))
             .toList();
-    return new ConversationView(c.getId(), rows);
+    return new ConversationView(c.getId(), rows, draftsWithMessages(c.getId(), rows));
+  }
+
+  /**
+   * The conversation's drafts, each tied to the assistant message it was proposed in: the first
+   * assistant answer written after the draft was created. Reloading the panel redraws the cards.
+   */
+  private List<AssistantDraftDto> draftsWithMessages(long conversationId, List<MessageView> rows) {
+    return draftService.forConversation(conversationId).stream()
+        .map(
+            d -> {
+              Instant created = Instant.parse(d.createdAt());
+              Long messageId =
+                  rows.stream()
+                      .filter(m -> "ASSISTANT".equals(m.role()))
+                      .filter(m -> !Instant.parse(m.createdAt()).isBefore(created))
+                      .map(MessageView::id)
+                      .findFirst()
+                      .orElse(null);
+              return d.withMessageId(messageId);
+            })
+        .toList();
   }
 
   /** Retention: drops every conversation (and its messages) idle since before {@code cutoff}. */
@@ -162,7 +186,8 @@ public class AssistantConversationService {
     return Instant.now();
   }
 
-  public record ConversationView(long conversationId, List<MessageView> messages) {}
+  public record ConversationView(
+      long conversationId, List<MessageView> messages, List<AssistantDraftDto> drafts) {}
 
   public record MessageView(
       long id, String role, String content, String inputMode, String createdAt) {}

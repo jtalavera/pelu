@@ -193,4 +193,113 @@ class ScriptedAssistantModelClientTest {
     assertThat(chunks).isGreaterThan(3);
     assertThat(events.get(events.size() - 1)).isInstanceOf(ModelEvent.Completed.class);
   }
+
+  @Test
+  void invoicingChainsSearchServiceAndProposal_likeARealModelWould() {
+    ChatTurn question = ChatTurn.user("invoice Maria Gomez for Corte cash");
+
+    ToolCall search = requestedTool(ask(question));
+    assertThat(search.name()).isEqualTo("buscar_clientes");
+    assertThat(search.argumentsJson()).contains("Maria Gomez");
+
+    ChatTurn found =
+        ChatTurn.toolResults(
+            List.of(
+                new ToolResult(
+                    search.id(),
+                    "buscar_clientes",
+                    "{\"data\":{\"clients\":[{\"id\":42,\"fullName\":\"MARIA GOMEZ\"}]}}")));
+    ToolCall services =
+        requestedTool(ask(question, ChatTurn.assistantToolCalls("", List.of(search)), found));
+    assertThat(services.name()).isEqualTo("listar_servicios");
+    assertThat(services.argumentsJson()).contains("Corte");
+
+    ChatTurn listed =
+        ChatTurn.toolResults(
+            List.of(
+                new ToolResult(
+                    services.id(),
+                    "listar_servicios",
+                    "{\"data\":{\"services\":[{\"id\":7,\"name\":\"Corte\",\"price\":\"Gs. 50.000\"}]}}")));
+    ToolCall proposal =
+        requestedTool(
+            ask(
+                question,
+                ChatTurn.assistantToolCalls("", List.of(search)),
+                found,
+                ChatTurn.assistantToolCalls("", List.of(services)),
+                listed));
+    assertThat(proposal.name()).isEqualTo("proponer_factura");
+    assertThat(proposal.argumentsJson())
+        .contains("\"clientId\":42")
+        .contains("\"serviceIds\":[7]")
+        .contains("\"paymentMethod\":\"CASH\"");
+  }
+
+  @Test
+  void aPaymentWordAtTheEndIsNotPartOfTheClientOrServiceName() {
+    assertThat(requestedTool(ask(ChatTurn.user("invoice Maria Gomez cash"))).argumentsJson())
+        .isEqualTo("{\"query\":\"Maria Gomez\"}");
+  }
+
+  @Test
+  void invoicingWithoutServices_proposesStraightAfterTheSearch() {
+    ChatTurn question = ChatTurn.user("facturale a Maria Gomez");
+    ToolCall search = requestedTool(ask(question));
+
+    ToolCall proposal =
+        requestedTool(
+            ask(
+                question,
+                ChatTurn.assistantToolCalls("", List.of(search)),
+                ChatTurn.toolResults(
+                    List.of(
+                        new ToolResult(
+                            search.id(),
+                            "buscar_clientes",
+                            "{\"data\":{\"clients\":[{\"id\":42,\"fullName\":\"MARIA GOMEZ\"}]}}")))));
+
+    assertThat(proposal.name()).isEqualTo("proponer_factura");
+    assertThat(proposal.argumentsJson()).isEqualTo("{\"clientId\":42}");
+  }
+
+  @Test
+  void aProposalIsAnsweredWithAReviewRequest_andErrorsWithAHint() {
+    ToolCall call = new ToolCall("c1", "proponer_factura", "{}");
+    ChatTurn question = ChatTurn.user("invoice Maria");
+
+    String ok =
+        said(
+            ask(
+                question,
+                ChatTurn.assistantToolCalls("", List.of(call)),
+                ChatTurn.toolResults(
+                    List.of(
+                        new ToolResult(
+                            "c1",
+                            "proponer_factura",
+                            "{\"data\":{\"client\":\"MARIA GOMEZ\",\"total\":\"Gs. 50.000\"}}")))));
+    String none =
+        said(
+            ask(
+                question,
+                ChatTurn.assistantToolCalls("", List.of(call)),
+                ChatTurn.toolResults(
+                    List.of(
+                        new ToolResult(
+                            "c1", "proponer_factura", "{\"error\":\"NOTHING_TO_INVOICE\"}")))));
+
+    assertThat(ok)
+        .contains("Preparé el borrador de factura para MARIA GOMEZ")
+        .contains("confirmalo");
+    assertThat(none).contains("No encontré nada para facturar");
+  }
+
+  @Test
+  void discardingTheDraftAsksForTheDiscardTool() {
+    assertThat(requestedTool(ask(ChatTurn.user("discard the draft"))).name())
+        .isEqualTo("descartar_borrador");
+    assertThat(requestedTool(ask(ChatTurn.user("descartá el borrador"))).name())
+        .isEqualTo("descartar_borrador");
+  }
 }

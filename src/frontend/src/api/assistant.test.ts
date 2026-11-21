@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  AssistantApiError,
+  completeAssistantDraft,
+  confirmAssistantDraft,
+  discardAssistantDraft,
   streamAssistantMessage,
   toAssistantStreamEvent,
   type AssistantStreamEvent,
@@ -93,5 +97,88 @@ describe("toAssistantStreamEvent", () => {
     expect(
       toAssistantStreamEvent({ event: "tool.status", data: '{"tool":"x","state":"weird"}' }),
     ).toBeNull();
+  });
+});
+
+describe("toAssistantStreamEvent · cards", () => {
+  it("reads draft cards and the update of an older one", () => {
+    expect(
+      toAssistantStreamEvent({
+        event: "card.draft",
+        data: JSON.stringify({ id: "d-1", type: "INVOICE", status: "DRAFT", missing: [] }),
+      }),
+    ).toMatchObject({ type: "card.draft", draft: { id: "d-1", status: "DRAFT" } });
+    expect(
+      toAssistantStreamEvent({
+        event: "card.draft.updated",
+        data: '{"id":"d-0","status":"SUPERSEDED"}',
+      }),
+    ).toEqual({ type: "card.draft.updated", id: "d-0", status: "SUPERSEDED" });
+    expect(toAssistantStreamEvent({ event: "card.draft", data: "{}" })).toBeNull();
+  });
+});
+
+describe("draft calls", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+    sessionStorage.setItem("accessToken", "jwt-token");
+  });
+  afterEach(() => {
+    fetchMock.mockReset();
+    vi.unstubAllGlobals();
+    sessionStorage.clear();
+  });
+
+  it("confirm is a POST with the draft id as Idempotency-Key and the bearer token", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ type: "INVOICE", invoiceId: 7 }), { status: 200 }),
+    );
+
+    const result = await confirmAssistantDraft("d-1");
+
+    expect(result.invoiceId).toBe(7);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/api\/assistant\/drafts\/d-1\/confirm$/);
+    expect(init.method).toBe("POST");
+    expect(init.headers["Idempotency-Key"]).toBe("d-1");
+    expect(init.headers.Authorization).toBe("Bearer jwt-token");
+  });
+
+  it("discard and complete use their own routes", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(new Response("{}", { status: 200 })));
+
+    await discardAssistantDraft("d-1");
+    await completeAssistantDraft("d-1", { paymentMethod: "CASH" });
+
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/drafts\/d-1\/discard$/);
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST");
+    expect(String(fetchMock.mock.calls[1][0])).toMatch(/drafts\/d-1$/);
+    expect(fetchMock.mock.calls[1][1].method).toBe("PATCH");
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ paymentMethod: "CASH" });
+  });
+
+  it("a refusal keeps the raw body as message and exposes it parsed, with the code", async () => {
+    fetchMock.mockResolvedValue(
+      new Response('{"error":"ASSISTANT_PRICE_CHANGED","draft":{"id":"d-1"}}', { status: 409 }),
+    );
+
+    const error = await confirmAssistantDraft("d-1").catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(AssistantApiError);
+    const e = error as AssistantApiError;
+    expect(e.code).toBe("ASSISTANT_PRICE_CHANGED");
+    expect((e.body.draft as { id: string }).id).toBe("d-1");
+    expect(e.message).toContain("ASSISTANT_PRICE_CHANGED");
+  });
+
+  it("a refusal that is not JSON still becomes an error with its text", async () => {
+    fetchMock.mockResolvedValue(new Response("Bad gateway", { status: 502 }));
+
+    const error = (await discardAssistantDraft("d-1").catch((e: unknown) => e)) as AssistantApiError;
+
+    expect(error.message).toBe("Bad gateway");
+    expect(error.code).toBeNull();
   });
 });

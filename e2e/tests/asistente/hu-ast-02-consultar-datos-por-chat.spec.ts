@@ -14,12 +14,13 @@ import {
   assistantAnswers,
   assistantBubbles,
   bookAppointmentTomorrow,
+  clientInvoicesApi,
   createClientWithPhone,
   currentConversationApi,
   enableAssistantGlobally,
   openAssistantPanel,
-  startNewConversationUi,
   restoreAssistantGlobal,
+  startNewConversationUi,
   userBubbles,
 } from "../../fixtures/assistant";
 import { loginAs, loginAsDemo } from "../../fixtures/auth";
@@ -287,7 +288,10 @@ test.describe("HU-AST-02 · Consultar datos por chat", () => {
     await expect(assistantAnswers(page).last()).toContainText("turnos del día");
   });
 
-  test("AC10 · pedirle crear o facturar algo no cambia ningún dato", async ({ page, request }) => {
+  test("AC10 · sin confirmación el asistente no cambia ningún dato: pedir facturar solo prepara un borrador", async ({
+    page,
+    request,
+  }) => {
     const listTomorrow = async () => {
       // Wide enough to hold the salon's "tomorrow" whatever the time zone of the runner.
       const from = new Date();
@@ -305,19 +309,19 @@ test.describe("HU-AST-02 · Consultar datos por chat", () => {
     };
     const appointmentsBefore = await listTomorrow();
     const clientsBefore = await listClients();
+    const invoicesBefore = (await clientInvoicesApi(request, token, clientOne.id)).length;
 
     await loginAsDemo(page);
     await openAssistantPanel(page);
     await startNewConversationUi(page);
-    await askAssistantUi(page, `Book an appointment for ${clientOne.fullName} tomorrow at 10:00`);
-    await expect(assistantAnswers(page).last()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("assistant-send")).toBeDisabled();
-    await askAssistantUi(page, `Issue an invoice to ${clientOne.fullName} and create a new client`);
-    await expect(assistantBubbles(page)).toHaveCount(4, { timeout: 15_000 });
-    await expect(assistantAnswers(page).last()).toContainText("No entendí tu consulta");
+    await askAssistantUi(page, `invoice ${clientOne.fullName} for ${salon.serviceFullName}`);
+    await expect(assistantAnswers(page).last()).toContainText("Preparé el borrador", { timeout: 20_000 });
+    // It is a draft on a card, waiting for a person to confirm.
+    await expect(page.getByTestId("assistant-draft-card").last()).toHaveAttribute("data-status", "DRAFT");
 
     expect(await listTomorrow()).toEqual(appointmentsBefore);
     expect(await listClients()).toBe(clientsBefore);
+    expect((await clientInvoicesApi(request, token, clientOne.id)).length).toBe(invoicesBefore);
   });
 
   test("AC11 · si el modelo no está disponible la burbuja muestra un error traducido y la caja queda libre", async ({

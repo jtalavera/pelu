@@ -47,7 +47,14 @@ class AssistantToolsTest {
   private final FemmeTimeProperties time = new FemmeTimeProperties();
   private final JsonMapper json = JsonMapper.builder().build();
   private final AssistantTools tools =
-      new AssistantTools(clients, catalog, professionals, appointments, time, json);
+      new AssistantTools(
+          clients,
+          catalog,
+          professionals,
+          appointments,
+          time,
+          json,
+          mock(AssistantProposalTools.class));
 
   private static AssistantContext admin() {
     return new AssistantContext(TENANT, 1L, UserRole.ADMIN, null, "hoy");

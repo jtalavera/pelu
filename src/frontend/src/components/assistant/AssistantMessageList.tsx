@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Alert, Heading, Spinner, Text } from "@design-system";
 import { translateApiError } from "../../api/parseApiErrorMessage";
 import type { AssistantUiMessage } from "../../assistant/AssistantContext";
+import { InvoiceDraftCard } from "./InvoiceDraftCard";
 
 const SUGGESTIONS = ["appointmentsToday", "services", "professionals"] as const;
 
@@ -61,6 +62,7 @@ export function AssistantMessageList({
   activeTool,
   busy,
   onSend,
+  draftActions,
 }: {
   messages: AssistantUiMessage[];
   loadingHistory: boolean;
@@ -68,6 +70,17 @@ export function AssistantMessageList({
   activeTool: string | null;
   busy: boolean;
   onSend: (text: string) => void;
+  /** What the cards' buttons do (confirm, discard, complete, open the invoice). */
+  draftActions: {
+    onConfirm: (id: string) => void;
+    onDiscard: (id: string) => void;
+    onComplete: (
+      id: string,
+      patch: { paymentMethod?: string; cardBrand?: string; email?: string },
+    ) => void;
+    onViewInvoice: (invoiceId: number) => void;
+    onShareInvoice: (invoiceId: number) => void;
+  };
 }) {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -143,6 +156,9 @@ export function AssistantMessageList({
                 {toolLabel}
               </span>
             )}
+            {m.cards?.map((card) => (
+              <InvoiceDraftCard key={card.draft.id} card={card} {...draftActions} />
+            ))}
             {m.error && (
               <Alert variant="destructive" data-testid="assistant-error" className="max-w-[95%]">
                 {translateApiError(m.error, t)}

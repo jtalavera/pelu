@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Heading } from "@design-system";
 import { useAssistant } from "../../assistant/AssistantContext";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { TOPBAR_HEIGHT } from "../../layout/layoutConstants";
 import { ACTION_BUTTON } from "../actionButtons";
+import { InvoiceDetailModal } from "../InvoiceDetailModal";
 import { AssistantComposer } from "./AssistantComposer";
 import { AssistantMessageList } from "./AssistantMessageList";
 import { BackIcon, CloseIcon, PlusIcon } from "./AssistantIcons";
@@ -32,6 +34,9 @@ export function AssistantPanel() {
   const a = useAssistant();
   const isDesktop = useMediaQuery("(min-width: 1024px)");
   const isTabletUp = useMediaQuery("(min-width: 768px)");
+  // The issued invoice opens in its own dialog (over the panel): «Ver factura», and «Compartir con
+  // el cliente», which opens straight into its Compartir panel.
+  const [invoiceModal, setInvoiceModal] = useState<{ id: number; share: boolean } | null>(null);
   if (!a.enabled || !a.open) return null;
 
   const fullScreen = !isTabletUp;
@@ -98,11 +103,25 @@ export function AssistantPanel() {
         activeTool={a.activeTool}
         busy={a.busy}
         onSend={(text) => void a.send(text)}
+        draftActions={{
+          onConfirm: (id) => void a.confirmDraft(id),
+          onDiscard: (id) => void a.discardDraft(id),
+          onComplete: (id, patch) => void a.completeDraft(id, patch),
+          onViewInvoice: (id) => setInvoiceModal({ id, share: false }),
+          onShareInvoice: (id) => setInvoiceModal({ id, share: true }),
+        }}
       />
       <AssistantComposer
         disabled={a.busy || a.loadingHistory}
         onSend={(text) => void a.send(text)}
       />
+      {invoiceModal && (
+        <InvoiceDetailModal
+          invoiceId={invoiceModal.id}
+          initialPanel={invoiceModal.share ? "share" : undefined}
+          onClose={() => setInvoiceModal(null)}
+        />
+      )}
     </aside>
   );
 }

@@ -104,7 +104,8 @@ class AssistantOrchestratorTest {
           }
           out.accept(new ModelEvent.Completed(new Usage(5, 2)));
         };
-    when(tools.execute(ctx, "buscar_clientes", "{\"query\":\"ana\"}")).thenReturn("{\"data\":{}}");
+    when(tools.run(ctx, "buscar_clientes", "{\"query\":\"ana\"}"))
+        .thenReturn(ToolOutcome.of("{\"data\":{}}"));
 
     orchestrator().run(ctx, CONVERSATION, "busca ana", "TEXT", sink);
 
@@ -129,7 +130,7 @@ class AssistantOrchestratorTest {
               new ModelEvent.ToolCalls(List.of(new ToolCall("c", "listar_servicios", "{}"))));
           out.accept(new ModelEvent.Completed(Usage.NONE));
         };
-    when(tools.execute(any(), anyString(), anyString())).thenReturn("{\"data\":{}}");
+    when(tools.run(any(), anyString(), anyString())).thenReturn(ToolOutcome.of("{\"data\":{}}"));
 
     orchestrator().run(ctx, CONVERSATION, "servicios", "TEXT", sink);
 
@@ -137,7 +138,7 @@ class AssistantOrchestratorTest {
     assertThat(payloads.get(payloads.size() - 1))
         .isEqualTo(Map.of("code", "ASSISTANT_TOO_MANY_STEPS"));
     verify(conversations, never()).appendAssistant(anyLong(), anyString(), any());
-    verify(tools, org.mockito.Mockito.times(3)).execute(any(), anyString(), anyString());
+    verify(tools, org.mockito.Mockito.times(3)).run(any(), anyString(), anyString());
   }
 
   @Test
@@ -227,5 +228,40 @@ class AssistantOrchestratorTest {
         .isEqualTo("RuntimeException: 404: deployment missing");
     assertThat(AssistantOrchestrator.rootCause(new RuntimeException("x".repeat(500))).length())
         .isLessThan(330);
+  }
+
+  @Test
+  void cardsOfATool_areSentRightAfterItsDoneStatus_andNeverWrittenByTheModel() {
+    int[] round = {0};
+    model =
+        (req, out) -> {
+          if (round[0]++ == 0) {
+            out.accept(
+                new ModelEvent.ToolCalls(List.of(new ToolCall("c1", "proponer_factura", "{}"))));
+          } else {
+            out.accept(new ModelEvent.TextDelta("Revisalo y confirmalo."));
+          }
+          out.accept(new ModelEvent.Completed(Usage.NONE));
+        };
+    when(tools.run(any(), anyString(), anyString()))
+        .thenReturn(
+            new ToolOutcome(
+                "{\"data\":{}}",
+                List.of(
+                    new ToolOutcome.CardEvent(
+                        "card.draft.updated", Map.of("id", "old", "status", "SUPERSEDED")),
+                    new ToolOutcome.CardEvent("card.draft", Map.of("id", "new")))));
+
+    orchestrator().run(ctx, CONVERSATION, "factura a ana", "TEXT", sink);
+
+    assertThat(events)
+        .containsExactly(
+            "tool.status",
+            "tool.status",
+            "card.draft.updated",
+            "card.draft",
+            "message.delta",
+            "message.done");
+    assertThat(payloads.get(3)).isEqualTo(Map.of("id", "new"));
   }
 }

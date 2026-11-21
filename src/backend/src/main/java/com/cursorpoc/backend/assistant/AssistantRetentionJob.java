@@ -13,9 +13,25 @@ public class AssistantRetentionJob {
   private static final Logger log = LoggerFactory.getLogger(AssistantRetentionJob.class);
 
   private final AssistantConversationService conversations;
+  private final AssistantDraftService drafts;
 
-  public AssistantRetentionJob(AssistantConversationService conversations) {
+  public AssistantRetentionJob(
+      AssistantConversationService conversations, AssistantDraftService drafts) {
     this.conversations = conversations;
+    this.drafts = drafts;
+  }
+
+  /** Drafts nobody confirmed in 24 h read as expired right away; this makes it official. */
+  @Scheduled(cron = "0 */15 * * * *")
+  public void expireDrafts() {
+    try {
+      int expired = drafts.expireDue();
+      if (expired > 0) {
+        log.info("assistant drafts expired: {}", expired);
+      }
+    } catch (RuntimeException e) {
+      log.error("assistant draft expiry failed", e);
+    }
   }
 
   @Scheduled(cron = "0 30 3 * * *", zone = "${app.femme.business-zone-id:America/Asuncion}")

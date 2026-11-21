@@ -1,6 +1,13 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
-import { API_BASE, apiPostJson, authHeaders } from "./api";
+import {
+  API_BASE,
+  apiPostJson,
+  apiPutJson,
+  authHeaders,
+  ensureActiveFiscalStampForInvoices,
+  ensureCashSessionOpenApi,
+} from "./api";
 import { setGlobalFlag } from "./commissions";
 
 /**
@@ -174,3 +181,106 @@ export async function startNewConversationUi(page: Page) {
   await expect(assistantBubbles(page)).toHaveCount(0);
   await expect(page.getByTestId("assistant-welcome")).toBeVisible();
 }
+
+// ── Invoice drafts (phase 2) ─────────────────────────────────────────────────────────────────────
+
+
+/** What the demo salon needs to issue an invoice: an active fiscal stamp and an open cash register. */
+export async function prepareInvoicing(request: APIRequestContext, token: string) {
+  await ensureActiveFiscalStampForInvoices(request, token);
+  await ensureCashSessionOpenApi(request, token);
+}
+
+/** An open ficha with one service line (no price: it takes the catalog's), ready to be charged. */
+export async function createOpenFicha(
+  request: APIRequestContext,
+  token: string,
+  body: { clientId: number; serviceId: number; professionalId: number },
+): Promise<number> {
+  const ficha = await apiPostJson<{ id: number }>(request, token, "/api/service-records", {
+    clientId: body.clientId,
+    lines: [
+      { serviceId: body.serviceId, professionalId: body.professionalId, quantity: 1, unitPrice: null },
+    ],
+    tips: [],
+  });
+  return ficha.id;
+}
+
+export type InvoiceRow = { id: number; status: string; total: string | number };
+
+export async function clientInvoicesApi(
+  request: APIRequestContext,
+  token: string,
+  clientId: number,
+): Promise<InvoiceRow[]> {
+  const res = await request.get(`${API_BASE}/api/invoices?clientId=${clientId}&size=100`, {
+    headers: authHeaders(token),
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return ((await res.json()) as { content: InvoiceRow[] }).content;
+}
+
+export type DraftDto = {
+  id: string;
+  type: string;
+  status: string;
+  missing: string[];
+  payload: { total: number; clientName: string; lines: Array<{ name: string; lineTotal: number }> };
+};
+
+/** Asks the assistant (API) and returns the draft card it produced, if any. */
+export async function proposeViaApi(
+  request: APIRequestContext,
+  token: string,
+  text: string,
+): Promise<{ draft: DraftDto | null; answer: AssistantAnswer }> {
+  const { conversationId } = await currentConversationApi(request, token);
+  const answer = await askAssistantApi(request, token, conversationId, text);
+  const card = answer.events.find((e) => e.event === "card.draft");
+  return { draft: card ? (card.data as unknown as DraftDto) : null, answer };
+}
+
+export async function completeDraftApi(
+  request: APIRequestContext,
+  token: string,
+  id: string,
+  patch: Record<string, string>,
+) {
+  const res = await request.patch(`${API_BASE}/api/assistant/drafts/${id}`, {
+    headers: authHeaders(token),
+    data: patch,
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+export function confirmDraftApi(request: APIRequestContext, token: string, id: string) {
+  return request.post(`${API_BASE}/api/assistant/drafts/${id}/confirm`, {
+    headers: { ...authHeaders(token), "Idempotency-Key": id },
+  });
+}
+
+/** Moves the draft's 24 h expiry into the past (e2e-only support endpoint). */
+export async function expireDraftApi(request: APIRequestContext, token: string, id: string) {
+  const res = await request.post(`${API_BASE}/api/admin/assistant-test-support/drafts/${id}/expire`, {
+    headers: authHeaders(token),
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+export async function updateServicePriceApi(
+  request: APIRequestContext,
+  token: string,
+  service: { id: number; name: string; categoryId: number },
+  priceMinor: number,
+) {
+  await apiPutJson(request, token, `/api/services/${service.id}`, {
+    name: service.name,
+    categoryId: service.categoryId,
+    priceMinor,
+    durationMinutes: 60,
+  });
+}
+
+export const draftCards = (page: Page) => page.getByTestId("assistant-draft-card");
+export const lastDraftCard = (page: Page) => draftCards(page).last();

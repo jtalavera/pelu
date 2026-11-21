@@ -54,6 +54,16 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
       Pattern.compile(
           "(?i)\\b(?:turnos|appointments)\\s+(?:de|of|for)\\s+(?!hoy|today|manana|mañana|tomorrow)"
               + "(.+?)(?:\\s+(?:para|de|for|on)\\s+(?:hoy|today|manana|mañana|tomorrow|\\d{4}-\\d{2}-\\d{2}))?\\W*$");
+
+  /** «invoice <client> [for <service>]» / «factura(le) a <cliente> [por|con <servicio>]». */
+  private static final Pattern INVOICE =
+      Pattern.compile(
+          "(?i)\\b(?:invoice|bill|factura(?:r|le)?)\\s+(?:a\\s+|to\\s+|for\\s+)?(.+?)"
+              + "(?:\\s+(?:for|por|con|with)\\s+(.+?))?\\s*$");
+
+  private static final Pattern DISCARD =
+      Pattern.compile("(?i)\\b(?:discard|descart\\w*)\\b.*\\b(?:draft|borrador)\\b");
+
   private static final int CHUNK = 16;
 
   /** With «slowly» / «despacio» in the question the answer trickles out, for streaming e2e. */
@@ -73,7 +83,7 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
     boolean slow = isSlow(fold(userText));
 
     if (last.kind() == Kind.TOOL_RESULTS) {
-      answerFromToolResults(last, userText, slow, sink);
+      answerFromToolResults(turns, last, userText, slow, sink);
       return;
     }
     String folded = fold(userText);
@@ -81,7 +91,13 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
       throw new AssistantModelException("scripted failure");
     }
     Matcher of = APPOINTMENTS_OF.matcher(userText.trim());
-    if (isAppointments(folded) && of.find()) {
+    Matcher invoice = INVOICE.matcher(userText.trim());
+    if (DISCARD.matcher(userText).find()) {
+      requestTool(sink, "descartar_borrador", "{}");
+    } else if (invoice.find()) {
+      requestTool(
+          sink, "buscar_clientes", "{\"query\":" + quote(withoutPayment(invoice.group(1))) + "}");
+    } else if (isAppointments(folded) && of.find()) {
       requestTool(sink, "buscar_clientes", "{\"query\":" + quote(of.group(1).trim()) + "}");
     } else if (isAppointments(folded)) {
       requestTool(sink, "turnos_del_dia", "{\"date\":" + quote(dateOf(folded, userText)) + "}");
@@ -101,14 +117,47 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
   // ---------------------------------------------------------------------------------------------
 
   private void answerFromToolResults(
-      ChatTurn results, String userText, boolean slow, Consumer<ModelEvent> sink) {
+      List<ChatTurn> turns,
+      ChatTurn results,
+      String userText,
+      boolean slow,
+      Consumer<ModelEvent> sink) {
     ToolResult r = results.toolResults().get(0);
     JsonNode root = objectMapper.readTree(r.content());
+    Matcher invoice = INVOICE.matcher(userText.trim());
+    boolean invoicing = invoice.find();
+    if (r.name().equals("proponer_factura") || r.name().equals("descartar_borrador")) {
+      answerProposal(r.name(), root, slow, sink);
+      return;
+    }
     if (root.has("error")) {
       say(sink, slow, "No pude consultar ese dato.");
       return;
     }
     JsonNode data = root.get("data");
+    if (invoicing && r.name().equals("buscar_clientes") && !data.get("clients").isEmpty()) {
+      long clientId = data.get("clients").get(0).get("id").asLong();
+      String service = invoice.group(2) == null ? null : withoutPayment(invoice.group(2));
+      if (service != null && !service.isBlank()) {
+        requestTool(sink, "listar_servicios", "{\"query\":" + quote(service) + "}");
+      } else {
+        requestTool(sink, "proponer_factura", invoiceArgs(clientId, null, userText));
+      }
+      return;
+    }
+    if (invoicing && r.name().equals("listar_servicios")) {
+      JsonNode services = data.get("services");
+      Long clientId = clientIdFromEarlierSearch(turns);
+      if (services.isEmpty() || clientId == null) {
+        say(sink, slow, "No encontré ese servicio.");
+      } else {
+        requestTool(
+            sink,
+            "proponer_factura",
+            invoiceArgs(clientId, services.get(0).get("id").asLong(), userText));
+      }
+      return;
+    }
     switch (r.name()) {
       case "buscar_clientes" -> {
         JsonNode clients = data.get("clients");
@@ -158,6 +207,73 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
       }
       default -> say(sink, slow, FALLBACK);
     }
+  }
+
+  private void answerProposal(String tool, JsonNode root, boolean slow, Consumer<ModelEvent> sink) {
+    if (root.has("error")) {
+      String code = root.get("error").asString();
+      say(
+          sink,
+          slow,
+          switch (code) {
+            case "MULTIPLE_APPOINTMENTS" ->
+                "El cliente tiene varios turnos hoy. ¿Cuál querés facturar?";
+            case "NOTHING_TO_INVOICE" -> "No encontré nada para facturar. ¿Qué servicios cobro?";
+            case "CLIENT_REQUIRES_MANUAL_INVOICE" -> "Esa factura se hace desde Facturación.";
+            case "FORBIDDEN" -> "Facturar es solo para administración.";
+            case "NO_ACTIVE_DRAFT" -> "No hay ningún borrador para descartar.";
+            default -> "No pude preparar el borrador (" + code + ").";
+          });
+      return;
+    }
+    if (tool.equals("descartar_borrador")) {
+      say(sink, slow, "Listo, descarté el borrador.");
+      return;
+    }
+    say(
+        sink,
+        slow,
+        "Preparé el borrador de factura para "
+            + root.get("data").get("client").asString()
+            + ". Revisalo y confirmalo con el botón de la tarjeta.");
+  }
+
+  /**
+   * «Corte cash» → «Corte»: a payment word at the end is the payment method, not part of a name.
+   */
+  private static String withoutPayment(String text) {
+    return text.trim().replaceAll("(?i)\\s+(?:cash|efectivo|transfer\\w*)\\s*$", "");
+  }
+
+  private static String invoiceArgs(long clientId, Long serviceId, String userText) {
+    String folded = fold(userText);
+    StringBuilder sb = new StringBuilder("{\"clientId\":" + clientId);
+    if (serviceId != null) {
+      sb.append(",\"serviceIds\":[").append(serviceId).append(']');
+    }
+    if (folded.contains("cash") || folded.contains("efectivo")) {
+      sb.append(",\"paymentMethod\":\"CASH\"");
+    } else if (folded.contains("transfer")) {
+      sb.append(",\"paymentMethod\":\"TRANSFER\"");
+    }
+    return sb.append('}').toString();
+  }
+
+  /**
+   * The client found by the earlier search of this same request (tool results are not replayed).
+   */
+  private Long clientIdFromEarlierSearch(List<ChatTurn> turns) {
+    for (ChatTurn t : turns) {
+      for (ToolResult r : t.toolResults()) {
+        if (r.name().equals("buscar_clientes")) {
+          JsonNode clients = objectMapper.readTree(r.content()).path("data").path("clients");
+          if (!clients.isEmpty()) {
+            return clients.get(0).get("id").asLong();
+          }
+        }
+      }
+    }
+    return null;
   }
 
   /** Fixed format, same as the system prompt asks of the real model: «- Nombre — Gs. 50.000». */

@@ -56,6 +56,7 @@ public class AssistantTools {
   private final AppointmentService appointmentService;
   private final FemmeTimeProperties timeProperties;
   private final ObjectMapper objectMapper;
+  private final AssistantProposalTools proposals;
 
   public AssistantTools(
       ClientService clientService,
@@ -63,13 +64,15 @@ public class AssistantTools {
       ProfessionalDirectoryService professionalDirectoryService,
       AppointmentService appointmentService,
       FemmeTimeProperties timeProperties,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      AssistantProposalTools proposals) {
     this.clientService = clientService;
     this.serviceCatalogService = serviceCatalogService;
     this.professionalDirectoryService = professionalDirectoryService;
     this.appointmentService = appointmentService;
     this.timeProperties = timeProperties;
     this.objectMapper = objectMapper;
+    this.proposals = proposals;
   }
 
   /** True for a tool this class implements — bounds the cardinality of the tool metric. */
@@ -77,11 +80,19 @@ public class AssistantTools {
     return BUSCAR_CLIENTES.equals(name)
         || LISTAR_SERVICIOS.equals(name)
         || LISTAR_PROFESIONALES.equals(name)
-        || TURNOS_DEL_DIA.equals(name);
+        || TURNOS_DEL_DIA.equals(name)
+        || AssistantProposalTools.PROPONER_FACTURA.equals(name)
+        || AssistantProposalTools.DESCARTAR_BORRADOR.equals(name);
   }
 
   /** The tools offered to this user. All four are read-only and open to ADMIN and PROFESSIONAL. */
   public List<ToolSpec> specsFor(AssistantContext ctx) {
+    List<ToolSpec> all = new java.util.ArrayList<>(readSpecs(ctx));
+    all.addAll(proposals.specsFor(ctx));
+    return all;
+  }
+
+  private List<ToolSpec> readSpecs(AssistantContext ctx) {
     return List.of(
         new ToolSpec(
             BUSCAR_CLIENTES,
@@ -114,13 +125,24 @@ public class AssistantTools {
                 "[\"date\"]")));
   }
 
-  /** Runs one tool. Never throws: a failure becomes {@code {"error": "CODE"}} for the model. */
+  /** Runs one tool and returns only what the model reads (see {@link #run}). */
   public String execute(AssistantContext ctx, String name, String argumentsJson) {
+    return run(ctx, name, argumentsJson).json();
+  }
+
+  /**
+   * Runs one tool. Never throws: a failure becomes {@code {"error": "CODE"}} for the model. Besides
+   * the JSON the model reads, the outcome carries the cards (drafts…) the person must see.
+   */
+  public ToolOutcome run(AssistantContext ctx, String name, String argumentsJson) {
     try {
       JsonNode args =
           argumentsJson == null || argumentsJson.isBlank()
               ? objectMapper.createObjectNode()
               : objectMapper.readTree(argumentsJson);
+      if (proposals.handles(name)) {
+        return proposals.run(ctx, name, args);
+      }
       Object data =
           switch (name) {
             case BUSCAR_CLIENTES -> buscarClientes(ctx, args);
@@ -129,13 +151,18 @@ public class AssistantTools {
             case TURNOS_DEL_DIA -> turnosDelDia(ctx, args);
             default -> throw new ToolException("UNKNOWN_TOOL");
           };
-      return objectMapper.writeValueAsString(Map.of("data", data));
+      return ToolOutcome.of(objectMapper.writeValueAsString(Map.of("data", data)));
     } catch (ToolException e) {
-      return error(e.getMessage());
+      return ToolOutcome.of(error(e.getMessage(), e.extra()));
+    } catch (AssistantDraftException e) {
+      return ToolOutcome.of(error(e.code(), Map.of()));
+    } catch (org.springframework.web.server.ResponseStatusException e) {
+      // A service refused (unknown client, inactive professional…): its code goes to the model.
+      return ToolOutcome.of(error(e.getReason() == null ? "TOOL_FAILED" : e.getReason()));
     } catch (RuntimeException e) {
       // Never log arguments or results: they hold client data.
       log.error("assistant tool failed tool={} tenantId={}", name, ctx.tenantId(), e);
-      return error("TOOL_FAILED");
+      return ToolOutcome.of(error("TOOL_FAILED"));
     }
   }
 
@@ -280,7 +307,14 @@ public class AssistantTools {
   }
 
   private String error(String code) {
-    return objectMapper.writeValueAsString(Map.of("error", code));
+    return error(code, Map.of());
+  }
+
+  private String error(String code, Map<String, Object> extra) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("error", code);
+    body.putAll(extra);
+    return objectMapper.writeValueAsString(body);
   }
 
   private static String text(JsonNode args, String field) {
@@ -299,7 +333,7 @@ public class AssistantTools {
     return n.asLong();
   }
 
-  private static String schema(String properties, String required) {
+  static String schema(String properties, String required) {
     return "{\"type\":\"object\",\"properties\":"
         + properties
         + ",\"required\":"
@@ -307,10 +341,21 @@ public class AssistantTools {
         + ",\"additionalProperties\":false}";
   }
 
-  /** A tool refused its input; the code goes back to the model, not to the user. */
+  /** A tool refused its input; the code (and any hints) go back to the model, not to the user. */
   static final class ToolException extends RuntimeException {
+    private final transient Map<String, Object> extra;
+
     ToolException(String code) {
+      this(code, Map.of());
+    }
+
+    ToolException(String code, Map<String, Object> extra) {
       super(code);
+      this.extra = extra;
+    }
+
+    Map<String, Object> extra() {
+      return extra;
     }
   }
 }

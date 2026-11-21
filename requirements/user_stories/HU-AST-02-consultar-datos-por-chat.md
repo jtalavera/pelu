@@ -24,7 +24,7 @@ Multi-tenant y convenciones: [PRD Femme MVP v1](../prds/femme_historias_usuario_
 
 ## Contexto
 
-El asistente entiende la pregunta con un modelo de lenguaje y la responde consultando las mismas fuentes de datos que el resto del sistema, siempre dentro del salón de quien pregunta. En esta fase **solo lee**: el modelo no tiene ninguna herramienta que cree, cambie, cancele o facture algo. Las herramientas son `buscar_clientes`, `listar_servicios`, `listar_profesionales` y `turnos_del_dia`. En las pruebas automáticas el modelo es un doble guionado que responde por patrones de texto y pasa por el mismo recorrido real (herramientas, streaming y pantalla).
+El asistente entiende la pregunta con un modelo de lenguaje y la responde consultando las mismas fuentes de datos que el resto del sistema, siempre dentro del salón de quien pregunta. El modelo **consulta** con `buscar_clientes`, `listar_servicios`, `listar_profesionales` y `turnos_del_dia`, y **propone** borradores con `proponer_factura` y `descartar_borrador` (fase 2); no tiene ninguna herramienta que cree, cambie, cancele o emita algo: eso lo hace la persona con el botón de la tarjeta. En las pruebas automáticas el modelo es un doble guionado que responde por patrones de texto y pasa por el mismo recorrido real (herramientas, streaming y pantalla).
 
 ---
 
@@ -39,7 +39,7 @@ El asistente entiende la pregunta con un modelo de lenguaje y la responde consul
 7. **Solo cliente propio — Aislamiento por salón.** El asistente nunca devuelve clientes, turnos ni profesionales de otro salón, aunque se los pida por nombre.
 8. **Profesional — Solo nombres.** Una profesional puede usar el asistente, pero ve de los clientes solo el nombre (sin teléfono ni RUC) y los busca solo por nombre, igual que en la lista de clientes.
 9. **No entiende — Respuesta de ayuda.** Ante una pregunta que no entiende, el asistente lo dice y sugiere qué puede hacer.
-10. **Solo lectura — No cambia datos.** Pedirle al asistente que cree un turno, una factura o modifique algo no cambia ningún dato.
+10. **Sin confirmación — No cambia datos.** Pedirle al asistente algo que modifica datos (por ejemplo facturar) solo prepara un borrador en una tarjeta ([HU-AST-03](HU-AST-03-proponer-y-emitir-factura-desde-el-chat.md)): ningún cliente, turno ni factura cambia hasta que la persona lo confirma con el botón.
 11. **Error del modelo — Mensaje traducido.** Si el modelo no está disponible, la burbuja muestra un mensaje de error traducido (sin códigos técnicos) y la caja vuelve a quedar disponible.
 12. **Mensaje vacío o demasiado largo — Validación.** Un mensaje vacío no se envía (el botón «Enviar» queda deshabilitado). La caja no admite más de 2000 caracteres y el servidor rechaza uno más largo (`ASSISTANT_MESSAGE_TOO_LONG`; la pantalla lo traduce diciendo el máximo: «El mensaje es demasiado largo: el máximo es de 2000 caracteres.»).
 13. **Conversación propia — Una por persona.** Cada persona tiene su propia conversación: nadie puede leer ni continuar la de otra persona, ni siquiera conociendo su identificador.

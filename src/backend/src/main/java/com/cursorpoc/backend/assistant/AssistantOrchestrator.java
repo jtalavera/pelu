@@ -185,11 +185,15 @@ public class AssistantOrchestrator {
     for (ToolCall call : calls) {
       sink.send(EVENT_TOOL_STATUS, Map.of("tool", call.name(), "state", "running"));
       pauseForToolDelay();
-      String result = tools.execute(ctx, call.name(), call.argumentsJson());
+      ToolOutcome outcome = tools.run(ctx, call.name(), call.argumentsJson());
+      String result = outcome.json();
       boolean failed = result.startsWith("{\"error\"");
       metrics.recordToolCall(ctx.tenantId(), call.name(), failed ? "error" : "ok");
       conversations.appendTool(conversationId, call.name(), result);
       sink.send(EVENT_TOOL_STATUS, Map.of("tool", call.name(), "state", "done"));
+      for (ToolOutcome.CardEvent card : outcome.cards()) {
+        sink.send(card.event(), card.payload());
+      }
       results.add(new ToolResult(call.id(), call.name(), result));
     }
     return results;

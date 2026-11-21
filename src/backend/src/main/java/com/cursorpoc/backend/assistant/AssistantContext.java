@@ -9,15 +9,28 @@ import com.cursorpoc.backend.security.FemmeUserPrincipal;
  * supplies either.
  */
 public record AssistantContext(
-    long tenantId, long userId, UserRole role, Long professionalId, String currentPage) {
+    long tenantId,
+    long userId,
+    UserRole role,
+    Long professionalId,
+    String currentPage,
+    Long conversationId) {
 
-  public static AssistantContext from(FemmeUserPrincipal principal, String currentPage) {
+  /** Without a conversation: enough for the read-only tools. */
+  public AssistantContext(
+      long tenantId, long userId, UserRole role, Long professionalId, String currentPage) {
+    this(tenantId, userId, role, professionalId, currentPage, null);
+  }
+
+  public static AssistantContext from(
+      FemmeUserPrincipal principal, String currentPage, Long conversationId) {
     return new AssistantContext(
         principal.getTenantId(),
         principal.getUserId(),
         principal.getRole(),
         principal.getProfessionalId(),
-        sanitizePage(currentPage));
+        sanitizePage(currentPage),
+        conversationId);
   }
 
   /**
@@ -32,5 +45,9 @@ public record AssistantContext(
 
   public boolean isProfessional() {
     return role == UserRole.PROFESSIONAL;
+  }
+
+  public boolean isAdmin() {
+    return role == UserRole.ADMIN;
   }
 }
