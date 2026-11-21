@@ -123,6 +123,15 @@ export function startAssistantConversation(): Promise<AssistantConversation> {
   return femmeJson<AssistantConversation>("/api/assistant/conversations", { method: "POST" });
 }
 
+/** Short-lived Speech token for dictation: the browser talks to Azure AI Speech with it. */
+export function getAssistantSpeechToken(): Promise<{
+  token: string;
+  region: string;
+  expiresInSeconds: number;
+}> {
+  return femmeJson("/api/assistant/speech-token", { json: false });
+}
+
 export function toAssistantStreamEvent(message: SseMessage): AssistantStreamEvent | null {
   let payload: unknown;
   try {

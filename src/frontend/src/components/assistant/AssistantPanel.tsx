@@ -121,7 +121,7 @@ export function AssistantPanel() {
       />
       <AssistantComposer
         disabled={a.busy || a.loadingHistory}
-        onSend={(text) => void a.send(text)}
+        onSend={(text, inputMode) => void a.send(text, inputMode)}
       />
       {invoiceModal && (
         <InvoiceDetailModal

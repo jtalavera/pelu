@@ -36,6 +36,29 @@ vi.mock("../../api/assistant", async (importOriginal) => ({
   completeAssistantDraft: api.complete,
 }));
 
+// The microphone of the panel's composer: a fake the test speaks into (the real one is Azure Speech).
+const mic = vi.hoisted(() => ({
+  handlers: null as null | {
+    onPartial: (t: string) => void;
+    onFinal: (t: string) => void;
+    onError: (c: string) => void;
+    onEnded: () => void;
+  },
+  stops: 0,
+}));
+vi.mock("../../assistant/dictation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../assistant/dictation")>()),
+  startDictation: async (_language: string, handlers: NonNullable<typeof mic.handlers>) => {
+    mic.handlers = handlers;
+    return {
+      stop: async () => {
+        mic.stops += 1;
+        mic.handlers = null;
+      },
+    };
+  },
+}));
+
 type StreamScript = (emit: (e: AssistantStreamEvent) => void) => Promise<void> | void;
 
 /** The answer of the next message: the script emits events, like the SSE stream would. */
@@ -107,6 +130,8 @@ describe("Assistant (provider + button + panel)", () => {
     api.confirm.mockReset();
     api.discard.mockReset();
     api.complete.mockReset();
+    mic.handlers = null;
+    mic.stops = 0;
   });
 
   it("does not exist when the feature flag is off: no button, no panel, no shortcut", async () => {
@@ -157,6 +182,59 @@ describe("Assistant (provider + button + panel)", () => {
     expect(bubbles.map((b) => b.getAttribute("data-role"))).toEqual(["USER", "ASSISTANT"]);
     expect(screen.queryByTestId("assistant-welcome")).toBeNull();
     expect(screen.getByText(/Hay 2 turnos\./)).toBeTruthy();
+  });
+
+  it("shows «Dictado» under the messages that were dictated, and nothing under typed ones", async () => {
+    api.getCurrent.mockResolvedValue({
+      conversationId: 5,
+      messages: [
+        { id: 1, role: "USER", content: "escrito a mano", inputMode: "TEXT", createdAt: "" },
+        { id: 2, role: "ASSISTANT", content: "Listo.", inputMode: null, createdAt: "" },
+        { id: 3, role: "USER", content: "hablado", inputMode: "VOICE", createdAt: "" },
+      ],
+    });
+    renderAssistant();
+    await openPanel();
+
+    const bubbles = await screen.findAllByTestId("assistant-message");
+
+    expect(within(bubbles[0]).queryByTestId("assistant-message-dictated")).toBeNull();
+    expect(within(bubbles[1]).queryByTestId("assistant-message-dictated")).toBeNull();
+    expect(within(bubbles[2]).getByTestId("assistant-message-dictated").textContent).toBe("Dictado");
+  });
+
+  it("dictating fills the box, and sending it posts VOICE and marks the bubble «Dictado»", async () => {
+    scriptAnswer((emit) => {
+      emit({ type: "message.delta", text: "Estos son los turnos." });
+      emit({ type: "message.done", messageId: 1 });
+    });
+    renderAssistant();
+    await openPanel();
+
+    await userEvent.click(screen.getByTestId("assistant-mic"));
+    await waitFor(() => expect(mic.handlers).not.toBeNull());
+    act(() => mic.handlers?.onPartial("turnos de hoy"));
+    expect((screen.getByTestId("assistant-input") as HTMLTextAreaElement).value).toBe("turnos de hoy");
+    expect(api.stream).not.toHaveBeenCalled(); // it never sends by itself
+    await userEvent.click(screen.getByTestId("assistant-send"));
+
+    await waitFor(() => expect(api.stream).toHaveBeenCalledTimes(1));
+    expect(api.stream.mock.calls[0][0]).toMatchObject({ text: "turnos de hoy", inputMode: "VOICE" });
+    const bubbles = await screen.findAllByTestId("assistant-message");
+    expect(within(bubbles[0]).getByTestId("assistant-message-dictated")).toBeTruthy();
+    expect(mic.stops).toBeGreaterThan(0);
+  });
+
+  it("a typed message is posted as TEXT and has no «Dictado» mark", async () => {
+    scriptAnswer((emit) => emit({ type: "message.done", messageId: 1 }));
+    renderAssistant();
+    await openPanel();
+
+    await ask("hola");
+
+    await waitFor(() => expect(api.stream).toHaveBeenCalledTimes(1));
+    expect(api.stream.mock.calls[0][0]).toMatchObject({ text: "hola", inputMode: "TEXT" });
+    expect(screen.queryByTestId("assistant-message-dictated")).toBeNull();
   });
 
   it("streams the answer, shows the tool being run, and sends the screen as context", async () => {

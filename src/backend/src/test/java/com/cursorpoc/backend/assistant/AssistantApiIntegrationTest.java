@@ -239,6 +239,54 @@ class AssistantApiIntegrationTest {
   }
 
   @Test
+  void speechToken_isIssuedToASalonUser_neverCached_andOnlyWithTheFlagOn() throws Exception {
+    HttpResponse<String> res = get("/api/assistant/speech-token", token(adminA));
+
+    assertThat(res.statusCode()).as(res.body()).isEqualTo(200);
+    JsonNode body = json(res);
+    assertThat(body.get("token").asString()).isNotBlank();
+    assertThat(body.get("region").asString()).isNotBlank();
+    assertThat(body.get("expiresInSeconds").asInt()).isBetween(60, 600);
+    assertThat(res.headers().firstValue("Cache-Control").orElse("")).contains("no-store");
+
+    // A professional dictates too; nobody without a session does.
+    Professional pro = professionalOf(tenantA);
+    AppUser proUser = user(tenantA, UserRole.PROFESSIONAL, pro.getId());
+    assertThat(get("/api/assistant/speech-token", token(proUser)).statusCode()).isEqualTo(200);
+    assertThat(get("/api/assistant/speech-token", null).statusCode()).isIn(401, 403);
+
+    FeatureFlag flag = featureFlagRepository.findByFlagKey(AssistantAccess.FLAG).orElseThrow();
+    flag.setEnabled(false);
+    featureFlagRepository.save(flag);
+    HttpResponse<String> off = get("/api/assistant/speech-token", token(adminA));
+    assertThat(off.statusCode()).isEqualTo(403);
+    assertThat(off.body()).contains("ASSISTANT_DISABLED");
+  }
+
+  @Test
+  void aDictatedMessage_isStoredAsVoice_andComesBackWithTheHistory() throws Exception {
+    long conversationId = currentConversation(adminA);
+    postMessageMode(adminA, conversationId, "servicios", "VOICE");
+    postMessageMode(adminA, conversationId, "profesionales", "TEXT");
+    postMessageMode(adminA, conversationId, "clientes", "SOMETHING_ELSE");
+
+    JsonNode messages =
+        json(get("/api/assistant/conversations/current", token(adminA))).get("messages");
+
+    java.util.Map<String, String> modeByText = new java.util.LinkedHashMap<>();
+    for (JsonNode m : messages) {
+      if ("USER".equals(m.get("role").asString())) {
+        modeByText.put(m.get("content").asString(), m.get("inputMode").asString());
+      }
+    }
+    // Anything but VOICE is plain text (the field is never trusted as free text).
+    assertThat(modeByText)
+        .containsEntry("servicios", "VOICE")
+        .containsEntry("profesionales", "TEXT")
+        .containsEntry("clientes", "TEXT");
+  }
+
+  @Test
   void retention_deletesOnlyConversationsIdleForLongerThanTheCutoff() {
     AssistantConversation old =
         conversationService.getOrCreateCurrent(tenantA.getId(), adminA.getId());
@@ -271,6 +319,15 @@ class AssistantApiIntegrationTest {
   private HttpResponse<String> postMessage(AppUser user, long conversationId, String text)
       throws Exception {
     return postMessageRaw(user, conversationId, text, "hoy");
+  }
+
+  private HttpResponse<String> postMessageMode(
+      AppUser user, long conversationId, String text, String inputMode) throws Exception {
+    String body =
+        objectMapper.writeValueAsString(
+            java.util.Map.of(
+                "conversationId", conversationId, "text", text, "inputMode", inputMode));
+    return post("/api/assistant/messages", token(user), body);
   }
 
   private HttpResponse<String> postMessageRaw(

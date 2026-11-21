@@ -8,8 +8,10 @@ import java.util.concurrent.RejectedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,6 +41,7 @@ public class AssistantController {
   private final AssistantProperties properties;
   private final ExecutorService assistantExecutor;
   private final ObjectMapper objectMapper;
+  private final SpeechTokenProvider speechTokens;
 
   public AssistantController(
       AssistantAccess access,
@@ -46,13 +49,15 @@ public class AssistantController {
       AssistantOrchestrator orchestrator,
       AssistantProperties properties,
       ExecutorService assistantExecutor,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      SpeechTokenProvider speechTokens) {
     this.access = access;
     this.conversations = conversations;
     this.orchestrator = orchestrator;
     this.properties = properties;
     this.assistantExecutor = assistantExecutor;
     this.objectMapper = objectMapper;
+    this.speechTokens = speechTokens;
   }
 
   /** The user's open conversation with its recent history (created on first use). */
@@ -71,6 +76,33 @@ public class AssistantController {
     AssistantConversation c =
         conversations.startNew(principal.getTenantId(), principal.getUserId());
     return conversations.view(c);
+  }
+
+  /**
+   * Dictation (HU-AST-07): a short-lived Speech token so the browser talks to Azure AI Speech
+   * directly. Same access as the rest of the assistant (flag on, salon user); never cached.
+   */
+  @GetMapping("/speech-token")
+  public ResponseEntity<Map<String, Object>> speechToken(
+      @AuthenticationPrincipal FemmeUserPrincipal principal) {
+    access.requireEnabled(principal);
+    try {
+      SpeechTokenProvider.SpeechToken t = speechTokens.issue();
+      return ResponseEntity.ok()
+          .cacheControl(CacheControl.noStore())
+          .body(
+              Map.of(
+                  "token", t.token(),
+                  "region", t.region(),
+                  "expiresInSeconds", t.expiresInSeconds()));
+    } catch (SpeechTokenProvider.SpeechUnavailableException e) {
+      log.error(
+          "speech token unavailable tenantId={} reason={}",
+          principal.getTenantId(),
+          e.getMessage());
+      throw new ResponseStatusException(
+          HttpStatus.SERVICE_UNAVAILABLE, "ASSISTANT_SPEECH_UNAVAILABLE");
+    }
   }
 
   /** Sends a message; the answer streams back as Server-Sent Events. */

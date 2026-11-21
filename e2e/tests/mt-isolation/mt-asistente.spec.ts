@@ -124,6 +124,12 @@ test.describe("mt-asistente · aislamiento del asistente conversacional", () => 
         headers: authHeaders(tokenA),
       });
       expect(still.status()).toBe(200);
+      // Dictation follows the same flag: no voice token for the salon that has it off.
+      const noVoice = await request.get(`${API_BASE}/api/assistant/speech-token`, { headers: authHeaders(tokenB) });
+      expect(noVoice.status()).toBe(403);
+      expect(await noVoice.text()).toContain("ASSISTANT_DISABLED");
+      const voiceA = await request.get(`${API_BASE}/api/assistant/speech-token`, { headers: authHeaders(tokenA) });
+      expect(voiceA.status()).toBe(200);
     } finally {
       const platform = await loginPlatformAdminApi(request);
       await request.delete(

@@ -1648,6 +1648,20 @@
       "options": {
         "SLOT": "Pick a time"
       },
+      "dictation": {
+        "start": "Dictate a message",
+        "stop": "Stop dictating",
+        "starting": "Starting the microphone…",
+        "listening": "Listening… speak, then review the text before sending it.",
+        "badge": "Dictated",
+        "errors": {
+          "MIC_DENIED": "Microphone access was denied. Allow it in your browser's site settings and try again.",
+          "MIC_UNAVAILABLE": "No microphone was found, or another app is using it.",
+          "NETWORK": "Dictation lost its connection. Check your network and try again.",
+          "UNAVAILABLE": "Dictation is not available right now. You can type your message.",
+          "UNSUPPORTED": "This browser cannot dictate. You can type your message."
+        }
+      },
       "tool": {
         "buscar_clientes": "Searching clients…",
         "listar_servicios": "Looking up services…",
@@ -3635,6 +3649,7 @@
       }
     },
     "apiErrors": {
+      "ASSISTANT_SPEECH_UNAVAILABLE": "Dictation is not available right now. You can type your message.",
       "ASSISTANT_DRAFT_INVALID_PRICE": "That price is not valid. Enter a whole amount greater than zero, for example 50.000.",
       "ASSISTANT_SLOT_TAKEN": "That time was just taken. Pick another free time below.",
       "ASSISTANT_DRAFT_NOT_FOUND": "That draft no longer exists.",

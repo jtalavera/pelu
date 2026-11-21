@@ -1648,6 +1648,20 @@
       "options": {
         "SLOT": "Elegí un horario"
       },
+      "dictation": {
+        "start": "Dictar un mensaje",
+        "stop": "Detener el dictado",
+        "starting": "Iniciando el micrófono…",
+        "listening": "Escuchando… hablá y revisá el texto antes de enviarlo.",
+        "badge": "Dictado",
+        "errors": {
+          "MIC_DENIED": "Se denegó el acceso al micrófono. Permitilo en la configuración del sitio de tu navegador y probá de nuevo.",
+          "MIC_UNAVAILABLE": "No se encontró un micrófono o lo está usando otra aplicación.",
+          "NETWORK": "El dictado perdió la conexión. Revisá tu red y probá de nuevo.",
+          "UNAVAILABLE": "El dictado no está disponible en este momento. Podés escribir tu mensaje.",
+          "UNSUPPORTED": "Este navegador no permite dictar. Podés escribir tu mensaje."
+        }
+      },
       "tool": {
         "buscar_clientes": "Buscando clientes…",
         "listar_servicios": "Consultando servicios…",
@@ -3635,6 +3649,7 @@
       }
     },
     "apiErrors": {
+      "ASSISTANT_SPEECH_UNAVAILABLE": "El dictado no está disponible en este momento. Podés escribir tu mensaje.",
       "ASSISTANT_DRAFT_INVALID_PRICE": "Ese precio no es válido. Ingresá un monto entero mayor a cero, por ejemplo 50.000.",
       "ASSISTANT_SLOT_TAKEN": "Ese horario se acaba de ocupar. Elegí otro horario libre.",
       "ASSISTANT_DRAFT_NOT_FOUND": "Ese borrador ya no existe.",

@@ -6,6 +6,7 @@ import type { AssistantUiMessage } from "../../assistant/AssistantContext";
 import type { DraftPatch } from "../../api/assistant";
 import { AppointmentDraftCard } from "./AppointmentDraftCard";
 import { AssistantOptionChips } from "./AssistantOptionChips";
+import { MicIcon } from "./AssistantIcons";
 import { InvoiceDraftCard } from "./InvoiceDraftCard";
 
 const SUGGESTIONS = ["appointmentsToday", "services", "professionals"] as const;
@@ -151,6 +152,15 @@ export function AssistantMessageList({
                   m.content
                 )}
               </div>
+            )}
+            {isUser && m.inputMode === "VOICE" && (
+              <span
+                data-testid="assistant-message-dictated"
+                className="flex items-center gap-1 text-xs text-ink-2"
+              >
+                <MicIcon width={12} height={12} />
+                {t("femme.assistant.dictation.badge")}
+              </span>
             )}
             {m.streaming && m.content !== "" && toolLabel && (
               <span data-testid="assistant-tool-status" className="text-xs text-ink-2">

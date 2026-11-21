@@ -21,6 +21,9 @@ public class AssistantProperties {
   /** Name of the model deployment inside the Foundry account. */
   private String deployment = "";
 
+  /** Azure region of the Speech resource (same Foundry account) the browser dictates to. */
+  private String speechRegion = "";
+
   /** Last USER/ASSISTANT messages of the conversation sent to the model as context. */
   private int historyMaxMessages = 20;
 
@@ -63,6 +66,14 @@ public class AssistantProperties {
 
   public void setEndpoint(String endpoint) {
     this.endpoint = endpoint;
+  }
+
+  public String getSpeechRegion() {
+    return speechRegion;
+  }
+
+  public void setSpeechRegion(String speechRegion) {
+    this.speechRegion = speechRegion;
   }
 
   public String getDeployment() {

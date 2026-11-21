@@ -49,7 +49,7 @@ export function parseSse(body: string): SseEvent[] {
 
 export type AssistantConversationDto = {
   conversationId: number;
-  messages: Array<{ id: number; role: "USER" | "ASSISTANT"; content: string }>;
+  messages: Array<{ id: number; role: "USER" | "ASSISTANT"; content: string; inputMode: string | null }>;
 };
 
 export async function currentConversationApi(
@@ -157,6 +157,8 @@ export async function openAssistantPanel(page: Page) {
 
 /** Types in the assistant's message box and presses Enter. */
 export async function askAssistantUi(page: Page, text: string) {
+  // A message sent while the assistant is still answering is ignored: wait for the box to be free.
+  await expect(page.getByTestId("assistant-composer")).toHaveAttribute("data-busy", "false", { timeout: 30_000 });
   const input = page.getByTestId("assistant-input");
   await input.fill(text);
   await input.press("Enter");
@@ -366,3 +368,46 @@ export const optionChips = (page: Page) => page.getByTestId("assistant-option");
 
 export const draftCards = (page: Page) => page.getByTestId("assistant-draft-card");
 export const lastDraftCard = (page: Page) => draftCards(page).last();
+
+// ── Dictation (HU-AST-07) ────────────────────────────────────────────────────────────────────────
+//
+// Playwright cannot speak: the Vite build used by the e2e (VITE_PLAYWRIGHT=1) swaps Azure AI Speech
+// for a simulated engine a test drives through `window.__assistantDictation`.
+
+type Dictation = {
+  listening: boolean;
+  starts: number;
+  partial: (text: string) => void;
+  final: (text: string) => void;
+  fail: (code: string) => void;
+  failNextStart: (code: string) => void;
+};
+type WithDictation = Window & { __assistantDictation?: Dictation };
+
+export const micButton = (page: Page) => page.getByTestId("assistant-mic");
+export const assistantInput = (page: Page) => page.getByTestId("assistant-input");
+export const dictatedMarks = (page: Page) => page.getByTestId("assistant-message-dictated");
+
+/** What the person says, while the microphone is listening (replaces the utterance in progress). */
+export const speakPartial = (page: Page, text: string) =>
+  page.evaluate((t) => (window as WithDictation).__assistantDictation!.partial(t), text);
+/** A finished utterance. */
+export const speakFinal = (page: Page, text: string) =>
+  page.evaluate((t) => (window as WithDictation).__assistantDictation!.final(t), text);
+/** The listening session fails. */
+export const failDictation = (page: Page, code: string) =>
+  page.evaluate((c) => (window as WithDictation).__assistantDictation!.fail(c), code);
+/** The next attempt to start dictating fails (e.g. the browser's permission was denied). */
+export const failNextDictationStart = (page: Page, code: string) =>
+  page.evaluate((c) => (window as WithDictation).__assistantDictation!.failNextStart(c), code);
+export const microphoneOpen = (page: Page) =>
+  page.evaluate(() => (window as WithDictation).__assistantDictation!.listening);
+export const dictationStarts = (page: Page) =>
+  page.evaluate(() => (window as WithDictation).__assistantDictation!.starts);
+
+/** Taps the microphone and waits until it is really listening. */
+export async function startDictating(page: Page) {
+  await micButton(page).click();
+  await expect(micButton(page)).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => microphoneOpen(page)).toBe(true);
+}
