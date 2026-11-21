@@ -95,14 +95,30 @@ public class AssistantInvoiceDrafts {
     this.timeProperties = timeProperties;
   }
 
-  /** What the model asked to invoice. All optional but {@code clientId}. */
+  /**
+   * What the model asked to invoice. All optional but {@code clientId}. {@code prices} are unit
+   * prices (by service id) the PERSON said in the message: they arrive on the card already as
+   * edited, editable prices.
+   */
   public record Request(
       Long clientId,
       List<Long> serviceIds,
       Long professionalId,
       Long appointmentId,
       String paymentMethod,
-      String email) {}
+      String email,
+      Map<Long, BigDecimal> prices) {
+
+    public Request(
+        Long clientId,
+        List<Long> serviceIds,
+        Long professionalId,
+        Long appointmentId,
+        String paymentMethod,
+        String email) {
+      this(clientId, serviceIds, professionalId, appointmentId, paymentMethod, email, null);
+    }
+  }
 
   // ---------------------------------------------------------------------------------------------
   // Building a draft
@@ -155,6 +171,7 @@ public class AssistantInvoiceDrafts {
         appointmentId = today.id();
       }
     }
+    lines = applyRequestedPrices(lines, req.prices());
     boolean identified = hasIdentity(client);
     String email = blankToNull(req.email());
     if (email == null) {
@@ -325,6 +342,44 @@ public class AssistantInvoiceDrafts {
     return out;
   }
 
+  /** A unit price is valid when it is a whole number of guaraníes, above zero and sane. */
+  private static boolean isValidUnitPrice(BigDecimal price) {
+    return price != null
+        && price.signum() > 0
+        && price.stripTrailingZeros().scale() <= 0
+        && price.compareTo(MAX_UNIT_PRICE) <= 0;
+  }
+
+  /**
+   * Prices the person gave in the message: they replace the catalog's for the lines of that service
+   * and arrive marked as edited. A price for a service that is not on the invoice, or an invalid
+   * one, is reported so the assistant can ask again instead of guessing.
+   */
+  private static List<Line> applyRequestedPrices(List<Line> lines, Map<Long, BigDecimal> prices) {
+    if (prices == null || prices.isEmpty()) {
+      return lines;
+    }
+    for (Map.Entry<Long, BigDecimal> e : prices.entrySet()) {
+      if (e.getKey() == null || !isValidUnitPrice(e.getValue())) {
+        throw new AssistantTools.ToolException("INVALID_PRICE");
+      }
+      if (lines.stream().noneMatch(l -> e.getKey().equals(l.serviceId()))) {
+        throw new AssistantTools.ToolException("PRICE_SERVICE_NOT_IN_INVOICE");
+      }
+    }
+    List<Line> out = new ArrayList<>();
+    for (Line l : lines) {
+      BigDecimal price = l.serviceId() == null ? null : prices.get(l.serviceId());
+      if (price == null) {
+        out.add(l);
+      } else {
+        BigDecimal whole = price.setScale(0, RoundingMode.UNNECESSARY);
+        out.add(l.withEditedPrice(whole, lineTotal(whole, l.quantity())));
+      }
+    }
+    return out;
+  }
+
   /**
    * The person edits unit prices on the card, like the billing screen allows. Whole guaraníes,
    * greater than zero; the totals are recalculated here (the card never sends a total).
@@ -340,10 +395,7 @@ public class AssistantInvoiceDrafts {
       if (change.index() == null
           || change.index() < 0
           || change.index() >= lines.size()
-          || price == null
-          || price.signum() <= 0
-          || price.stripTrailingZeros().scale() > 0
-          || price.compareTo(MAX_UNIT_PRICE) > 0) {
+          || !isValidUnitPrice(price)) {
         throw new AssistantDraftException(
             org.springframework.http.HttpStatus.BAD_REQUEST, "ASSISTANT_DRAFT_INVALID_PRICE");
       }

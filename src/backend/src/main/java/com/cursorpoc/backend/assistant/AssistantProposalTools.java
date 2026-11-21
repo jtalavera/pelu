@@ -52,13 +52,18 @@ public class AssistantProposalTools {
               PROPONER_FACTURA,
               "Prepara un BORRADOR de factura para un cliente; no emite nada: la persona lo revisa y"
                   + " lo confirma con un botón. Sin serviceIds toma la ficha abierta del cliente o su"
-                  + " único turno de hoy. El precio y el total los calcula el sistema.",
+                  + " único turno de hoy. El precio y el total los calcula el sistema; solo si la persona"
+                  + " DIJO un precio para un servicio, pasalo en prices (nunca inventes uno).",
               AssistantTools.schema(
                   "{\"clientId\":{\"type\":\"integer\",\"description\":\"Id del cliente"
                       + " (buscar_clientes)\"},"
                       + "\"serviceIds\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"},"
                       + "\"description\":\"Ids de servicios a cobrar; repetir un id para cantidad"
                       + " 2\"},"
+                      + "\"prices\":{\"type\":\"array\",\"description\":\"Precio unitario que la persona"
+                      + " dijo para un servicio, en guaraníes enteros y sin puntos (45000)\","
+                      + "\"items\":{\"type\":\"object\",\"properties\":{\"serviceId\":{\"type\":\"integer\"},"
+                      + "\"unitPrice\":{\"type\":\"integer\"}},\"required\":[\"serviceId\",\"unitPrice\"]}},"
                       + "\"appointmentId\":{\"type\":\"integer\"},"
                       + "\"professionalId\":{\"type\":\"integer\"},"
                       + "\"paymentMethod\":{\"type\":\"string\",\"enum\":[\"CASH\",\"DEBIT_CARD\","
@@ -85,6 +90,36 @@ public class AssistantProposalTools {
     };
   }
 
+  /** Unit prices by service id, as the person said them; anything malformed is a bad call. */
+  private static Map<Long, java.math.BigDecimal> prices(JsonNode args) {
+    JsonNode node = args.get("prices");
+    if (node == null || node.isNull()) {
+      return null;
+    }
+    if (!node.isArray()) {
+      throw new AssistantTools.ToolException("INVALID_ARGUMENTS");
+    }
+    Map<Long, java.math.BigDecimal> out = new LinkedHashMap<>();
+    for (JsonNode item : node) {
+      JsonNode id = item.get("serviceId");
+      JsonNode price = item.get("unitPrice");
+      if (id == null || !id.canConvertToLong() || price == null) {
+        throw new AssistantTools.ToolException("INVALID_ARGUMENTS");
+      }
+      try {
+        // «45000» or «"45.000"» (Spanish thousands separator); a comma would be a decimal: invalid.
+        out.put(
+            id.asLong(),
+            price.isNumber()
+                ? price.decimalValue()
+                : new java.math.BigDecimal(price.asString().replace(".", "").trim()));
+      } catch (NumberFormatException e) {
+        throw new AssistantTools.ToolException("INVALID_PRICE");
+      }
+    }
+    return out;
+  }
+
   private ToolOutcome proponerFactura(AssistantContext ctx, JsonNode args) {
     if (!ctx.isAdmin()) {
       throw new AssistantTools.ToolException("FORBIDDEN");
@@ -109,7 +144,8 @@ public class AssistantProposalTools {
                 longArg(args, "professionalId"),
                 longArg(args, "appointmentId"),
                 text(args, "paymentMethod"),
-                text(args, "email")));
+                text(args, "email"),
+                prices(args)));
     AssistantDraftService.Created created = draftService.createInvoiceDraft(ctx, payload);
 
     List<CardEvent> cards = new ArrayList<>();

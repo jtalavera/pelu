@@ -379,6 +379,49 @@ test.describe("HU-AST-03 · Proponer y emitir una factura desde el chat", () => 
     await expect(card.getByTestId("assistant-draft-line-price-0")).toHaveCount(0);
   });
 
+  test("AC16 · un precio dicho en el pedido llega precargado y editable en el borrador", async ({ page, request }) => {
+    const client = await newClient(request);
+    await open(page);
+
+    await askAssistantUi(page, `invoice ${client.fullName} for ${salon.serviceFullName} at 45000`);
+
+    const card = lastDraftCard(page);
+    await expect(card).toBeVisible({ timeout: 20_000 });
+    const price = card.getByTestId("assistant-draft-line-price-0");
+    await expect(price).toHaveValue("45.000"); // not the catalog's 50.000
+    await expect(card.getByTestId("assistant-draft-line-edited-0")).toBeVisible();
+    await expect(card.getByTestId("assistant-draft-line-total-0")).toHaveText("Gs. 45.000");
+    await expect(card.getByTestId("assistant-draft-total")).toHaveText("Gs. 45.000");
+
+    // It is editable like any other price.
+    await price.fill("40000");
+    await price.press("Enter");
+    await expect(card.getByTestId("assistant-draft-total")).toHaveText("Gs. 40.000");
+
+    // Spanish, with the thousands separator, and the price is what gets issued.
+    const second = await newClient(request);
+    await askAssistantUi(page, `facturale a ${second.fullName} por ${salon.serviceFullName} a 55.000`);
+    await expect(draftCards(page)).toHaveCount(2, { timeout: 20_000 });
+    const card2 = lastDraftCard(page);
+    await expect(card2.getByTestId("assistant-draft-line-price-0")).toHaveValue("55.000");
+    await card2.getByTestId("assistant-draft-payment-CASH").click();
+    await card2.getByTestId("assistant-draft-confirm").click();
+    await expect(card2).toHaveAttribute("data-status", "CONFIRMED", { timeout: 20_000 });
+    const invoices = await clientInvoicesApi(request, token, second.id);
+    expect(Number(invoices[0].total)).toBe(55000);
+  });
+
+  test("AC16 · un precio inválido no genera borrador y el asistente lo explica", async ({ page, request }) => {
+    const client = await newClient(request);
+    await open(page);
+
+    await askAssistantUi(page, `invoice ${client.fullName} for ${salon.serviceFullName} at 0`);
+
+    await expect(assistantAnswers(page).last()).toContainText("no es válido", { timeout: 20_000 });
+    await expect(draftCards(page)).toHaveCount(0);
+    expect(await clientInvoicesApi(request, token, client.id)).toHaveLength(0);
+  });
+
   test("AC11 · escribir «sí», «dale» o «confirmá» no emite nada", async ({ page, request }) => {
     const client = await newClient(request);
     await open(page);

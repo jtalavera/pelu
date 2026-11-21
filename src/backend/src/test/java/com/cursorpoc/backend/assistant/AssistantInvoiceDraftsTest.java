@@ -154,6 +154,51 @@ class AssistantInvoiceDraftsTest {
     assertThat(p.paymentMethod()).isNull();
   }
 
+  private InvoiceDraftPayload buildWithPrices(List<Long> serviceIds, Map<Long, BigDecimal> prices) {
+    return drafts.build(
+        TENANT,
+        new AssistantInvoiceDrafts.Request(42L, serviceIds, null, null, null, null, prices));
+  }
+
+  @Test
+  void aPriceThePersonSaid_arrivesAsAnEditedPrice_andTheTotalFollowsIt() {
+    InvoiceDraftPayload p =
+        buildWithPrices(List.of(1L, 2L, 1L), Map.of(1L, new BigDecimal("45000")));
+
+    // Corte ×2 at the price they said; Tintura untouched (catalog).
+    assertThat(p.lines().get(0).unitPrice()).isEqualByComparingTo("45000");
+    assertThat(p.lines().get(0).lineTotal()).isEqualByComparingTo("90000");
+    assertThat(p.lines().get(0).priceEdited()).isTrue();
+    assertThat(p.lines().get(1).unitPrice()).isEqualByComparingTo("120000");
+    assertThat(p.lines().get(1).priceEdited()).isNull();
+    assertThat(p.total()).isEqualByComparingTo("210000");
+  }
+
+  @Test
+  void aSaidPrice_survivesRepricing_whileAnUntouchedLineFollowsTheCatalog() {
+    InvoiceDraftPayload p = buildWithPrices(List.of(1L, 2L), Map.of(1L, new BigDecimal("45000")));
+    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), eq("SERVICE")))
+        .thenReturn(
+            List.of(service(1, "Corte", 65_000, true), service(2, "Tintura", 130_000, true)));
+
+    InvoiceDraftPayload fresh = drafts.reprice(TENANT, p);
+
+    assertThat(fresh.lines().get(0).unitPrice()).isEqualByComparingTo("45000");
+    assertThat(fresh.lines().get(1).unitPrice()).isEqualByComparingTo("130000");
+  }
+
+  @Test
+  void aSaidPrice_mustBeValid_andForAServiceOnTheInvoice() {
+    for (String bad : List.of("0", "-5", "1500.5", "1000000000")) {
+      assertThatThrownBy(() -> buildWithPrices(List.of(1L), Map.of(1L, new BigDecimal(bad))))
+          .as(bad)
+          .hasMessage("INVALID_PRICE");
+    }
+    // Service 2 is not on the invoice: the assistant must ask, not guess.
+    assertThatThrownBy(() -> buildWithPrices(List.of(1L), Map.of(2L, new BigDecimal("1000"))))
+        .hasMessage("PRICE_SERVICE_NOT_IN_INVOICE");
+  }
+
   @Test
   void anInactiveOrUnknownService_isRefused() {
     assertThatThrownBy(() -> build(req(42L, List.of(3L)))).hasMessage("SERVICE_NOT_FOUND");

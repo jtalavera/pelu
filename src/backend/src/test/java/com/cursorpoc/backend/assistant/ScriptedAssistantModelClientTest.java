@@ -237,6 +237,41 @@ class ScriptedAssistantModelClientTest {
   }
 
   @Test
+  void aPriceSaidAtTheEnd_isPassedAsPrices_andIsNotPartOfTheServiceName() {
+    ChatTurn question = ChatTurn.user("invoice Maria Gomez for Corte at 45.000 cash");
+    ToolCall search = requestedTool(ask(question));
+    ChatTurn found =
+        ChatTurn.toolResults(
+            List.of(
+                new ToolResult(
+                    search.id(),
+                    "buscar_clientes",
+                    "{\"data\":{\"clients\":[{\"id\":42,\"fullName\":\"MARIA GOMEZ\"}]}}")));
+    ToolCall services =
+        requestedTool(ask(question, ChatTurn.assistantToolCalls("", List.of(search)), found));
+    assertThat(services.argumentsJson()).isEqualTo("{\"query\":\"Corte\"}");
+
+    ToolCall proposal =
+        requestedTool(
+            ask(
+                question,
+                ChatTurn.assistantToolCalls("", List.of(search)),
+                found,
+                ChatTurn.assistantToolCalls("", List.of(services)),
+                ChatTurn.toolResults(
+                    List.of(
+                        new ToolResult(
+                            services.id(),
+                            "listar_servicios",
+                            "{\"data\":{\"services\":[{\"id\":7,\"name\":\"Corte\"}]}}")))));
+
+    assertThat(proposal.argumentsJson())
+        .contains("\"serviceIds\":[7]")
+        .contains("\"prices\":[{\"serviceId\":7,\"unitPrice\":45000}]")
+        .contains("\"paymentMethod\":\"CASH\"");
+  }
+
+  @Test
   void aPaymentWordAtTheEndIsNotPartOfTheClientOrServiceName() {
     assertThat(requestedTool(ask(ChatTurn.user("invoice Maria Gomez cash"))).argumentsJson())
         .isEqualTo("{\"query\":\"Maria Gomez\"}");

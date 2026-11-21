@@ -315,6 +315,36 @@ class AssistantDraftIntegrationTest {
   }
 
   @Test
+  void aPriceSaidInTheRequest_arrivesPreloadedAsAnEditedPrice() throws Exception {
+    long conv = currentConversation(admin);
+
+    AssistantAnswerBody answer =
+        ask(admin, conv, "invoice " + clientName + " for " + serviceName + " at 45000");
+
+    JsonNode draft =
+        answer.events.stream()
+            .filter(e -> e.event.equals("card.draft"))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("no card.draft in: " + answer.raw))
+            .data;
+    JsonNode line = draft.get("payload").get("lines").get(0);
+    assertThat(line.get("unitPrice").asLong()).isEqualTo(45_000);
+    assertThat(line.get("priceEdited").asBoolean()).isTrue();
+    assertThat(draft.get("payload").get("total").asLong()).isEqualTo(45_000);
+    // And it is the price that gets issued once confirmed.
+    String id = draft.get("id").asString();
+    patch("/api/assistant/drafts/" + id, admin, "{\"paymentMethod\":\"CASH\"}");
+    HttpResponse<String> res = post("/api/assistant/drafts/" + id + "/confirm", admin, null, id);
+    assertThat(res.statusCode()).as(res.body()).isEqualTo(200);
+    assertThat(
+            invoiceRepository
+                .findById(json(res).get("invoiceId").asLong())
+                .orElseThrow()
+                .getTotal())
+        .isEqualByComparingTo("45000");
+  }
+
+  @Test
   void anInvalidTypedPrice_isRefused_andTheDraftKeepsItsPrice() throws Exception {
     long conv = currentConversation(admin);
     JsonNode draft = proposeInvoice(admin, conv);

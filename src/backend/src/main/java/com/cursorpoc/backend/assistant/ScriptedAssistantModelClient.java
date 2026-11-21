@@ -390,6 +390,9 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
             case "NOTHING_TO_INVOICE" -> "No encontré nada para facturar. ¿Qué servicios cobro?";
             case "CLIENT_REQUIRES_MANUAL_INVOICE" -> "Esa factura se hace desde Facturación.";
             case "FORBIDDEN" -> "Facturar es solo para administración.";
+            case "INVALID_PRICE" ->
+                "Ese precio no es válido: tiene que ser un monto entero mayor a cero.";
+            case "PRICE_SERVICE_NOT_IN_INVOICE" -> "Ese servicio no está en la factura.";
             case "SLOT_TAKEN" -> "Ese horario está ocupado. Elegí otro de los botones.";
             case "START_IN_PAST" -> "Ese horario ya pasó.";
             case "APPOINTMENT_NOT_OWNED_BY_PROFESSIONAL" ->
@@ -431,6 +434,24 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
    * «Corte cash» → «Corte»: a payment word at the end is the payment method, not part of a name.
    */
   private static String withoutPayment(String text) {
+    String out = text.trim();
+    // Trailing «at 45000» (a price the person said) and a payment word, in either order.
+    String before;
+    do {
+      before = out;
+      out = out.replaceAll("(?i)\\s+(?:cash|efectivo|transfer\\w*)\\s*$", "");
+      out = PRICE.matcher(out).replaceFirst("");
+    } while (!out.equals(before));
+    return out;
+  }
+
+  /**
+   * A price said at the end of the request: «… at 45000», «… a 45.000», «… @45000» (not
+   * «price»/«precio»: they appear in service names).
+   */
+  private static final Pattern PRICE = Pattern.compile("(?i)\\s+(?:at|a|@)\\s*(\\d[\\d.]*)\\s*$");
+
+  private static String withoutTrailingPayment(String text) {
     return text.trim().replaceAll("(?i)\\s+(?:cash|efectivo|transfer\\w*)\\s*$", "");
   }
 
@@ -439,6 +460,16 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
     StringBuilder sb = new StringBuilder("{\"clientId\":" + clientId);
     if (serviceId != null) {
       sb.append(",\"serviceIds\":[").append(serviceId).append(']');
+    }
+    if (serviceId != null) {
+      Matcher price = PRICE.matcher(withoutTrailingPayment(userText));
+      if (price.find()) {
+        sb.append(",\"prices\":[{\"serviceId\":")
+            .append(serviceId)
+            .append(",\"unitPrice\":")
+            .append(price.group(1).replace(".", ""))
+            .append("}]");
+      }
     }
     if (folded.contains("cash") || folded.contains("efectivo")) {
       sb.append(",\"paymentMethod\":\"CASH\"");
