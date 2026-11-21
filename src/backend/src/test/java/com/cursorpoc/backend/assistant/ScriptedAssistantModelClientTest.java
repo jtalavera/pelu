@@ -123,6 +123,26 @@ class ScriptedAssistantModelClientTest {
   }
 
   @Test
+  void servicesAreListedAsNameAndPrice_oneLineEach() {
+    ToolCall call = new ToolCall("c1", "listar_servicios", "{}");
+
+    String answer =
+        said(
+            ask(
+                ChatTurn.user("services"),
+                ChatTurn.assistantToolCalls("", List.of(call)),
+                ChatTurn.toolResults(
+                    List.of(
+                        new ToolResult(
+                            "c1",
+                            "listar_servicios",
+                            "{\"data\":{\"services\":[{\"id\":1,\"name\":\"Corte\",\"price\":\"Gs. 50.000\"},"
+                                + "{\"id\":2,\"name\":\"Tintura\",\"price\":\"Gs. 120.000\"}]}}")))));
+
+    assertThat(answer).isEqualTo("Servicios:\n- Corte — Gs. 50.000\n- Tintura — Gs. 120.000");
+  }
+
+  @Test
   void anEmptyResultAndAnErrorResultAreAnsweredWithoutInventingData() {
     ToolCall call = new ToolCall("c1", "buscar_clientes", "{}");
     ChatTurn question = ChatTurn.user("search Nadie");

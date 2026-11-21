@@ -219,7 +219,13 @@ test.describe("HU-AST-02 · Consultar datos por chat", () => {
     await askAssistantUi(page, "services");
     const services = assistantAnswers(page).last();
     await expect(services).toContainText("Servicios:", { timeout: 15_000 });
-    await expect(services).toContainText(salon.serviceFullName);
+    // Fixed format: «- Nombre — Gs. 50.000» (price with point as thousands separator, no decimals).
+    await expect(services).toContainText(`- ${salon.serviceFullName} — Gs. 50.000`);
+    const listing = await services.innerText();
+    expect(listing).not.toMatch(/Gs\. [\d.]*,\d/);
+    // Name and price only: neither the category nor the duration show up.
+    expect(listing).not.toContain("E2E Cat");
+    expect(listing).not.toMatch(/\bmin(utos)?\b|\b60\b/i);
     await expect(services).not.toContainText(inactiveServiceName);
 
     await askAssistantUi(page, "professionals");

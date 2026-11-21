@@ -168,6 +168,9 @@ export async function startNewConversationUi(page: Page) {
   );
   await page.getByTestId("assistant-new-conversation").click();
   await created;
+  // The app swaps its active conversation right after the response; until then a message would go
+  // to the old (closed) one.
+  await expect(page.getByTestId("assistant-composer")).toHaveAttribute("data-busy", "false");
   await expect(assistantBubbles(page)).toHaveCount(0);
   await expect(page.getByTestId("assistant-welcome")).toBeVisible();
 }

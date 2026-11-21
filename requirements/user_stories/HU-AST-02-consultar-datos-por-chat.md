@@ -35,7 +35,7 @@ El asistente entiende la pregunta con un modelo de lenguaje y la responde consul
 3. **Turnos del día — Hora, cliente, servicio y profesional.** Preguntar por los turnos de una fecha (hoy, mañana o una fecha concreta) lista cada turno con su hora, cliente, servicio y profesional; si no hay, lo dice.
 4. **Turnos de un cliente — Dos consultas encadenadas.** Preguntar por los turnos de un cliente por su nombre busca al cliente y muestra solo sus turnos.
 5. **Buscar clientes — Por nombre.** Pedir que busque a un cliente lo encuentra por nombre; si no existe, el asistente dice que no lo encontró.
-6. **Servicios y profesionales — Activos.** Preguntar por los servicios o por los profesionales los lista; no aparecen los inactivos.
+6. **Servicios y profesionales — Formato fijo.** Preguntar por los servicios los lista activos, uno por línea, mostrando **solo el nombre y el precio** con el formato `- Nombre — Gs. 50.000` (punto de miles, sin decimales, como en el resto de la app); no aparecen la categoría, la duración ni otros datos, y tampoco los servicios inactivos. Preguntar por los profesionales los lista, sin los inactivos. Este formato es permanente: lo define la herramienta (`AssistantMoney`), lo exige el prompt de sistema y lo verifican los tests.
 7. **Solo cliente propio — Aislamiento por salón.** El asistente nunca devuelve clientes, turnos ni profesionales de otro salón, aunque se los pida por nombre.
 8. **Profesional — Solo nombres.** Una profesional puede usar el asistente, pero ve de los clientes solo el nombre (sin teléfono ni RUC) y los busca solo por nombre, igual que en la lista de clientes.
 9. **No entiende — Respuesta de ayuda.** Ante una pregunta que no entiende, el asistente lo dice y sugiere qué puede hacer.

@@ -132,8 +132,7 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
               "Encontré " + clients.size() + " cliente(s): " + names(clients, "fullName") + ".");
         }
       }
-      case "listar_servicios" ->
-          say(sink, slow, "Servicios: " + names(data.get("services"), "name") + ".");
+      case "listar_servicios" -> say(sink, slow, servicesListing(data.get("services")));
       case "listar_profesionales" ->
           say(sink, slow, "Profesionales: " + names(data.get("professionals"), "name") + ".");
       case "turnos_del_dia" -> {
@@ -159,6 +158,18 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
       }
       default -> say(sink, slow, FALLBACK);
     }
+  }
+
+  /** Fixed format, same as the system prompt asks of the real model: «- Nombre — Gs. 50.000». */
+  private static String servicesListing(JsonNode services) {
+    StringBuilder sb = new StringBuilder("Servicios:");
+    for (JsonNode s : services) {
+      sb.append("\n- ")
+          .append(s.get("name").asString())
+          .append(" — ")
+          .append(s.get("price").asString());
+    }
+    return sb.toString();
   }
 
   private static String dateOf(String folded, String original) {

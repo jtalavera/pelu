@@ -46,6 +46,8 @@ export function AssistantComposer({
       onSubmit={submit}
       className="flex items-end gap-2 border-t border-line bg-surface p-3"
       data-testid="assistant-composer"
+      data-busy={disabled ? "true" : "false"}
+      aria-busy={disabled}
     >
       <Textarea
         ref={inputRef}

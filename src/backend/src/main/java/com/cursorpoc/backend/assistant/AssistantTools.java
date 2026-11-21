@@ -95,7 +95,7 @@ public class AssistantTools {
                 "[\"query\"]")),
         new ToolSpec(
             LISTAR_SERVICIOS,
-            "Lista los servicios activos del catálogo con precio y duración.",
+            "Lista los servicios activos del catálogo: nombre y precio.",
             schema(
                 "{\"query\":{\"type\":\"string\",\"description\":\"Filtro opcional por nombre o"
                     + " categoría\"}}",
@@ -183,9 +183,8 @@ public class AssistantTools {
                   Map<String, Object> row = new LinkedHashMap<>();
                   row.put("id", s.id());
                   row.put("name", s.name());
-                  row.put("category", s.categoryName());
-                  row.put("price", s.priceMinor());
-                  row.put("durationMinutes", s.durationMinutes());
+                  // The listing format is fixed: name and price, nothing else (HU-AST-02 AC6).
+                  row.put("price", AssistantMoney.gs(s.priceMinor()));
                   return row;
                 })
             .toList();

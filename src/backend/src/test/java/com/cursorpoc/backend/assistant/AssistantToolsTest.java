@@ -138,15 +138,21 @@ class AssistantToolsTest {
   }
 
   @Test
-  void listarServicios_onlyActiveServices_withPriceAndDuration() {
+  void listarServicios_onlyActiveServices_withNameAndFormattedPriceAndNothingElse() {
     when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), eq("SERVICE")))
         .thenReturn(List.of(service(1, "Corte", true), service(2, "Servicio viejo", false)));
 
     JsonNode rows = run(admin(), "listar_servicios", "{}").get("data").get("services");
 
     assertThat(rows).hasSize(1);
-    assertThat(rows.get(0).get("name").asString()).isEqualTo("Corte");
-    assertThat(rows.get(0).get("durationMinutes").asInt()).isEqualTo(30);
+    JsonNode row = rows.get(0);
+    assertThat(row.get("name").asString()).isEqualTo("Corte");
+    // Fixed format (HU-AST-02 AC6): the price arrives formatted like the app shows it.
+    assertThat(row.get("price").asString()).isEqualTo("Gs. 50.000");
+    // Only id (for later tool calls), name and price: no category, duration or tax data.
+    List<String> fields = new java.util.ArrayList<>();
+    row.propertyNames().forEach(fields::add);
+    assertThat(fields).containsExactly("id", "name", "price");
   }
 
   @Test
