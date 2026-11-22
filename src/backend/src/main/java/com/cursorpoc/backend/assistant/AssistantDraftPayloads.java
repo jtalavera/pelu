@@ -1,5 +1,6 @@
 package com.cursorpoc.backend.assistant;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -175,4 +176,51 @@ public final class AssistantDraftPayloads {
       String endTime,
       int durationMinutes,
       boolean outsideWorkingHours) {}
+
+  /**
+   * A ficha de servicio waiting for confirmation (created, or changed when {@code serviceRecordId}
+   * is set). {@code lines} is the RESULTING list: the lines that will exist numbered 1..n (what the
+   * person and the model call «#1»), then the ones taken out with position 0 and mark {@code
+   * REMOVED}. {@code changes} is what was asked, with stable keys, so it can be applied again if
+   * the ficha changes before the button is pressed; {@code notApplied} lists what then found no
+   * line. For a professional every amount is null and absent from the JSON: she never sees money.
+   */
+  public record ServiceRecordDraftPayload(
+      Long clientId,
+      String clientName,
+      Long serviceRecordId,
+      Long appointmentId,
+      String appointmentTime,
+      List<Line> lines,
+      List<Change> changes,
+      List<NotApplied> notApplied,
+      @JsonInclude(JsonInclude.Include.NON_NULL) BigDecimal total,
+      String recordFingerprint) {
+
+    public record Line(
+        int position,
+        Long serviceId,
+        String name,
+        int quantity,
+        @JsonInclude(JsonInclude.Include.NON_NULL) BigDecimal unitPrice,
+        @JsonInclude(JsonInclude.Include.NON_NULL) BigDecimal lineTotal,
+        Long professionalId,
+        String professionalName,
+        /** NEW, KEPT, CHANGED or REMOVED (against the ficha as it is saved). */
+        String mark) {}
+
+    /** A line of the list as it was when asked: service, professional, n-th of that pair. */
+    public record LineKey(Long serviceId, Long professionalId, int occurrence) {}
+
+    /** ADD (service, quantity, professional, price), REMOVE (key) or CHANGE (key + new values). */
+    public record Change(
+        String op,
+        LineKey key,
+        Long serviceId,
+        Integer quantity,
+        Long professionalId,
+        @JsonInclude(JsonInclude.Include.NON_NULL) BigDecimal unitPrice) {}
+
+    public record NotApplied(String op, String name) {}
+  }
 }

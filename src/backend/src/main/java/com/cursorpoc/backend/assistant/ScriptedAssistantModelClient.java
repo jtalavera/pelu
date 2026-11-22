@@ -28,6 +28,9 @@ import tools.jackson.databind.ObjectMapper;
  *   <li>{@code "busca <texto>"} → {@code buscar_clientes}
  *   <li>{@code "servicios"} → {@code listar_servicios}; {@code "profesionales"} → {@code
  *       listar_profesionales}
+ *   <li>{@code "record <client> [new] [rec=ID] [apt=ID] [add <item> [xN] [at P] | remove N | set N
+ *       xQ | set N with <professional>]"} → {@code buscar_clientes}, then {@code ver_ficha_abierta}
+ *       (no change) or {@code proponer_ficha}
  *   <li>anything else → a «no entendí» answer without tools
  * </ul>
  *
@@ -88,6 +91,19 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
   private static final Pattern DISCARD =
       Pattern.compile("(?i)\\b(?:discard|descart\\w*)\\b.*\\b(?:draft|borrador)\\b");
 
+  /** «record <client> …» / «ficha <cliente> …»: read, open or change the client's ficha. */
+  private static final Pattern RECORD = Pattern.compile("(?i)^\\s*(?:record|ficha)\\s+(.+?)\\s*$");
+
+  private static final Pattern RECORD_OP =
+      Pattern.compile("(?i)^(.+?)\\s+(add|agrega|remove|quita|set|cambia)\\s+(.+)$");
+  private static final Pattern REC_ID = Pattern.compile("(?i)\\brec=(\\d+)");
+  private static final Pattern APT_ID = Pattern.compile("(?i)\\bapt=(\\d+)");
+  private static final Pattern NEW_FLAG = Pattern.compile("(?i)\\bnew\\b");
+  private static final Pattern LEADING_NUMBER = Pattern.compile("^(\\d+)");
+  private static final Pattern SET_PROFESSIONAL =
+      Pattern.compile("(?i)^(\\d+)\\s+(?:with|con)\\s+(.+)$");
+  private static final Pattern SET_QUANTITY = Pattern.compile("(?i)^(\\d+)\\s+[x×]\\s*(\\d{1,2})$");
+
   private static final int CHUNK = 16;
 
   /** With «slowly» / «despacio» in the question the answer trickles out, for streaming e2e. */
@@ -118,8 +134,11 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
     Matcher invoice = INVOICE.matcher(userText.trim());
     Matcher book = BOOK.matcher(userText.trim());
     Matcher avail = AVAILABILITY.matcher(userText.trim());
+    RecordIntent record = recordIntent(userText.trim());
     if (DISCARD.matcher(userText).find()) {
       requestTool(sink, "descartar_borrador", "{}");
+    } else if (record != null) {
+      requestTool(sink, "buscar_clientes", "{\"query\":" + quote(record.client()) + "}");
     } else if (SLOT_CHIP.matcher(userText).find()) {
       say(sink, slow, "¿Para qué cliente querés agendar ese horario?");
     } else if (ADD.matcher(userText).matches()) {
@@ -163,6 +182,11 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
       Consumer<ModelEvent> sink) {
     ToolResult r = results.toolResults().get(0);
     JsonNode root = objectMapper.readTree(r.content());
+    RecordIntent record = recordIntent(userText.trim());
+    if (record != null) {
+      answerRecord(record, turns, r, root, slow, sink);
+      return;
+    }
     Matcher invoice = INVOICE.matcher(userText.trim());
     boolean invoicing = invoice.find();
     if (r.name().equals("proponer_factura")
@@ -407,6 +431,248 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
     return text.trim().replaceAll("(?i)\\s+(?:in the\\s+)?(?:morning|afternoon)\\s*$", "");
   }
 
+  /** What the person asked about a ficha, parsed from the text (tool results are not replayed). */
+  private record RecordIntent(
+      String client, String op, String rest, boolean isNew, Long recordId, Long appointmentId) {}
+
+  private static RecordIntent recordIntent(String text) {
+    Matcher m = RECORD.matcher(text);
+    if (!m.matches()) {
+      return null;
+    }
+    String body = m.group(1);
+    Long recordId = null;
+    Long appointmentId = null;
+    Matcher rec = REC_ID.matcher(body);
+    if (rec.find()) {
+      recordId = Long.valueOf(rec.group(1));
+      body = rec.replaceAll("");
+    }
+    Matcher apt = APT_ID.matcher(body);
+    if (apt.find()) {
+      appointmentId = Long.valueOf(apt.group(1));
+      body = apt.replaceAll("");
+    }
+    boolean isNew = NEW_FLAG.matcher(body).find();
+    body = NEW_FLAG.matcher(body).replaceAll("").replaceAll("\\s+", " ").trim();
+    Matcher op = RECORD_OP.matcher(body);
+    if (op.matches()) {
+      String kind =
+          switch (op.group(2).toLowerCase()) {
+            case "add", "agrega" -> "add";
+            case "remove", "quita" -> "remove";
+            default -> "set";
+          };
+      return new RecordIntent(
+          op.group(1).trim(), kind, op.group(3).trim(), isNew, recordId, appointmentId);
+    }
+    boolean flags = isNew || recordId != null || appointmentId != null;
+    return new RecordIntent(body, flags ? "open" : "read", "", isNew, recordId, appointmentId);
+  }
+
+  private void answerRecord(
+      RecordIntent ri,
+      List<ChatTurn> turns,
+      ToolResult r,
+      JsonNode root,
+      boolean slow,
+      Consumer<ModelEvent> sink) {
+    if (r.name().equals("proponer_ficha")) {
+      say(
+          sink,
+          slow,
+          root.has("error")
+              ? fichaError(root.get("error").asString())
+              : "Preparé la ficha de "
+                  + root.get("data").get("client").asString()
+                  + " para que la revises. Guardala con el botón de la tarjeta.");
+      return;
+    }
+    if (root.has("error")) {
+      say(sink, slow, "No pude consultar ese dato.");
+      return;
+    }
+    JsonNode data = root.get("data");
+    switch (r.name()) {
+      case "buscar_clientes" -> {
+        JsonNode clients = data.get("clients");
+        if (clients.isEmpty()) {
+          say(sink, slow, "No encontré clientes con ese nombre.");
+          return;
+        }
+        long clientId = clients.get(0).get("id").asLong();
+        switch (ri.op()) {
+          case "read" -> requestTool(sink, "ver_ficha_abierta", "{\"clientId\":" + clientId + "}");
+          case "add" ->
+              requestTool(
+                  sink, "listar_servicios", "{\"query\":" + quote(itemName(ri.rest())) + "}");
+          case "remove" -> {
+            Matcher n = LEADING_NUMBER.matcher(ri.rest());
+            if (n.find()) {
+              requestTool(
+                  sink,
+                  "proponer_ficha",
+                  recordArgs(clientId, ri, "\"quitar\":[" + n.group(1) + "]"));
+            } else {
+              say(sink, slow, FALLBACK);
+            }
+          }
+          case "set" -> {
+            Matcher pro = SET_PROFESSIONAL.matcher(ri.rest());
+            Matcher qty = SET_QUANTITY.matcher(ri.rest());
+            if (pro.matches()) {
+              requestTool(sink, "listar_profesionales", "{}");
+            } else if (qty.matches()) {
+              requestTool(
+                  sink,
+                  "proponer_ficha",
+                  recordArgs(
+                      clientId,
+                      ri,
+                      "\"cambiar\":[{\"position\":"
+                          + qty.group(1)
+                          + ",\"quantity\":"
+                          + qty.group(2)
+                          + "}]"));
+            } else {
+              say(sink, slow, FALLBACK);
+            }
+          }
+          default -> requestTool(sink, "proponer_ficha", recordArgs(clientId, ri, null));
+        }
+      }
+      case "listar_servicios", "listar_productos" -> {
+        boolean services = r.name().equals("listar_servicios");
+        JsonNode found = data.get(services ? "services" : "products");
+        Long clientId = clientIdFromEarlierSearch(turns);
+        if (found.isEmpty() && services) {
+          requestTool(sink, "listar_productos", "{\"query\":" + quote(itemName(ri.rest())) + "}");
+        } else if (found.isEmpty() || clientId == null) {
+          say(sink, slow, "No encontré ese ítem.");
+        } else {
+          StringBuilder item =
+              new StringBuilder("{\"id\":" + found.get(0).get("id").asLong())
+                  .append(",\"quantity\":")
+                  .append(quantityOf(ri.rest()));
+          Matcher price = PRICE.matcher(withoutTrailingPayment(ri.rest()));
+          if (price.find()) {
+            item.append(",\"unitPrice\":").append(price.group(1).replace(".", ""));
+          }
+          requestTool(
+              sink,
+              "proponer_ficha",
+              recordArgs(clientId, ri, "\"agregar\":[" + item.append('}') + "]"));
+        }
+      }
+      case "listar_profesionales" -> {
+        Matcher pro = SET_PROFESSIONAL.matcher(ri.rest());
+        Long clientId = clientIdFromEarlierSearch(turns);
+        Long proId = null;
+        if (pro.matches()) {
+          for (JsonNode p : data.get("professionals")) {
+            if (fold(p.get("name").asString()).contains(fold(pro.group(2).trim()))) {
+              proId = p.get("id").asLong();
+              break;
+            }
+          }
+        }
+        if (proId == null || clientId == null) {
+          say(sink, slow, "No encontré a ese profesional.");
+        } else {
+          requestTool(
+              sink,
+              "proponer_ficha",
+              recordArgs(
+                  clientId,
+                  ri,
+                  "\"cambiar\":[{\"position\":"
+                      + pro.group(1)
+                      + ",\"professionalId\":"
+                      + proId
+                      + "}]"));
+        }
+      }
+      case "ver_ficha_abierta" -> say(sink, slow, recordText(data));
+      default -> say(sink, slow, FALLBACK);
+    }
+  }
+
+  private static String recordArgs(long clientId, RecordIntent ri, String extra) {
+    StringBuilder sb = new StringBuilder("{\"clientId\":" + clientId);
+    if (ri.isNew()) {
+      sb.append(",\"newRecord\":true");
+    }
+    if (ri.recordId() != null) {
+      sb.append(",\"recordId\":").append(ri.recordId());
+    }
+    if (ri.appointmentId() != null) {
+      sb.append(",\"appointmentId\":").append(ri.appointmentId());
+    }
+    if (extra != null) {
+      sb.append(',').append(extra);
+    }
+    return sb.append('}').toString();
+  }
+
+  private static String fichaError(String code) {
+    return switch (code) {
+      case "MULTIPLE_RECORDS" -> "Tiene varias fichas abiertas. ¿Cuál querés cambiar?";
+      case "STALE_RECORD" ->
+          "Tiene una ficha abierta de un día anterior. ¿La edito o abro una nueva para hoy?";
+      case "MULTIPLE_APPOINTMENTS" -> "Tiene varios turnos hoy. ¿A cuál le ligo la ficha?";
+      case "NO_APPOINTMENT_TODAY" ->
+          "Solo podés abrir una ficha desde un turno propio de hoy, y no hay ninguno.";
+      case "PRICE_NOT_ALLOWED" -> "No podés fijar precios: eso lo hace administración.";
+      case "NOTHING_TO_SAVE" -> "La ficha no tendría ninguna línea. Decime qué agregar.";
+      case "INVALID_LINE_POSITION" -> "Esa línea no existe en la ficha.";
+      case "FICHA_DRAFT_PENDING" -> "Hay una ficha sin guardar: guardala o descartala primero.";
+      default -> "No pude preparar la ficha (" + code + ").";
+    };
+  }
+
+  /** The ficha as plain text: numbered lines, with money only when the tool sent it. */
+  private static String recordText(JsonNode data) {
+    JsonNode records = data.path("records");
+    StringBuilder sb = new StringBuilder();
+    if (records.isEmpty()) {
+      sb.append(data.path("clientName").asString()).append(" no tiene fichas abiertas.");
+    }
+    for (JsonNode rec : records) {
+      if (!sb.isEmpty()) {
+        sb.append("\n");
+      }
+      sb.append(data.path("pending").asBoolean(false) ? "Ficha (borrador):" : "Ficha abierta:");
+      for (JsonNode l : rec.path("lines")) {
+        sb.append("\n")
+            .append(l.path("position").asInt())
+            .append(". ")
+            .append(l.path("name").asString())
+            .append(" ×")
+            .append(l.path("quantity").asInt());
+        if (!l.path("professionalName").isNull() && !l.path("professionalName").isMissingNode()) {
+          sb.append(" · ").append(l.path("professionalName").asString());
+        }
+        if (l.has("price")) {
+          sb.append(" — ").append(l.get("price").asString());
+        }
+      }
+      if (rec.has("total")) {
+        sb.append("\nTotal: ").append(rec.get("total").asString());
+      }
+    }
+    JsonNode turnos = data.path("appointmentsToday");
+    if (!turnos.isEmpty()) {
+      sb.append("\nTurnos de hoy:");
+      for (JsonNode t : turnos) {
+        sb.append(" ")
+            .append(t.path("start").asString())
+            .append(" ")
+            .append(t.path("serviceName").asString());
+      }
+    }
+    return sb.toString();
+  }
+
   private void answerProposal(String tool, JsonNode root, boolean slow, Consumer<ModelEvent> sink) {
     if (root.has("error")) {
       String code = root.get("error").asString();
@@ -426,6 +692,8 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
             case "START_IN_PAST" -> "Ese horario ya pasó.";
             case "APPOINTMENT_NOT_OWNED_BY_PROFESSIONAL" ->
                 "Solo podés agendar turnos para vos misma.";
+            case "FICHA_DRAFT_PENDING" ->
+                "Hay una ficha sin guardar de ese cliente: guardala o descartala antes de facturar.";
             case "NO_ACTIVE_DRAFT" -> "No hay ningún borrador para descartar.";
             case "NO_ACTIVE_INVOICE_DRAFT" ->
                 "No hay una factura en borrador. Decime a qué cliente se la preparo.";

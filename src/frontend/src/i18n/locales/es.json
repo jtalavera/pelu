@@ -1647,6 +1647,27 @@
         "pickAnother": "Ese horario está ocupado. Elegí otro:",
         "viewInAgenda": "Ver en la agenda"
       },
+      "recordDraft": {
+        "title": "Borrador de ficha de servicio",
+        "savedTitle": "Ficha guardada",
+        "savedBadge": "Guardada",
+        "client": "Cliente",
+        "appointment": "Ligada al turno de las {{time}}",
+        "mark": {
+          "NEW": "Nuevo",
+          "CHANGED": "Cambiado",
+          "REMOVED": "Quitado"
+        },
+        "removedTitle": "Se quita",
+        "notApplied": "No se aplicó, porque la ficha cambió mientras tanto: {{items}}.",
+        "notAppliedOp": {
+          "REMOVE": "quitar {{name}}",
+          "CHANGE": "cambiar {{name}}"
+        },
+        "changed": "La ficha cambió desde que se preparó. Revisá la tarjeta actualizada y guardala de nuevo.",
+        "confirm": "Guardar ficha",
+        "confirming": "Guardando…"
+      },
       "options": {
         "SLOT": "Elegí un horario"
       },
@@ -1669,6 +1690,8 @@
         "listar_servicios": "Consultando servicios…",
         "listar_productos": "Consultando productos…",
         "agregar_item_a_borrador": "Agregando al borrador…",
+        "ver_ficha_abierta": "Consultando la ficha…",
+        "proponer_ficha": "Preparando la ficha…",
         "listar_profesionales": "Consultando profesionales…",
         "turnos_del_dia": "Revisando la agenda…",
         "generic": "Consultando…"
@@ -3666,6 +3689,11 @@
       "ASSISTANT_DRAFT_INVALID_PAYMENT": "Elegí un medio de pago de la lista.",
       "ASSISTANT_DRAFT_INVALID_EMAIL": "Ingresá un email válido. Ejemplo: cliente@correo.com",
       "ASSISTANT_PRICE_CHANGED": "Cambió un precio desde que se preparó este borrador. Revisá el nuevo total y confirmá de nuevo.",
+      "ASSISTANT_RECORD_CHANGED": "La ficha cambió desde que se preparó este borrador. Revisá la tarjeta actualizada y guardala de nuevo.",
+      "NOTHING_TO_SAVE": "La ficha quedaría sin ninguna línea. Decile al asistente qué agregar.",
+      "NO_APPOINTMENT_TODAY": "No tenés un turno propio hoy desde el cual abrir una ficha.",
+      "APPOINTMENT_ALREADY_HAS_SERVICE_RECORD": "Ese turno ya tiene una ficha de servicio.",
+      "APPOINTMENT_NOT_ACTIVE": "Ese turno ya no está activo, así que no se le puede ligar una ficha.",
       "RECEIPT_EMAIL_REQUIRED": "Ingresá el email del cliente para enviarle el comprobante. Ejemplo: cliente@correo.com",
       "RECEIPT_EMAIL_INVALID": "Ingresá un email válido. Ejemplo: cliente@correo.com",
       "APPOINTMENT_ALREADY_INVOICED": "Ese turno ya fue facturado.",

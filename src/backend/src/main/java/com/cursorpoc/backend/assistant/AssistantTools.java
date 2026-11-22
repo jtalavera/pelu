@@ -59,6 +59,7 @@ public class AssistantTools {
   private final ObjectMapper objectMapper;
   private final AssistantProposalTools proposals;
   private final AssistantAgendaTools agenda;
+  private final AssistantRecordTools records;
 
   public AssistantTools(
       ClientService clientService,
@@ -68,7 +69,8 @@ public class AssistantTools {
       FemmeTimeProperties timeProperties,
       ObjectMapper objectMapper,
       AssistantProposalTools proposals,
-      AssistantAgendaTools agenda) {
+      AssistantAgendaTools agenda,
+      AssistantRecordTools records) {
     this.clientService = clientService;
     this.serviceCatalogService = serviceCatalogService;
     this.professionalDirectoryService = professionalDirectoryService;
@@ -77,6 +79,7 @@ public class AssistantTools {
     this.objectMapper = objectMapper;
     this.proposals = proposals;
     this.agenda = agenda;
+    this.records = records;
   }
 
   /** True for a tool this class implements — bounds the cardinality of the tool metric. */
@@ -90,13 +93,16 @@ public class AssistantTools {
         || AssistantAgendaTools.PROPONER_TURNO.equals(name)
         || AssistantProposalTools.PROPONER_FACTURA.equals(name)
         || AssistantProposalTools.AGREGAR_ITEM.equals(name)
-        || AssistantProposalTools.DESCARTAR_BORRADOR.equals(name);
+        || AssistantProposalTools.DESCARTAR_BORRADOR.equals(name)
+        || AssistantRecordTools.VER_FICHA_ABIERTA.equals(name)
+        || AssistantRecordTools.PROPONER_FICHA.equals(name);
   }
 
   /** The tools offered to this user. All four are read-only and open to ADMIN and PROFESSIONAL. */
   public List<ToolSpec> specsFor(AssistantContext ctx) {
     List<ToolSpec> all = new java.util.ArrayList<>(readSpecs(ctx));
     all.addAll(agenda.specsFor(ctx));
+    all.addAll(records.specsFor(ctx));
     all.addAll(proposals.specsFor(ctx));
     return all;
   }
@@ -162,6 +168,9 @@ public class AssistantTools {
       }
       if (agenda.handles(name)) {
         return agenda.run(ctx, name, args);
+      }
+      if (records.handles(name)) {
+        return records.run(ctx, name, args);
       }
       Object data =
           switch (name) {

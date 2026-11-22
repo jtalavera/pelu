@@ -444,4 +444,186 @@ class ScriptedAssistantModelClientTest {
     assertThat(requestedTool(ask(ChatTurn.user("descartá el borrador"))).name())
         .isEqualTo("descartar_borrador");
   }
+
+  // ---------------------------------------------------------------------------------------------
+  // Fichas: «record <client> …»
+
+  private static final String CLIENT_FOUND =
+      "{\"data\":{\"clients\":[{\"id\":42,\"fullName\":\"MARIA GOMEZ\"}]}}";
+
+  /** Plays the first rounds of a request: each tool the model asks for is answered in order. */
+  private ToolCall afterAnswers(ChatTurn question, String... namesAndJson) {
+    List<ChatTurn> turns = new ArrayList<>(List.of(question));
+    ToolCall call = requestedTool(ask(turns.toArray(ChatTurn[]::new)));
+    for (int i = 0; i < namesAndJson.length; i += 2) {
+      turns.add(ChatTurn.assistantToolCalls("", List.of(call)));
+      turns.add(ChatTurn.toolResults(List.of(result(call, namesAndJson[i], namesAndJson[i + 1]))));
+      call = requestedTool(ask(turns.toArray(ChatTurn[]::new)));
+    }
+    return call;
+  }
+
+  @Test
+  void aFichaQuestionSearchesTheClientFirst_thenReadsTheFicha() {
+    ChatTurn question = ChatTurn.user("record Maria Gomez");
+
+    ToolCall search = requestedTool(ask(question));
+    assertThat(search.name()).isEqualTo("buscar_clientes");
+    assertThat(search.argumentsJson()).isEqualTo("{\"query\":\"Maria Gomez\"}");
+
+    ToolCall read = afterAnswers(question, "buscar_clientes", CLIENT_FOUND);
+    assertThat(read.name()).isEqualTo("ver_ficha_abierta");
+    assertThat(read.argumentsJson()).isEqualTo("{\"clientId\":42}");
+  }
+
+  @Test
+  void theFichaReadingIsSummarised_withMoneyOnlyWhenTheToolSentIt() {
+    ChatTurn question = ChatTurn.user("record Maria Gomez");
+    ToolCall read = afterAnswers(question, "buscar_clientes", CLIENT_FOUND);
+    String withMoney =
+        "{\"data\":{\"clientName\":\"MARIA GOMEZ\",\"records\":[{\"recordId\":500,\"lines\":"
+            + "[{\"position\":1,\"name\":\"Corte\",\"quantity\":1,\"professionalName\":\"Lu\","
+            + "\"price\":\"Gs. 50.000\"}],\"total\":\"Gs. 50.000\"}],\"appointmentsToday\":[]}}";
+    String withoutMoney =
+        withMoney.replace(",\"price\":\"Gs. 50.000\"", "").replace(",\"total\":\"Gs. 50.000\"", "");
+
+    for (String body : List.of(withMoney, withoutMoney)) {
+      String said =
+          said(
+              ask(
+                  question,
+                  ChatTurn.assistantToolCalls("", List.of(requestedTool(ask(question)))),
+                  ChatTurn.toolResults(
+                      List.of(
+                          result(requestedTool(ask(question)), "buscar_clientes", CLIENT_FOUND))),
+                  ChatTurn.assistantToolCalls("", List.of(read)),
+                  ChatTurn.toolResults(List.of(result(read, "ver_ficha_abierta", body)))));
+      assertThat(said).contains("Corte").contains("1.");
+      assertThat(said.contains("Gs.")).isEqualTo(body.equals(withMoney));
+    }
+  }
+
+  @Test
+  void addingToAFicha_looksTheItemUp_services_thenProducts_thenProposes() {
+    ChatTurn question = ChatTurn.user("record Maria Gomez add Cut x2 at 45000");
+
+    ToolCall services = afterAnswers(question, "buscar_clientes", CLIENT_FOUND);
+    assertThat(services.name()).isEqualTo("listar_servicios");
+    assertThat(services.argumentsJson()).isEqualTo("{\"query\":\"Cut\"}");
+
+    ToolCall products =
+        afterAnswers(
+            question,
+            "buscar_clientes",
+            CLIENT_FOUND,
+            "listar_servicios",
+            "{\"data\":{\"services\":[]}}");
+    assertThat(products.name()).isEqualTo("listar_productos");
+
+    ToolCall proposal =
+        afterAnswers(
+            question,
+            "buscar_clientes",
+            CLIENT_FOUND,
+            "listar_servicios",
+            "{\"data\":{\"services\":[{\"id\":1,\"name\":\"Cut\"}]}}");
+    assertThat(proposal.name()).isEqualTo("proponer_ficha");
+    assertThat(proposal.argumentsJson())
+        .isEqualTo("{\"clientId\":42,\"agregar\":[{\"id\":1,\"quantity\":2,\"unitPrice\":45000}]}");
+  }
+
+  @Test
+  void removingAndChangingALine_goStraightToTheProposal() {
+    ToolCall remove =
+        afterAnswers(ChatTurn.user("record Maria Gomez remove 2"), "buscar_clientes", CLIENT_FOUND);
+    assertThat(remove.name()).isEqualTo("proponer_ficha");
+    assertThat(remove.argumentsJson()).isEqualTo("{\"clientId\":42,\"quitar\":[2]}");
+
+    ToolCall quantity =
+        afterAnswers(ChatTurn.user("record Maria Gomez set 1 x3"), "buscar_clientes", CLIENT_FOUND);
+    assertThat(quantity.name()).isEqualTo("proponer_ficha");
+    assertThat(quantity.argumentsJson())
+        .isEqualTo("{\"clientId\":42,\"cambiar\":[{\"position\":1,\"quantity\":3}]}");
+  }
+
+  @Test
+  void changingTheProfessionalOfALine_looksTheProfessionalUp() {
+    ChatTurn question = ChatTurn.user("record Maria Gomez set 1 with Hugo");
+
+    ToolCall pros = afterAnswers(question, "buscar_clientes", CLIENT_FOUND);
+    assertThat(pros.name()).isEqualTo("listar_profesionales");
+
+    ToolCall proposal =
+        afterAnswers(
+            question,
+            "buscar_clientes",
+            CLIENT_FOUND,
+            "listar_profesionales",
+            "{\"data\":{\"professionals\":[{\"id\":9,\"name\":\"Lu\"},{\"id\":10,\"name\":\"Hugo\"}]}}");
+    assertThat(proposal.name()).isEqualTo("proponer_ficha");
+    assertThat(proposal.argumentsJson())
+        .isEqualTo("{\"clientId\":42,\"cambiar\":[{\"position\":1,\"professionalId\":10}]}");
+  }
+
+  @Test
+  void theFlagsChooseTheNewRecordTheFichaAndTheTurno() {
+    ToolCall open =
+        afterAnswers(ChatTurn.user("record Maria Gomez new"), "buscar_clientes", CLIENT_FOUND);
+    assertThat(open.name()).isEqualTo("proponer_ficha");
+    assertThat(open.argumentsJson()).isEqualTo("{\"clientId\":42,\"newRecord\":true}");
+
+    ToolCall flags =
+        afterAnswers(
+            ChatTurn.user("record Maria Gomez rec=500 apt=70 remove 1"),
+            "buscar_clientes",
+            CLIENT_FOUND);
+    assertThat(flags.argumentsJson())
+        .isEqualTo("{\"clientId\":42,\"recordId\":500,\"appointmentId\":70,\"quitar\":[1]}");
+  }
+
+  @Test
+  void aFichaProposalIsAnsweredWithAReviewRequest_andEachErrorWithItsHint() {
+    ChatTurn question = ChatTurn.user("record Maria Gomez remove 1");
+    ToolCall call = afterAnswers(question, "buscar_clientes", CLIENT_FOUND);
+
+    java.util.function.Function<String, String> answer =
+        body ->
+            said(
+                ask(
+                    question,
+                    ChatTurn.assistantToolCalls("", List.of(requestedTool(ask(question)))),
+                    ChatTurn.toolResults(
+                        List.of(
+                            result(requestedTool(ask(question)), "buscar_clientes", CLIENT_FOUND))),
+                    ChatTurn.assistantToolCalls("", List.of(call)),
+                    ChatTurn.toolResults(List.of(result(call, "proponer_ficha", body)))));
+
+    assertThat(answer.apply("{\"data\":{\"client\":\"MARIA GOMEZ\"}}"))
+        .contains("Preparé la ficha de MARIA GOMEZ")
+        .contains("Guardala");
+    assertThat(answer.apply("{\"error\":\"MULTIPLE_RECORDS\"}")).contains("varias fichas");
+    assertThat(answer.apply("{\"error\":\"STALE_RECORD\"}")).contains("día anterior");
+    assertThat(answer.apply("{\"error\":\"MULTIPLE_APPOINTMENTS\"}")).contains("varios turnos");
+    assertThat(answer.apply("{\"error\":\"NO_APPOINTMENT_TODAY\"}")).contains("turno propio");
+    assertThat(answer.apply("{\"error\":\"PRICE_NOT_ALLOWED\"}")).contains("precios");
+    assertThat(answer.apply("{\"error\":\"NOTHING_TO_SAVE\"}")).contains("ninguna línea");
+  }
+
+  @Test
+  void invoicingWithAnUnsavedFichaDraft_isExplained() {
+    ToolCall call = new ToolCall("c1", "proponer_factura", "{}");
+    ChatTurn question = ChatTurn.user("invoice Maria");
+
+    String said =
+        said(
+            ask(
+                question,
+                ChatTurn.assistantToolCalls("", List.of(call)),
+                ChatTurn.toolResults(
+                    List.of(
+                        new ToolResult(
+                            "c1", "proponer_factura", "{\"error\":\"FICHA_DRAFT_PENDING\"}")))));
+
+    assertThat(said).contains("ficha sin guardar");
+  }
 }

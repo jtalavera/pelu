@@ -60,8 +60,8 @@ public class AssistantProposalTools {
           new ToolSpec(
               PROPONER_FACTURA,
               "Prepara un BORRADOR de factura para un cliente; no emite nada: la persona lo revisa y"
-                  + " lo confirma con un botón. Sin serviceIds toma la ficha abierta del cliente o su"
-                  + " único turno de hoy. Se pueden cobrar servicios y productos (ids de listar_servicios"
+                  + " lo confirma con un botón. Sin items ni serviceIds (la persona no dijo qué cobrar) arma el borrador con la ficha abierta del"
+                  + " cliente o, si no tiene, su único turno de hoy: llamala directo, sin preguntar antes qué cobrar. Se pueden cobrar servicios y productos (ids de listar_servicios"
                   + " o listar_productos). El precio y el total los calcula el sistema; solo si la"
                   + " persona DIJO un precio para un ítem, pasalo en prices (nunca inventes uno).",
               AssistantTools.schema(
@@ -154,6 +154,16 @@ public class AssistantProposalTools {
   private ToolOutcome proponerFactura(AssistantContext ctx, JsonNode args) {
     if (!ctx.isAdmin()) {
       throw new AssistantTools.ToolException("FORBIDDEN");
+    }
+    // One active draft per conversation: this proposal would silently drop a ficha card the person
+    // has not saved yet, and the invoice would come out of the ficha WITHOUT what that card adds.
+    Long clientId = longArg(args, "clientId");
+    if (clientId != null
+        && draftService
+            .activeRecordPayload(ctx)
+            .filter(p -> clientId.equals(p.clientId()))
+            .isPresent()) {
+      throw new AssistantTools.ToolException("FICHA_DRAFT_PENDING");
     }
     List<Long> serviceIds = new ArrayList<>();
     JsonNode ids = args.get("serviceIds");

@@ -2,6 +2,7 @@ package com.cursorpoc.backend.assistant;
 
 import com.cursorpoc.backend.assistant.AssistantDraftPayloads.AppointmentDraftPayload;
 import com.cursorpoc.backend.assistant.AssistantDraftPayloads.InvoiceDraftPayload;
+import com.cursorpoc.backend.assistant.AssistantDraftPayloads.ServiceRecordDraftPayload;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.AppointmentService;
 import com.cursorpoc.backend.service.InvoiceEmissionService;
@@ -47,6 +48,7 @@ public class AssistantDraftService {
   private final AssistantDraftRepository drafts;
   private final AssistantInvoiceDrafts invoiceDrafts;
   private final AssistantAppointmentDrafts appointmentDrafts;
+  private final AssistantRecordDrafts recordDrafts;
   private final InvoiceEmissionService emissionService;
   private final AppointmentService appointmentService;
   private final ObjectMapper objectMapper;
@@ -56,6 +58,7 @@ public class AssistantDraftService {
       AssistantDraftRepository drafts,
       AssistantInvoiceDrafts invoiceDrafts,
       AssistantAppointmentDrafts appointmentDrafts,
+      AssistantRecordDrafts recordDrafts,
       InvoiceEmissionService emissionService,
       AppointmentService appointmentService,
       ObjectMapper objectMapper,
@@ -63,6 +66,7 @@ public class AssistantDraftService {
     this.drafts = drafts;
     this.invoiceDrafts = invoiceDrafts;
     this.appointmentDrafts = appointmentDrafts;
+    this.recordDrafts = recordDrafts;
     this.emissionService = emissionService;
     this.appointmentService = appointmentService;
     this.objectMapper = objectMapper;
@@ -81,7 +85,10 @@ public class AssistantDraftService {
       Long appointmentId,
       String startAt,
       Long professionalId,
-      AssistantDraftDto draft) {}
+      AssistantDraftDto draft,
+      /** SERVICE_RECORD: the ficha that was created or changed, and which of the two. */
+      Long serviceRecordId,
+      String recordOperation) {}
 
   // ---------------------------------------------------------------------------------------------
   // Propose / list
@@ -120,9 +127,29 @@ public class AssistantDraftService {
     return new Created(toDto(draft), superseded);
   }
 
+  @Transactional
+  public Created createRecordDraft(AssistantContext ctx, ServiceRecordDraftPayload payload) {
+    return create(
+        ctx,
+        AssistantDraftType.SERVICE_RECORD,
+        payload,
+        AssistantRecordDrafts.fingerprint(payload));
+  }
+
   /** The invoice draft this person has active (and not expired) in the conversation, if any. */
   @Transactional(readOnly = true)
   public java.util.Optional<InvoiceDraftPayload> activeInvoicePayload(AssistantContext ctx) {
+    return activePayload(ctx, AssistantDraftType.INVOICE, InvoiceDraftPayload.class);
+  }
+
+  /** The ficha draft this person has active (and not expired) in the conversation, if any. */
+  @Transactional(readOnly = true)
+  public java.util.Optional<ServiceRecordDraftPayload> activeRecordPayload(AssistantContext ctx) {
+    return activePayload(ctx, AssistantDraftType.SERVICE_RECORD, ServiceRecordDraftPayload.class);
+  }
+
+  private <T> java.util.Optional<T> activePayload(
+      AssistantContext ctx, AssistantDraftType type, Class<T> payloadType) {
     if (ctx.conversationId() == null) {
       return java.util.Optional.empty();
     }
@@ -130,10 +157,10 @@ public class AssistantDraftService {
         .findByConversationIdAndStatus(ctx.conversationId(), AssistantDraftStatus.DRAFT)
         .stream()
         .filter(d -> d.getTenantId() == ctx.tenantId() && d.getUserId() == ctx.userId())
-        .filter(d -> d.getType() == AssistantDraftType.INVOICE)
+        .filter(d -> d.getType() == type)
         .filter(d -> effective(d) == AssistantDraftStatus.DRAFT)
         .max(java.util.Comparator.comparing(AssistantDraft::getCreatedAt))
-        .map(d -> fromJson(d, InvoiceDraftPayload.class));
+        .map(d -> fromJson(d, payloadType));
   }
 
   @Transactional(readOnly = true)
@@ -216,7 +243,7 @@ public class AssistantDraftService {
       // What the draft charges changed: the stored fingerprint must follow, or confirming would
       // mistake the person's own edit for «the price changed».
       d.setPayloadHash(AssistantInvoiceDrafts.fingerprint(updated));
-    } else if (completion.startAt() != null) {
+    } else if (d.getType() == AssistantDraftType.APPOINTMENT && completion.startAt() != null) {
       AppointmentDraftPayload old = fromJson(d, AppointmentDraftPayload.class);
       Long professionalId =
           ownProfessionalId != null ? ownProfessionalId : completion.professionalId();
@@ -239,11 +266,14 @@ public class AssistantDraftService {
   // Confirm
 
   /** The outcome of the transactional part of confirming. */
-  private sealed interface Outcome permits Confirmed, Repriced {}
+  private sealed interface Outcome permits Confirmed, Repriced, RecordChanged {}
 
   private record Confirmed(ConfirmResult result) implements Outcome {}
 
   private record Repriced(AssistantDraftDto draft) implements Outcome {}
+
+  /** The ficha changed since the proposal: the draft was rebuilt, the person must look again. */
+  private record RecordChanged(AssistantDraftDto draft) implements Outcome {}
 
   /**
    * Confirms a draft. Errors are {@link AssistantDraftException}s (or the codes the regular
@@ -256,6 +286,10 @@ public class AssistantDraftService {
       // Committed (the draft now carries the new prices): tell the person, who must look again.
       throw new AssistantDraftException(
           HttpStatus.CONFLICT, "ASSISTANT_PRICE_CHANGED", Map.of("draft", r.draft()));
+    }
+    if (outcome instanceof RecordChanged r) {
+      throw new AssistantDraftException(
+          HttpStatus.CONFLICT, "ASSISTANT_RECORD_CHANGED", Map.of("draft", r.draft()));
     }
     return ((Confirmed) outcome).result();
   }
@@ -270,6 +304,12 @@ public class AssistantDraftService {
     if (d.getType() == AssistantDraftType.APPOINTMENT) {
       requireMayBook(principal, fromJson(d, AppointmentDraftPayload.class));
     }
+    // A ficha is the administration's or a professional's (who can only work on her own turnos).
+    if (d.getType() == AssistantDraftType.SERVICE_RECORD
+        && !principal.isAdmin()
+        && !(principal.isProfessional() && principal.getProfessionalId() != null)) {
+      throw new AssistantDraftException(HttpStatus.FORBIDDEN, "FORBIDDEN");
+    }
     switch (d.getStatus()) {
       case CONFIRMED -> throw alreadyConfirmed(d);
       case DRAFT -> {
@@ -282,9 +322,11 @@ public class AssistantDraftService {
       default ->
           throw new AssistantDraftException(HttpStatus.CONFLICT, "ASSISTANT_DRAFT_NOT_ACTIVE");
     }
-    return d.getType() == AssistantDraftType.INVOICE
-        ? confirmInvoice(tenantId, userId, d)
-        : confirmAppointment(principal, tenantId, userId, d);
+    return switch (d.getType()) {
+      case INVOICE -> confirmInvoice(tenantId, userId, d);
+      case SERVICE_RECORD -> confirmServiceRecord(principal, tenantId, userId, d);
+      case APPOINTMENT -> confirmAppointment(principal, tenantId, userId, d);
+    };
   }
 
   private static void requireMayBook(FemmeUserPrincipal principal, AppointmentDraftPayload p) {
@@ -352,7 +394,9 @@ public class AssistantDraftService {
             appointment.id(),
             appointment.startAt(),
             appointment.professionalId(),
-            toDto(claimed)));
+            toDto(claimed),
+            null,
+            null));
   }
 
   /**
@@ -366,6 +410,62 @@ public class AssistantDraftService {
       return new AssistantDraftException(HttpStatus.CONFLICT, "ASSISTANT_SLOT_TAKEN", extra);
     }
     return new AssistantDraftException(HttpStatus.CONFLICT, e.getMessage());
+  }
+
+  private Outcome confirmServiceRecord(
+      FemmeUserPrincipal principal, long tenantId, long userId, AssistantDraft d) {
+    ServiceRecordDraftPayload payload = fromJson(d, ServiceRecordDraftPayload.class);
+    if (drafts.claim(d.getId(), tenantId, userId, Instant.now()) == 0) {
+      AssistantDraft current = load(tenantId, userId, d.getId());
+      throw current.getStatus() == AssistantDraftStatus.CONFIRMED
+          ? alreadyConfirmed(current)
+          : new AssistantDraftException(HttpStatus.CONFLICT, notActiveCode(current));
+    }
+    AssistantDraft claimed = load(tenantId, userId, d.getId());
+    AssistantContext ctx =
+        new AssistantContext(
+            tenantId, userId, principal.getRole(), principal.getProfessionalId(), "");
+    long recordId;
+    try {
+      // The ficha as it is NOW, with what the person asked applied again on top of it.
+      ServiceRecordDraftPayload fresh = recordDrafts.rebase(ctx, payload);
+      // Changed when the ficha moved OR when anything the card showed would now come out
+      // different (a catalog price, the turno's line): the person must look again.
+      boolean changed =
+          !java.util.Objects.equals(fresh.recordFingerprint(), payload.recordFingerprint())
+              || !AssistantRecordDrafts.fingerprint(fresh).equals(claimed.getPayloadHash());
+      if (changed) {
+        claimed.setPayload(toJson(fresh));
+        claimed.setPayloadHash(AssistantRecordDrafts.fingerprint(fresh));
+        claimed.setStatus(AssistantDraftStatus.DRAFT);
+        claimed.setUpdatedAt(Instant.now());
+        drafts.save(claimed);
+        return new RecordChanged(toDto(claimed));
+      }
+      recordId = recordDrafts.commit(principal, fresh);
+    } catch (AssistantTools.ToolException e) {
+      throw new AssistantDraftException(HttpStatus.CONFLICT, e.getMessage());
+    }
+    claimed.setStatus(AssistantDraftStatus.CONFIRMED);
+    claimed.setResult("SERVICE_RECORD", recordId);
+    claimed.setUpdatedAt(Instant.now());
+    drafts.save(claimed);
+    log.info(
+        "assistant draft confirmed tenantId={} type=SERVICE_RECORD serviceRecordId={}",
+        tenantId,
+        recordId);
+    return new Confirmed(
+        new ConfirmResult(
+            "SERVICE_RECORD",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            toDto(claimed),
+            recordId,
+            payload.serviceRecordId() == null ? "create" : "update"));
   }
 
   private Outcome confirmInvoice(long tenantId, long userId, AssistantDraft d) {
@@ -418,7 +518,9 @@ public class AssistantDraftService {
             null,
             null,
             null,
-            toDto(claimed)));
+            toDto(claimed),
+            null,
+            null));
   }
 
   /** The second tap of a double tap: 409 carrying the original result, nothing is issued twice. */

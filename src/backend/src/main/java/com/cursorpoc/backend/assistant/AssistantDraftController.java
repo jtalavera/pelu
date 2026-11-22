@@ -57,6 +57,14 @@ public class AssistantDraftController {
           String.valueOf(result.invoiceId()),
           AuditLogService.SOURCE_ASSISTANT);
     }
+    if (result.serviceRecordId() != null) {
+      auditLogService.recordBusinessAction(
+          principal,
+          "service-records",
+          result.recordOperation(),
+          String.valueOf(result.serviceRecordId()),
+          AuditLogService.SOURCE_ASSISTANT);
+    }
     if (result.appointmentId() != null) {
       auditLogService.recordBusinessAction(
           principal,

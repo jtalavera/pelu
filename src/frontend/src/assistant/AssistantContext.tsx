@@ -42,6 +42,8 @@ export type AssistantDraftCard = {
   result?: DraftConfirmResult | null;
   /** The price changed since the proposal: the card shows the new total and asks to review. */
   priceChanged?: boolean;
+  /** A ficha draft: the ficha changed since the proposal, so the card was rebuilt — look again. */
+  recordChanged?: boolean;
   /** The slot was taken: other free times to move the draft to. */
   alternatives?: SlotAlternative[];
 };
@@ -372,7 +374,7 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
 
   const confirmDraft = useCallback(
     async (id: string) => {
-      patchCard(id, (c) => ({ ...c, busy: true, error: null, priceChanged: false }));
+      patchCard(id, (c) => ({ ...c, busy: true, error: null, priceChanged: false, recordChanged: false }));
       try {
         const result = await confirmAssistantDraft(id);
         patchCard(id, (c) => ({ ...c, busy: false, draft: result.draft, result }));
@@ -387,10 +389,12 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
               busy: false,
               draft,
               result: {
-                type: "INVOICE",
-                invoiceId: (body.invoiceId as number | null) ?? draft.resultId,
+                type: draft.type,
+                // The generic result id is the invoice's only for an invoice.
+                invoiceId: draft.type === "INVOICE" ? ((body.invoiceId as number | null) ?? draft.resultId) : null,
                 invoiceNumberFormatted: null,
                 sifenSubmissionStatus: null,
+                serviceRecordId: draft.type === "SERVICE_RECORD" ? draft.resultId : null,
                 draft,
               },
             }));
@@ -405,6 +409,11 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
               error: e,
               alternatives: (body.alternatives as SlotAlternative[] | undefined) ?? [],
             }));
+            return;
+          }
+          if (e.code === "ASSISTANT_RECORD_CHANGED" && draft) {
+            // The ficha changed meanwhile: the draft was rebuilt on it; the person reviews and saves again.
+            patchCard(id, (c) => ({ ...c, busy: false, draft, recordChanged: true }));
             return;
           }
           if (e.code === "ASSISTANT_PRICE_CHANGED" && draft) {

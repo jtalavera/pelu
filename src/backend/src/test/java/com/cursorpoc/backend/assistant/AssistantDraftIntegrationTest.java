@@ -26,10 +26,18 @@ import com.cursorpoc.backend.repository.InvoiceRepository;
 import com.cursorpoc.backend.repository.ProfessionalRepository;
 import com.cursorpoc.backend.repository.SalonServiceRepository;
 import com.cursorpoc.backend.repository.ServiceCategoryRepository;
+import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TaxRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.repository.TierRepository;
 import com.cursorpoc.backend.security.JwtService;
+import com.cursorpoc.backend.service.AppointmentService;
+import com.cursorpoc.backend.service.AppointmentServiceRecordService;
+import com.cursorpoc.backend.service.ServiceRecordService;
+import com.cursorpoc.backend.web.dto.AppointmentCreateRequest;
+import com.cursorpoc.backend.web.dto.ServiceRecordLineRequest;
+import com.cursorpoc.backend.web.dto.ServiceRecordRequest;
+import com.cursorpoc.backend.web.dto.ServiceRecordVoidRequest;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -80,6 +88,11 @@ class AssistantDraftIntegrationTest {
   @Autowired private FeatureFlagRepository featureFlagRepository;
   @Autowired private AssistantDraftRepository draftRepository;
   @Autowired private AssistantDraftService draftService;
+  @Autowired private AssistantRecordDrafts recordDrafts;
+  @Autowired private AppointmentService appointmentService;
+  @Autowired private ServiceRecordService serviceRecordService;
+  @Autowired private AppointmentServiceRecordService appointmentRecordService;
+  @Autowired private ServiceRecordRepository serviceRecordRepository;
   @Autowired private JwtService jwtService;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private ObjectMapper objectMapper;
@@ -665,6 +678,371 @@ class AssistantDraftIntegrationTest {
       }
     }
     return out;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Fichas de servicio (HU-AST-08)
+
+  @Test
+  void savingARecordDraft_createsTheFichaLinkedToTheTurno_once_andIsAudited() throws Exception {
+    long conv = currentConversation(admin);
+    long turno = bookTurnoToday(newProfessional().getId());
+    JsonNode draft = proposeRecord(admin, conv, addProduct());
+
+    assertThat(draft.get("type").asString()).isEqualTo("SERVICE_RECORD");
+    assertThat(draft.get("payload").get("appointmentId").asLong()).isEqualTo(turno);
+    assertThat(recordCount()).as("proposing writes nothing").isZero();
+
+    String id = draft.get("id").asString();
+    HttpResponse<String> saved = post("/api/assistant/drafts/" + id + "/confirm", admin, null, id);
+    assertThat(saved.statusCode()).as(saved.body()).isEqualTo(200);
+    JsonNode result = json(saved);
+    assertThat(result.get("type").asString()).isEqualTo("SERVICE_RECORD");
+    assertThat(result.get("draft").get("status").asString()).isEqualTo("CONFIRMED");
+    long recordId = result.get("serviceRecordId").asLong();
+    assertThat(recordCount()).isEqualTo(1);
+    var record = serviceRecordService.getServiceRecord(tenant.getId(), recordId);
+    assertThat(record.lines()).extracting(l -> l.serviceId()).hasSize(2);
+    var appointment = appointmentService.get(tenant.getId(), turno);
+    assertThat(appointment.serviceRecordId()).isEqualTo(recordId);
+    assertThat(appointment.status()).isEqualTo("IN_PROGRESS");
+
+    List<AuditLog> rows =
+        auditLogRepository.findAll().stream()
+            .filter(r -> "ASSISTANT".equals(r.getSource()))
+            .filter(r -> tenant.getId().equals(r.getTenantId()))
+            .toList();
+    assertThat(rows).hasSize(1);
+    assertThat(rows.get(0).getResource()).isEqualTo("service-records");
+    assertThat(rows.get(0).getOperation()).isEqualTo("create");
+    assertThat(rows.get(0).getEntityId()).isEqualTo(String.valueOf(recordId));
+  }
+
+  @Test
+  void aProfessionalSavesHerRecord_andNeverSeesAnAmountAnywhere() throws Exception {
+    AppUser pro = user(tenant, UserRole.PROFESSIONAL);
+    long proId = professionalIds.get(pro.getId());
+    long conv = currentConversation(pro);
+    long turno = bookTurnoToday(proId);
+
+    JsonNode draft = proposeRecord(pro, conv, addProduct());
+    assertNoAmounts(draft.get("payload"));
+
+    String id = draft.get("id").asString();
+    HttpResponse<String> saved = post("/api/assistant/drafts/" + id + "/confirm", pro, null, id);
+    assertThat(saved.statusCode()).as(saved.body()).isEqualTo(200);
+    assertNoAmounts(json(saved).get("draft").get("payload"));
+    assertThat(saved.body()).doesNotContain("unitPrice").doesNotContain("lineTotal");
+
+    // After a reload the card comes back from the server: still without money.
+    HttpResponse<String> reloaded = get("/api/assistant/conversations/current", pro);
+    assertThat(reloaded.body()).doesNotContain("unitPrice").doesNotContain("lineTotal");
+    assertThat(appointmentService.get(tenant.getId(), turno).serviceRecordId()).isNotNull();
+    long recordId = json(saved).get("serviceRecordId").asLong();
+    assertThat(serviceRecordService.getServiceRecord(tenant.getId(), recordId).lines()).hasSize(2);
+  }
+
+  @Test
+  void twoSimultaneousSaves_createOneFicha() throws Exception {
+    long conv = currentConversation(admin);
+    String id = proposeRecord(admin, conv, addProduct()).get("id").asString();
+
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try {
+      Callable<Integer> tap =
+          () -> post("/api/assistant/drafts/" + id + "/confirm", admin, null, id).statusCode();
+      Future<Integer> a = pool.submit(tap);
+      Future<Integer> b = pool.submit(tap);
+      assertThat(List.of(a.get(), b.get())).containsExactlyInAnyOrder(200, 409);
+    } finally {
+      pool.shutdownNow();
+    }
+    assertThat(recordCount()).isEqualTo(1);
+  }
+
+  @Test
+  void aRecordThatChangedBeforeTheButton_isNotSaved_andIsRebuiltWithTheChangesReapplied()
+      throws Exception {
+    long recordId = openRecordWithTheService(1);
+    long conv = currentConversation(admin);
+    JsonNode draft = proposeRecord(admin, conv, addProduct());
+    String id = draft.get("id").asString();
+    // Meanwhile somebody changes the quantity on the ficha screen.
+    updateRecordLines(
+        recordId,
+        new ServiceRecordLineRequest(service.getId(), null, 2, BigDecimal.valueOf(110_000)));
+
+    HttpResponse<String> first = post("/api/assistant/drafts/" + id + "/confirm", admin, null, id);
+
+    assertThat(first.statusCode()).isEqualTo(409);
+    JsonNode body = json(first);
+    assertThat(body.get("error").asString()).isEqualTo("ASSISTANT_RECORD_CHANGED");
+    assertThat(body.get("draft").get("status").asString()).isEqualTo("DRAFT");
+    // Nothing was saved yet: still the other person's quantity.
+    assertThat(serviceRecordService.getServiceRecord(tenant.getId(), recordId).lines()).hasSize(1);
+
+    HttpResponse<String> second = post("/api/assistant/drafts/" + id + "/confirm", admin, null, id);
+    assertThat(second.statusCode()).as(second.body()).isEqualTo(200);
+    var lines = serviceRecordService.getServiceRecord(tenant.getId(), recordId).lines();
+    assertThat(lines).hasSize(2);
+    assertThat(
+            lines.stream()
+                .filter(l -> l.serviceId() == service.getId())
+                .findFirst()
+                .orElseThrow()
+                .quantity())
+        .isEqualTo(2);
+  }
+
+  @Test
+  void aLineThatIsGoneIsReportedAsNotApplied() throws Exception {
+    long recordId = openRecordWithTheService(1);
+    long conv = currentConversation(admin);
+    JsonNode draft =
+        proposeRecord(
+            admin,
+            conv,
+            new AssistantRecordDrafts.Request(
+                clientId(),
+                null,
+                null,
+                false,
+                List.of(new AssistantRecordDrafts.Add(productId(), 1, null, null)),
+                List.of(1),
+                List.of()));
+    String id = draft.get("id").asString();
+    // Meanwhile the haircut is replaced by the product on the ficha itself.
+    updateRecordLines(
+        recordId, new ServiceRecordLineRequest(productId(), null, 1, BigDecimal.valueOf(20_000)));
+
+    HttpResponse<String> res = post("/api/assistant/drafts/" + id + "/confirm", admin, null, id);
+
+    assertThat(res.statusCode()).isEqualTo(409);
+    assertThat(json(res).get("draft").get("payload").get("notApplied")).hasSize(1);
+  }
+
+  @Test
+  void aClosedFicha_orATurnoThatGotItsFicha_refusesWithTheServiceCode_andKeepsTheDraft()
+      throws Exception {
+    long recordId = openRecordWithTheService(1);
+    long conv = currentConversation(admin);
+    String id = proposeRecord(admin, conv, addProduct()).get("id").asString();
+    serviceRecordService.voidServiceRecord(
+        tenant.getId(), recordId, new ServiceRecordVoidRequest("test"));
+
+    HttpResponse<String> closed = post("/api/assistant/drafts/" + id + "/confirm", admin, null, id);
+
+    assertThat(closed.statusCode()).isEqualTo(409);
+    assertThat(json(closed).get("error").asString()).isEqualTo("SERVICE_RECORD_NOT_OPEN");
+    assertThat(draftRepository.findById(java.util.UUID.fromString(id)).orElseThrow().getStatus())
+        .isEqualTo(AssistantDraftStatus.DRAFT);
+
+    // A new tenant-less turno case: the turno gets a ficha from the agenda before the button.
+    long turno = bookTurnoToday(newProfessional().getId());
+    long conv2 = currentConversation(admin);
+    String id2 = proposeRecord(admin, conv2, addProduct()).get("id").asString();
+    appointmentRecordService.createFromAppointment(tenant.getId(), turno);
+
+    HttpResponse<String> taken =
+        post("/api/assistant/drafts/" + id2 + "/confirm", admin, null, id2);
+
+    assertThat(taken.statusCode()).isEqualTo(409);
+    assertThat(json(taken).get("error").asString())
+        .isEqualTo("APPOINTMENT_ALREADY_HAS_SERVICE_RECORD");
+    assertThat(draftRepository.findById(java.util.UUID.fromString(id2)).orElseThrow().getStatus())
+        .isEqualTo(AssistantDraftStatus.DRAFT);
+  }
+
+  @Test
+  void aRecordDraftIsOnlyThePersonsOwn_inTheirSalon() throws Exception {
+    long conv = currentConversation(admin);
+    String id = proposeRecord(admin, conv, addProduct()).get("id").asString();
+    AppUser colleague = user(tenant, UserRole.ADMIN);
+    Tenant other = new Tenant();
+    other.setName("Otro " + suffix);
+    other.setTier(tenant.getTier());
+    other = tenantRepository.save(other);
+    AppUser stranger = user(other, UserRole.ADMIN);
+
+    for (AppUser who : List.of(colleague, stranger)) {
+      HttpResponse<String> res = post("/api/assistant/drafts/" + id + "/confirm", who, null, id);
+      assertThat(res.statusCode()).isEqualTo(404);
+      assertThat(json(res).get("error").asString()).isEqualTo("ASSISTANT_DRAFT_NOT_FOUND");
+    }
+    assertThat(recordCount()).isZero();
+  }
+
+  @Test
+  void aSecondProposalOnAPendingEditDraft_readsTheFichaItIsBuiltOn() throws Exception {
+    // The pending draft's ficha is read again (its lines are lazy): it must work outside any
+    // caller's transaction, like the tool does when the model proposes twice in a row.
+    long recordId = openRecordWithTheService(1);
+    long conv = currentConversation(admin);
+    proposeRecord(admin, conv, addProduct());
+
+    JsonNode second =
+        proposeRecord(
+            admin,
+            conv,
+            new AssistantRecordDrafts.Request(
+                clientId(),
+                null,
+                null,
+                false,
+                List.of(),
+                List.of(),
+                List.of(new AssistantRecordDrafts.ChangeReq(1, 3, null, null))));
+
+    assertThat(second.get("payload").get("serviceRecordId").asLong()).isEqualTo(recordId);
+    assertThat(second.get("payload").get("changes")).hasSize(2); // the product AND the quantity
+  }
+
+  @Test
+  void aCatalogPriceThatMovedBeforeTheButton_rebuildsTheCard_insteadOfSavingAnotherPrice()
+      throws Exception {
+    long conv = currentConversation(admin);
+    JsonNode draft = proposeRecord(admin, conv, addProduct());
+    assertThat(draft.get("payload").get("total").asLong()).isEqualTo(20_000);
+    String id = draft.get("id").asString();
+    SalonService product = serviceRepository.findById(productId()).orElseThrow();
+    product.setPriceMinor(BigDecimal.valueOf(25_000));
+    serviceRepository.save(product);
+
+    HttpResponse<String> first = post("/api/assistant/drafts/" + id + "/confirm", admin, null, id);
+
+    assertThat(first.statusCode()).isEqualTo(409);
+    assertThat(json(first).get("error").asString()).isEqualTo("ASSISTANT_RECORD_CHANGED");
+    assertThat(json(first).get("draft").get("payload").get("total").asLong()).isEqualTo(25_000);
+    assertThat(recordCount()).isZero();
+
+    HttpResponse<String> second = post("/api/assistant/drafts/" + id + "/confirm", admin, null, id);
+    assertThat(second.statusCode()).as(second.body()).isEqualTo(200);
+    long recordId = json(second).get("serviceRecordId").asLong();
+    assertThat(
+            serviceRecordService
+                .getServiceRecord(tenant.getId(), recordId)
+                .lines()
+                .get(0)
+                .unitPrice())
+        .isEqualByComparingTo("25000");
+  }
+
+  @Test
+  void patchingARecordDraftChangesNothing() throws Exception {
+    long conv = currentConversation(admin);
+    JsonNode draft = proposeRecord(admin, conv, addProduct());
+    String id = draft.get("id").asString();
+
+    HttpResponse<String> res =
+        patch("/api/assistant/drafts/" + id, admin, "{\"startAt\":\"2030-01-01T10:00:00Z\"}");
+
+    assertThat(res.statusCode()).as(res.body()).isEqualTo(200);
+    assertThat(json(res).get("payload")).isEqualTo(draft.get("payload"));
+  }
+
+  // --- fixtures of the ficha tests
+
+  private AssistantRecordDrafts.Request addProduct() {
+    return new AssistantRecordDrafts.Request(
+        clientId(),
+        null,
+        null,
+        false,
+        List.of(new AssistantRecordDrafts.Add(productId(), 1, null, null)),
+        List.of(),
+        List.of());
+  }
+
+  private JsonNode proposeRecord(
+      AppUser user, long conversationId, AssistantRecordDrafts.Request req) {
+    AssistantContext ctx =
+        new AssistantContext(
+            tenant.getId(),
+            user.getId(),
+            user.getRole(),
+            professionalIds.get(user.getId()),
+            "hoy",
+            conversationId);
+    var payload = recordDrafts.build(ctx, req, draftService.activeRecordPayload(ctx));
+    return objectMapper.valueToTree(draftService.createRecordDraft(ctx, payload).draft());
+  }
+
+  private long clientId() {
+    return clientRepository.findAll().stream()
+        .filter(
+            c -> c.getTenant().getId().equals(tenant.getId()) && clientName.equals(c.getFullName()))
+        .findFirst()
+        .orElseThrow()
+        .getId();
+  }
+
+  private long productId() {
+    return serviceRepository.findAll().stream()
+        .filter(
+            s -> s.getTenant().getId().equals(tenant.getId()) && productName.equals(s.getName()))
+        .findFirst()
+        .orElseThrow()
+        .getId();
+  }
+
+  private Professional newProfessional() {
+    Professional p = new Professional();
+    p.setTenant(tenant);
+    p.setFullName("Pro " + System.nanoTime());
+    p.setActive(true);
+    return professionalRepository.save(p);
+  }
+
+  /**
+   * A turno of the client starting in a couple of minutes, so it is «today» and not in the past.
+   */
+  private long bookTurnoToday(long professionalId) {
+    return appointmentService
+        .create(
+            tenant.getId(),
+            new AppointmentCreateRequest(
+                clientId(),
+                professionalId,
+                service.getId(),
+                Instant.now().plusSeconds(180).toString()))
+        .id();
+  }
+
+  private long openRecordWithTheService(int quantity) {
+    return serviceRecordService
+        .createServiceRecord(
+            tenant.getId(),
+            new ServiceRecordRequest(
+                clientId(),
+                List.of(
+                    new ServiceRecordLineRequest(
+                        service.getId(), null, quantity, BigDecimal.valueOf(110_000))),
+                List.of()))
+        .id();
+  }
+
+  private void updateRecordLines(long recordId, ServiceRecordLineRequest... lines) {
+    serviceRecordService.updateServiceRecord(
+        tenant.getId(), recordId, new ServiceRecordRequest(clientId(), List.of(lines), List.of()));
+  }
+
+  private long recordCount() {
+    return serviceRecordRepository.findAll().stream()
+        .filter(r -> r.getTenant().getId().equals(tenant.getId()))
+        .count();
+  }
+
+  /** No amount may reach a professional: no such key anywhere in the JSON, not even null. */
+  private static void assertNoAmounts(JsonNode node) {
+    node.properties()
+        .forEach(
+            e -> {
+              assertThat(e.getKey()).isNotIn("unitPrice", "lineTotal", "total", "price");
+              assertNoAmounts(e.getValue());
+            });
+    if (node.isArray()) {
+      node.forEach(AssistantDraftIntegrationTest::assertNoAmounts);
+    }
   }
 
   private long currentConversation(AppUser user) throws Exception {

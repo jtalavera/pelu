@@ -65,6 +65,37 @@ export type AppointmentDraftPayload = {
   outsideWorkingHours: boolean;
 };
 
+/**
+ * A ficha de servicio the assistant proposed (created, or changed when `serviceRecordId` is set).
+ * `lines` is the RESULTING list numbered 1..n, then the lines taken out with position 0 and mark
+ * REMOVED. For a professional every amount is ABSENT: she never sees money, here or anywhere.
+ */
+export type ServiceRecordDraftPayload = {
+  clientId: number;
+  clientName: string;
+  serviceRecordId: number | null;
+  /** The turno a new ficha is linked to (it moves to «En curso»), with its HH:mm. */
+  appointmentId: number | null;
+  appointmentTime: string | null;
+  lines: {
+    position: number;
+    serviceId: number | null;
+    name: string;
+    quantity: number;
+    unitPrice?: number;
+    lineTotal?: number;
+    professionalId: number | null;
+    professionalName: string | null;
+    mark: "NEW" | "KEPT" | "CHANGED" | "REMOVED";
+  }[];
+  /** What was asked (internal: used to apply it again if the ficha changes). */
+  changes: unknown[];
+  /** Changes that no longer found their line when the ficha changed meanwhile. */
+  notApplied: { op: string; name: string }[];
+  total?: number;
+  recordFingerprint: string | null;
+};
+
 /** Another free time offered when the one asked for is taken. */
 export type SlotAlternative = {
   time: string;
@@ -76,14 +107,14 @@ export type SlotAlternative = {
 /** A proposal waiting for the person's confirmation (the card draws it from this). */
 export type AssistantDraft = {
   id: string;
-  type: "INVOICE" | "APPOINTMENT";
+  type: "INVOICE" | "APPOINTMENT" | "SERVICE_RECORD";
   status: AssistantDraftStatus;
   createdAt: string;
   expiresAt: string;
   /** What must still be completed before «Confirmar» works: PAYMENT_METHOD, CARD_BRAND, EMAIL. */
   missing: string[];
-  /** An {@link InvoiceDraftPayload} for `INVOICE`, an {@link AppointmentDraftPayload} for `APPOINTMENT`. */
-  payload: InvoiceDraftPayload | AppointmentDraftPayload;
+  /** The payload type that goes with `type` (invoice, appointment or service record). */
+  payload: InvoiceDraftPayload | AppointmentDraftPayload | ServiceRecordDraftPayload;
   resultType: string | null;
   resultId: number | null;
   /** Set when the conversation is reloaded: the assistant message this card belongs to. */
@@ -238,13 +269,16 @@ export class AssistantApiError extends Error {
 }
 
 export type DraftConfirmResult = {
-  type: "INVOICE" | "APPOINTMENT";
+  type: "INVOICE" | "APPOINTMENT" | "SERVICE_RECORD";
   invoiceId: number | null;
   invoiceNumberFormatted: string | null;
   sifenSubmissionStatus: string | null;
   appointmentId?: number | null;
   startAt?: string | null;
   professionalId?: number | null;
+  /** SERVICE_RECORD: the ficha saved, and whether it was created or updated. */
+  serviceRecordId?: number | null;
+  recordOperation?: "create" | "update" | null;
   draft: AssistantDraft;
 };
 

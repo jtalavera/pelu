@@ -50,6 +50,8 @@ Principio de todo el asistente: **el modelo propone, la persona confirma**. El m
 18. **Productos — Se facturan como los servicios.** Una factura puede llevar servicios y productos (ids de `listar_servicios` y `listar_productos`), con cantidad («2 shampoos»). La tarjeta, el precio dicho, la edición del precio y el quitar ítems funcionan igual con productos, y al emitir se usa el mismo camino de siempre (comisiones y descuento de stock incluidos).
 19. **Agregar ítems — Al borrador en curso, sin perder lo editado.** «Agregale dos shampoos» agrega servicios o productos al borrador activo (herramienta `agregar_item_a_borrador`): aparece una tarjeta nueva y la anterior se atenúa. Se conserva lo que la persona ya hizo en la tarjeta (precios editados, ítems quitados, medio de pago, email). Si el ítem ya estaba, suma cantidad a su precio actual. Si no hay un borrador de factura activo, el asistente lo dice y pide el cliente. Si el borrador salía de una ficha o turno, lo agregado se mantiene al volver a calcular al confirmar.
 
+20. **Sin indicar qué cobrar — Primero la ficha.** Pedir «facturale a <cliente>» o «facturemos los servicios de <cliente>» sin nombrar ítems llama de inmediato a `proponer_factura` sin ítems: el asistente no pregunta qué cobrar ni lista el catálogo antes. El borrador sale de la ficha abierta del cliente o de su único turno de hoy; solo si no hay nada que cobrar (`NOTHING_TO_INVOICE`) el asistente dice que no tiene ficha abierta ni turno hoy y pide qué cobrar. _La instrucción al modelo real se verifica a mano; el Playwright cubre el borrador desde la ficha (AC2) y un test del prompt cubre el texto de la regla._
+
 ---
 
 ## Fuera de alcance

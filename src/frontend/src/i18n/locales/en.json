@@ -1647,6 +1647,27 @@
         "pickAnother": "That time is taken. Pick another:",
         "viewInAgenda": "View in the agenda"
       },
+      "recordDraft": {
+        "title": "Service record draft",
+        "savedTitle": "Service record saved",
+        "savedBadge": "Saved",
+        "client": "Client",
+        "appointment": "Linked to the appointment at {{time}}",
+        "mark": {
+          "NEW": "New",
+          "CHANGED": "Changed",
+          "REMOVED": "Removed"
+        },
+        "removedTitle": "Taken out",
+        "notApplied": "Not applied, because the record changed meanwhile: {{items}}.",
+        "notAppliedOp": {
+          "REMOVE": "remove {{name}}",
+          "CHANGE": "change {{name}}"
+        },
+        "changed": "The record changed since this was prepared. Review the updated card and save again.",
+        "confirm": "Save record",
+        "confirming": "Saving…"
+      },
       "options": {
         "SLOT": "Pick a time"
       },
@@ -1669,6 +1690,8 @@
         "listar_servicios": "Looking up services…",
         "listar_productos": "Looking up products…",
         "agregar_item_a_borrador": "Adding to the draft…",
+        "ver_ficha_abierta": "Looking up the service record…",
+        "proponer_ficha": "Preparing the service record…",
         "listar_profesionales": "Looking up professionals…",
         "turnos_del_dia": "Checking the agenda…",
         "generic": "Working on it…"
@@ -3666,6 +3689,11 @@
       "ASSISTANT_DRAFT_INVALID_PAYMENT": "Choose a payment method from the list.",
       "ASSISTANT_DRAFT_INVALID_EMAIL": "Enter a valid email. Example: client@email.com",
       "ASSISTANT_PRICE_CHANGED": "A price changed since this draft was prepared. Review the new total and confirm again.",
+      "ASSISTANT_RECORD_CHANGED": "The service record changed since this draft was prepared. Review the updated card and save again.",
+      "NOTHING_TO_SAVE": "The service record has no lines left. Tell the assistant what to add.",
+      "NO_APPOINTMENT_TODAY": "There is no appointment of yours today to open a service record from.",
+      "APPOINTMENT_ALREADY_HAS_SERVICE_RECORD": "That appointment already has a service record.",
+      "APPOINTMENT_NOT_ACTIVE": "That appointment is no longer active, so a record cannot be linked to it.",
       "RECEIPT_EMAIL_REQUIRED": "Enter the client's email to send the receipt. Example: client@email.com",
       "RECEIPT_EMAIL_INVALID": "Enter a valid email. Example: client@email.com",
       "APPOINTMENT_ALREADY_INVOICED": "That appointment was already invoiced.",

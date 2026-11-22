@@ -39,6 +39,7 @@ class AssistantToolsTest {
 
   private static final long TENANT = 7L;
 
+  private final AssistantRecordTools records = mock(AssistantRecordTools.class);
   private final ClientService clients = mock(ClientService.class);
   private final ServiceCatalogService catalog = mock(ServiceCatalogService.class);
   private final ProfessionalDirectoryService professionals =
@@ -55,7 +56,8 @@ class AssistantToolsTest {
           time,
           json,
           mock(AssistantProposalTools.class),
-          mock(AssistantAgendaTools.class));
+          mock(AssistantAgendaTools.class),
+          records);
 
   private static AssistantContext admin() {
     return new AssistantContext(TENANT, 1L, UserRole.ADMIN, null, "hoy");
@@ -73,6 +75,25 @@ class AssistantToolsTest {
 
   private JsonNode run(AssistantContext ctx, String tool, String args) {
     return json.readTree(tools.execute(ctx, tool, args));
+  }
+
+  @Test
+  void fichaToolsAreKnownAndRoutedToTheirClass() {
+    assertThat(AssistantTools.isKnown("ver_ficha_abierta")).isTrue();
+    assertThat(AssistantTools.isKnown("proponer_ficha")).isTrue();
+    var outcome = ToolOutcome.of("{\"data\":{}}");
+    when(records.handles("ver_ficha_abierta")).thenReturn(true);
+    when(records.run(any(), eq("ver_ficha_abierta"), any())).thenReturn(outcome);
+
+    assertThat(tools.run(admin(), "ver_ficha_abierta", "{\"clientId\":42}")).isSameAs(outcome);
+  }
+
+  @Test
+  void fichaToolSpecsAreAddedForTheRole() {
+    var spec = new AssistantModelClient.ToolSpec("proponer_ficha", "d", "{}");
+    when(records.specsFor(professional())).thenReturn(List.of(spec));
+
+    assertThat(tools.specsFor(professional())).contains(spec);
   }
 
   @Test

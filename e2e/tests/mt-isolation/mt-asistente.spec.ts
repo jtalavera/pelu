@@ -12,6 +12,7 @@ import {
   askAssistantApi,
   bookAppointmentTomorrow,
   createClientWithPhone,
+  createOpenFicha,
   createProductApi,
   completeDraftApi,
   confirmDraftApi,
@@ -19,6 +20,7 @@ import {
   enableAssistantGlobally,
   optionLabels,
   proposeAppointmentViaApi,
+  proposeRecordViaApi,
   proposeViaApi,
   restoreAssistantGlobal,
   workingWeek,
@@ -272,6 +274,52 @@ test.describe("mt-asistente · aislamiento del asistente conversacional", () => 
       `book ${names.A} for ${serviceA} tomorrow at 10:00 with Profesional Inexistente ${tag}`,
     );
     expect(ghost.events.some((e) => e.event === "card.draft")).toBe(false);
+  });
+
+  test("HU-AST-08 AC15 · un borrador de ficha es de su salón: otro salón no puede confirmarlo, completarlo ni descartarlo", async ({
+    request,
+  }) => {
+    const serviceA = world.tenantA.catalog.serviceNames[0];
+    const { draft } = await proposeRecordViaApi(request, tokenA, `record ${names.A} add ${serviceA}`);
+    expect(draft, "salon A gets its own ficha draft").not.toBeNull();
+
+    expect((await confirmDraftApi(request, tokenB, draft!.id)).status()).toBe(404);
+    const patch = await request.patch(`${API_BASE}/api/assistant/drafts/${draft!.id}`, {
+      headers: authHeaders(tokenB),
+      data: { startAt: new Date(Date.now() + 3 * 86_400_000).toISOString() },
+    });
+    expect(patch.status()).toBe(404);
+    const discard = await request.post(`${API_BASE}/api/assistant/drafts/${draft!.id}/discard`, {
+      headers: authHeaders(tokenB),
+    });
+    expect(discard.status()).toBe(404);
+
+    // The owner still has it: it can be discarded by its own salon.
+    const own = await request.post(`${API_BASE}/api/assistant/drafts/${draft!.id}/discard`, {
+      headers: authHeaders(tokenA),
+    });
+    expect(own.status()).toBe(200);
+  });
+
+  test("HU-AST-08 AC15 · el asistente no lee ni arma fichas con clientes ni fichas de otro salón", async ({ request }) => {
+    const serviceA = world.tenantA.catalog.serviceNames[0];
+    const clientB = await createClientWithPhone(request, tokenB, `MT Ficha Beta ${tag}`);
+    await createOpenFicha(request, tokenB, {
+      clientId: clientB.id,
+      serviceId: world.tenantB.catalog.serviceIds[0],
+      professionalId: world.tenantB.professionalIds[0],
+    });
+    const { conversationId } = await currentConversationApi(request, tokenA);
+
+    // Reading: A finds nobody with that name, so nothing of B's ficha comes back.
+    const read = await askAssistantApi(request, tokenA, conversationId, `record ${clientB.fullName}`);
+    expect(read.text).toContain("No encontré");
+    expect(read.text).not.toContain(world.tenantB.catalog.serviceNames[0] + " ×");
+
+    // Proposing: no draft for a client (or a ficha) of another salon.
+    const propose = await proposeRecordViaApi(request, tokenA, `record ${clientB.fullName} add ${serviceA}`);
+    expect(propose.draft).toBeNull();
+    expect(propose.answer.text).toContain("No encontré");
   });
 
   test("sin sesión no hay asistente", async ({ request }) => {

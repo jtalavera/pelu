@@ -598,6 +598,101 @@ describe("Assistant (provider + button + panel)", () => {
     expect(within(card).queryByTestId("assistant-draft-error")).toBeNull();
   });
 
+  function recordDraft(over: Partial<AssistantDraft> = {}, noMoney = false): AssistantDraft {
+    return {
+      id: "r-1",
+      type: "SERVICE_RECORD",
+      status: "DRAFT",
+      createdAt: "2026-11-20T10:00:00Z",
+      expiresAt: "2026-11-21T10:00:00Z",
+      missing: [],
+      resultType: null,
+      resultId: null,
+      payload: {
+        clientId: 42,
+        clientName: "MARIA GOMEZ",
+        serviceRecordId: 500,
+        appointmentId: null,
+        appointmentTime: null,
+        lines: [
+          {
+            position: 1,
+            serviceId: 1,
+            name: "Corte",
+            quantity: 1,
+            ...(noMoney ? {} : { unitPrice: 50000, lineTotal: 50000 }),
+            professionalId: 9,
+            professionalName: "Lu",
+            mark: "KEPT",
+          },
+        ],
+        changes: [],
+        notApplied: [],
+        ...(noMoney ? {} : { total: 50000 }),
+        recordFingerprint: "fp",
+      },
+      ...over,
+    };
+  }
+
+  it("draws a proposed service record as its own card, with money only when the server sent it", async () => {
+    const card = await proposeDraft(recordDraft());
+
+    expect(card.getAttribute("data-type")).toBe("SERVICE_RECORD");
+    expect(within(card).getByTestId("assistant-record-line-1").textContent).toContain("Gs. 50.000");
+    expect(within(card).getByTestId("assistant-record-total").textContent).toContain("Gs. 50.000");
+    expect(within(card).getByTestId("assistant-draft-confirm").textContent).toBe("Guardar ficha");
+  });
+
+  it("a professional's service record card shows no money", async () => {
+    const card = await proposeDraft(recordDraft({}, true));
+
+    expect(within(card).getByTestId("assistant-record-line-1").textContent).toContain("Corte");
+    expect(within(card).queryByTestId("assistant-record-total")).toBeNull();
+    expect(card.textContent).not.toContain("Gs.");
+  });
+
+  it("saving the service record turns the card green", async () => {
+    const d = recordDraft();
+    const card = await proposeDraft(d);
+    api.confirm.mockResolvedValue({
+      type: "SERVICE_RECORD",
+      invoiceId: null,
+      invoiceNumberFormatted: null,
+      sifenSubmissionStatus: null,
+      serviceRecordId: 500,
+      recordOperation: "update",
+      draft: { ...d, status: "CONFIRMED", resultType: "SERVICE_RECORD", resultId: 500 },
+    });
+
+    await userEvent.click(within(card).getByTestId("assistant-draft-confirm"));
+
+    await waitFor(() => expect(card.getAttribute("data-status")).toBe("CONFIRMED"));
+    expect(within(card).queryByTestId("assistant-draft-confirm")).toBeNull();
+  });
+
+  it("a service record that changed before saving is rebuilt on the card, asking to review before saving again", async () => {
+    const d = recordDraft();
+    const card = await proposeDraft(d);
+    api.confirm.mockRejectedValue(
+      new AssistantApiError(
+        JSON.stringify({
+          error: "ASSISTANT_RECORD_CHANGED",
+          draft: {
+            ...d,
+            payload: { ...d.payload, notApplied: [{ op: "REMOVE", name: "Tintura" }] },
+          },
+        }),
+      ),
+    );
+
+    await userEvent.click(within(card).getByTestId("assistant-draft-confirm"));
+
+    await waitFor(() => expect(within(card).getByTestId("assistant-record-changed")).toBeTruthy());
+    expect(within(card).getByTestId("assistant-record-not-applied").textContent).toContain("Tintura");
+    expect(card.getAttribute("data-status")).toBe("DRAFT");
+  });
+
   it("a price that changed is shown on the card, recalculated, asking to review before confirming again", async () => {
     const ready = draft({ missing: [], payload: { ...draft().payload, paymentMethod: "CASH" } });
     const card = await proposeDraft(ready);

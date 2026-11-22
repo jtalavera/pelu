@@ -8,6 +8,7 @@ import { AppointmentDraftCard } from "./AppointmentDraftCard";
 import { AssistantOptionChips } from "./AssistantOptionChips";
 import { MicIcon } from "./AssistantIcons";
 import { InvoiceDraftCard } from "./InvoiceDraftCard";
+import { ServiceRecordDraftCard } from "./ServiceRecordDraftCard";
 
 const SUGGESTIONS = ["appointmentsToday", "services", "professionals"] as const;
 
@@ -177,6 +178,8 @@ export function AssistantMessageList({
                 />
               ) : card.draft.type === "APPOINTMENT" ? (
                 <AppointmentDraftCard key={card.draft.id} card={card} {...draftActions} />
+              ) : card.draft.type === "SERVICE_RECORD" ? (
+                <ServiceRecordDraftCard key={card.draft.id} card={card} {...draftActions} />
               ) : (
                 <InvoiceDraftCard key={card.draft.id} card={card} {...draftActions} />
               ),

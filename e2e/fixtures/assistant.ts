@@ -457,3 +457,118 @@ export async function startDictating(page: Page) {
   await expect(micButton(page)).toHaveAttribute("aria-pressed", "true");
   await expect.poll(() => microphoneOpen(page)).toBe(true);
 }
+
+// ── Service records from the chat (HU-AST-08) ────────────────────────────────────────────────────
+//
+// The scripted model understands «record <client> [new] [rec=ID] [apt=ID] [add <item> [xN] [at P] |
+// remove N | set N xQ | set N with <professional>]» (see ScriptedAssistantModelClient). A name must
+// not contain the words new/add/remove/set, which the grammar reads as keywords.
+
+export type RecordDraftDto = {
+  id: string;
+  type: string;
+  status: string;
+  payload: {
+    clientName: string;
+    serviceRecordId: number | null;
+    appointmentId: number | null;
+    appointmentTime: string | null;
+    total?: number;
+    lines: Array<{
+      position: number;
+      name: string;
+      quantity: number;
+      unitPrice?: number;
+      lineTotal?: number;
+      professionalId: number | null;
+      professionalName: string | null;
+      mark: string;
+    }>;
+    notApplied: Array<{ op: string; name: string }>;
+  };
+};
+
+/** Asks the assistant (API) and returns the ficha draft card it produced, if any. */
+export async function proposeRecordViaApi(
+  request: APIRequestContext,
+  token: string,
+  text: string,
+): Promise<{ draft: RecordDraftDto | null; answer: AssistantAnswer }> {
+  const { conversationId } = await currentConversationApi(request, token);
+  const answer = await askAssistantApi(request, token, conversationId, text);
+  const card = answer.events.find((e) => e.event === "card.draft");
+  return { draft: card ? (card.data as unknown as RecordDraftDto) : null, answer };
+}
+
+/**
+ * A turno of the client that starts in a few minutes, so it is «today» in the salon and not in the
+ * past (the agenda refuses a start in the past). Use a professional of its own per test.
+ */
+export async function bookAppointmentToday(
+  request: APIRequestContext,
+  token: string,
+  body: { clientId: number; serviceId: number; professionalId: number },
+): Promise<{ id: number }> {
+  return apiPostJson<{ id: number }>(request, token, "/api/appointments", {
+    ...body,
+    startAt: new Date(Date.now() + 4 * 60_000).toISOString(),
+  });
+}
+
+export type RecordLineDto = {
+  serviceId: number;
+  quantity: number;
+  unitPrice: number;
+  professionalId: number | null;
+  description: string;
+};
+
+export async function getRecordApi(request: APIRequestContext, token: string, id: number) {
+  const res = await request.get(`${API_BASE}/api/service-records/${id}`, { headers: authHeaders(token) });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return (await res.json()) as { id: number; status: string; appointmentId: number | null; lines: RecordLineDto[] };
+}
+
+/** Every ficha of the client (any status), newest first. */
+export async function recordsOfClientApi(request: APIRequestContext, token: string, clientId: number) {
+  const res = await request.get(`${API_BASE}/api/service-records?clientId=${clientId}&size=50`, {
+    headers: authHeaders(token),
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return ((await res.json()) as { content: Array<{ id: number; status: string; appointmentId: number | null }> })
+    .content;
+}
+
+/** Replaces the lines of an open ficha, as the Fichas screen does. */
+export async function putRecordLinesApi(
+  request: APIRequestContext,
+  token: string,
+  id: number,
+  clientId: number,
+  lines: Array<{ serviceId: number; professionalId?: number | null; quantity: number; unitPrice?: number | null }>,
+) {
+  await apiPutJson(request, token, `/api/service-records/${id}`, { clientId, lines, tips: [] });
+}
+
+/** Moves a ficha's creation into the past (e2e-only support endpoint): a «ficha de un día anterior». */
+export async function backdateRecordApi(request: APIRequestContext, token: string, id: number, daysAgo: number) {
+  const res = await request.post(`${API_BASE}/api/admin/service-record-test-support/${id}/backdate/${daysAgo}`, {
+    headers: authHeaders(token),
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+export async function getAppointmentApi(request: APIRequestContext, token: string, id: number) {
+  const res = await request.get(`${API_BASE}/api/appointments/${id}`, { headers: authHeaders(token) });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return (await res.json()) as { id: number; status: string; serviceRecordId: number | null };
+}
+
+/** The audit trail rows of one resource (administration only). */
+export async function auditRowsApi(request: APIRequestContext, token: string, resource: string) {
+  const res = await request.get(`${API_BASE}/api/audit?resource=${resource}&size=100`, {
+    headers: authHeaders(token),
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return ((await res.json()) as { content: Array<{ operation: string; entityId: string; resource: string }> }).content;
+}
