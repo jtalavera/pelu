@@ -16,6 +16,8 @@ import {
   confirmDraftApi,
   createClientWithPhone,
   createOpenFicha,
+  createProductApi,
+  createOpenFichaWithServices,
   currentConversationApi,
   draftCards,
   enableAssistantGlobally,
@@ -377,6 +379,156 @@ test.describe("HU-AST-03 · Proponer y emitir una factura desde el chat", () => 
     expect(Number(invoices[0].total)).toBe(45000);
     // Once issued, the card has no editable prices.
     await expect(card.getByTestId("assistant-draft-line-price-0")).toHaveCount(0);
+  });
+
+  test("AC17 · un ítem se descarta del borrador: el total se recalcula, siempre queda uno y lo emitido no lo incluye", async ({
+    page,
+    request,
+  }) => {
+    // A second service (priced 30.000) next to the salon's (50.000), both on the client's ficha.
+    const category = await apiPostJson<{ id: number }>(request, token, "/api/service-categories", {
+      name: `E2E Cat Quitar ${SUFFIX}`,
+      accentKey: "stone",
+    });
+    const secondName = `E2E Svc Quitar ${SUFFIX}`;
+    const second = await apiPostJson<{ id: number }>(request, token, "/api/services", {
+      name: secondName,
+      categoryId: category.id,
+      priceMinor: 30000,
+      durationMinutes: 30,
+    });
+    const client = await newClient(request);
+    await createOpenFichaWithServices(request, token, {
+      clientId: client.id,
+      serviceIds: [salon.serviceId, second.id],
+      professionalId: salon.professionalId,
+    });
+    await open(page);
+    await askAssistantUi(page, `invoice ${client.fullName}`);
+    const card = lastDraftCard(page);
+    await expect(card).toBeVisible({ timeout: 20_000 });
+    const lines = card.getByTestId("assistant-draft-lines").locator("li");
+    await expect(lines).toHaveCount(2);
+    await expect(card.getByTestId("assistant-draft-total")).toHaveText("Gs. 80.000");
+
+    // Each item has its own «Remove» button, at least 44 px.
+    const remove = card.getByTestId("assistant-draft-line-remove-0");
+    await expect(remove).toHaveAccessibleName(new RegExp(`Remove ${salon.serviceFullName}`, "i"));
+    const box = (await remove.boundingBox())!;
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+
+    await remove.click();
+    await expect(lines).toHaveCount(1);
+    await expect(card.getByTestId("assistant-draft-lines")).not.toContainText(salon.serviceFullName);
+    await expect(card.getByTestId("assistant-draft-lines")).toContainText(secondName);
+    await expect(card.getByTestId("assistant-draft-total")).toHaveText("Gs. 30.000");
+    // The last item cannot be removed: no button (to give up, discard the draft).
+    await expect(card.getByTestId("assistant-draft-line-remove-0")).toHaveCount(0);
+
+    // The API refuses it too, and the removal survives a reload.
+    const id = (await card.getAttribute("data-draft-id"))!;
+    const refused = await request.patch(`${API_BASE}/api/assistant/drafts/${id}`, {
+      headers: authHeaders(token),
+      data: { removeLines: [0] },
+    });
+    expect(refused.status()).toBe(400);
+    expect(await refused.text()).toContain("ASSISTANT_DRAFT_LAST_LINE");
+    await page.reload();
+    await openAssistantPanel(page);
+    await expect(lastDraftCard(page).getByTestId("assistant-draft-lines").locator("li")).toHaveCount(1);
+    await expect(lastDraftCard(page).getByTestId("assistant-draft-total")).toHaveText("Gs. 30.000");
+
+    // Issuing charges only what is left: 30.000, and it is not a «price changed».
+    const again = lastDraftCard(page);
+    await again.getByTestId("assistant-draft-payment-CASH").click();
+    await again.getByTestId("assistant-draft-confirm").click();
+    await expect(again).toHaveAttribute("data-status", "CONFIRMED", { timeout: 20_000 });
+    await expect(again.getByTestId("assistant-draft-price-changed")).toHaveCount(0);
+    const invoices = await clientInvoicesApi(request, token, client.id);
+    expect(invoices).toHaveLength(1);
+    expect(Number(invoices[0].total)).toBe(30000);
+  });
+
+  test("AC18 · un producto se factura como un servicio, con cantidad, y lo emitido usa su precio", async ({
+    page,
+    request,
+  }) => {
+    const productName = `E2E Producto Fact ${SUFFIX}`;
+    await createProductApi(request, token, productName, 20000);
+    const client = await newClient(request);
+    await open(page);
+
+    // The product is not a service: the assistant finds it among the products. «x2» is the quantity.
+    await askAssistantUi(page, `invoice ${client.fullName} for ${productName} x2 cash`);
+
+    const card = lastDraftCard(page);
+    await expect(card).toBeVisible({ timeout: 20_000 });
+    await expect(card.getByTestId("assistant-draft-lines")).toContainText(productName);
+    await expect(card.getByTestId("assistant-draft-lines")).toContainText("× 2");
+    await expect(card.getByTestId("assistant-draft-line-price-0")).toHaveValue("20.000");
+    await expect(card.getByTestId("assistant-draft-total")).toHaveText("Gs. 40.000");
+
+    await card.getByTestId("assistant-draft-confirm").click();
+    await expect(card).toHaveAttribute("data-status", "CONFIRMED", { timeout: 20_000 });
+    const invoices = await clientInvoicesApi(request, token, client.id);
+    expect(invoices).toHaveLength(1);
+    expect(Number(invoices[0].total)).toBe(40000);
+  });
+
+  test("AC19 · «agregale…» suma ítems al borrador en curso sin perder lo editado, y sin borrador lo avisa", async ({
+    page,
+    request,
+  }) => {
+    const productName = `E2E Producto Agregar ${SUFFIX}`;
+    await createProductApi(request, token, productName, 20000);
+    const client = await newClient(request);
+    await open(page);
+
+    await askAssistantUi(page, `invoice ${client.fullName} for ${salon.serviceFullName}`);
+    await expect(lastDraftCard(page)).toBeVisible({ timeout: 20_000 });
+    // «last» moves when a newer card arrives: pin this one by its id.
+    const firstId = (await lastDraftCard(page).getAttribute("data-draft-id"))!;
+    const first = page.locator(`[data-testid="assistant-draft-card"][data-draft-id="${firstId}"]`);
+    // The person edits the service's price on the card and picks the payment method.
+    const price = first.getByTestId("assistant-draft-line-price-0");
+    await price.fill("45000");
+    await price.press("Enter");
+    await expect(first.getByTestId("assistant-draft-total")).toHaveText("Gs. 45.000");
+    await first.getByTestId("assistant-draft-payment-CASH").click();
+    await expect(first.getByTestId("assistant-draft-payment-CASH")).toHaveAttribute("aria-pressed", "true");
+
+    await askAssistantUi(page, `add ${productName} x2`);
+
+    // A new card replaces the previous one (which dims) and keeps the edit and the payment method.
+    await expect(first).toHaveAttribute("data-status", "SUPERSEDED", { timeout: 20_000 });
+    const card = lastDraftCard(page);
+    await expect(card).toHaveAttribute("data-status", "DRAFT");
+    await expect(card.getByTestId("assistant-draft-lines").locator("li")).toHaveCount(2);
+    await expect(card.getByTestId("assistant-draft-line-price-0")).toHaveValue("45.000");
+    await expect(card.getByTestId("assistant-draft-line-edited-0")).toBeVisible();
+    await expect(card.getByTestId("assistant-draft-lines")).toContainText(`${productName} × 2`);
+    await expect(card.getByTestId("assistant-draft-total")).toHaveText("Gs. 85.000");
+    await expect(card.getByTestId("assistant-draft-payment-CASH")).toHaveAttribute("aria-pressed", "true");
+
+    // Adding the same item again raises its quantity instead of repeating the line.
+    await askAssistantUi(page, `add ${productName}`);
+    const again = lastDraftCard(page);
+    await expect(again.getByTestId("assistant-draft-lines").locator("li")).toHaveCount(2);
+    await expect(again.getByTestId("assistant-draft-lines")).toContainText(`${productName} × 3`);
+    await expect(again.getByTestId("assistant-draft-total")).toHaveText("Gs. 105.000");
+
+    await again.getByTestId("assistant-draft-confirm").click();
+    await expect(again).toHaveAttribute("data-status", "CONFIRMED", { timeout: 20_000 });
+    const invoices = await clientInvoicesApi(request, token, client.id);
+    expect(invoices).toHaveLength(1);
+    expect(Number(invoices[0].total)).toBe(105000);
+
+    // With no invoice draft in progress there is nothing to add to.
+    await startNewConversationUi(page);
+    await askAssistantUi(page, `add ${productName}`);
+    await expect(assistantAnswers(page).last()).toContainText("No hay una factura en borrador", { timeout: 15_000 });
+    await expect(page.getByTestId("assistant-draft-card")).toHaveCount(0);
   });
 
   test("AC16 · un precio dicho en el pedido llega precargado y editable en el borrador", async ({ page, request }) => {

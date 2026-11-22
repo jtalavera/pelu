@@ -8,6 +8,7 @@ import { formatGuaraniesGs } from "../../lib/formatMoney";
 import { maskMoneyInput, parseMaskedMoney } from "../../lib/moneyInputMask";
 import { FieldValidationError } from "../FieldValidationError";
 import { ACTION_BUTTON } from "../actionButtons";
+import { CloseIcon } from "./AssistantIcons";
 
 const PAYMENT_METHODS = ["CASH", "DEBIT_CARD", "CREDIT_CARD", "TRANSFER"] as const;
 const CARD_BRANDS = ["VISA", "MASTERCARD", "AMEX", "MAESTRO", "PANAL", "CABAL"] as const;
@@ -215,13 +216,30 @@ export function InvoiceDraftCard({
               </span>
             </div>
             {open && (
-              <LinePriceField
-                key={`${i}-${l.unitPrice}-${l.quantity}`}
-                index={i}
-                line={l}
-                disabled={!!busy}
-                onSave={(index, unitPrice) => onComplete(draft.id, { linePrices: [{ index, unitPrice }] })}
-              />
+              <div className="flex items-start justify-between gap-2">
+                <LinePriceField
+                  key={`${i}-${l.unitPrice}-${l.quantity}`}
+                  index={i}
+                  line={l}
+                  disabled={!!busy}
+                  onSave={(index, unitPrice) => onComplete(draft.id, { linePrices: [{ index, unitPrice }] })}
+                />
+                {/* An invoice needs an item: with one left, discarding the draft is the way out. */}
+                {payload.lines.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    data-testid={`assistant-draft-line-remove-${i}`}
+                    aria-label={t("femme.assistant.draft.removeLineOf", { name: l.name })}
+                    title={t("femme.assistant.draft.removeLine")}
+                    disabled={!!busy}
+                    className="min-h-11 min-w-11 shrink-0 px-2 sm:h-11 sm:min-h-11 sm:min-w-11"
+                    onClick={() => onComplete(draft.id, { removeLines: [i] })}
+                  >
+                    <CloseIcon />
+                  </Button>
+                )}
+              </div>
             )}
           </li>
         ))}

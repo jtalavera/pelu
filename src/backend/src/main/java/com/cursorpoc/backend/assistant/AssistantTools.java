@@ -41,6 +41,7 @@ public class AssistantTools {
 
   static final String BUSCAR_CLIENTES = "buscar_clientes";
   static final String LISTAR_SERVICIOS = "listar_servicios";
+  static final String LISTAR_PRODUCTOS = "listar_productos";
   static final String LISTAR_PROFESIONALES = "listar_profesionales";
   static final String TURNOS_DEL_DIA = "turnos_del_dia";
 
@@ -82,11 +83,13 @@ public class AssistantTools {
   static boolean isKnown(String name) {
     return BUSCAR_CLIENTES.equals(name)
         || LISTAR_SERVICIOS.equals(name)
+        || LISTAR_PRODUCTOS.equals(name)
         || LISTAR_PROFESIONALES.equals(name)
         || TURNOS_DEL_DIA.equals(name)
         || AssistantAgendaTools.CONSULTAR_DISPONIBILIDAD.equals(name)
         || AssistantAgendaTools.PROPONER_TURNO.equals(name)
         || AssistantProposalTools.PROPONER_FACTURA.equals(name)
+        || AssistantProposalTools.AGREGAR_ITEM.equals(name)
         || AssistantProposalTools.DESCARTAR_BORRADOR.equals(name);
   }
 
@@ -113,6 +116,14 @@ public class AssistantTools {
         new ToolSpec(
             LISTAR_SERVICIOS,
             "Lista los servicios activos del catálogo: nombre y precio.",
+            schema(
+                "{\"query\":{\"type\":\"string\",\"description\":\"Filtro opcional por nombre o"
+                    + " categoría\"}}",
+                "[]")),
+        new ToolSpec(
+            LISTAR_PRODUCTOS,
+            "Lista los productos activos del catálogo (los que se venden, no los servicios): nombre y"
+                + " precio.",
             schema(
                 "{\"query\":{\"type\":\"string\",\"description\":\"Filtro opcional por nombre o"
                     + " categoría\"}}",
@@ -156,6 +167,7 @@ public class AssistantTools {
           switch (name) {
             case BUSCAR_CLIENTES -> buscarClientes(ctx, args);
             case LISTAR_SERVICIOS -> listarServicios(ctx, args);
+            case LISTAR_PRODUCTOS -> listarProductos(ctx, args);
             case LISTAR_PROFESIONALES -> listarProfesionales(ctx);
             case TURNOS_DEL_DIA -> turnosDelDia(ctx, args);
             default -> throw new ToolException("UNKNOWN_TOOL");
@@ -207,11 +219,19 @@ public class AssistantTools {
   }
 
   private Object listarServicios(AssistantContext ctx, JsonNode args) {
+    return listarCatalogo(ctx, args, "SERVICE", "services");
+  }
+
+  private Object listarProductos(AssistantContext ctx, JsonNode args) {
+    return listarCatalogo(ctx, args, "PRODUCT", "products");
+  }
+
+  /** Services and products share the shape and the fixed listing format; each has its own tool. */
+  private Object listarCatalogo(AssistantContext ctx, JsonNode args, String kind, String key) {
     String query = text(args, "query");
-    var services =
-        serviceCatalogService.listServices(ctx.tenantId(), Optional.empty(), query, "SERVICE");
+    var items = serviceCatalogService.listServices(ctx.tenantId(), Optional.empty(), query, kind);
     List<Map<String, Object>> rows =
-        services.stream()
+        items.stream()
             .filter(s -> s.active())
             .limit(MAX_SERVICES)
             .map(
@@ -224,7 +244,7 @@ public class AssistantTools {
                   return row;
                 })
             .toList();
-    return page("services", rows, (int) services.stream().filter(s -> s.active()).count());
+    return page(key, rows, (int) items.stream().filter(s -> s.active()).count());
   }
 
   private Object listarProfesionales(AssistantContext ctx) {

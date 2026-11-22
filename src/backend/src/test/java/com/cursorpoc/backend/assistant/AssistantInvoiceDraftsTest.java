@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -61,12 +62,13 @@ class AssistantInvoiceDraftsTest {
 
   @BeforeEach
   void setUp() {
-    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), eq("SERVICE")))
+    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), isNull()))
         .thenReturn(
             List.of(
                 service(1, "Corte", 50_000, true),
                 service(2, "Tintura", 120_000, true),
-                service(3, "Servicio viejo", 10_000, false)));
+                service(3, "Servicio viejo", 10_000, false),
+                service(4, "Shampoo", 20_000, true))); // a product: the catalog has both kinds
     when(professionals.listOptions(TENANT))
         .thenReturn(List.of(new ProfessionalOptionResponse(9, "Lucia Perez", "Lu", "Lu", true)));
     when(clients.getById(TENANT, 42)).thenReturn(client(42, "MARIA GOMEZ", null, null, null, null));
@@ -177,7 +179,7 @@ class AssistantInvoiceDraftsTest {
   @Test
   void aSaidPrice_survivesRepricing_whileAnUntouchedLineFollowsTheCatalog() {
     InvoiceDraftPayload p = buildWithPrices(List.of(1L, 2L), Map.of(1L, new BigDecimal("45000")));
-    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), eq("SERVICE")))
+    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), isNull()))
         .thenReturn(
             List.of(service(1, "Corte", 65_000, true), service(2, "Tintura", 130_000, true)));
 
@@ -417,7 +419,7 @@ class AssistantInvoiceDraftsTest {
   @Test
   void repricing_picksUpTheCatalogsNewPrice() {
     InvoiceDraftPayload old = build(req(42L, List.of(1L)));
-    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), eq("SERVICE")))
+    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), isNull()))
         .thenReturn(List.of(service(1, "Corte", 65_000, true)));
 
     InvoiceDraftPayload fresh = drafts.reprice(TENANT, old);
@@ -451,6 +453,218 @@ class AssistantInvoiceDraftsTest {
         .isNotEqualTo(AssistantInvoiceDrafts.fingerprint(p));
   }
 
+  private static List<Integer> remove(Integer... indexes) {
+    return List.of(indexes);
+  }
+
+  @Test
+  void removingAnItem_dropsItAndTheTotalFollows() {
+    InvoiceDraftPayload p = build(req(42L, List.of(1L, 2L))); // 50.000 + 120.000
+
+    InvoiceDraftPayload out = drafts.complete(p, null, null, null, null, remove(0));
+
+    assertThat(out.lines()).hasSize(1);
+    assertThat(out.lines().get(0).name()).isEqualTo("Tintura");
+    assertThat(out.total()).isEqualByComparingTo("120000");
+    assertThat(drafts.toRequest(TENANT, out.withPayment("CASH", null)).payments().get(0).amount())
+        .isEqualByComparingTo("120000");
+    assertThat(drafts.toRequest(TENANT, out.withPayment("CASH", null)).lines()).hasSize(1);
+    assertThat(AssistantInvoiceDrafts.fingerprint(out))
+        .isNotEqualTo(AssistantInvoiceDrafts.fingerprint(p));
+  }
+
+  @Test
+  void aPriceEditAndARemovalInOneRequest_bothUseThePositionsTheCardShows() {
+    InvoiceDraftPayload p = build(req(42L, List.of(1L, 2L)));
+
+    InvoiceDraftPayload out =
+        drafts.complete(p, null, null, null, price(1, "100000"), remove(0)); // edit 2nd, drop 1st
+
+    assertThat(out.lines()).hasSize(1);
+    assertThat(out.lines().get(0).unitPrice()).isEqualByComparingTo("100000");
+    assertThat(out.lines().get(0).priceEdited()).isTrue();
+    assertThat(out.total()).isEqualByComparingTo("100000");
+  }
+
+  @Test
+  void removingItems_needsValidPositions_andAlwaysLeavesOne() {
+    InvoiceDraftPayload p = build(req(42L, List.of(1L, 2L)));
+
+    for (List<Integer> bad : List.of(remove(2), remove(-1), remove(0, 0))) {
+      assertThatThrownBy(() -> drafts.complete(p, null, null, null, null, bad))
+          .isInstanceOf(AssistantDraftException.class)
+          .hasMessage("ASSISTANT_DRAFT_INVALID_LINE");
+    }
+    assertThatThrownBy(() -> drafts.complete(p, null, null, null, null, remove(0, 1)))
+        .isInstanceOf(AssistantDraftException.class)
+        .hasMessage("ASSISTANT_DRAFT_LAST_LINE");
+    InvoiceDraftPayload single = build(req(42L, List.of(1L)));
+    assertThatThrownBy(() -> drafts.complete(single, null, null, null, null, remove(0)))
+        .isInstanceOf(AssistantDraftException.class)
+        .hasMessage("ASSISTANT_DRAFT_LAST_LINE");
+  }
+
+  @Test
+  void aRemovedCatalogItem_staysRemovedAfterRepricing() {
+    InvoiceDraftPayload out =
+        drafts.complete(build(req(42L, List.of(1L, 2L))), null, null, null, null, remove(0));
+
+    InvoiceDraftPayload fresh = drafts.reprice(TENANT, out);
+
+    assertThat(fresh.lines()).hasSize(1);
+    assertThat(AssistantInvoiceDrafts.fingerprint(fresh))
+        .isEqualTo(AssistantInvoiceDrafts.fingerprint(out));
+  }
+
+  @Test
+  void aRemovedFichaLine_isNotBroughtBackByRepricingFromTheFicha() {
+    ServiceRecord record = mock(ServiceRecord.class);
+    ServiceRecordLine first = recordLine(1, null, 0, 1, null);
+    ServiceRecordLine second = recordLine(2, "Tintura especial", 150_000, 1, 9L);
+    when(record.getId()).thenReturn(500L);
+    when(record.getStatus()).thenReturn(ServiceRecordStatus.OPEN);
+    when(record.getLines()).thenReturn(List.of(first, second));
+    when(record.getCreatedAt()).thenReturn(Instant.now());
+    when(records.findByTenantAndClientAndStatusWithLines(TENANT, 42L, ServiceRecordStatus.OPEN))
+        .thenReturn(List.of(record));
+    when(records.findByIdAndTenant_Id(500L, TENANT)).thenReturn(Optional.of(record));
+    InvoiceDraftPayload p = build(req(42L, null)); // 50.000 + 150.000 from the ficha
+
+    InvoiceDraftPayload out = drafts.complete(p, null, null, null, null, remove(0));
+    InvoiceDraftPayload fresh = drafts.reprice(TENANT, out);
+
+    assertThat(out.serviceRecordId()).isEqualTo(500L); // still charges that ficha
+    assertThat(fresh.lines()).hasSize(1);
+    assertThat(fresh.lines().get(0).name()).isEqualTo("Tintura especial");
+    assertThat(fresh.total()).isEqualByComparingTo("150000");
+    // No false «the price changed» at confirm time just because an item was dropped.
+    assertThat(AssistantInvoiceDrafts.fingerprint(fresh))
+        .isEqualTo(AssistantInvoiceDrafts.fingerprint(out));
+  }
+
+  private static List<AssistantInvoiceDrafts.NewItem> add(long id, int quantity) {
+    return List.of(new AssistantInvoiceDrafts.NewItem(id, quantity));
+  }
+
+  @Test
+  void aProduct_isChargedLikeAService() {
+    InvoiceDraftPayload p = build(req(42L, List.of(4L, 4L, 1L))); // 2 shampoos + a haircut
+
+    assertThat(p.lines()).hasSize(2);
+    assertThat(p.lines().get(0).name()).isEqualTo("Shampoo");
+    assertThat(p.lines().get(0).quantity()).isEqualTo(2);
+    assertThat(p.lines().get(0).lineTotal()).isEqualByComparingTo("40000");
+    assertThat(p.total()).isEqualByComparingTo("90000");
+  }
+
+  @Test
+  void addingItems_keepsWhatThePersonEdited_andAddsNewOnesAtTheCatalogPrice() {
+    InvoiceDraftPayload edited =
+        drafts.complete(build(req(42L, List.of(1L))), "CASH", null, null, price(0, "45000"));
+
+    InvoiceDraftPayload out = drafts.addItems(TENANT, edited, add(4, 2), null, null);
+
+    assertThat(out.lines()).hasSize(2);
+    assertThat(out.lines().get(0).unitPrice()).isEqualByComparingTo("45000"); // theirs, kept
+    assertThat(out.lines().get(0).priceEdited()).isTrue();
+    assertThat(out.lines().get(1).name()).isEqualTo("Shampoo");
+    assertThat(out.lines().get(1).quantity()).isEqualTo(2);
+    assertThat(out.lines().get(1).lineTotal()).isEqualByComparingTo("40000");
+    assertThat(out.total()).isEqualByComparingTo("85000");
+    assertThat(out.paymentMethod()).isEqualTo("CASH"); // what was completed stays
+    assertThat(AssistantInvoiceDrafts.fingerprint(out))
+        .isNotEqualTo(AssistantInvoiceDrafts.fingerprint(edited));
+  }
+
+  @Test
+  void addingAnItemThatIsAlreadyThere_raisesItsQuantity_atItsCurrentUnitPrice() {
+    InvoiceDraftPayload edited =
+        drafts.complete(build(req(42L, List.of(1L))), null, null, null, price(0, "45000"));
+
+    InvoiceDraftPayload out = drafts.addItems(TENANT, edited, add(1, 2), null, null);
+
+    assertThat(out.lines()).hasSize(1);
+    assertThat(out.lines().get(0).quantity()).isEqualTo(3);
+    assertThat(out.lines().get(0).unitPrice()).isEqualByComparingTo("45000");
+    assertThat(out.lines().get(0).lineTotal()).isEqualByComparingTo("135000");
+    assertThat(out.lines().get(0).priceEdited()).isTrue();
+  }
+
+  @Test
+  void aPriceSaidForAnAddedItem_arrivesAsAnEditedPrice() {
+    InvoiceDraftPayload out =
+        drafts.addItems(
+            TENANT,
+            build(req(42L, List.of(1L))),
+            add(4, 1),
+            null,
+            Map.of(4L, new BigDecimal("18000")));
+
+    assertThat(out.lines().get(1).unitPrice()).isEqualByComparingTo("18000");
+    assertThat(out.lines().get(1).priceEdited()).isTrue();
+    assertThat(out.total()).isEqualByComparingTo("68000");
+  }
+
+  @Test
+  void addingItems_refusesUnknownInactiveOrAbsurdOnes() {
+    InvoiceDraftPayload p = build(req(42L, List.of(1L)));
+
+    assertThatThrownBy(() -> drafts.addItems(TENANT, p, add(99, 1), null, null))
+        .hasMessage("SERVICE_NOT_FOUND");
+    assertThatThrownBy(() -> drafts.addItems(TENANT, p, add(3, 1), null, null))
+        .hasMessage("SERVICE_NOT_FOUND"); // inactive
+    assertThatThrownBy(() -> drafts.addItems(TENANT, p, add(4, 0), null, null))
+        .hasMessage("INVALID_ARGUMENTS");
+    assertThatThrownBy(() -> drafts.addItems(TENANT, p, add(4, 100), null, null))
+        .hasMessage("INVALID_ARGUMENTS");
+    assertThatThrownBy(() -> drafts.addItems(TENANT, p, List.of(), null, null))
+        .hasMessage("ITEMS_REQUIRED");
+    assertThatThrownBy(
+            () -> drafts.addItems(TENANT, p, add(4, 1), null, Map.of(1L, new BigDecimal("0"))))
+        .hasMessage("INVALID_PRICE");
+  }
+
+  @Test
+  void itemsAddedToAFichaDraft_surviveRepricing_andFollowTheCatalogsPrice() {
+    ServiceRecord record = mock(ServiceRecord.class);
+    ServiceRecordLine first = recordLine(1, null, 0, 1, 9L);
+    when(record.getId()).thenReturn(500L);
+    when(record.getStatus()).thenReturn(ServiceRecordStatus.OPEN);
+    when(record.getLines()).thenReturn(List.of(first));
+    when(record.getCreatedAt()).thenReturn(Instant.now());
+    when(records.findByTenantAndClientAndStatusWithLines(TENANT, 42L, ServiceRecordStatus.OPEN))
+        .thenReturn(List.of(record));
+    when(records.findByIdAndTenant_Id(500L, TENANT)).thenReturn(Optional.of(record));
+    InvoiceDraftPayload ficha = build(req(42L, null)); // the haircut, by professional 9
+
+    InvoiceDraftPayload out = drafts.addItems(TENANT, ficha, add(4, 1), null, null);
+    // No professional was said: it takes the one every line already has.
+    assertThat(out.lines().get(1).professionalId()).isEqualTo(9L);
+    InvoiceDraftPayload fresh = drafts.reprice(TENANT, out);
+
+    assertThat(fresh.serviceRecordId()).isEqualTo(500L);
+    assertThat(fresh.lines()).hasSize(2);
+    assertThat(fresh.lines().get(1).name()).isEqualTo("Shampoo");
+    // No false «price changed» at confirm time just because something was added.
+    assertThat(AssistantInvoiceDrafts.fingerprint(fresh))
+        .isEqualTo(AssistantInvoiceDrafts.fingerprint(out));
+
+    // And dropping the ficha's own line leaves the added product, not a resurrected ficha line.
+    InvoiceDraftPayload onlyProduct = drafts.complete(out, null, null, null, null, remove(0));
+    InvoiceDraftPayload again = drafts.reprice(TENANT, onlyProduct);
+    assertThat(again.lines()).hasSize(1);
+    assertThat(again.lines().get(0).name()).isEqualTo("Shampoo");
+  }
+
+  @Test
+  void anExplicitProfessional_isUsedForTheAddedItems() {
+    InvoiceDraftPayload out =
+        drafts.addItems(TENANT, build(req(42L, List.of(1L))), add(4, 1), 9L, null);
+
+    assertThat(out.lines().get(1).professionalId()).isEqualTo(9L);
+    assertThat(out.lines().get(1).professionalName()).isEqualTo("Lu");
+  }
+
   @Test
   void aUnitPrice_mustBeAWholePositiveAmountOnAnExistingLine() {
     InvoiceDraftPayload p = build(req(42L, List.of(1L)));
@@ -477,7 +691,7 @@ class AssistantInvoiceDraftsTest {
   void repricing_keepsAPriceThePersonTyped_whileRefreshingTheRest() {
     InvoiceDraftPayload edited =
         drafts.complete(build(req(42L, List.of(1L, 2L))), null, null, null, price(0, "45000"));
-    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), eq("SERVICE")))
+    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), isNull()))
         .thenReturn(
             List.of(service(1, "Corte", 65_000, true), service(2, "Tintura", 130_000, true)));
 
@@ -503,9 +717,12 @@ class AssistantInvoiceDraftsTest {
 
   // ---------------------------------------------------------------------------------------------
 
+  private static long nextRecordLineId = 7000;
+
   private static ServiceRecordLine recordLine(
       long serviceId, String description, Integer price, int qty, Long professionalId) {
     ServiceRecordLine l = mock(ServiceRecordLine.class);
+    when(l.getId()).thenReturn(nextRecordLineId++);
     SalonService s = mock(SalonService.class);
     when(s.getId()).thenReturn(serviceId);
     when(l.getSalonService()).thenReturn(s);

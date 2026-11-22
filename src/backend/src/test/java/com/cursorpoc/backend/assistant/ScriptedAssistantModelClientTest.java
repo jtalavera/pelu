@@ -232,7 +232,7 @@ class ScriptedAssistantModelClientTest {
     assertThat(proposal.name()).isEqualTo("proponer_factura");
     assertThat(proposal.argumentsJson())
         .contains("\"clientId\":42")
-        .contains("\"serviceIds\":[7]")
+        .contains("\"items\":[{\"id\":7,\"quantity\":1}]")
         .contains("\"paymentMethod\":\"CASH\"");
   }
 
@@ -266,9 +266,116 @@ class ScriptedAssistantModelClientTest {
                             "{\"data\":{\"services\":[{\"id\":7,\"name\":\"Corte\"}]}}")))));
 
     assertThat(proposal.argumentsJson())
-        .contains("\"serviceIds\":[7]")
+        .contains("\"items\":[{\"id\":7,\"quantity\":1}]")
         .contains("\"prices\":[{\"serviceId\":7,\"unitPrice\":45000}]")
         .contains("\"paymentMethod\":\"CASH\"");
+  }
+
+  private ToolResult result(ToolCall call, String tool, String json) {
+    return new ToolResult(call.id(), tool, json);
+  }
+
+  @Test
+  void productsAreListedWithTheirOwnTool() {
+    ToolCall call = requestedTool(ask(ChatTurn.user("show me the products")));
+    assertThat(call.name()).isEqualTo("listar_productos");
+
+    String answer =
+        said(
+            ask(
+                ChatTurn.user("show me the products"),
+                ChatTurn.assistantToolCalls("", List.of(call)),
+                ChatTurn.toolResults(
+                    List.of(
+                        result(
+                            call,
+                            "listar_productos",
+                            "{\"data\":{\"products\":[{\"id\":4,\"name\":\"Shampoo\",\"price\":\"Gs. 20.000\"}]}}")))));
+    assertThat(answer).isEqualTo("Productos:\n- Shampoo — Gs. 20.000");
+  }
+
+  @Test
+  void invoicingAProduct_fallsBackToTheProductsWhenNoServiceMatches_andKeepsTheQuantity() {
+    ChatTurn question = ChatTurn.user("invoice Maria Gomez for Shampoo x2 at 18.000 cash");
+    ToolCall search = requestedTool(ask(question));
+    ChatTurn found =
+        ChatTurn.toolResults(
+            List.of(
+                result(
+                    search,
+                    "buscar_clientes",
+                    "{\"data\":{\"clients\":[{\"id\":42,\"fullName\":\"MARIA GOMEZ\"}]}}")));
+    ToolCall services =
+        requestedTool(ask(question, ChatTurn.assistantToolCalls("", List.of(search)), found));
+    assertThat(services.name()).isEqualTo("listar_servicios");
+    assertThat(services.argumentsJson()).isEqualTo("{\"query\":\"Shampoo\"}");
+
+    ToolCall products =
+        requestedTool(
+            ask(
+                question,
+                ChatTurn.assistantToolCalls("", List.of(search)),
+                found,
+                ChatTurn.assistantToolCalls("", List.of(services)),
+                ChatTurn.toolResults(
+                    List.of(
+                        result(services, "listar_servicios", "{\"data\":{\"services\":[]}}")))));
+    assertThat(products.name()).isEqualTo("listar_productos");
+    assertThat(products.argumentsJson()).isEqualTo("{\"query\":\"Shampoo\"}");
+
+    ToolCall proposal =
+        requestedTool(
+            ask(
+                question,
+                ChatTurn.assistantToolCalls("", List.of(search)),
+                found,
+                ChatTurn.assistantToolCalls("", List.of(services)),
+                ChatTurn.toolResults(
+                    List.of(result(services, "listar_servicios", "{\"data\":{\"services\":[]}}"))),
+                ChatTurn.assistantToolCalls("", List.of(products)),
+                ChatTurn.toolResults(
+                    List.of(
+                        result(
+                            products,
+                            "listar_productos",
+                            "{\"data\":{\"products\":[{\"id\":4,\"name\":\"Shampoo\"}]}}")))));
+    assertThat(proposal.name()).isEqualTo("proponer_factura");
+    assertThat(proposal.argumentsJson())
+        .contains("\"items\":[{\"id\":4,\"quantity\":2}]")
+        .contains("\"prices\":[{\"serviceId\":4,\"unitPrice\":18000}]")
+        .contains("\"paymentMethod\":\"CASH\"");
+  }
+
+  @Test
+  void addingAnItem_looksItUpAndAddsItToTheDraftInProgress() {
+    ChatTurn question = ChatTurn.user("add Shampoo x2");
+    ToolCall services = requestedTool(ask(question));
+    assertThat(services.name()).isEqualTo("listar_servicios");
+    assertThat(services.argumentsJson()).isEqualTo("{\"query\":\"Shampoo\"}");
+    ChatTurn noServices =
+        ChatTurn.toolResults(
+            List.of(result(services, "listar_servicios", "{\"data\":{\"services\":[]}}")));
+
+    ToolCall products =
+        requestedTool(
+            ask(question, ChatTurn.assistantToolCalls("", List.of(services)), noServices));
+    assertThat(products.name()).isEqualTo("listar_productos");
+
+    ToolCall add =
+        requestedTool(
+            ask(
+                question,
+                ChatTurn.assistantToolCalls("", List.of(services)),
+                noServices,
+                ChatTurn.assistantToolCalls("", List.of(products)),
+                ChatTurn.toolResults(
+                    List.of(
+                        result(
+                            products,
+                            "listar_productos",
+                            "{\"data\":{\"products\":[{\"id\":4,\"name\":\"Shampoo\"}]}}")))));
+    assertThat(add.name()).isEqualTo("agregar_item_a_borrador");
+    assertThat(add.argumentsJson()).isEqualTo("{\"items\":[{\"id\":4,\"quantity\":2}]}");
   }
 
   @Test

@@ -12,6 +12,7 @@ import {
   askAssistantApi,
   bookAppointmentTomorrow,
   createClientWithPhone,
+  createProductApi,
   completeDraftApi,
   confirmDraftApi,
   currentConversationApi,
@@ -190,6 +191,24 @@ test.describe("mt-asistente · aislamiento del asistente conversacional", () => 
     });
     const otherService = await proposeViaApi(request, tokenA, `invoice ${names.A} for ${privateName}`);
     expect(otherService.draft).toBeNull();
+  });
+
+  test("HU-AST-02 AC14 / HU-AST-03 AC18 · el asistente no lista ni factura productos de otro salón", async ({
+    request,
+  }) => {
+    const privateProduct = `MT Producto privado ${tag}`;
+    await createProductApi(request, tokenB, privateProduct, 15000);
+
+    // The owner sees it in its own listing…
+    const convB = (await currentConversationApi(request, tokenB)).conversationId;
+    expect((await askAssistantApi(request, tokenB, convB, "products")).text).toContain(privateProduct);
+
+    // …the other salon neither lists it nor can invoice it.
+    const convA = (await currentConversationApi(request, tokenA)).conversationId;
+    expect((await askAssistantApi(request, tokenA, convA, "products")).text).not.toContain(privateProduct);
+    const invoice = await proposeViaApi(request, tokenA, `invoice ${names.A} for ${privateProduct}`);
+    expect(invoice.draft).toBeNull();
+    expect(invoice.answer.text).toContain("No encontré");
   });
 
   test("HU-AST-05 AC8 · la disponibilidad solo incluye profesionales del propio salón", async ({ request }) => {

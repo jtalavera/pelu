@@ -43,6 +43,7 @@ El asistente entiende la pregunta con un modelo de lenguaje y la responde consul
 11. **Error del modelo — Mensaje traducido.** Si el modelo no está disponible, la burbuja muestra un mensaje de error traducido (sin códigos técnicos) y la caja vuelve a quedar disponible.
 12. **Mensaje vacío o demasiado largo — Validación.** Un mensaje vacío no se envía (el botón «Enviar» queda deshabilitado). La caja no admite más de 2000 caracteres y el servidor rechaza uno más largo (`ASSISTANT_MESSAGE_TOO_LONG`; la pantalla lo traduce diciendo el máximo: «El mensaje es demasiado largo: el máximo es de 2000 caracteres.»).
 13. **Conversación propia — Una por persona.** Cada persona tiene su propia conversación: nadie puede leer ni continuar la de otra persona, ni siquiera conociendo su identificador.
+14. **Productos — Lista aparte, mismo formato.** Preguntar por los productos los lista activos con su propia herramienta (`listar_productos`), uno por línea y con el mismo formato fijo que los servicios (`- Nombre — Gs. 20.000`, solo nombre y precio). La lista de servicios no incluye productos ni la de productos incluye servicios.
 
 ---
 

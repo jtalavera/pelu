@@ -35,6 +35,8 @@ export type InvoiceDraftPayload = {
     professionalName: string | null;
     /** True when the person typed this unit price on the card. */
     priceEdited?: boolean | null;
+    /** The ficha line this one comes from (internal: never shown). */
+    sourceId?: number | null;
   }[];
   serviceRecordId: number | null;
   appointmentId: number | null;
@@ -285,6 +287,8 @@ export type DraftPatch = {
   email?: string;
   /** Invoice: unit prices typed on the card, by line position (whole guaraníes). */
   linePrices?: { index: number; unitPrice: number }[];
+  /** Invoice: positions of the items dropped on the card (at least one always stays). */
+  removeLines?: number[];
   /** Appointment: move the draft to another slot (ISO instant) and, optionally, professional. */
   startAt?: string;
   professionalId?: number;

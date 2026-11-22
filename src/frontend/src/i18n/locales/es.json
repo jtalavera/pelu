@@ -1582,6 +1582,8 @@
         "unitPriceOf": "Precio unitario de {{name}}",
         "priceEdited": "Editado",
         "priceInvalid": "Ingresá un monto entero mayor a cero, por ejemplo 50.000.",
+        "removeLine": "Quitar este ítem",
+        "removeLineOf": "Quitar {{name}} de la factura",
         "invoiceTitle": "Borrador de factura",
         "status": {
           "DRAFT": "Borrador",
@@ -1665,6 +1667,8 @@
       "tool": {
         "buscar_clientes": "Buscando clientes…",
         "listar_servicios": "Consultando servicios…",
+        "listar_productos": "Consultando productos…",
+        "agregar_item_a_borrador": "Agregando al borrador…",
         "listar_profesionales": "Consultando profesionales…",
         "turnos_del_dia": "Revisando la agenda…",
         "generic": "Consultando…"
@@ -3651,6 +3655,8 @@
     "apiErrors": {
       "ASSISTANT_SPEECH_UNAVAILABLE": "El dictado no está disponible en este momento. Podés escribir tu mensaje.",
       "ASSISTANT_DRAFT_INVALID_PRICE": "Ese precio no es válido. Ingresá un monto entero mayor a cero, por ejemplo 50.000.",
+      "ASSISTANT_DRAFT_INVALID_LINE": "Ese ítem ya no está en el borrador. Revisá la tarjeta.",
+      "ASSISTANT_DRAFT_LAST_LINE": "Debe quedar al menos un ítem. Para no facturar, descartá el borrador.",
       "ASSISTANT_SLOT_TAKEN": "Ese horario se acaba de ocupar. Elegí otro horario libre.",
       "ASSISTANT_DRAFT_NOT_FOUND": "Ese borrador ya no existe.",
       "ASSISTANT_DRAFT_EXPIRED": "Este borrador venció (los borradores valen 24 horas). Pedile uno nuevo al asistente.",

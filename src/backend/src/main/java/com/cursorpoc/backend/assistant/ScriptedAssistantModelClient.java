@@ -78,6 +78,13 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
   private static final Pattern SLOT_CHIP =
       Pattern.compile("(?i)quiero el turno del (\\d{4}-\\d{2}-\\d{2}) a las (\\d{1,2}:\\d{2})");
 
+  /** «add <item> [x2] [at <amount>]» / «agregale <item>»: more items on the draft in progress. */
+  private static final Pattern ADD =
+      Pattern.compile("(?i)^\\s*(?:add|agrega(?:r|le)?)\\s+(.+?)\\s*$");
+
+  /** «Shampoo x2» / «Shampoo ×2»: how many. */
+  private static final Pattern QUANTITY = Pattern.compile("(?i)\\s+[x×]\\s*(\\d{1,2})\\s*$");
+
   private static final Pattern DISCARD =
       Pattern.compile("(?i)\\b(?:discard|descart\\w*)\\b.*\\b(?:draft|borrador)\\b");
 
@@ -115,6 +122,10 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
       requestTool(sink, "descartar_borrador", "{}");
     } else if (SLOT_CHIP.matcher(userText).find()) {
       say(sink, slow, "¿Para qué cliente querés agendar ese horario?");
+    } else if (ADD.matcher(userText).matches()) {
+      Matcher add = ADD.matcher(userText);
+      add.matches();
+      requestTool(sink, "listar_servicios", "{\"query\":" + quote(itemName(add.group(1))) + "}");
     } else if (book.find()) {
       requestTool(sink, "buscar_clientes", "{\"query\":" + quote(book.group(1).trim()) + "}");
     } else if (avail.find()) {
@@ -133,6 +144,8 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
       requestTool(sink, "buscar_clientes", "{\"query\":" + quote(m.group(1).trim()) + "}");
     } else if (folded.contains("servicios") || folded.contains("services")) {
       requestTool(sink, "listar_servicios", "{}");
+    } else if (folded.contains("productos") || folded.contains("products")) {
+      requestTool(sink, "listar_productos", "{}");
     } else if (folded.contains("profesionales") || folded.contains("professionals")) {
       requestTool(sink, "listar_profesionales", "{}");
     } else {
@@ -153,6 +166,7 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
     Matcher invoice = INVOICE.matcher(userText.trim());
     boolean invoicing = invoice.find();
     if (r.name().equals("proponer_factura")
+        || r.name().equals("agregar_item_a_borrador")
         || r.name().equals("descartar_borrador")
         || r.name().equals("proponer_turno")) {
       answerProposal(r.name(), root, slow, sink);
@@ -214,24 +228,38 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
     JsonNode data = root.get("data");
     if (invoicing && r.name().equals("buscar_clientes") && !data.get("clients").isEmpty()) {
       long clientId = data.get("clients").get(0).get("id").asLong();
-      String service = invoice.group(2) == null ? null : withoutPayment(invoice.group(2));
+      String service = invoice.group(2) == null ? null : itemName(invoice.group(2));
       if (service != null && !service.isBlank()) {
         requestTool(sink, "listar_servicios", "{\"query\":" + quote(service) + "}");
       } else {
-        requestTool(sink, "proponer_factura", invoiceArgs(clientId, null, userText));
+        requestTool(sink, "proponer_factura", invoiceArgs(clientId, null, 1, userText));
       }
       return;
     }
-    if (invoicing && r.name().equals("listar_servicios")) {
-      JsonNode services = data.get("services");
-      Long clientId = clientIdFromEarlierSearch(turns);
-      if (services.isEmpty() || clientId == null) {
-        say(sink, slow, "No encontré ese servicio.");
+    Matcher add = ADD.matcher(userText);
+    boolean adding = add.matches();
+    boolean catalogLookup =
+        r.name().equals("listar_servicios") || r.name().equals("listar_productos");
+    if ((invoicing || adding) && catalogLookup) {
+      JsonNode found = data.get(r.name().equals("listar_servicios") ? "services" : "products");
+      Long clientId = invoicing ? clientIdFromEarlierSearch(turns) : null;
+      if (found.isEmpty() && r.name().equals("listar_servicios")) {
+        // Not a service: the same name may be a product.
+        String name = itemName(invoicing ? invoice.group(2) : add.group(1));
+        requestTool(sink, "listar_productos", "{\"query\":" + quote(name) + "}");
+      } else if (found.isEmpty() || (invoicing && clientId == null)) {
+        say(sink, slow, "No encontré ese ítem.");
+      } else if (adding) {
+        requestTool(
+            sink,
+            "agregar_item_a_borrador",
+            itemArgs(found.get(0).get("id").asLong(), quantityOf(add.group(1)), userText));
       } else {
         requestTool(
             sink,
             "proponer_factura",
-            invoiceArgs(clientId, services.get(0).get("id").asLong(), userText));
+            invoiceArgs(
+                clientId, found.get(0).get("id").asLong(), quantityOf(invoice.group(2)), userText));
       }
       return;
     }
@@ -258,7 +286,8 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
               "Encontré " + clients.size() + " cliente(s): " + names(clients, "fullName") + ".");
         }
       }
-      case "listar_servicios" -> say(sink, slow, servicesListing(data.get("services")));
+      case "listar_servicios" -> say(sink, slow, listing("Servicios", data.get("services")));
+      case "listar_productos" -> say(sink, slow, listing("Productos", data.get("products")));
       case "listar_profesionales" ->
           say(sink, slow, "Profesionales: " + names(data.get("professionals"), "name") + ".");
       case "turnos_del_dia" -> {
@@ -398,6 +427,8 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
             case "APPOINTMENT_NOT_OWNED_BY_PROFESSIONAL" ->
                 "Solo podés agendar turnos para vos misma.";
             case "NO_ACTIVE_DRAFT" -> "No hay ningún borrador para descartar.";
+            case "NO_ACTIVE_INVOICE_DRAFT" ->
+                "No hay una factura en borrador. Decime a qué cliente se la preparo.";
             default -> "No pude preparar el borrador (" + code + ").";
           });
       return;
@@ -425,7 +456,9 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
     say(
         sink,
         slow,
-        "Preparé el borrador de factura para "
+        (tool.equals("agregar_item_a_borrador")
+                ? "Actualicé el borrador de factura para "
+                : "Preparé el borrador de factura para ")
             + root.get("data").get("client").asString()
             + ". Revisalo y confirmalo con el botón de la tarjeta.");
   }
@@ -455,21 +488,16 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
     return text.trim().replaceAll("(?i)\\s+(?:cash|efectivo|transfer\\w*)\\s*$", "");
   }
 
-  private static String invoiceArgs(long clientId, Long serviceId, String userText) {
+  private static String invoiceArgs(long clientId, Long serviceId, int quantity, String userText) {
     String folded = fold(userText);
     StringBuilder sb = new StringBuilder("{\"clientId\":" + clientId);
     if (serviceId != null) {
-      sb.append(",\"serviceIds\":[").append(serviceId).append(']');
-    }
-    if (serviceId != null) {
-      Matcher price = PRICE.matcher(withoutTrailingPayment(userText));
-      if (price.find()) {
-        sb.append(",\"prices\":[{\"serviceId\":")
-            .append(serviceId)
-            .append(",\"unitPrice\":")
-            .append(price.group(1).replace(".", ""))
-            .append("}]");
-      }
+      sb.append(",\"items\":[{\"id\":")
+          .append(serviceId)
+          .append(",\"quantity\":")
+          .append(quantity)
+          .append("}]")
+          .append(priceJson(serviceId, userText));
     }
     if (folded.contains("cash") || folded.contains("efectivo")) {
       sb.append(",\"paymentMethod\":\"CASH\"");
@@ -477,6 +505,40 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
       sb.append(",\"paymentMethod\":\"TRANSFER\"");
     }
     return sb.append('}').toString();
+  }
+
+  /** Arguments of {@code agregar_item_a_borrador}. */
+  private static String itemArgs(long itemId, int quantity, String userText) {
+    return "{\"items\":[{\"id\":"
+        + itemId
+        + ",\"quantity\":"
+        + quantity
+        + "}]"
+        + priceJson(itemId, userText)
+        + "}";
+  }
+
+  /** «, "prices": [...]» when the request ends with a price said by the person, else empty. */
+  private static String priceJson(long itemId, String userText) {
+    Matcher price = PRICE.matcher(withoutTrailingPayment(userText));
+    return price.find()
+        ? ",\"prices\":[{\"serviceId\":"
+            + itemId
+            + ",\"unitPrice\":"
+            + price.group(1).replace(".", "")
+            + "}]"
+        : "";
+  }
+
+  /** «Shampoo x2 at 20000 cash» → «Shampoo»: what to look up in the catalog. */
+  private static String itemName(String text) {
+    return QUANTITY.matcher(withoutPayment(text)).replaceFirst("").trim();
+  }
+
+  /** «Shampoo x2 at 20000» → 2 (1 when no quantity was said). */
+  private static int quantityOf(String text) {
+    Matcher q = QUANTITY.matcher(withoutPayment(text == null ? "" : text));
+    return q.find() ? Integer.parseInt(q.group(1)) : 1;
   }
 
   /**
@@ -497,9 +559,9 @@ public class ScriptedAssistantModelClient implements AssistantModelClient {
   }
 
   /** Fixed format, same as the system prompt asks of the real model: «- Nombre — Gs. 50.000». */
-  private static String servicesListing(JsonNode services) {
-    StringBuilder sb = new StringBuilder("Servicios:");
-    for (JsonNode s : services) {
+  private static String listing(String title, JsonNode items) {
+    StringBuilder sb = new StringBuilder(title + ":");
+    for (JsonNode s : items) {
       sb.append("\n- ")
           .append(s.get("name").asString())
           .append(" — ")

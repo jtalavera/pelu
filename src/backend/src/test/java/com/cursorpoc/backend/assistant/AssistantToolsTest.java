@@ -83,7 +83,11 @@ class AssistantToolsTest {
     assertThat(tools.specsFor(admin()))
         .extracting(s -> s.name())
         .containsExactly(
-            "buscar_clientes", "listar_servicios", "listar_profesionales", "turnos_del_dia");
+            "buscar_clientes",
+            "listar_servicios",
+            "listar_productos",
+            "listar_profesionales",
+            "turnos_del_dia");
   }
 
   @Test
@@ -161,6 +165,34 @@ class AssistantToolsTest {
     List<String> fields = new java.util.ArrayList<>();
     row.propertyNames().forEach(fields::add);
     assertThat(fields).containsExactly("id", "name", "price");
+  }
+
+  @Test
+  void listarProductos_asksForProducts_onlyActiveOnes_inTheSameFixedFormat() {
+    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), eq("PRODUCT")))
+        .thenReturn(List.of(service(7, "Shampoo", true), service(8, "Producto viejo", false)));
+
+    JsonNode data = run(admin(), "listar_productos", "{}").get("data");
+
+    JsonNode rows = data.get("products");
+    assertThat(rows).hasSize(1);
+    assertThat(rows.get(0).get("name").asString()).isEqualTo("Shampoo");
+    assertThat(rows.get(0).get("price").asString()).isEqualTo("Gs. 50.000");
+    List<String> fields = new java.util.ArrayList<>();
+    rows.get(0).propertyNames().forEach(fields::add);
+    assertThat(fields).containsExactly("id", "name", "price");
+    // Products never show up under «services».
+    assertThat(data.has("services")).isFalse();
+  }
+
+  @Test
+  void listarProductos_isOpenToAProfessionalToo_andNeverAsksForServices() {
+    when(catalog.listServices(eq(TENANT), eq(Optional.empty()), any(), eq("PRODUCT")))
+        .thenReturn(List.of(service(7, "Shampoo", true)));
+
+    assertThat(run(professional(), "listar_productos", "{}").get("data").get("products"))
+        .hasSize(1);
+    verify(catalog, never()).listServices(eq(TENANT), any(), any(), eq("SERVICE"));
   }
 
   @Test

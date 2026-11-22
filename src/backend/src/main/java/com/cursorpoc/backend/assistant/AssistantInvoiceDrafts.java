@@ -191,7 +191,8 @@ public class AssistantInvoiceDrafts {
         method,
         null,
         email,
-        total(lines));
+        total(lines),
+        List.of());
   }
 
   /**
@@ -212,11 +213,11 @@ public class AssistantInvoiceDrafts {
           || invoiceRepository.existsByServiceRecord_Id(record.getId())) {
         throw new AssistantTools.ToolException("SERVICE_RECORD_NOT_OPEN");
       }
-      lines = recordLines(record, catalog);
+      lines = withoutDropped(recordLines(record, catalog), old);
     } else if (old.appointmentId() != null) {
       AppointmentResponse a = appointmentService.get(tenantId, old.appointmentId());
       requireNotInvoiced(tenantId, a);
-      lines = List.of(appointmentLine(a, catalog, professionals));
+      lines = withoutDropped(List.of(appointmentLine(a, catalog, professionals)), old);
     } else {
       List<Line> repriced = new ArrayList<>();
       for (Line l : old.lines()) {
@@ -229,8 +230,39 @@ public class AssistantInvoiceDrafts {
       }
       lines = repriced;
     }
+    if (old.serviceRecordId() != null || old.appointmentId() != null) {
+      // Items added on top of the ficha / appointment are not in it: they stay, at today's price.
+      lines = new ArrayList<>(lines);
+      lines.addAll(addedLines(old, catalog));
+      if (lines.isEmpty()) {
+        throw new AssistantTools.ToolException("NOTHING_TO_INVOICE");
+      }
+    }
     lines = keepEditedPrices(old.lines(), lines);
     return old.withLines(lines, total(lines));
+  }
+
+  /** The lines of the source (ficha / appointment) the person did not drop from the card. */
+  private static List<Line> withoutDropped(List<Line> source, InvoiceDraftPayload old) {
+    List<Long> dropped = old.removedSourceIds() == null ? List.of() : old.removedSourceIds();
+    return source.stream().filter(l -> !dropped.contains(l.sourceId())).toList();
+  }
+
+  /** Catalog items added to a ficha / appointment draft, priced from the catalog NOW. */
+  private static List<Line> addedLines(
+      InvoiceDraftPayload old, Map<Long, ServiceResponse> catalog) {
+    List<Line> out = new ArrayList<>();
+    for (Line l : old.lines()) {
+      if (l.sourceId() != null) {
+        continue;
+      }
+      ServiceResponse s = catalog.get(l.serviceId());
+      if (s == null || !s.active()) {
+        throw new AssistantTools.ToolException("SERVICE_NOT_FOUND");
+      }
+      out.add(line(s, l.quantity(), s.priceMinor(), l.professionalId(), l.professionalName()));
+    }
+    return out;
   }
 
   /**
@@ -251,6 +283,92 @@ public class AssistantInvoiceDrafts {
           sameLine ? f.withEditedPrice(o.unitPrice(), lineTotal(o.unitPrice(), f.quantity())) : f);
     }
     return out;
+  }
+
+  /** A catalog item (service or product) to add, and how many. */
+  public record NewItem(Long id, int quantity) {}
+
+  static final int MAX_QUANTITY = 99;
+
+  /**
+   * The draft with more items on it. It keeps what the person already did on the card (prices they
+   * typed, items they dropped, payment, e-mail): an item already there (same catalog item, same
+   * professional, not from the ficha) gets a larger quantity at its current unit price; anything
+   * else is a new line at the catalog's price, or at the price the person said.
+   *
+   * @param professionalId optional; without it the new items take the professional every line of
+   *     the draft already shares, if any
+   */
+  public InvoiceDraftPayload addItems(
+      long tenantId,
+      InvoiceDraftPayload old,
+      List<NewItem> items,
+      Long professionalId,
+      Map<Long, BigDecimal> prices) {
+    if (items == null || items.isEmpty()) {
+      throw new AssistantTools.ToolException("ITEMS_REQUIRED");
+    }
+    Map<Long, ServiceResponse> catalog = catalogById(tenantId);
+    Long proId = professionalId;
+    String proName = null;
+    if (proId != null) {
+      ProfessionalOptionResponse p = professionalsById(tenantId).get(proId);
+      if (p == null || !p.active()) {
+        throw new AssistantTools.ToolException("PROFESSIONAL_NOT_FOUND");
+      }
+      proName = p.displayName();
+    } else {
+      Line shared = sharedProfessional(old.lines());
+      if (shared != null) {
+        proId = shared.professionalId();
+        proName = shared.professionalName();
+      }
+    }
+    List<Line> lines = new ArrayList<>(old.lines());
+    for (NewItem item : items) {
+      if (item.id() == null || item.quantity() < 1 || item.quantity() > MAX_QUANTITY) {
+        throw new AssistantTools.ToolException("INVALID_ARGUMENTS");
+      }
+      ServiceResponse s = catalog.get(item.id());
+      if (s == null || !s.active()) {
+        throw new AssistantTools.ToolException("SERVICE_NOT_FOUND");
+      }
+      int at = -1;
+      for (int i = 0; i < lines.size() && at < 0; i++) {
+        Line l = lines.get(i);
+        if (item.id().equals(l.serviceId())
+            && l.sourceId() == null
+            && Objects.equals(l.professionalId(), proId)) {
+          at = i;
+        }
+      }
+      if (at >= 0) {
+        Line l = lines.get(at);
+        int quantity = l.quantity() + item.quantity();
+        if (quantity > MAX_QUANTITY) {
+          throw new AssistantTools.ToolException("INVALID_ARGUMENTS");
+        }
+        lines.set(at, l.withQuantity(quantity, lineTotal(l.unitPrice(), quantity)));
+      } else {
+        lines.add(line(s, item.quantity(), s.priceMinor(), proId, proName));
+      }
+    }
+    lines = applyRequestedPrices(lines, prices);
+    return old.withLines(lines, total(lines));
+  }
+
+  /** A line carrying the one professional that every line of the draft has, if there is one. */
+  private static Line sharedProfessional(List<Line> lines) {
+    Line first = lines.isEmpty() ? null : lines.get(0);
+    if (first == null || first.professionalId() == null) {
+      return null;
+    }
+    for (Line l : lines) {
+      if (!first.professionalId().equals(l.professionalId())) {
+        return null;
+      }
+    }
+    return first;
   }
 
   /** Fingerprint of what the draft charges and at what price (not of payment or e-mail). */
@@ -305,14 +423,29 @@ public class AssistantInvoiceDrafts {
     return complete(p, paymentMethod, cardBrand, email, null);
   }
 
-  /** Applies what the card sends ({@code PATCH}); validates every value. */
+  /** Same as the full version, with no line removals. */
   public InvoiceDraftPayload complete(
       InvoiceDraftPayload p,
       String paymentMethod,
       String cardBrand,
       String email,
       List<AssistantDraftService.LinePrice> linePrices) {
+    return complete(p, paymentMethod, cardBrand, email, linePrices, null);
+  }
+
+  /**
+   * Applies what the card sends ({@code PATCH}); validates every value. Prices and removals both
+   * refer to the lines as the card shows them, so prices go first and removals after.
+   */
+  public InvoiceDraftPayload complete(
+      InvoiceDraftPayload p,
+      String paymentMethod,
+      String cardBrand,
+      String email,
+      List<AssistantDraftService.LinePrice> linePrices,
+      List<Integer> removeLines) {
     InvoiceDraftPayload out = applyLinePrices(p, linePrices);
+    out = applyRemovals(out, removeLines);
     if (paymentMethod != null) {
       String method = normalizeMethod(paymentMethod);
       if (method == null) {
@@ -404,6 +537,40 @@ public class AssistantInvoiceDrafts {
       lines.set(change.index(), l.withEditedPrice(whole, lineTotal(whole, l.quantity())));
     }
     return p.withLines(lines, total(lines));
+  }
+
+  /**
+   * The person drops items from the card. At least one must stay (an invoice without items does not
+   * exist: to give it up, discard the draft). A line that comes from the ficha is remembered, so
+   * re-pricing from the ficha does not bring it back.
+   */
+  private static InvoiceDraftPayload applyRemovals(InvoiceDraftPayload p, List<Integer> indexes) {
+    if (indexes == null || indexes.isEmpty()) {
+      return p;
+    }
+    java.util.Set<Integer> drop = new java.util.LinkedHashSet<>();
+    for (Integer i : indexes) {
+      if (i == null || i < 0 || i >= p.lines().size() || !drop.add(i)) {
+        throw new AssistantDraftException(
+            org.springframework.http.HttpStatus.BAD_REQUEST, "ASSISTANT_DRAFT_INVALID_LINE");
+      }
+    }
+    if (drop.size() >= p.lines().size()) {
+      throw new AssistantDraftException(
+          org.springframework.http.HttpStatus.BAD_REQUEST, "ASSISTANT_DRAFT_LAST_LINE");
+    }
+    List<Line> kept = new ArrayList<>();
+    List<Long> removedIds =
+        new ArrayList<>(p.removedSourceIds() == null ? List.of() : p.removedSourceIds());
+    for (int i = 0; i < p.lines().size(); i++) {
+      Line l = p.lines().get(i);
+      if (!drop.contains(i)) {
+        kept.add(l);
+      } else if (l.sourceId() != null) {
+        removedIds.add(l.sourceId());
+      }
+    }
+    return p.withoutLines(kept, total(kept), removedIds);
   }
 
   /**
@@ -562,7 +729,8 @@ public class AssistantInvoiceDrafts {
               lineTotal(unit, qty),
               l.getProfessional() == null ? null : l.getProfessional().getId(),
               l.getProfessional() == null ? null : l.getProfessional().getDisplayName(),
-              null));
+              null,
+              l.getId()));
     }
     return lines;
   }
@@ -577,17 +745,26 @@ public class AssistantInvoiceDrafts {
     }
     ProfessionalOptionResponse p = professionals.get(a.professionalId());
     return line(
-        s,
-        1,
-        s.priceMinor(),
-        a.professionalId(),
-        p != null ? p.displayName() : a.professionalName());
+            s,
+            1,
+            s.priceMinor(),
+            a.professionalId(),
+            p != null ? p.displayName() : a.professionalName())
+        .withSource(a.id());
   }
 
   private static Line line(
       ServiceResponse s, int qty, BigDecimal unit, Long professionalId, String professionalName) {
     return new Line(
-        s.id(), s.name(), qty, unit, lineTotal(unit, qty), professionalId, professionalName, null);
+        s.id(),
+        s.name(),
+        qty,
+        unit,
+        lineTotal(unit, qty),
+        professionalId,
+        professionalName,
+        null,
+        null);
   }
 
   private static BigDecimal lineTotal(BigDecimal unit, int qty) {
@@ -600,8 +777,7 @@ public class AssistantInvoiceDrafts {
 
   private Map<Long, ServiceResponse> catalogById(long tenantId) {
     Map<Long, ServiceResponse> map = new LinkedHashMap<>();
-    for (ServiceResponse s :
-        catalogService.listServices(tenantId, Optional.empty(), null, "SERVICE")) {
+    for (ServiceResponse s : catalogService.listServices(tenantId, Optional.empty(), null, null)) {
       map.put(s.id(), s);
     }
     return map;

@@ -92,6 +92,7 @@ class AssistantDraftIntegrationTest {
   private String clientName;
   private String serviceName;
   private SalonService service;
+  private String productName;
   private CashSession cashSession;
 
   @BeforeEach
@@ -139,6 +140,25 @@ class AssistantDraftIntegrationTest {
     service.setKind(ServiceKind.SERVICE);
     service.setTax(iva);
     service = serviceRepository.save(service);
+
+    // A product (its own category kind): the catalog has both.
+    ServiceCategory productCategory = new ServiceCategory();
+    productCategory.setTenant(tenant);
+    productCategory.setName("Productos " + suffix);
+    productCategory.setActive(true);
+    productCategory.setKind(ServiceKind.PRODUCT);
+    productCategory = categoryRepository.save(productCategory);
+    productName = "Shampoo " + suffix;
+    SalonService product = new SalonService();
+    product.setTenant(tenant);
+    product.setCategory(productCategory);
+    product.setName(productName);
+    product.setPriceMinor(BigDecimal.valueOf(20_000));
+    product.setDurationMinutes(1);
+    product.setActive(true);
+    product.setKind(ServiceKind.PRODUCT);
+    product.setTax(iva);
+    serviceRepository.save(product);
 
     clientName = "Maria Alvarez " + suffix;
     Client client = new Client();
@@ -362,6 +382,100 @@ class AssistantDraftIntegrationTest {
     }
     HttpResponse<String> reread = patch("/api/assistant/drafts/" + id, admin, "{}");
     assertThat(json(reread).get("payload").get("total").asLong()).isEqualTo(before);
+  }
+
+  @Test
+  void aProductIsInvoicedLikeAService_andItemsAreAddedToTheDraftKeepingItsEdits() throws Exception {
+    long conv = currentConversation(admin);
+    AssistantAnswerBody first = ask(admin, conv, "invoice " + clientName + " for " + serviceName);
+    String firstId = draftCard(first).get("id").asString();
+    // The person edits the haircut's price on the card…
+    patch(
+        "/api/assistant/drafts/" + firstId,
+        admin,
+        "{\"linePrices\":[{\"index\":0,\"unitPrice\":100000}]}");
+
+    // …and then asks for two shampoos (a product) to be added.
+    AssistantAnswerBody added = ask(admin, conv, "add " + productName + " x2");
+
+    JsonNode draft = draftCard(added);
+    assertThat(draft.get("id").asString()).isNotEqualTo(firstId);
+    JsonNode lines = draft.get("payload").get("lines");
+    assertThat(lines).hasSize(2);
+    assertThat(lines.get(0).get("unitPrice").asLong()).isEqualTo(100_000); // their edit survives
+    assertThat(lines.get(0).get("priceEdited").asBoolean()).isTrue();
+    assertThat(lines.get(1).get("name").asString()).isEqualTo(productName);
+    assertThat(lines.get(1).get("quantity").asInt()).isEqualTo(2);
+    assertThat(draft.get("payload").get("total").asLong()).isEqualTo(140_000);
+    // The previous draft is replaced (its card dims).
+    assertThat(
+            added.events.stream()
+                .anyMatch(
+                    e ->
+                        e.event.equals("card.draft.updated")
+                            && e.data.get("id").asString().equals(firstId)
+                            && e.data.get("status").asString().equals("SUPERSEDED")))
+        .isTrue();
+
+    // Confirming issues both items at the card's total.
+    String id = draft.get("id").asString();
+    patch("/api/assistant/drafts/" + id, admin, "{\"paymentMethod\":\"CASH\"}");
+    HttpResponse<String> res = post("/api/assistant/drafts/" + id + "/confirm", admin, null, id);
+    assertThat(res.statusCode()).as(res.body()).isEqualTo(200);
+    assertThat(
+            invoiceRepository
+                .findById(json(res).get("invoiceId").asLong())
+                .orElseThrow()
+                .getTotal())
+        .isEqualByComparingTo("140000");
+  }
+
+  @Test
+  void invoicingAProductByName_worksFromTheStart() throws Exception {
+    long conv = currentConversation(admin);
+
+    JsonNode draft = draftCard(ask(admin, conv, "invoice " + clientName + " for " + productName));
+
+    JsonNode lines = draft.get("payload").get("lines");
+    assertThat(lines).hasSize(1);
+    assertThat(lines.get(0).get("name").asString()).isEqualTo(productName);
+    assertThat(draft.get("payload").get("total").asLong()).isEqualTo(20_000);
+  }
+
+  @Test
+  void addingAnItem_withoutAnActiveInvoiceDraft_isReported() throws Exception {
+    long conv = currentConversation(admin);
+
+    AssistantAnswerBody answer = ask(admin, conv, "add " + productName);
+
+    assertThat(answer.events.stream().noneMatch(e -> e.event.equals("card.draft"))).isTrue();
+    assertThat(answer.text).contains("No hay una factura en borrador");
+  }
+
+  private JsonNode draftCard(AssistantAnswerBody answer) {
+    return answer.events.stream()
+        .filter(e -> e.event.equals("card.draft"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no card.draft in: " + answer.raw))
+        .data;
+  }
+
+  @Test
+  void theOnlyItemOfADraft_cannotBeRemoved_andABadPositionIsRefused() throws Exception {
+    long conv = currentConversation(admin);
+    JsonNode draft = proposeInvoice(admin, conv);
+    String id = draft.get("id").asString();
+
+    HttpResponse<String> last =
+        patch("/api/assistant/drafts/" + id, admin, "{\"removeLines\":[0]}");
+    assertThat(last.statusCode()).isEqualTo(400);
+    assertThat(last.body()).contains("ASSISTANT_DRAFT_LAST_LINE");
+    HttpResponse<String> bad = patch("/api/assistant/drafts/" + id, admin, "{\"removeLines\":[5]}");
+    assertThat(bad.statusCode()).isEqualTo(400);
+    assertThat(bad.body()).contains("ASSISTANT_DRAFT_INVALID_LINE");
+
+    HttpResponse<String> reread = patch("/api/assistant/drafts/" + id, admin, "{}");
+    assertThat(json(reread).get("payload").get("lines")).hasSize(1);
   }
 
   @Test

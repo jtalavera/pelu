@@ -1582,6 +1582,8 @@
         "unitPriceOf": "Unit price of {{name}}",
         "priceEdited": "Edited",
         "priceInvalid": "Enter a whole amount greater than zero, for example 50.000.",
+        "removeLine": "Remove this item",
+        "removeLineOf": "Remove {{name}} from the invoice",
         "invoiceTitle": "Invoice draft",
         "status": {
           "DRAFT": "Draft",
@@ -1665,6 +1667,8 @@
       "tool": {
         "buscar_clientes": "Searching clients…",
         "listar_servicios": "Looking up services…",
+        "listar_productos": "Looking up products…",
+        "agregar_item_a_borrador": "Adding to the draft…",
         "listar_profesionales": "Looking up professionals…",
         "turnos_del_dia": "Checking the agenda…",
         "generic": "Working on it…"
@@ -3651,6 +3655,8 @@
     "apiErrors": {
       "ASSISTANT_SPEECH_UNAVAILABLE": "Dictation is not available right now. You can type your message.",
       "ASSISTANT_DRAFT_INVALID_PRICE": "That price is not valid. Enter a whole amount greater than zero, for example 50.000.",
+      "ASSISTANT_DRAFT_INVALID_LINE": "That item is no longer in the draft. Check the card.",
+      "ASSISTANT_DRAFT_LAST_LINE": "At least one item must stay. To skip invoicing, discard the draft.",
       "ASSISTANT_SLOT_TAKEN": "That time was just taken. Pick another free time below.",
       "ASSISTANT_DRAFT_NOT_FOUND": "That draft no longer exists.",
       "ASSISTANT_DRAFT_EXPIRED": "This draft expired (drafts are valid for 24 hours). Ask the assistant for a new one.",

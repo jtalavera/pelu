@@ -209,6 +209,47 @@ export async function createOpenFicha(
   return ficha.id;
 }
 
+/** A catalog PRODUCT (own category kind), as the Productos screen creates it. */
+export async function createProductApi(
+  request: APIRequestContext,
+  token: string,
+  name: string,
+  priceMinor: number,
+): Promise<{ id: number; name: string }> {
+  const category = await apiPostJson<{ id: number }>(request, token, "/api/service-categories", {
+    name: `E2E Reventa ${name}`.slice(0, 60),
+    accentKey: "stone",
+    kind: "PRODUCT",
+  });
+  return apiPostJson<{ id: number; name: string }>(request, token, "/api/services", {
+    name,
+    categoryId: category.id,
+    priceMinor,
+    durationMinutes: 1,
+    kind: "PRODUCT",
+    sku: `SKU-${Date.now()}${Math.floor(Math.random() * 1000)}`,
+  });
+}
+
+/** An open ficha with several services (one line each, catalog prices), ready to be charged. */
+export async function createOpenFichaWithServices(
+  request: APIRequestContext,
+  token: string,
+  body: { clientId: number; serviceIds: number[]; professionalId: number },
+): Promise<number> {
+  const ficha = await apiPostJson<{ id: number }>(request, token, "/api/service-records", {
+    clientId: body.clientId,
+    lines: body.serviceIds.map((serviceId) => ({
+      serviceId,
+      professionalId: body.professionalId,
+      quantity: 1,
+      unitPrice: null,
+    })),
+    tips: [],
+  });
+  return ficha.id;
+}
+
 export type InvoiceRow = { id: number; status: string; total: string | number };
 
 export async function clientInvoicesApi(

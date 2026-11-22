@@ -21,10 +21,17 @@ import tools.jackson.databind.ObjectMapper;
 public class AssistantProposalTools {
 
   static final String PROPONER_FACTURA = "proponer_factura";
+  static final String AGREGAR_ITEM = "agregar_item_a_borrador";
   static final String DESCARTAR_BORRADOR = "descartar_borrador";
 
   static final String EVENT_DRAFT = "card.draft";
   static final String EVENT_DRAFT_UPDATED = "card.draft.updated";
+
+  /** The «items» argument: catalog ids (service or product) with how many of each. */
+  private static final String ITEMS_SCHEMA =
+      "\"items\":{\"type\":\"array\",\"description\":\"Servicios o productos con cantidad\","
+          + "\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},"
+          + "\"quantity\":{\"type\":\"integer\",\"minimum\":1}},\"required\":[\"id\"]}},";
 
   private final AssistantInvoiceDrafts invoiceDrafts;
   private final AssistantDraftService draftService;
@@ -40,7 +47,9 @@ public class AssistantProposalTools {
   }
 
   boolean handles(String name) {
-    return PROPONER_FACTURA.equals(name) || DESCARTAR_BORRADOR.equals(name);
+    return PROPONER_FACTURA.equals(name)
+        || AGREGAR_ITEM.equals(name)
+        || DESCARTAR_BORRADOR.equals(name);
   }
 
   /** Invoicing is ADMIN-only in the app (/api/invoices), so only an administrator is offered it. */
@@ -52,16 +61,18 @@ public class AssistantProposalTools {
               PROPONER_FACTURA,
               "Prepara un BORRADOR de factura para un cliente; no emite nada: la persona lo revisa y"
                   + " lo confirma con un botón. Sin serviceIds toma la ficha abierta del cliente o su"
-                  + " único turno de hoy. El precio y el total los calcula el sistema; solo si la persona"
-                  + " DIJO un precio para un servicio, pasalo en prices (nunca inventes uno).",
+                  + " único turno de hoy. Se pueden cobrar servicios y productos (ids de listar_servicios"
+                  + " o listar_productos). El precio y el total los calcula el sistema; solo si la"
+                  + " persona DIJO un precio para un ítem, pasalo en prices (nunca inventes uno).",
               AssistantTools.schema(
                   "{\"clientId\":{\"type\":\"integer\",\"description\":\"Id del cliente"
                       + " (buscar_clientes)\"},"
                       + "\"serviceIds\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"},"
-                      + "\"description\":\"Ids de servicios a cobrar; repetir un id para cantidad"
-                      + " 2\"},"
+                      + "\"description\":\"Ids de servicios o productos a cobrar, de a uno cada vez\"},"
+                      + ITEMS_SCHEMA
                       + "\"prices\":{\"type\":\"array\",\"description\":\"Precio unitario que la persona"
-                      + " dijo para un servicio, en guaraníes enteros y sin puntos (45000)\","
+                      + " dijo para un servicio o producto, en guaraníes enteros y sin puntos"
+                      + " (45000)\","
                       + "\"items\":{\"type\":\"object\",\"properties\":{\"serviceId\":{\"type\":\"integer\"},"
                       + "\"unitPrice\":{\"type\":\"integer\"}},\"required\":[\"serviceId\",\"unitPrice\"]}},"
                       + "\"appointmentId\":{\"type\":\"integer\"},"
@@ -70,6 +81,25 @@ public class AssistantProposalTools {
                       + "\"CREDIT_CARD\",\"TRANSFER\"]},"
                       + "\"email\":{\"type\":\"string\"}}",
                   "[\"clientId\"]")));
+    }
+    if (ctx.isAdmin()) {
+      specs.add(
+          new ToolSpec(
+              AGREGAR_ITEM,
+              "Agrega servicios o productos al BORRADOR de factura activo, conservando lo que la"
+                  + " persona ya editó (precios, ítems quitados, medio de pago, email). Usala para"
+                  + " «agregale…» en lugar de volver a proponer la factura. Si el ítem ya estaba,"
+                  + " suma cantidad. Solo si la persona DIJO un precio, pasalo en prices.",
+              AssistantTools.schema(
+                  "{"
+                      + ITEMS_SCHEMA
+                      + "\"prices\":{\"type\":\"array\",\"description\":\"Precio unitario que la persona"
+                      + " dijo para un ítem, en guaraníes enteros y sin puntos (45000)\","
+                      + "\"items\":{\"type\":\"object\",\"properties\":{\"serviceId\":{\"type\":\"integer\"},"
+                      + "\"unitPrice\":{\"type\":\"integer\"}},\"required\":[\"serviceId\",\"unitPrice\"]}},"
+                      + "\"professionalId\":{\"type\":\"integer\",\"description\":\"Solo si la persona"
+                      + " lo pidió\"}}",
+                  "[\"items\"]")));
     }
     specs.add(
         new ToolSpec(
@@ -85,6 +115,7 @@ public class AssistantProposalTools {
     }
     return switch (name) {
       case PROPONER_FACTURA -> proponerFactura(ctx, args);
+      case AGREGAR_ITEM -> agregarItem(ctx, args);
       case DESCARTAR_BORRADOR -> descartar(ctx);
       default -> throw new AssistantTools.ToolException("UNKNOWN_TOOL");
     };
@@ -135,6 +166,11 @@ public class AssistantProposalTools {
             serviceIds.add(n.asLong());
           });
     }
+    for (AssistantInvoiceDrafts.NewItem item : items(args)) {
+      for (int i = 0; i < item.quantity(); i++) {
+        serviceIds.add(item.id());
+      }
+    }
     InvoiceDraftPayload payload =
         invoiceDrafts.build(
             ctx.tenantId(),
@@ -146,8 +182,61 @@ public class AssistantProposalTools {
                 text(args, "paymentMethod"),
                 text(args, "email"),
                 prices(args)));
-    AssistantDraftService.Created created = draftService.createInvoiceDraft(ctx, payload);
+    return invoiceOutcome(draftService.createInvoiceDraft(ctx, payload), payload);
+  }
 
+  /** Adds items to the active invoice draft: a new draft that keeps what the person edited. */
+  private ToolOutcome agregarItem(AssistantContext ctx, JsonNode args) {
+    if (!ctx.isAdmin()) {
+      throw new AssistantTools.ToolException("FORBIDDEN");
+    }
+    List<AssistantInvoiceDrafts.NewItem> items = items(args);
+    if (items.isEmpty()) {
+      throw new AssistantTools.ToolException("ITEMS_REQUIRED");
+    }
+    InvoiceDraftPayload old =
+        draftService
+            .activeInvoicePayload(ctx)
+            .orElseThrow(() -> new AssistantTools.ToolException("NO_ACTIVE_INVOICE_DRAFT"));
+    InvoiceDraftPayload payload =
+        invoiceDrafts.addItems(
+            ctx.tenantId(), old, items, longArg(args, "professionalId"), prices(args));
+    return invoiceOutcome(draftService.createInvoiceDraft(ctx, payload), payload);
+  }
+
+  /** {@code items: [{id, quantity?}]}: a malformed entry is a bad call. */
+  private static List<AssistantInvoiceDrafts.NewItem> items(JsonNode args) {
+    JsonNode node = args.get("items");
+    List<AssistantInvoiceDrafts.NewItem> out = new ArrayList<>();
+    if (node == null || node.isNull()) {
+      return out;
+    }
+    if (!node.isArray()) {
+      throw new AssistantTools.ToolException("INVALID_ARGUMENTS");
+    }
+    for (JsonNode n : node) {
+      JsonNode id = n.get("id");
+      JsonNode quantity = n.get("quantity");
+      if (id == null || !id.canConvertToLong()) {
+        throw new AssistantTools.ToolException("INVALID_ARGUMENTS");
+      }
+      int qty = 1;
+      if (quantity != null && !quantity.isNull()) {
+        if (!quantity.canConvertToInt()) {
+          throw new AssistantTools.ToolException("INVALID_ARGUMENTS");
+        }
+        qty = quantity.asInt();
+      }
+      if (qty < 1 || qty > AssistantInvoiceDrafts.MAX_QUANTITY) {
+        throw new AssistantTools.ToolException("INVALID_ARGUMENTS");
+      }
+      out.add(new AssistantInvoiceDrafts.NewItem(id.asLong(), qty));
+    }
+    return out;
+  }
+
+  private ToolOutcome invoiceOutcome(
+      AssistantDraftService.Created created, InvoiceDraftPayload payload) {
     List<CardEvent> cards = new ArrayList<>();
     for (String old : created.supersededIds()) {
       cards.add(new CardEvent(EVENT_DRAFT_UPDATED, Map.of("id", old, "status", "SUPERSEDED")));

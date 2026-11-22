@@ -120,6 +120,22 @@ public class AssistantDraftService {
     return new Created(toDto(draft), superseded);
   }
 
+  /** The invoice draft this person has active (and not expired) in the conversation, if any. */
+  @Transactional(readOnly = true)
+  public java.util.Optional<InvoiceDraftPayload> activeInvoicePayload(AssistantContext ctx) {
+    if (ctx.conversationId() == null) {
+      return java.util.Optional.empty();
+    }
+    return drafts
+        .findByConversationIdAndStatus(ctx.conversationId(), AssistantDraftStatus.DRAFT)
+        .stream()
+        .filter(d -> d.getTenantId() == ctx.tenantId() && d.getUserId() == ctx.userId())
+        .filter(d -> d.getType() == AssistantDraftType.INVOICE)
+        .filter(d -> effective(d) == AssistantDraftStatus.DRAFT)
+        .max(java.util.Comparator.comparing(AssistantDraft::getCreatedAt))
+        .map(d -> fromJson(d, InvoiceDraftPayload.class));
+  }
+
   @Transactional(readOnly = true)
   public List<AssistantDraftDto> forConversation(long conversationId) {
     return drafts.findByConversationIdOrderByCreatedAtAsc(conversationId).stream()
@@ -170,7 +186,9 @@ public class AssistantDraftService {
       String startAt,
       Long professionalId,
       /** INVOICE: unit prices typed on the card, by line position. */
-      List<LinePrice> linePrices) {}
+      List<LinePrice> linePrices,
+      /** INVOICE: positions of the lines dropped on the card (at least one always stays). */
+      List<Integer> removeLines) {}
 
   /** A unit price the person typed for the line at {@code index} (whole guaraníes). */
   public record LinePrice(Integer index, BigDecimal unitPrice) {}
@@ -192,7 +210,8 @@ public class AssistantDraftService {
               completion.paymentMethod(),
               completion.cardBrand(),
               completion.email(),
-              completion.linePrices());
+              completion.linePrices(),
+              completion.removeLines());
       d.setPayload(toJson(updated));
       // What the draft charges changed: the stored fingerprint must follow, or confirming would
       // mistake the person's own edit for «the price changed».

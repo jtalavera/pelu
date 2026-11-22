@@ -16,6 +16,7 @@ import {
   bookAppointmentTomorrow,
   clientInvoicesApi,
   createClientWithPhone,
+  createProductApi,
   currentConversationApi,
   enableAssistantGlobally,
   openAssistantPanel,
@@ -235,6 +236,29 @@ test.describe("HU-AST-02 · Consultar datos por chat", () => {
       timeout: 15_000,
     });
     await expect(professionals).not.toContainText(new RegExp(inactiveProfessionalName, "i"));
+  });
+
+  test("AC14 · los productos se listan aparte con el mismo formato fijo, sin mezclarse con los servicios", async ({
+    page,
+    request,
+  }) => {
+    const productName = `E2E Producto Lista ${SUFFIX}`;
+    await createProductApi(request, token, productName, 20000);
+    await loginAsDemo(page);
+    await openAssistantPanel(page);
+    await startNewConversationUi(page);
+
+    await askAssistantUi(page, "products");
+    const products = assistantAnswers(page).last();
+    await expect(products).toContainText("Productos:", { timeout: 15_000 });
+    await expect(products).toContainText(`- ${productName} — Gs. 20.000`);
+    await expect(products).not.toContainText(salon.serviceFullName);
+
+    await askAssistantUi(page, "services");
+    const services = assistantAnswers(page).last();
+    await expect(services).toContainText("Servicios:", { timeout: 15_000 });
+    await expect(services).toContainText(salon.serviceFullName);
+    await expect(services).not.toContainText(productName);
   });
 
   test("AC8 · una profesional usa el asistente pero busca clientes solo por nombre", async ({
