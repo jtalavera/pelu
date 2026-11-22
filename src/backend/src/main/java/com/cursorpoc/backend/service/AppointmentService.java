@@ -54,6 +54,9 @@ public class AppointmentService {
 
   private final FemmeTimeProperties timeProperties;
 
+  /** The overlap rule, shared with the availability calculation. */
+  private final AppointmentConflictChecker conflictChecker;
+
   public AppointmentService(
       AppointmentRepository appointmentRepository,
       TenantRepository tenantRepository,
@@ -68,6 +71,7 @@ public class AppointmentService {
     this.invoiceRepository = invoiceRepository;
     this.timeProperties = timeProperties;
     this.appointmentRepository = appointmentRepository;
+    this.conflictChecker = new AppointmentConflictChecker(appointmentRepository);
     this.tenantRepository = tenantRepository;
     this.professionalRepository = professionalRepository;
     this.salonServiceRepository = salonServiceRepository;
@@ -265,12 +269,7 @@ public class AppointmentService {
 
   private void validateNoOverlap(
       long tenantId, long professionalId, Instant startAt, Instant endAt, Long excludeId) {
-    long overlaps =
-        appointmentRepository.countOverlapping(
-            tenantId, professionalId, startAt, endAt, excludeId, AppointmentStatus.CANCELLED);
-    if (overlaps > 0) {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "APPOINTMENT_OVERLAP");
-    }
+    conflictChecker.requireNoOverlap(tenantId, professionalId, startAt, endAt, excludeId);
   }
 
   private Appointment loadAppointmentOrThrow(long tenantId, long id) {

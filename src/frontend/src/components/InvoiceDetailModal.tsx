@@ -17,7 +17,11 @@ import {
 } from "@design-system";
 import { femmeJson, femmePostJson } from "../api/femmeClient";
 import { isValidParaguayRuc } from "../util/paraguayRuc";
-import { downloadInvoicePdf, type ReceiptFormat } from "../api/downloadInvoicePdf";
+import {
+  downloadInvoicePdf,
+  sendInvoiceReceiptByEmail,
+  type ReceiptFormat,
+} from "../api/downloadInvoicePdf";
 import { ReceiptDownloadButton } from "./ReceiptDownloadButton";
 import {
   downloadSifenKude,
@@ -40,7 +44,7 @@ import { SifenStatusBadge } from "./SifenStatusBadge";
 import { useDateLocale } from "../i18n/dateLocale";
 import { formatAmountDecimal } from "../lib/formatMoney";
 import { formatParaguayDateTime, formatParaguayTime } from "../lib/paraguayDateTime";
-import { sendKudeByWhatsapp } from "../lib/invoiceKudeShare";
+import { sendKudeByWhatsapp, sendReceiptByWhatsapp } from "../lib/invoiceKudeShare";
 import { isSifenStatusInFlight, useSifenStatusLiveRefresh } from "../hooks/useSifenStatusLiveRefresh";
 
 /**
@@ -314,6 +318,7 @@ export function InvoiceDetailModal({
   onCorrected,
   onTipsChanged,
   allowVoid = true,
+  initialPanel,
 }: {
   invoiceId: number;
   onClose: () => void;
@@ -326,6 +331,11 @@ export function InvoiceDetailModal({
    */
   onTipsChanged?: () => void;
   allowVoid?: boolean;
+  /**
+   * Opens straight into a panel — the assistant's «Compartir con el cliente» uses `"share"`. The
+   * panel only shows once the invoice loaded and can actually be shared.
+   */
+  initialPanel?: "share";
 }) {
   const { t } = useTranslation();
   const dateLocale = useDateLocale();
@@ -341,7 +351,7 @@ export function InvoiceDetailModal({
   // Redesign: one view. Share, void, cancel, revalidate, identify and the technical detail are
   // "panels" that open under the actions (the secondary ones from the "⋯" menu). One panel is open
   // at a time: picking another replaces it, picking the same one (or its ✕, or "⋯" again) closes it.
-  const [activePanel, setActivePanel] = useState<DetailPanel | null>(null);
+  const [activePanel, setActivePanel] = useState<DetailPanel | null>(initialPanel ?? null);
   const [menuOpen, setMenuOpen] = useState(false);
   const togglePanel = (panel: DetailPanel) =>
     setActivePanel((current) => (current === panel ? null : panel));
@@ -382,6 +392,13 @@ export function InvoiceDetailModal({
   // Issue #215: "Enviar por WhatsApp" — downloads the KuDE and opens a prefilled wa.me chat.
   const [kudeWhatsappSending, setKudeWhatsappSending] = useState(false);
   const [kudeWhatsappError, setKudeWhatsappError] = useState<string | null>(null);
+  // «Compartir» of a NON-fiscal receipt (no SIFEN): e-mail the PDF or hand it to WhatsApp.
+  const [receiptEmail, setReceiptEmail] = useState("");
+  const [receiptEmailSending, setReceiptEmailSending] = useState(false);
+  const [receiptEmailError, setReceiptEmailError] = useState<string | null>(null);
+  const [receiptEmailSuccess, setReceiptEmailSuccess] = useState(false);
+  const [receiptWhatsappSending, setReceiptWhatsappSending] = useState(false);
+  const [receiptWhatsappError, setReceiptWhatsappError] = useState<string | null>(null);
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelReasonError, setCancelReasonError] = useState<string | null>(null);
@@ -431,6 +448,8 @@ export function InvoiceDetailModal({
         // comprobante form for this document, falling back to the client's own email on file.
         if (data.recipientEmail) setKudeEmail(data.recipientEmail);
         else if (data.clientEmail) setKudeEmail(data.clientEmail);
+        if (data.recipientEmail) setReceiptEmail(data.recipientEmail);
+        else if (data.clientEmail) setReceiptEmail(data.clientEmail);
       })
       .catch(() => {
         if (!cancelled) setLoadError(t("femme.billing.history.detail.loadError"));
@@ -590,6 +609,36 @@ export function InvoiceDetailModal({
       setKudeWhatsappError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
     } finally {
       setKudeWhatsappSending(false);
+    }
+  }
+
+  /** Non-fiscal receipt: e-mails the PDF to the typed address (blank → invoice's / client's own). */
+  async function handleSendReceiptEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setReceiptEmailError(null);
+    setReceiptEmailSuccess(false);
+    setReceiptEmailSending(true);
+    try {
+      await sendInvoiceReceiptByEmail(invoiceId, receiptEmail);
+      setReceiptEmailSuccess(true);
+    } catch (err) {
+      setReceiptEmailError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setReceiptEmailSending(false);
+    }
+  }
+
+  /** Non-fiscal receipt: the PDF + a prefilled WhatsApp chat (lib/invoiceKudeShare). */
+  async function handleSendReceiptWhatsapp() {
+    if (!invoice) return;
+    setReceiptWhatsappError(null);
+    setReceiptWhatsappSending(true);
+    try {
+      await sendReceiptByWhatsapp(invoice, t);
+    } catch (err) {
+      setReceiptWhatsappError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setReceiptWhatsappSending(false);
     }
   }
 
@@ -1652,7 +1701,100 @@ export function InvoiceDetailModal({
           invoice.status === "ISSUED" &&
           !sifenCancelEligible &&
           invoice.sifenSubmissionStatus !== "REJECTED";
-        const shareAvailable = !!sifenSections?.kudeEligible;
+        // Without SIFEN the comprobante is the non-fiscal receipt: it can be shared too (the same
+        // condition under which its PDF is offered, below).
+        const receiptShareAvailable =
+          invoice.status === "ISSUED" && !sifenEnabled && receiptEnabled && !sifenSections;
+        const shareAvailable = !!sifenSections?.kudeEligible || receiptShareAvailable;
+        const receiptSharePanel = (
+          <section
+            className="flex flex-col gap-3 rounded-lg border border-line p-4"
+            data-testid="receipt-share-section"
+          >
+            <Heading as="h3" className="text-base">
+              {t("femme.billing.history.detail.receiptShare.title")}
+            </Heading>
+            <form
+              className="flex flex-col gap-2 sm:flex-row sm:items-end"
+              onSubmit={(e) => void handleSendReceiptEmail(e)}
+              noValidate
+            >
+              <div className="min-w-0 flex-1">
+                <Label htmlFor="receipt-share-email">
+                  <span aria-hidden="true">✉ </span>
+                  {t("femme.billing.history.detail.receiptShare.emailLabel")}
+                </Label>
+                <Input
+                  id="receipt-share-email"
+                  type="email"
+                  data-testid="receipt-share-email-input"
+                  value={receiptEmail}
+                  onChange={(e) => {
+                    setReceiptEmail(e.target.value);
+                    setReceiptEmailSuccess(false);
+                  }}
+                  placeholder={t("femme.billing.history.detail.receiptShare.emailPlaceholder")}
+                  className="mt-1 w-full"
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                className="min-h-11 w-full whitespace-nowrap sm:w-auto"
+                disabled={receiptEmailSending}
+                data-testid="receipt-share-send-email-button"
+              >
+                {receiptEmailSending
+                  ? t("femme.billing.history.detail.receiptShare.emailSending")
+                  : t("femme.billing.history.detail.receiptShare.emailButton")}
+              </Button>
+            </form>
+            <div className="flex items-center gap-3 text-sm text-ink-3" aria-hidden="true">
+              <span className="h-px flex-1 bg-line" />
+              {t("femme.billing.history.detail.receiptShare.or")}
+              <span className="h-px flex-1 bg-line" />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-h-11 w-full sm:w-auto sm:self-start"
+              disabled={receiptWhatsappSending}
+              data-testid="receipt-share-send-whatsapp-button"
+              onClick={() => void handleSendReceiptWhatsapp()}
+            >
+              {receiptWhatsappSending
+                ? t("femme.billing.history.detail.receiptShare.whatsappSending")
+                : t("femme.billing.history.detail.receiptShare.whatsappButton")}
+            </Button>
+            {receiptEmailError && (
+              <Alert
+                variant="destructive"
+                title={t("femme.billing.errorTitle")}
+                data-testid="receipt-share-email-error"
+              >
+                {receiptEmailError}
+              </Alert>
+            )}
+            {receiptEmailSuccess && !receiptEmailError && (
+              <Alert
+                variant="success"
+                title={t("femme.billing.history.detail.receiptShare.emailSuccess")}
+                data-testid="receipt-share-email-success"
+              >
+                {t("femme.billing.history.detail.receiptShare.emailSuccess")}
+              </Alert>
+            )}
+            {receiptWhatsappError && (
+              <Alert
+                variant="destructive"
+                title={t("femme.billing.errorTitle")}
+                data-testid="receipt-share-whatsapp-error"
+              >
+                {receiptWhatsappError}
+              </Alert>
+            )}
+          </section>
+        );
         const cancelAvailable =
           !!sifenSections && (sifenSections.cancelEligible || sifenSections.cancelHistoryVisible);
         const revalidateAvailable = !!sifenSections && !!invoice.sifenVerificationUrl;
@@ -2011,7 +2153,9 @@ export function InvoiceDetailModal({
             {/* Panels (the container keeps the testid the SIFEN specs already use) */}
             {wrapPanels(
               <>
-            {activePanel === "share" && shareAvailable && framed("share", sifenSections?.email)}
+            {activePanel === "share" &&
+              shareAvailable &&
+              framed("share", sifenSections?.kudeEligible ? sifenSections.email : receiptSharePanel)}
 
             {activePanel === "void" &&
               voidAvailable &&

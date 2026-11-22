@@ -52,7 +52,12 @@ public class AuditLogService {
           "/api/admin/seed",
           "/api/whatsapp/webhook",
           "/api/me/tour-state",
-          "/api/sso/");
+          "/api/sso/",
+          // The assistant: chat traffic would be an audit row per message and carries no business
+          // change. What a person CONFIRMS from a draft (an invoice, an appointment) is recorded by
+          // the confirm endpoint itself, as the business action it is, with source ASSISTANT (see
+          // recordBusinessAction) — not as an opaque "assistant/confirm" HTTP row.
+          "/api/assistant/");
 
   /** Routing prefixes that say who may call, not what is touched: skipped to find the resource. */
   private static final Set<String> PREFIX_SEGMENTS = Set.of("platform", "admin");
@@ -141,6 +146,46 @@ public class AuditLogService {
       auditLogRepository.save(row);
     } catch (RuntimeException e) {
       log.error("audit: could not record {} {} ({})", method, pattern, e.toString());
+    }
+  }
+
+  /** Where an audited action came from, when it did not come straight from the API. */
+  public static final String SOURCE_ASSISTANT = "ASSISTANT";
+
+  /**
+   * Records a business action performed on the person's behalf by a feature that is not a plain
+   * REST call — today the assistant's confirmed drafts — as the resource it touched ({@code
+   * invoices}/{@code issue}, {@code appointments}/{@code create}) with its {@code source}. Same
+   * guarantees as {@link #record}: never throws, own transaction (call it after the action
+   * committed).
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void recordBusinessAction(
+      FemmeUserPrincipal principal,
+      String resource,
+      String operation,
+      String entityId,
+      String source) {
+    try {
+      AuditLog row = new AuditLog();
+      row.setTenantId(principal.getTenantIdOrNull());
+      row.setUserId(principal.getUserId());
+      row.setUserEmail(principal.getUsername());
+      row.setUserRole(
+          principal.isImpersonation()
+              ? UserRole.PLATFORM_ADMIN.name()
+              : principal.getRole() != null ? principal.getRole().name() : null);
+      row.setHttpMethod("POST");
+      row.setResource(truncate(resource, 64));
+      row.setOperation(truncate(operation, 64));
+      row.setPathPattern(truncate("/api/" + resource + "/" + operation, 255));
+      row.setEntityId(truncate(entityId, 64));
+      row.setStatusCode(201);
+      row.setSource(truncate(source, 16));
+      row.setCreatedAt(Instant.now());
+      auditLogRepository.save(row);
+    } catch (RuntimeException e) {
+      log.error("audit: could not record {}/{} ({})", resource, operation, e.toString());
     }
   }
 

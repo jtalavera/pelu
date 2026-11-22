@@ -1,7 +1,7 @@
 package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
-import com.cursorpoc.backend.service.FeatureFlagService;
+import com.cursorpoc.backend.service.InvoiceEmissionService;
 import com.cursorpoc.backend.service.InvoiceHistoryReportService;
 import com.cursorpoc.backend.service.InvoiceIssuanceService;
 import com.cursorpoc.backend.service.InvoiceReportRow;
@@ -48,20 +48,13 @@ public class InvoiceController {
 
   private static final Logger log = LoggerFactory.getLogger(InvoiceController.class);
 
-  /**
-   * SIFEN HU-22 (Fase 5): the real per-tenant switch between the SIFEN pipeline and the traditional
-   * generator, wired here since {@code issue()} is the single entry point for both (see
-   * PROGRESS.md).
-   */
-  static final String SIFEN_ELECTRONIC_INVOICING_FLAG_KEY = "SIFEN_ELECTRONIC_INVOICING";
-
   private final InvoiceService invoiceService;
   private final InvoiceIssuanceService invoiceIssuanceService;
   private final InvoiceHistoryReportService invoiceHistoryReportService;
   private final SifenInvoiceSubmissionService sifenInvoiceSubmissionService;
   private final SifenInvoiceCancellationService sifenInvoiceCancellationService;
   private final SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService;
-  private final FeatureFlagService featureFlagService;
+  private final InvoiceEmissionService invoiceEmissionService;
   private final SifenCertificateService sifenCertificateService;
   private final SifenNumberVoidingService sifenNumberVoidingService;
   private final SifenInvoiceEventLogService sifenInvoiceEventLogService;
@@ -73,7 +66,7 @@ public class InvoiceController {
       SifenInvoiceSubmissionService sifenInvoiceSubmissionService,
       SifenInvoiceCancellationService sifenInvoiceCancellationService,
       SifenInvoiceClientIdentificationService sifenInvoiceClientIdentificationService,
-      FeatureFlagService featureFlagService,
+      InvoiceEmissionService invoiceEmissionService,
       SifenCertificateService sifenCertificateService,
       SifenNumberVoidingService sifenNumberVoidingService,
       SifenInvoiceEventLogService sifenInvoiceEventLogService) {
@@ -83,7 +76,7 @@ public class InvoiceController {
     this.sifenInvoiceSubmissionService = sifenInvoiceSubmissionService;
     this.sifenInvoiceCancellationService = sifenInvoiceCancellationService;
     this.sifenInvoiceClientIdentificationService = sifenInvoiceClientIdentificationService;
-    this.featureFlagService = featureFlagService;
+    this.invoiceEmissionService = invoiceEmissionService;
     this.sifenCertificateService = sifenCertificateService;
     this.sifenNumberVoidingService = sifenNumberVoidingService;
     this.sifenInvoiceEventLogService = sifenInvoiceEventLogService;
@@ -91,9 +84,10 @@ public class InvoiceController {
 
   /**
    * SIFEN HU-22 AC-03/AC-04: routes between the traditional generator and the SIFEN pipeline based
-   * on the tenant's {@value #SIFEN_ELECTRONIC_INVOICING_FLAG_KEY} flag. When enabled, a valid
-   * certificate is required *before* the invoice is created (AC-04: blocks issuance entirely,
-   * nothing is persisted, if {@link SifenCertificateService#requireActiveCertificate} throws).
+   * on the tenant's {@value InvoiceEmissionService#SIFEN_ELECTRONIC_INVOICING_FLAG_KEY} flag. When
+   * enabled, a valid certificate is required *before* the invoice is created (AC-04: blocks
+   * issuance entirely, nothing is persisted, if {@link
+   * SifenCertificateService#requireActiveCertificate} throws).
    *
    * <p>RT-20 (Hardening_SIFEN.md): the invoice is signed synchronously — {@link
    * SifenInvoiceSubmissionService#prepareAndSign} mints the CDC/QR and marks it {@code QUEUED},
@@ -113,23 +107,7 @@ public class InvoiceController {
     requirePrincipal(principal);
     long tenantId = principal.getTenantId();
     log.info("POST /api/invoices tenantId={}", tenantId);
-    boolean sifenEnabled =
-        featureFlagService.isEnabled(SIFEN_ELECTRONIC_INVOICING_FLAG_KEY, tenantId);
-    if (sifenEnabled) {
-      sifenCertificateService.requireActiveCertificate(tenantId);
-      // Issue #173: with SIFEN enabled the KuDE is auto-emailed after approval, so a recipient
-      // address is mandatory — except for a "Sin identificar" (unidentified) receiver, where no
-      // client data is sent to SIFEN at all.
-      if (receiverWillBeIdentified(request) && isBlank(request.email())) {
-        log.error(
-            "POST /api/invoices tenantId={} status=400 SIFEN_RECIPIENT_EMAIL_REQUIRED", tenantId);
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "SIFEN_RECIPIENT_EMAIL_REQUIRED");
-      }
-    }
-    InvoiceResponse response =
-        sifenEnabled
-            ? invoiceIssuanceService.issueWithSifen(tenantId, request)
-            : invoiceService.issueInvoice(tenantId, request);
+    InvoiceResponse response = invoiceEmissionService.issue(tenantId, request);
     log.info("POST /api/invoices tenantId={} status=201", tenantId);
     return ResponseEntity.status(HttpStatus.CREATED).body(response);
   }
@@ -380,19 +358,5 @@ public class InvoiceController {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
     }
-  }
-
-  /**
-   * Issue #173: mirrors {@code SifenInvoiceHeaderService.isReceiverUnidentified} on the request —
-   * the receiver ends up identified iff a RUC or an identity-document override was sent (a linked
-   * client's own profile data is never used as a fallback, per issue #96).
-   */
-  private static boolean receiverWillBeIdentified(InvoiceCreateRequest request) {
-    return !isBlank(request.clientRucOverride())
-        || !isBlank(request.clientIdentityDocumentOverride());
-  }
-
-  private static boolean isBlank(String value) {
-    return value == null || value.isBlank();
   }
 }

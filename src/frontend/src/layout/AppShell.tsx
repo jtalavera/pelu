@@ -18,6 +18,10 @@ import { translateApiError } from "../api/parseApiErrorMessage";
 import { onBroadcastLogout } from "../auth/sessionBroadcast";
 import { openStockInNewTab, stockSpaBaseUrl } from "../stock/openStock";
 import { Alert, Button, FlowbitLogo } from "@design-system";
+import { AssistantProvider } from "../assistant/AssistantContext";
+import { AssistantButton } from "../components/assistant/AssistantButton";
+import { AssistantPanel, ASSISTANT_PANEL_WIDTH, useAssistantDocked } from "../components/assistant/AssistantPanel";
+import { TOPBAR_HEIGHT } from "./layoutConstants";
 
 function getInitials(email: string): string {
   const parts = email.split("@")[0].split(/[._-]/);
@@ -60,7 +64,6 @@ function SectionLabel({ label }: { label: string }) {
 const DrawerNavContext = createContext(false);
 
 /** Fixed topbar height (px); the sidebar and main content are offset by it. */
-const TOPBAR_HEIGHT = 56;
 
 function SideNavItem({
   to,
@@ -337,7 +340,9 @@ const PIN_SESSION_IDLE_MS = 5 * 60 * 1000;
 export function AppShell() {
   return (
     <FeatureFlagProvider>
-      <AppShellInner />
+      <AssistantProvider>
+        <AppShellInner />
+      </AssistantProvider>
     </FeatureFlagProvider>
   );
 }
@@ -367,6 +372,8 @@ function AppShellInner() {
   useSessionRefresh(true, () => logout("expired"));
   // HU-66: a PIN session on a shared device is calendar-only and ends after 5 idle minutes.
   const pinMode = isPinSession();
+  // Conversational assistant: on desktop its panel docks to the right and pushes the content.
+  const assistantDocked = useAssistantDocked();
   useIdleLogout(true, () => logout("idle"), pinMode ? PIN_SESSION_IDLE_MS : undefined);
 
   // HU-65: signing out of Stock signs out of Femme too (broadcast by /login?reason=stock_logout).
@@ -711,6 +718,9 @@ function AppShellInner() {
             <BellIcon />
           </button>
           )}
+
+          {/* Conversational assistant (ASSISTANT_CHATBOT flag; never in a shared-device PIN session) */}
+          <AssistantButton isPhone={isPhone} />
 
           {/* User profile */}
           {pinMode ? (
@@ -1148,6 +1158,8 @@ function AppShellInner() {
       <main
         style={{
           marginLeft: isDesktop ? 220 : 0,
+          marginRight: assistantDocked ? ASSISTANT_PANEL_WIDTH : 0,
+          transition: "margin-right 150ms ease",
           marginTop: TOPBAR_HEIGHT,
           padding: isPhone ? "12px 12px calc(80px + env(safe-area-inset-bottom))" : isDesktop ? 24 : 16,
           minWidth: 0,
@@ -1183,6 +1195,8 @@ function AppShellInner() {
         )}
         <Outlet />
       </main>
+
+      <AssistantPanel />
 
       {isPhone && !navOpen && (
         <nav

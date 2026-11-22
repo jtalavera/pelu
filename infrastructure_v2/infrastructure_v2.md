@@ -253,6 +253,20 @@ done per environment, in this order:
 5. Activate `STOCK_MODULE` for a tenant and check `stock_outbox` reaches `DONE` (operational
    notes in `docs/stock-integration.md`).
 
+## Conversational assistant (Azure AI Foundry)
+
+`requirements/asistente/plan_asistente.md`, phase 0. Terraform creates, in `var.location`:
+
+- `azurerm_cognitive_account.foundry` (kind `AIServices`, `custom_subdomain_name`, `local_auth_enabled = false`): **Entra ID only, no API keys**. It also hosts Speech (phase 4).
+- `azurerm_cognitive_account_rai_policy.assistant`: content filter with Prompt Shields (jailbreak + indirect attack) on top of the default harm categories.
+- `azurerm_cognitive_deployment.assistant`: the model (`assistant_model_name`, default `gpt-5-mini`; `assistant_model_version`, `assistant_model_sku`, `assistant_model_capacity` in thousands of TPM). `gpt-5-mini` has **no regional `Standard` SKU in `centralus`** (check with `az cognitiveservices model list --location centralus` and `az cognitiveservices usage list --location centralus`), so the default is `DataZoneStandard` (US data zone); `GlobalStandard` would let Azure route data outside the US. Re-check model, version and quota before applying in another region/environment. Sizing variables must stay identical in prod and staging (`scripts/staging/parity.py`).
+- Role assignments *Cognitive Services OpenAI User* and *Cognitive Services User* for the Container App identity and for the `femme-sql-admins` group (local development against the dev Foundry).
+- Diagnostic setting to Log Analytics, and the Container App env vars `FEMME_AI_ENDPOINT`, `FEMME_AI_DEPLOYMENT`, `FEMME_SPEECH_REGION` (no secrets).
+
+`providers.tf` sets `cognitive_account.purge_soft_delete_on_destroy = true`: a soft-deleted account keeps its custom subdomain reserved, which would break the next `scripts/staging/up.sh`.
+
+Post-apply check (dev): with `az login` and membership in `femme-sql-admins`, get the endpoint with `az cognitiveservices account list -g femme-test-rg --query "[?kind=='AIServices'].properties.endpoint" -o tsv` (there is no Terraform output for it), then run the opt-in smoke test against the real deployment: `FEMME_AI_ENDPOINT=<endpoint> FEMME_AI_DEPLOYMENT=femme-assistant ./gradlew cleanTest test --tests '*FoundryLiveTest' --no-daemon -i`. For the full chat, run the backend with those two variables (see CLAUDE.md), turn `ASSISTANT_CHATBOT` on for a tenant and ask a question; token usage and latency appear in the `femme.assistant.*` custom metrics (Application Insights). The flag is born OFF in every environment.
+
 ## SQL free-limit grant (not enabled — known limitation)
 
 Azure grants one serverless General Purpose database per subscription up to
