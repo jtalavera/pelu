@@ -37,7 +37,12 @@ dependencies {
     implementation("org.flywaydb:flyway-sqlserver")
     implementation("com.microsoft.sqlserver:mssql-jdbc")
     implementation("com.microsoft.azure:msal4j:1.17.2")
-    implementation("com.azure:azure-identity:1.19.0")
+    // Keep at 1.15.4. 1.19.0 (with Spring Boot 4.2's Reactor/Netty) hangs forever in
+    // DefaultAzureCredential.getTokenSync() on the Managed Identity path, inside
+    // KeyVaultSecretsEnvironmentPostProcessor — before the banner, so the Container App never opens
+    // :8080 and prints no logs (dev deploy of PR #444 failed with ActivationFailed). Re-test the MI
+    // path against a real Container App revision before bumping.
+    implementation("com.azure:azure-identity:1.15.4")
     // The OpenAI model module alone (no starter): the Foundry client is wired by hand in
     // FoundryClientConfig because it authenticates with Entra ID, not an API key, and must not
     // auto-configure in profiles that run the scripted model.
