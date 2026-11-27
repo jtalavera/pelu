@@ -118,12 +118,24 @@ public class MeController {
     }
 
     if (principal.getProfessionalId() == null) {
-      // Admin without linked Professional (incl. HU-35's tenant-less PLATFORM_ADMIN): only allow
-      // email update on AppUser
-      log.error(
-          "PUT /api/me/profile tenantId={} status=403 - admin has no linked professional",
-          principal.getTenantIdOrNull());
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PROFILE_NOT_EDITABLE_FOR_ADMIN");
+      // Admin without linked Professional (incl. the tenant-less PLATFORM_ADMIN): the only editable
+      // field is the human name stored on the AppUser itself.
+      String newName = request.fullName() == null ? "" : request.fullName().trim();
+      if (newName.isBlank()) {
+        log.error(
+            "PUT /api/me/profile tenantId={} status=400 - FULL_NAME_REQUIRED",
+            principal.getTenantIdOrNull());
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "FULL_NAME_REQUIRED");
+      }
+      AppUser user =
+          appUserRepository
+              .findById(principal.getUserId())
+              .orElseThrow(
+                  () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "USER_NOT_FOUND"));
+      user.setFullName(newName);
+      appUserRepository.save(user);
+      log.info("PUT /api/me/profile tenantId={} status=200", principal.getTenantIdOrNull());
+      return ResponseEntity.ok(new MeProfileResponse(user.getFullName(), null, null, null, null));
     }
 
     Professional professional =

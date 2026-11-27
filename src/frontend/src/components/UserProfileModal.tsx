@@ -2,7 +2,7 @@
  * HU-30 AC-10/11: Profile edit modal opened from the "Configuración de usuario" user menu option.
  * - For PROFESSIONAL users: shows full profile (nombre, apellido, dirección, teléfono, email, foto)
  *   backed by the linked Professional record.
- * - For ADMIN users (no linked Professional): shows email-only + change-password.
+ * - For ADMIN users (no linked Professional): shows a single full-name field + change-password.
  * Also accessible via the "Cambiar contraseña" menu shortcut (initialTab="password").
  */
 import { useRef, useState } from "react";
@@ -48,6 +48,8 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
   const [profileEmail, setProfileEmail] = useState(prof?.email ?? me.email ?? "");
   const [address, setAddress] = useState(prof?.address ?? "");
   const [photoDataUrl, setPhotoDataUrl] = useState(prof?.photoDataUrl ?? "");
+  const [adminName, setAdminName] = useState(me.fullName ?? "");
+  const [adminNameError, setAdminNameError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -102,6 +104,27 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
     }
   }
 
+  async function handleAdminNameSave(e: React.FormEvent) {
+    e.preventDefault();
+    setProfileError(null);
+    setProfileSuccess(false);
+    if (!adminName.trim()) {
+      setAdminNameError(t("app.userProfile.fullNameRequired"));
+      return;
+    }
+    setAdminNameError(null);
+    setProfileSaving(true);
+    try {
+      await femmePutJson("/api/me/profile", { fullName: adminName.trim() });
+      setProfileSuccess(true);
+      onSaved?.();
+    } catch (err) {
+      setProfileError(translateApiError(err, t, "femme.apiErrors.GENERIC"));
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   async function handlePasswordSave(e: React.FormEvent) {
     e.preventDefault();
     setPasswordError(null);
@@ -144,17 +167,15 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {/* Tabs */}
         <div style={{ display: "flex", gap: 4 }} role="tablist">
-          {hasProfile && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === "profile"}
-              style={tabStyle("profile")}
-              onClick={() => setActiveTab("profile")}
-            >
-              {t("app.userProfile.tabProfile")}
-            </button>
-          )}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "profile"}
+            style={tabStyle("profile")}
+            onClick={() => setActiveTab("profile")}
+          >
+            {t("app.userProfile.tabProfile")}
+          </button>
           <button
             type="button"
             role="tab"
@@ -290,9 +311,46 @@ export function UserProfileModal({ me, initialTab = "profile", onClose, onSaved 
           </form>
         )}
 
-        {/* Degraded admin view — only show password tab (no profile) */}
+        {/* Admin without linked professional — only the full name is editable */}
         {activeTab === "profile" && !hasProfile && (
-          <Text variant="muted">{t("app.userProfile.adminNoProfile")}</Text>
+          <form onSubmit={(e) => void handleAdminNameSave(e)} noValidate>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <Text variant="muted">{t("app.userProfile.adminNoProfile")}</Text>
+              {profileError && (
+                <Alert variant="destructive" title={t("app.userProfile.errorTitle")}>
+                  {profileError}
+                </Alert>
+              )}
+              {profileSuccess && (
+                <Alert variant="success" title={t("app.userProfile.savedTitle")}>
+                  {t("app.userProfile.savedTitle")}
+                </Alert>
+              )}
+              <div>
+                <Label htmlFor="profile-admin-full-name">{t("app.userProfile.fullName")}</Label>
+                <Input
+                  id="profile-admin-full-name"
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                  aria-invalid={adminNameError ? true : undefined}
+                  aria-describedby={adminNameError ? "profile-admin-full-name-error" : undefined}
+                />
+                {adminNameError && (
+                  <FieldValidationError id="profile-admin-full-name-error">
+                    {adminNameError}
+                  </FieldValidationError>
+                )}
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <Button type="button" variant="secondary" onClick={onClose}>
+                  {t("app.userProfile.cancel")}
+                </Button>
+                <Button type="submit" disabled={profileSaving}>
+                  {profileSaving ? <Spinner size="sm" /> : t("app.userProfile.save")}
+                </Button>
+              </div>
+            </div>
+          </form>
         )}
 
         {/* Password tab */}
