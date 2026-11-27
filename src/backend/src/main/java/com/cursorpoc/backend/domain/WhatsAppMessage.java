@@ -7,6 +7,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * HU-WAP-01/07: outbox and delivery log of the WhatsApp channel. One row per message, unique per
@@ -64,9 +66,11 @@ public class WhatsAppMessage {
   @Column(nullable = false)
   private int attempts;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "next_attempt_at")
   private Instant nextAttemptAt;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "fallback_email_sent_at")
   private Instant fallbackEmailSentAt;
 
@@ -74,21 +78,27 @@ public class WhatsAppMessage {
   @Column(name = "fallback_email", length = 320)
   private String fallbackEmail;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "recipient_masked_at")
   private Instant recipientMaskedAt;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "queued_at", nullable = false)
   private Instant queuedAt;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "sent_at")
   private Instant sentAt;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "delivered_at")
   private Instant deliveredAt;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "read_at")
   private Instant readAt;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "failed_at")
   private Instant failedAt;
 
