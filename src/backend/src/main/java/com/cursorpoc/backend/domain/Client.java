@@ -139,6 +139,7 @@ public class Client {
   @Column(name = "whatsapp_opt_in", nullable = false)
   private boolean whatsappOptIn;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "whatsapp_opt_in_at")
   private Instant whatsappOptInAt;
 
@@ -149,6 +150,7 @@ public class Client {
   @Column(name = "whatsapp_opt_in_phone", length = 32)
   private String whatsappOptInPhone;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "whatsapp_opt_out_at")
   private Instant whatsappOptOutAt;
 

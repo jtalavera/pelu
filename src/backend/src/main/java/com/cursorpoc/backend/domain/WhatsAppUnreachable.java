@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /** HU-WAP-07 criterio 4: a phone Meta reported as having no WhatsApp; not retried. */
 @Entity
@@ -15,6 +17,7 @@ public class WhatsAppUnreachable {
   @Column(length = 32)
   private String phone;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "marked_at", nullable = false)
   private Instant markedAt;
 

@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /** HU-WAP-03: a phone that asked to stop receiving notices — applies to every salon. */
 @Entity
@@ -15,6 +17,7 @@ public class WhatsAppOptOut {
   @Column(length = 32)
   private String phone;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "opted_out_at", nullable = false)
   private Instant optedOutAt;
 

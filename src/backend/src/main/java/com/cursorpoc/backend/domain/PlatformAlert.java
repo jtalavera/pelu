@@ -7,6 +7,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * An alert for platform administrators (a paused template, an incomplete WhatsApp configuration).
@@ -29,9 +31,11 @@ public class PlatformAlert {
   @Column(length = 500)
   private String detail;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "acknowledged_at")
   private Instant acknowledgedAt;
 

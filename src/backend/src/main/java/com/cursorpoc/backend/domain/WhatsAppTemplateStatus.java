@@ -8,6 +8,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /** HU-WAP-02: the approval status of a template as last reported by Meta. */
 @Entity
@@ -36,9 +38,11 @@ public class WhatsAppTemplateStatus {
   @Column(length = 500)
   private String reason;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "checked_at", nullable = false)
   private Instant checkedAt;
 
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
   @Column(name = "changed_at", nullable = false)
   private Instant changedAt;
 
