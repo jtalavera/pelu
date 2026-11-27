@@ -16,6 +16,7 @@ import com.cursorpoc.backend.repository.ClientRepository;
 import com.cursorpoc.backend.repository.ServiceRecordRepository;
 import com.cursorpoc.backend.repository.TenantRepository;
 import com.cursorpoc.backend.web.dto.ClientRequest;
+import com.cursorpoc.backend.whatsapp.WhatsAppConsentService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +40,7 @@ class ClientServiceTest {
   @Mock private ClientRepository clientRepository;
   @Mock private TenantRepository tenantRepository;
   @Mock private ServiceRecordRepository serviceRecordRepository;
+  @Mock private WhatsAppConsentService whatsAppConsent;
   @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   @InjectMocks private ClientService clientService;
@@ -613,5 +615,153 @@ class ClientServiceTest {
     Instant firstOfMonth =
         java.time.LocalDate.now(zone).withDayOfMonth(1).atStartOfDay(zone).toInstant();
     assertThat(captor.getAllValues()).containsExactly(firstOfMonth, null);
+  }
+
+  // ── HU-WAP-03: consentimiento de WhatsApp ───────────────────────────────────────────────────
+
+  private Client consenting(String phone) {
+    Client c = buildClient(5L, "Ana", phone, null, null);
+    c.setWhatsappOptIn(true);
+    c.setWhatsappOptInPhone("+595981123456");
+    c.setWhatsappOptInSource("STAFF");
+    return c;
+  }
+
+  private void stubClient(Client c) {
+    lenient().when(clientRepository.findByIdAndTenant_Id(c.getId(), 1L)).thenReturn(Optional.of(c));
+  }
+
+  @Test
+  void whatsAppConsent_newClientsHaveNone() {
+    var response = clientService.create(1L, new ClientRequest("Ana", "0981123456", null, null));
+    assertThat(response.whatsappOptIn()).isFalse();
+    assertThat(response.whatsappOptInAt()).isNull();
+  }
+
+  @Test
+  void setWhatsAppConsent_on_recordsItForTheCurrentPhoneInInternationalFormat() {
+    Client c = buildClient(5L, "Ana", "0981 123 456", null, null);
+    stubClient(c);
+
+    var response = clientService.setWhatsAppConsent(1L, 5L, true);
+
+    assertThat(response.whatsappOptIn()).isTrue();
+    assertThat(response.whatsappOptInSource()).isEqualTo("STAFF");
+    assertThat(response.whatsappOptInAt()).isNotNull();
+    assertThat(c.getWhatsappOptInPhone()).isEqualTo("+595981123456");
+    assertThat(c.getWhatsappOptOutAt()).isNull();
+  }
+
+  @Test
+  void setWhatsAppConsent_off_withdrawsItAndRecordsWhen() {
+    Client c = consenting("0981123456");
+    stubClient(c);
+
+    var response = clientService.setWhatsAppConsent(1L, 5L, false);
+
+    assertThat(response.whatsappOptIn()).isFalse();
+    assertThat(c.getWhatsappOptInPhone()).isNull();
+    assertThat(c.getWhatsappOptOutAt()).isNotNull();
+  }
+
+  @Test
+  void setWhatsAppConsent_on_withoutAUsablePhone_isRejected() {
+    for (String phone : new String[] {null, "021123456", "abc"}) {
+      Client c = buildClient(5L, "Ana", phone, null, null);
+      stubClient(c);
+      assertThatThrownBy(() -> clientService.setWhatsAppConsent(1L, 5L, true))
+          .isInstanceOfSatisfying(
+              ResponseStatusException.class,
+              e -> {
+                assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                assertThat(e.getReason()).isEqualTo("WHATSAPP_CLIENT_PHONE_INVALID");
+              });
+      assertThat(c.isWhatsappOptIn()).isFalse();
+    }
+  }
+
+  @Test
+  void setWhatsAppConsent_on_forAPhoneThatOptedOut_isRejected() {
+    Client c = buildClient(5L, "Ana", "0981123456", null, null);
+    stubClient(c);
+    when(whatsAppConsent.isOptedOut("+595981123456")).thenReturn(true);
+
+    assertThatThrownBy(() -> clientService.setWhatsAppConsent(1L, 5L, true))
+        .isInstanceOfSatisfying(
+            ResponseStatusException.class,
+            e -> {
+              assertThat(e.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+              assertThat(e.getReason()).isEqualTo("WHATSAPP_PHONE_OPTED_OUT");
+            });
+    assertThat(c.isWhatsappOptIn()).isFalse();
+  }
+
+  @Test
+  void setWhatsAppConsent_genericAndInactiveAndUnknownClients_areRejected() {
+    Client generic = buildClient(5L, "CLIENTE OCASIONAL", "0981123456", null, null);
+    generic.setGeneric(true);
+    stubClient(generic);
+    assertThatThrownBy(() -> clientService.setWhatsAppConsent(1L, 5L, true))
+        .isInstanceOfSatisfying(
+            ResponseStatusException.class,
+            e -> assertThat(e.getReason()).isEqualTo("CLIENT_GENERIC_READ_ONLY"));
+
+    Client inactive = buildClient(6L, "Ana", "0981123456", null, null);
+    inactive.setActive(false);
+    stubClient(inactive);
+    assertThatThrownBy(() -> clientService.setWhatsAppConsent(1L, 6L, true))
+        .isInstanceOfSatisfying(
+            ResponseStatusException.class,
+            e -> assertThat(e.getReason()).isEqualTo("CLIENT_INACTIVE"));
+
+    lenient().when(clientRepository.findByIdAndTenant_Id(99L, 1L)).thenReturn(Optional.empty());
+    assertThatThrownBy(() -> clientService.setWhatsAppConsent(1L, 99L, true))
+        .isInstanceOfSatisfying(
+            ResponseStatusException.class,
+            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+  }
+
+  @Test
+  void update_changingThePhone_clearsTheConsentGivenForTheOldNumber() {
+    Client c = consenting("0981123456");
+    stubClient(c);
+
+    var response = clientService.update(1L, 5L, new ClientRequest("Ana", "0982999999", null, null));
+
+    assertThat(response.whatsappOptIn()).isFalse();
+    assertThat(c.getWhatsappOptInPhone()).isNull();
+  }
+
+  @Test
+  void update_sameNumberTypedDifferently_keepsTheConsent() {
+    Client c = consenting("0981123456");
+    stubClient(c);
+
+    var response =
+        clientService.update(1L, 5L, new ClientRequest("Ana", "+595 981 123 456", null, null));
+
+    assertThat(response.whatsappOptIn()).isTrue();
+    assertThat(c.getWhatsappOptInPhone()).isEqualTo("+595981123456");
+  }
+
+  @Test
+  void update_removingThePhone_clearsTheConsent() {
+    Client c = consenting("0981123456");
+    stubClient(c);
+
+    var response = clientService.update(1L, 5L, new ClientRequest("Ana", "", null, null));
+
+    assertThat(response.whatsappOptIn()).isFalse();
+  }
+
+  @Test
+  void update_aClientWithoutConsent_isUntouched() {
+    Client c = buildClient(5L, "Ana", "0981123456", null, null);
+    stubClient(c);
+
+    var response = clientService.update(1L, 5L, new ClientRequest("Ana", "0982999999", null, null));
+
+    assertThat(response.whatsappOptIn()).isFalse();
+    assertThat(c.getWhatsappOptOutAt()).isNull();
   }
 }

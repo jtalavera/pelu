@@ -11,6 +11,8 @@ import com.cursorpoc.backend.web.dto.ClientSummaryResponse;
 import com.cursorpoc.backend.web.dto.ClientTechnicalSheetRequest;
 import com.cursorpoc.backend.web.dto.ClientTechnicalSheetResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
+import com.cursorpoc.backend.web.dto.WhatsAppConsentRequest;
+import com.cursorpoc.backend.whatsapp.WhatsAppAccess;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.slf4j.Logger;
@@ -36,11 +38,14 @@ public class ClientController {
   private final ClientService clientService;
   private final ClientSummaryService clientSummaryService;
   private final ClientTechnicalSheetService clientTechnicalSheetService;
+  private final WhatsAppAccess whatsAppAccess;
 
   public ClientController(
       ClientService clientService,
       ClientSummaryService clientSummaryService,
-      ClientTechnicalSheetService clientTechnicalSheetService) {
+      ClientTechnicalSheetService clientTechnicalSheetService,
+      WhatsAppAccess whatsAppAccess) {
+    this.whatsAppAccess = whatsAppAccess;
     this.clientService = clientService;
     this.clientSummaryService = clientSummaryService;
     this.clientTechnicalSheetService = clientTechnicalSheetService;
@@ -220,6 +225,41 @@ public class ClientController {
     } catch (ResponseStatusException ex) {
       log.error(
           "PUT /api/clients/{} tenantId={} status={}",
+          id,
+          principal.getTenantId(),
+          ex.getStatusCode());
+      throw ex;
+    }
+  }
+
+  /**
+   * HU-WAP-03: the salon sets the client's WhatsApp consent ("Acepta recibir avisos por WhatsApp").
+   * Audited automatically like every mutating call (resource {@code clients}, operation {@code
+   * whatsapp-consent}). With the channel's flags off the route answers 403 {@code <FLAG>_DISABLED}
+   * (RT-01). The professional never reaches it (ProfessionalAccessPolicy).
+   */
+  @PutMapping("/{id}/whatsapp-consent")
+  public ClientResponse setWhatsAppConsent(
+      @AuthenticationPrincipal FemmeUserPrincipal principal,
+      @PathVariable("id") long id,
+      @Valid @RequestBody WhatsAppConsentRequest request) {
+    if (principal == null) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED");
+    }
+    log.info("PUT /api/clients/{}/whatsapp-consent tenantId={}", id, principal.getTenantId());
+    try {
+      whatsAppAccess.requireFlags(principal.getTenantId());
+      ClientResponse result =
+          clientService.setWhatsAppConsent(principal.getTenantId(), id, request.optIn());
+      log.info(
+          "PUT /api/clients/{}/whatsapp-consent tenantId={} status=200 optIn={}",
+          id,
+          principal.getTenantId(),
+          request.optIn());
+      return result;
+    } catch (ResponseStatusException ex) {
+      log.error(
+          "PUT /api/clients/{}/whatsapp-consent tenantId={} status={}",
           id,
           principal.getTenantId(),
           ex.getStatusCode());

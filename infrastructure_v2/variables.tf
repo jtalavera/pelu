@@ -279,6 +279,35 @@ variable "stock_client_id" {
   default     = "pelu"
 }
 
+# WhatsApp channel (HU-WAP-01..08). One shared WhatsApp Business number for every salon. The channel
+# stays off until enabled here; the three secrets (app-femme-whatsapp-access-token — a PERMANENT
+# system-user token, not a temporary test one —, app-femme-whatsapp-app-secret and
+# app-femme-whatsapp-webhook-verify-token) are created in this environment's Key Vault by an
+# operator — never in Terraform state.
+variable "whatsapp_enabled" {
+  description = "Platform switch of the WhatsApp channel (WHATSAPP_ENABLED). False = every message falls back to email."
+  type        = bool
+  default     = false
+}
+
+variable "whatsapp_phone_number_id" {
+  description = "Phone number id of the shared WhatsApp Business number (WHATSAPP_PHONE_NUMBER_ID)."
+  type        = string
+  default     = ""
+}
+
+variable "whatsapp_business_account_id" {
+  description = "WhatsApp Business Account id, used to read the template approval status (WHATSAPP_BUSINESS_ACCOUNT_ID)."
+  type        = string
+  default     = ""
+}
+
+variable "whatsapp_api_version" {
+  description = "Meta Graph API version used for WhatsApp (WHATSAPP_API_VERSION)."
+  type        = string
+  default     = "v21.0"
+}
+
 # Conversational assistant (requirements/asistente/plan_asistente.md). Sizing variables are shared
 # by prod and staging on purpose (scripts/staging/parity.py): override them in tfvars only for dev
 # and update prod/staging together.

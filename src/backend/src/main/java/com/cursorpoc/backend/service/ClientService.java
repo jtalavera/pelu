@@ -15,12 +15,15 @@ import com.cursorpoc.backend.util.ParaguayRucValidator;
 import com.cursorpoc.backend.web.dto.ClientRequest;
 import com.cursorpoc.backend.web.dto.ClientResponse;
 import com.cursorpoc.backend.web.dto.PageResponse;
+import com.cursorpoc.backend.whatsapp.WhatsAppConsentService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -32,7 +35,10 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class ClientService {
 
+  private static final Logger log = LoggerFactory.getLogger(ClientService.class);
+
   private final ClientRepository clientRepository;
+  private final WhatsAppConsentService whatsAppConsent;
   private final TenantRepository tenantRepository;
   private final FemmeTimeProperties timeProperties;
   private final ServiceRecordRepository serviceRecordRepository;
@@ -44,7 +50,9 @@ public class ClientService {
       ClientRepository clientRepository,
       TenantRepository tenantRepository,
       FemmeTimeProperties timeProperties,
-      ServiceRecordRepository serviceRecordRepository) {
+      ServiceRecordRepository serviceRecordRepository,
+      WhatsAppConsentService whatsAppConsent) {
+    this.whatsAppConsent = whatsAppConsent;
     this.timeProperties = timeProperties;
     this.serviceRecordRepository = serviceRecordRepository;
     this.clientRepository = clientRepository;
@@ -219,6 +227,54 @@ public class ClientService {
     client.setCityCode(blankToNull(request.cityCode()));
     client.setCityName(blankToNull(request.cityName()));
     applyProfileExtras(client, request, channel, channelOther);
+    // HU-WAP-03 criterio 8: a consent given for the old number is not valid for the new one.
+    if (WhatsAppConsentService.invalidateIfPhoneChanged(client)) {
+      log.info(
+          "WhatsApp consent cleared after a phone change tenantId={} clientId={}",
+          tenantId,
+          clientId);
+    }
+    clientRepository.save(client);
+    return toResponse(client, visits(tenantId, client));
+  }
+
+  /**
+   * HU-WAP-03: the salon turns the client's WhatsApp consent on or off ("Acepta recibir avisos por
+   * WhatsApp"). The consent is recorded for the client's CURRENT phone. Withdrawing takes effect at
+   * once: queued messages are cancelled when they are about to be sent (RT-11).
+   */
+  @Transactional
+  public ClientResponse setWhatsAppConsent(long tenantId, long clientId, boolean optIn) {
+    Client client =
+        clientRepository
+            .findByIdAndTenant_Id(clientId, tenantId)
+            .orElseThrow(
+                () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CLIENT_NOT_FOUND"));
+    rejectGeneric(client);
+    if (!client.isActive()) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "CLIENT_INACTIVE");
+    }
+    Instant now = Instant.now();
+    if (optIn) {
+      String e164 =
+          WhatsAppConsentService.normalize(client.getPhone())
+              .orElseThrow(
+                  () ->
+                      new ResponseStatusException(
+                          HttpStatus.BAD_REQUEST, "WHATSAPP_CLIENT_PHONE_INVALID"));
+      if (whatsAppConsent.isOptedOut(e164)) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "WHATSAPP_PHONE_OPTED_OUT");
+      }
+      client.setWhatsappOptIn(true);
+      client.setWhatsappOptInAt(now);
+      client.setWhatsappOptInSource(WhatsAppConsentService.SOURCE_STAFF);
+      client.setWhatsappOptInPhone(e164);
+      client.setWhatsappOptOutAt(null);
+    } else {
+      client.setWhatsappOptIn(false);
+      client.setWhatsappOptInPhone(null);
+      client.setWhatsappOptOutAt(now);
+    }
     clientRepository.save(client);
     return toResponse(client, visits(tenantId, client));
   }
@@ -420,6 +476,9 @@ public class ClientService {
         c.getBirthdayYear(),
         c.getAcquisitionChannel() == null ? null : c.getAcquisitionChannel().name(),
         c.getAcquisitionChannelOther(),
-        visits.lastVisitAt() == null ? null : visits.lastVisitAt().toString());
+        visits.lastVisitAt() == null ? null : visits.lastVisitAt().toString(),
+        c.isWhatsappOptIn(),
+        c.getWhatsappOptInAt() == null ? null : c.getWhatsappOptInAt().toString(),
+        c.getWhatsappOptInSource());
   }
 }

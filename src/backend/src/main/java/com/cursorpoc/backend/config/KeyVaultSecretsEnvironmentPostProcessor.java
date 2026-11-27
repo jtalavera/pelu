@@ -49,7 +49,12 @@ public class KeyVaultSecretsEnvironmentPostProcessor implements EnvironmentPostP
           "app-femme-stock-client-secret", "app.femme.stock.client-secret",
           "app-femme-stock-sso-secret", "app.femme.stock.sso.secret",
           "app-femme-integration-token-secret", "app.femme.stock.integration.token-secret",
-          "app-femme-integration-client-secret", "app.femme.stock.integration.client-secret");
+          "app-femme-integration-client-secret", "app.femme.stock.integration.client-secret",
+          // WhatsApp channel (HU-WAP-01): absent secrets leave the channel OFF and reported as
+          // misconfigured (WhatsAppConfigCheck) instead of failing the boot.
+          "app-femme-whatsapp-access-token", "app.femme.whatsapp.access-token",
+          "app-femme-whatsapp-app-secret", "app.femme.whatsapp.app-secret",
+          "app-femme-whatsapp-webhook-verify-token", "app.femme.whatsapp.webhook-verify-token");
 
   /** Initial attempt plus 3 retries at 2s/4s/8s — mirrors spring.flyway.connect-retries' intent. */
   private static final int MAX_ATTEMPTS = 4;

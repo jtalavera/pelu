@@ -54,6 +54,7 @@ type Client = {
   visitCount: number;
   lastVisitAt?: string | null;
   createdAt?: string | null;
+  whatsappOptIn?: boolean;
   address?: string | null;
   departmentCode?: string | null;
   departmentName?: string | null;
@@ -120,6 +121,10 @@ function exportCsv(clients: Client[]) {
 export default function ClientsPage() {
   const { t, i18n } = useTranslation();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  // Both hooks are always called (a `&&` between them would call the second conditionally).
+  const whatsappFlag = useFeatureFlag("WHATSAPP_REMINDERS");
+  const bookingFlag = useFeatureFlag("ONLINE_BOOKING");
+  const whatsappChannel = whatsappFlag && bookingFlag;
   useTour("clients", clientsSteps, undefined, guidedTourEnabled);
   const navigate = useNavigate();
   const location = useLocation();
@@ -536,6 +541,9 @@ export default function ClientsPage() {
                         ? t("femme.clients.lastVisit", { date: fmtDate(client.lastVisitAt, locale) })
                         : t("femme.clients.noVisits"),
                       client.active ? null : t("femme.status.INACTIVE"),
+                      whatsappChannel && client.whatsappOptIn
+                        ? t("femme.clients.whatsappConsent.listBadge")
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}

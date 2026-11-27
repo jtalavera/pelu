@@ -18,6 +18,7 @@ const NAV_ITEMS: { to: string; end?: boolean; labelKey: string }[] = [
   { to: "/platform/feature-flags", labelKey: "femme.platform.nav.featureFlags" },
   { to: "/platform/import", labelKey: "femme.platform.nav.import" },
   { to: "/platform/stock", labelKey: "femme.platform.nav.stock" },
+  { to: "/platform/whatsapp", labelKey: "femme.platform.nav.whatsapp" },
   { to: "/platform/audit", labelKey: "femme.platform.nav.audit" },
 ];
 

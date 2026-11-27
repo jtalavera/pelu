@@ -1737,6 +1737,7 @@
         "featureFlags": "Tenant feature flags",
         "import": "Data import",
         "stock": "Stock integration",
+        "whatsapp": "WhatsApp",
         "audit": "Audit"
       },
       "skin": {
@@ -2108,6 +2109,68 @@
           "SALE": "Sale",
           "REVERSE": "Reversal"
         }
+      },
+      "whatsapp": {
+        "title": "WhatsApp",
+        "lead": "Shared WhatsApp notice channel: configuration state, templates approved by Meta and a test send.",
+        "loadError": "Could not load the WhatsApp status.",
+        "channelTitle": "Channel status",
+        "switch": "Platform switch",
+        "switchOn": "On",
+        "switchOff": "Off",
+        "provider": "Provider",
+        "providerMeta": "Meta (real)",
+        "providerFake": "Simulated (testing only)",
+        "operational": "Channel operational",
+        "yes": "Yes",
+        "no": "No",
+        "apiVersion": "API version",
+        "missingTitle": "These configuration values are missing (the channel stays off until they are set):",
+        "templatesTitle": "Templates",
+        "templatesLead": "Only templates approved by Meta are used; if one is not, the message goes out by email.",
+        "refresh": "Refresh status from Meta",
+        "refreshing": "Asking Meta…",
+        "colName": "Template",
+        "colCategory": "Category",
+        "colVariables": "Variables",
+        "colButtons": "Buttons",
+        "colStatus": "Status",
+        "colReason": "Reason",
+        "colChecked": "Checked",
+        "category": {
+          "AUTHENTICATION": "Authentication",
+          "UTILITY": "Utility"
+        },
+        "status": {
+          "APPROVED": "Approved",
+          "PENDING": "Pending",
+          "REJECTED": "Rejected",
+          "PAUSED": "Paused",
+          "DISABLED": "Disabled",
+          "MISSING": "Not submitted",
+          "UNKNOWN": "Not checked"
+        },
+        "alertsTitle": "Open alerts",
+        "noAlerts": "There are no open alerts.",
+        "acknowledge": "Dismiss alert",
+        "alertCategory": {
+          "WHATSAPP_CONFIG_INCOMPLETE": "Incomplete configuration",
+          "WHATSAPP_TEMPLATE_PAUSED": "Template paused",
+          "WHATSAPP_TEMPLATE_REJECTED": "Template rejected",
+          "WHATSAPP_TEMPLATE_DISABLED": "Template disabled",
+          "WHATSAPP_TEMPLATE_MISSING": "Template not submitted to Meta",
+          "WHATSAPP_TEMPLATE_FLAGGED": "Template at risk of being paused",
+          "WHATSAPP_TEMPLATE_QUALITY_LOW": "Low template quality"
+        },
+        "testTitle": "Test send",
+        "testLead": "Sends the chosen template, with its example values, to a phone. Only works with the channel operational and the template approved.",
+        "testTemplate": "Template",
+        "testPhone": "Destination phone",
+        "testPhonePlaceholder": "0981 123 456",
+        "testPhoneRequired": "Enter a destination phone. Example: 0981 123 456.",
+        "testSend": "Send test",
+        "testSending": "Sending…",
+        "testSent": "Message sent. Id: {{wamid}}"
       }
     },
     "dashboard": {
@@ -3342,6 +3405,16 @@
       }
     },
     "clients": {
+      "whatsappConsent": {
+        "label": "Accepts WhatsApp notices",
+        "help": "Turn it on only if the client agreed.",
+        "needsPhone": "Enter a valid mobile number to turn it on. Example: 0981 123 456.",
+        "dirtyPhone": "Save the phone change first; the consent applies to the saved number.",
+        "inactive": "Reactivate the client to change this.",
+        "saveError": "Could not change the consent.",
+        "listBadge": "Accepts WhatsApp",
+        "since": "Recorded on {{date}}"
+      },
       "activeLabel": "Active",
       "inactiveLabel": "Inactive",
       "activeSwitchAria": "Client active: {{name}}",
@@ -3952,6 +4025,19 @@
       "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "The start date cannot be more than 1 year in the past.",
       "STOCK_MODULE_DISABLED": "This salon does not have the Stock module enabled.",
       "STOCK_NOT_CONFIGURED": "The Stock integration is not configured yet. Contact support.",
+      "WHATSAPP_CLIENT_PHONE_INVALID": "The client needs a valid mobile number to turn WhatsApp on. Example: 0981 123 456.",
+      "WHATSAPP_PHONE_OPTED_OUT": "This number asked not to receive WhatsApp notices; only the client can turn them back on.",
+      "WHATSAPP_REMINDERS_DISABLED": "WhatsApp notices are not enabled for this salon.",
+      "ONLINE_BOOKING_DISABLED": "Online booking is not enabled for this salon.",
+      "WHATSAPP_INVALID_RECIPIENT": "The phone number is not valid or has no WhatsApp. Example: 0981 123 456.",
+      "WHATSAPP_TEMPLATE_UNAVAILABLE": "The template is not approved by Meta.",
+      "WHATSAPP_RATE_LIMITED": "WhatsApp reached a sending limit. Try again later.",
+      "WHATSAPP_AUTH_FAILED": "The WhatsApp credential expired or lacks permissions.",
+      "WHATSAPP_TRANSIENT": "WhatsApp did not respond. Try again.",
+      "WHATSAPP_CHANNEL_UNAVAILABLE": "The WhatsApp channel is not available.",
+      "WHATSAPP_INVALID_REQUEST": "The message is not valid.",
+      "WHATSAPP_UNKNOWN_TEMPLATE": "Choose a template from the catalog.",
+      "ALERT_NOT_FOUND": "That alert no longer exists.",
       "STOCK_OUTBOX_EVENT_NOT_FOUND": "That Stock delivery no longer exists.",
       "STOCK_OUTBOX_EVENT_NOT_ACTIONABLE": "Only failed deliveries, or ones waiting for a retry after a failed attempt, can be retried or discarded.",
       "INVALID_CLIENT": "Invalid client credentials.",
@@ -4362,6 +4448,19 @@
         "NO_SHOW": "No show"
       },
       "detail": {
+        "notice": {
+          "title": "Notice to the client",
+          "sent": "Notice sent by WhatsApp",
+          "delivered": "Notice delivered by WhatsApp",
+          "read": "Notice read on WhatsApp",
+          "sending": "Sending the WhatsApp notice…",
+          "failed": "Not delivered by WhatsApp",
+          "failedEmail": "Not delivered by WhatsApp — sent by email instead",
+          "failedCall": "Not delivered — call the client at {{phone}}",
+          "failedCallNoPhone": "Not delivered — call the client",
+          "cancelled": "Notice not sent: the client does not accept WhatsApp",
+          "wentOut": "A notice was sent"
+        },
         "title": "Appointment detail",
         "client": "Client",
         "occasionalClient": "Occasional client",

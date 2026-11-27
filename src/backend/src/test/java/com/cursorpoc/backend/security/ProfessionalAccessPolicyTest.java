@@ -44,6 +44,7 @@ class ProfessionalAccessPolicyTest {
     "GET, /api/feature-flags",
     "GET, /api/appointments",
     "GET, /api/appointments/12",
+    "GET, /api/appointments/12/messages",
     "POST, /api/appointments",
     "PUT, /api/appointments/12",
     "PATCH, /api/appointments/12/status",
@@ -77,6 +78,7 @@ class ProfessionalAccessPolicyTest {
     "POST, /api/professionals/9/grant-access",
     "POST, /api/clients",
     "PUT, /api/clients/3",
+    "PUT, /api/clients/3/whatsapp-consent",
     "GET, /api/clients/3",
     "GET, /api/clients/3/summary",
     "POST, /api/clients/3/technical-sheet",
@@ -144,5 +146,13 @@ class ProfessionalAccessPolicyTest {
         new FemmeUserPrincipal(3L, 7L, "pro@salon.test", UserRole.PROFESSIONAL, 9L, false, 4L, 1);
     assertThat(allowed(auth(pin), "GET", "/api/assistant/conversations/current")).isFalse();
     assertThat(allowed(auth(pin), "POST", "/api/assistant/messages")).isFalse();
+  }
+
+  @Test
+  void pinSession_seesWhetherANoticeWentOut_butCannotChangeAConsent() {
+    FemmeUserPrincipal pin =
+        new FemmeUserPrincipal(3L, 7L, "pro@salon.test", UserRole.PROFESSIONAL, 9L, false, 4L, 1);
+    assertThat(allowed(auth(pin), "GET", "/api/appointments/12/messages")).isTrue();
+    assertThat(allowed(auth(pin), "PUT", "/api/clients/3/whatsapp-consent")).isFalse();
   }
 }
