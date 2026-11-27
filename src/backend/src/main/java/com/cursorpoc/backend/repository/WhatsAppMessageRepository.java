@@ -53,6 +53,10 @@ public interface WhatsAppMessageRepository extends JpaRepository<WhatsAppMessage
           + " AND m.status <> 'QUEUED' AND m.status <> 'SENDING' ORDER BY m.id")
   List<WhatsAppMessage> findToMask(@Param("before") Instant before, Pageable page);
 
+  /** Messages of one appointment in a given state (e.g. the QUEUED ones, to cancel them). */
+  List<WhatsAppMessage> findByTenantIdAndAppointmentIdAndStatusAndPurposeIn(
+      Long tenantId, Long appointmentId, String status, java.util.Collection<String> purposes);
+
   /** The notices of one appointment of a salon, newest first. */
   List<WhatsAppMessage> findByTenantIdAndAppointmentIdAndPurposeInOrderByIdDesc(
       Long tenantId, Long appointmentId, java.util.Collection<String> purposes);

@@ -712,7 +712,7 @@ Tres pistas. A y B son **independientes** y pueden avanzar en paralelo; C es la 
 | ---------- | --------- | ------------------ |
 | **C0** | HU-WAP-01 y HU-WAP-02 — **implementado** (pendiente prueba manual contra el número real, ver `docs/whatsapp-channel.md`) | Envío real de una plantilla de prueba con botones y lectura de su estado |
 | **C1** | HU-WAP-03 y HU-WAP-07 — **implementado, con criterios pendientes de A4/A5/A6/C4** (ver `docs/whatsapp-channel.md`) | Consentimiento en la ficha y seguimiento de entrega con respaldo por email |
-| **C2** | HU-WAP-04 | Mensajes de la reserva (requiere A4 y A6) |
+| **C2** | HU-WAP-04 — **motor implementado**, sin conectar a flujos reales hasta A4, A5 y A6 (ver `docs/whatsapp-channel.md`) | Mensajes de la reserva (requiere A4 y A6) |
 | **C3** | HU-WAP-05 | Recordatorio por WhatsApp para todos los turnos, en un salón piloto |
 | **C4** | HU-WAP-06 | Botones «Confirmo» / «No puedo ir», baja y alta, con webhook firmado |
 | **C5** | HU-WAP-08 | Topes, corte de emergencia, salud del número e informe de consumo |

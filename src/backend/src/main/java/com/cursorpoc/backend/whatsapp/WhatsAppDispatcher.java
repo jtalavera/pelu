@@ -113,6 +113,16 @@ public class WhatsAppDispatcher {
     }
   }
 
+  /** Sends the email fallback of a notice WhatsApp could not carry, off the caller's thread. */
+  public void fallbackAsync(long messageId) {
+    try {
+      executor.execute(() -> fallback.sendIfEligible(messageId));
+    } catch (RejectedExecutionException ex) {
+      log.warn(
+          "WHATSAPP dispatch queue full; the sweep will send the fallback messageId={}", messageId);
+    }
+  }
+
   /**
    * Sends what is due (lost wake-ups, retries whose wait is over) and retries pending fallbacks.
    */

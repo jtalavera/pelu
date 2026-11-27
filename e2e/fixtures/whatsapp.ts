@@ -48,6 +48,8 @@ export type FakeSentMessage = {
 
 export type WhatsAppLogRow = {
   id: number;
+  appointmentId: number | null;
+  clientId: number | null;
   purpose: string;
   template: string;
   status: string;
@@ -358,3 +360,59 @@ export function messageStatusEvent(wamid: string, status: string, errorCode?: nu
 
 export const CONFIRMED_VARS = ["María", "Salón Bella", "Corte", "viernes 28/11", "15:30", "Laura"];
 export const CONFIRMED_LINK = { kind: "URL" as const, index: 0, value: "bella/turno/abc123" };
+
+// ── HU-WAP-04: booking notices ────────────────────────────────────────────────────────────────
+
+export type BookingEventName = "CONFIRMED" | "PENDING" | "REJECTED" | "PROPOSAL" | "CANCELLED";
+
+export type BookingNoticeBody = {
+  appointmentId: number;
+  event: BookingEventName;
+  /** CLIENT = a salon-made turno (the client's own phone and consent); ONLINE = the turno's own contact. */
+  mode: "CLIENT" | "ONLINE";
+  fullName?: string;
+  phone?: string;
+  email?: string;
+  optIn?: boolean;
+  linkSuffix: string;
+  rollback?: boolean;
+};
+
+export type BookingNoticeOutcome = {
+  channel?: "WHATSAPP" | "EMAIL" | "NONE";
+  reason?: string;
+  messageId?: number;
+  rolledBack: boolean;
+};
+
+/** Stands in for what the online booking (A4), the management link (A5) and the approvals (A6) will do. */
+export async function sendBookingNotice(
+  request: APIRequestContext,
+  token: string,
+  body: BookingNoticeBody,
+): Promise<BookingNoticeOutcome> {
+  const res = await request.post(`${SUPPORT}/booking-notice`, { headers: authHeaders(token), data: body });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return (await res.json()) as BookingNoticeOutcome;
+}
+
+/** The salon's «Confirmaciones de reserva» switch (null = back to the platform default). */
+export async function setBookingNoticesEnabled(
+  request: APIRequestContext,
+  token: string,
+  enabled: boolean | null,
+) {
+  const res = await request.post(`${SUPPORT}/booking-notices-enabled`, {
+    headers: authHeaders(token),
+    data: { enabled },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+let phoneSeq = 100_000 + (Date.now() % 800_000);
+
+/** A phone and email no other test uses, so assertions only look at what went to THIS test. */
+export function uniqueRecipient() {
+  const n = ++phoneSeq;
+  return { phoneForm: `0981${n}`, phoneE164: `+595981${n}`, email: `ana${n}@example.com` };
+}

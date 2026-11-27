@@ -102,4 +102,90 @@ public class WhatsAppOutbox {
     }
     return saved;
   }
+
+  /**
+   * Records a notice that WhatsApp cannot carry (no consent, opted-out, channel off, bad phone…) as
+   * a FAILED row WITH the reason, and sends the email fallback after the caller's transaction
+   * commits (HU-WAP-04, criterio 6). Without an email address it only stays recorded, so the salon
+   * can see it needs a phone call. One row per {@code dedupKey}, like {@link #enqueue}.
+   */
+  @Transactional
+  public WhatsAppMessage enqueueUndeliverable(
+      long tenantId,
+      Long appointmentId,
+      Long clientId,
+      String purpose,
+      WhatsAppOutboundMessage message,
+      String dedupKey,
+      String fallbackEmail,
+      String reason) {
+    WhatsAppMessage existing =
+        repository.findByTenantIdAndDedupKey(tenantId, dedupKey).orElse(null);
+    if (existing != null) {
+      return existing;
+    }
+    WhatsAppMessage m = new WhatsAppMessage();
+    Instant now = Instant.now();
+    m.setTenantId(tenantId);
+    m.setAppointmentId(appointmentId);
+    m.setClientId(clientId);
+    m.setPurpose(purpose);
+    m.setTemplate(message.templateName());
+    m.setRecipient(message.to() == null || message.to().isBlank() ? "n/a" : message.to());
+    m.setPayload(
+        objectMapper.writeValueAsString(
+            new StoredPayload(
+                message.languageCode(), message.bodyParameters(), message.buttons())));
+    m.setDedupKey(dedupKey);
+    m.setFallbackEmail(
+        fallbackEmail == null || fallbackEmail.isBlank() ? null : fallbackEmail.trim());
+    m.setStatus(WhatsAppMessage.FAILED);
+    m.setErrorCode(reason);
+    m.setAttempts(0);
+    m.setQueuedAt(now);
+    m.setFailedAt(now);
+    WhatsAppMessage saved = repository.saveAndFlush(m);
+    long id = saved.getId();
+    if (saved.getFallbackEmail() != null) {
+      if (TransactionSynchronizationManager.isSynchronizationActive()) {
+        TransactionSynchronizationManager.registerSynchronization(
+            new TransactionSynchronization() {
+              @Override
+              public void afterCommit() {
+                dispatcher.fallbackAsync(id);
+              }
+            });
+      } else {
+        dispatcher.fallbackAsync(id);
+      }
+    }
+    return saved;
+  }
+
+  /**
+   * Cancels the still-QUEUED notices of an appointment (a reschedule or a cancellation makes them
+   * stale). {@code keepDedupSuffix} spares the ones that belong to the current schedule version.
+   * Returns how many were cancelled.
+   */
+  @Transactional
+  public int cancelQueued(
+      long tenantId,
+      long appointmentId,
+      java.util.Collection<String> purposes,
+      String keepDedupSuffix,
+      String reason) {
+    int n = 0;
+    for (WhatsAppMessage m :
+        repository.findByTenantIdAndAppointmentIdAndStatusAndPurposeIn(
+            tenantId, appointmentId, WhatsAppMessage.QUEUED, purposes)) {
+      if (keepDedupSuffix != null && m.getDedupKey().endsWith(keepDedupSuffix)) {
+        continue;
+      }
+      m.setStatus(WhatsAppMessage.CANCELLED);
+      m.setErrorCode(reason);
+      m.setNextAttemptAt(null);
+      n++;
+    }
+    return n;
+  }
 }

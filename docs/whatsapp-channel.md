@@ -10,7 +10,49 @@ plantillas para Meta: `requirements/user_stories/Plantillas_WhatsApp_para_Meta.m
 | ---------- | ------ |
 | **C0** HU-WAP-01 y HU-WAP-02 | Implementado. Falta la **prueba manual contra el número real** (Definición de terminado, punto 8) |
 | **C1** HU-WAP-03 y HU-WAP-07 | Implementado. Quedan criterios que dependen de otros incrementos (ver abajo) |
-| C2…C5 | Pendientes |
+| **C2** HU-WAP-04 | Implementado el **motor** de mensajes de la reserva. Todavía no lo dispara ningún flujo real (depende de A4, A5 y A6) |
+| C3…C5 | Pendientes |
+
+## Piezas de C2 (mensajes de la reserva)
+
+`BookingNotifier` es el motor de HU-WAP-04: se le dice qué le pasó a la reserva y él arma el mensaje, elige el canal y lo
+deja en cola. **Hoy nadie lo llama** (la reserva online, el enlace de gestión y la aprobación de solicitudes no existen
+todavía); los tests lo ejercitan a través de un disparador de soporte de e2e.
+
+| Pieza | Responsabilidad |
+| ----- | --------------- |
+| `BookingEvent` | Los cinco eventos y su plantilla: confirmado, pendiente, rechazado o vencido, propuesta de horario, cancelado |
+| `BookingContact` | A quién va: el celular, email y consentimiento de la clienta (turno del salón) o el **contacto propio** del turno online con el consentimiento del formulario |
+| `BookingNotifier.notify(...)` | Se llama **dentro de la transacción** de quien cambia el turno. Una clave por (turno, evento, horario): no se duplica. Anula lo que sigue en cola de un horario viejo (reprogramación) o todo lo pendiente (cancelación) |
+| `WhatsAppOutbox.enqueueUndeliverable` | Lo que WhatsApp no puede llevar (sin consentimiento, baja, canal apagado, celular inválido) queda como `FAILED` con el motivo y sale por email después del commit; sin email solo queda registrado |
+| `BookingMessagingSettings` | El interruptor «Confirmaciones de reserva» de cada salón (RSV-02). Hasta A2 se lee de `app.femme.whatsapp.booking-notices-enabled` (apagado por defecto en producción) |
+| `BookingNoticeFormatter` | `viernes 28/11` y `15:30`, siempre en español y en la zona del salón |
+
+**Cómo lo conectan los incrementos que faltan**, con una línea dentro de su transacción:
+
+```java
+bookingNotifier.notify(tenantId, appointmentId, BookingEvent.CONFIRMED,
+    BookingContact.online(nombre, celular, email, aceptoWhatsApp),   // o BookingContact.ofClient(cliente)
+    slug + "/turno/" + token);                                        // solo slug en rechazo y cancelación
+```
+
+- **A4** (reserva online): `PENDING` o `CONFIRMED` según la aprobación configurada.
+- **A5** (gestión por enlace): `CANCELLED` y, al reprogramar, otra `CONFIRMED`/`PENDING` (el motor anula la vieja).
+- **A6** (aprobación): `CONFIRMED` al aprobar, `REJECTED` al rechazar o vencer, `PROPOSAL` al proponer otro horario.
+- Crear un turno desde la agenda **no** llama al motor (criterio 8).
+
+Decisiones de C2:
+
+- El motivo que escribe la administradora al rechazar **no existe** en el motor: la plantilla no lo admite y queda solo
+  en la app.
+- Las notificaciones de un turno online usan `clientId = null` al encolar: manda el consentimiento del formulario del
+  turno, no el de la ficha de la clienta. Las bajas y los números sin WhatsApp (por celular) se respetan igual.
+- Si WhatsApp falla después de encolar (plantilla pausada, error definitivo, «no entregado») el respaldo por email es el
+  de C1.
+- Las claves de deduplicación terminan en `:<segundos del horario>`, y C3 (recordatorios) usará la misma forma para que
+  una reprogramación anule también el recordatorio viejo.
+- Un fallo al **armar** el aviso (por ejemplo, una variable vacía) se propaga al llamador: es un error de programación,
+  no una situación de negocio.
 
 ## Piezas de C1
 
