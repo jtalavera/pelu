@@ -851,6 +851,29 @@ resource "azurerm_container_app" "backend" {
         value = var.stock_client_id
       }
 
+      # WhatsApp channel (HU-WAP-01). The three secrets (access token, Meta app secret, webhook
+      # verify token) come from Key Vault at boot (KeyVaultSecretsEnvironmentPostProcessor), never
+      # from env vars. Off by default: with WHATSAPP_ENABLED=false everything falls back to email.
+      env {
+        name  = "WHATSAPP_ENABLED"
+        value = tostring(var.whatsapp_enabled)
+      }
+
+      env {
+        name  = "WHATSAPP_PHONE_NUMBER_ID"
+        value = var.whatsapp_phone_number_id
+      }
+
+      env {
+        name  = "WHATSAPP_BUSINESS_ACCOUNT_ID"
+        value = var.whatsapp_business_account_id
+      }
+
+      env {
+        name  = "WHATSAPP_API_VERSION"
+        value = var.whatsapp_api_version
+      }
+
       env {
         name  = "FEMME_REPORT_WARMUP_ENABLED"
         value = tostring(var.backend_report_warmup_enabled)

@@ -253,6 +253,29 @@ done per environment, in this order:
 5. Activate `STOCK_MODULE` for a tenant and check `stock_outbox` reaches `DONE` (operational
    notes in `docs/stock-integration.md`).
 
+## WhatsApp channel (HU-WAP-01..08)
+
+One shared WhatsApp Business number serves every salon (decision D9 of
+`requirements/user_stories/Especificacion_Reserva_Online_y_Ficha_Tecnica.md`). Terraform owns only the
+non-secret Container App env vars (`WHATSAPP_ENABLED`, `WHATSAPP_PHONE_NUMBER_ID`,
+`WHATSAPP_BUSINESS_ACCOUNT_ID`, `WHATSAPP_API_VERSION`), driven by the `whatsapp_*` variables in each
+`environments/<env>/terraform.tfvars`. The default is **off** (`whatsapp_enabled = false`): every message
+falls back to email, and `WHATSAPP_ENABLED=false` is also the emergency switch (HU-WAP-08).
+
+What Terraform does **not** manage, by design, per environment:
+
+1. **Key Vault secrets** (values never in Terraform), read at boot, so restart the revision afterwards:
+   `app-femme-whatsapp-access-token` (a **permanent** system-user token, not a temporary test one),
+   `app-femme-whatsapp-app-secret` (the Meta app secret; signs every webhook `POST`) and
+   `app-femme-whatsapp-webhook-verify-token` (any random string, also typed in Meta's webhook setup).
+2. **tfvars**: `whatsapp_phone_number_id`, `whatsapp_business_account_id`, then `whatsapp_enabled = true`.
+   If `WHATSAPP_ENABLED=true` but a value is missing the channel stays OFF and the Platform → WhatsApp
+   page lists the missing names (never their values).
+3. **Meta webhook**: callback `https://<api>/api/whatsapp/webhook`, the verify token above, and the
+   `message_template_status_update` and `message_template_quality_update` fields subscribed.
+4. **Flags**: `ONLINE_BOOKING` and `WHATSAPP_REMINDERS` start OFF globally; the channel only works for a
+   salon with both on. Check the template statuses in Platform → WhatsApp before enabling any salon.
+
 ## Conversational assistant (Azure AI Foundry)
 
 `requirements/asistente/plan_asistente.md`, phase 0. Terraform creates, in `var.location`:

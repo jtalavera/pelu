@@ -642,19 +642,21 @@ Texto base de ejemplo (`pelu_turno_confirmado`): «Hola {{1}}, tu turno en {{2}}
 
 | Rango | Contenido |
 | ----- | --------- |
-| **V107** | Flag `ONLINE_BOOKING` |
-| **V108** | `professional_time_off`, `salon_closures` |
-| **V109** | `booking_settings`, `bookable_online` en servicios y profesionales, `booking_professional_services` |
-| **V110** | `appointments`: `source`, `manage_token_version`, `contact_phone`, `contact_email`, `contact_whatsapp_opt_in`, `client_confirmed_at` |
-| **V111** | `booking_otp`, `booking_rate_events` |
-| **V113** | Flag `TECHNICAL_RECORD` |
-| **V114** | `service_categories.technical_template`, `technical_entries` |
-| **V115** | `client_allergy_profile`, `client_patch_tests`, `salon_services.requires_patch_test`, `technical_settings` |
-| **V120** | Flag `WHATSAPP_REMINDERS` |
+| **V107** | Flag `ONLINE_BOOKING` — **hecho en C0** (el canal WhatsApp exige ambos flags) |
+| **V108** | Flag `WHATSAPP_REMINDERS` — **hecho en C0** |
+| **V109** | `whatsapp_messages`, `whatsapp_template_status`, `whatsapp_processed_events`, `platform_alerts` — **hecho en C0** |
+| **V110** | `professional_time_off`, `salon_closures` |
+| **V111** | `booking_settings`, `bookable_online` en servicios y profesionales, `booking_professional_services` |
+| **V112** | `appointments`: `source`, `manage_token_version`, `contact_phone`, `contact_email`, `contact_whatsapp_opt_in`, `client_confirmed_at` |
+| **V113** | `booking_otp`, `booking_rate_events` |
+| **V114** | Flag `TECHNICAL_RECORD` |
+| **V115** | `service_categories.technical_template`, `technical_entries` |
+| **V116** | `client_allergy_profile`, `client_patch_tests`, `salon_services.requires_patch_test`, `technical_settings` |
 | **V121** | `clients`: consentimiento (`whatsapp_opt_in`, fecha, origen, baja); `whatsapp_opt_outs` |
-| **V122** | `whatsapp_messages`, `whatsapp_processed_events` |
 | **V123** | `whatsapp_usage_daily`, configuración de topes |
 | **V124** | Columnas de WhatsApp en `booking_settings` (`wa_booking_confirmations`, `wa_reminders`, `wa_reply_buttons`, `wa_show_salon_phone`) |
+
+*Renumeración al iniciar C0 (26/11/2026):* C0 necesitó los dos flags y las tablas del canal antes que A0, así que tomó V107–V109 y el resto de las pistas A y B se corrió. V117–V120 y V122 quedan libres.
 
 ## 7.3 API (resumen)
 
@@ -707,7 +709,7 @@ Tres pistas. A y B son **independientes** y pueden avanzar en paralelo; C es la 
 ### Pista C · Canal WhatsApp
 | Incremento | Contenido | Se puede demostrar |
 | ---------- | --------- | ------------------ |
-| **C0** | HU-WAP-01 y HU-WAP-02 | Envío real de una plantilla de prueba con botones y lectura de su estado |
+| **C0** | HU-WAP-01 y HU-WAP-02 — **implementado** (pendiente prueba manual contra el número real, ver `docs/whatsapp-channel.md`) | Envío real de una plantilla de prueba con botones y lectura de su estado |
 | **C1** | HU-WAP-03 y HU-WAP-07 | Consentimiento en la ficha y seguimiento de entrega con respaldo por email |
 | **C2** | HU-WAP-04 | Mensajes de la reserva (requiere A4 y A6) |
 | **C3** | HU-WAP-05 | Recordatorio por WhatsApp para todos los turnos, en un salón piloto |

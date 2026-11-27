@@ -57,6 +57,7 @@ import PlatformSkinPage from "./pages/PlatformSkinPage";
 import PlatformTiersPage from "./pages/PlatformTiersPage";
 import PlatformImportPage from "./pages/PlatformImportPage";
 import PlatformStockIntegrationPage from "./pages/PlatformStockIntegrationPage";
+import PlatformWhatsAppPage from "./pages/PlatformWhatsAppPage";
 
 export function AppRoutes() {
   return (
@@ -176,6 +177,7 @@ export function AppRoutes() {
         <Route path="/platform/feature-flags" element={<FeatureFlagsPage />} />
         <Route path="/platform/import" element={<PlatformImportPage />} />
         <Route path="/platform/stock" element={<PlatformStockIntegrationPage />} />
+        <Route path="/platform/whatsapp" element={<PlatformWhatsAppPage />} />
         <Route path="/platform/audit" element={<PlatformAuditPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/app" replace />} />

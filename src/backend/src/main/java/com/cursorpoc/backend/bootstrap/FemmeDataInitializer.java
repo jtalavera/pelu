@@ -127,6 +127,18 @@ public class FemmeDataInitializer {
           false,
           "Conversational assistant in the side panel (queries; later invoicing and booking).");
 
+      // Reserva online + canal WhatsApp: same flags as V107 / V108, OFF globally until a Platform
+      // Admin enables them (Flyway is disabled for `e2e`).
+      seedFlag(
+          "ONLINE_BOOKING",
+          false,
+          "Online booking page for clients (public link, verification code, manage-your-appointment"
+              + " link).");
+      seedFlag(
+          "WHATSAPP_REMINDERS",
+          false,
+          "WhatsApp channel: booking confirmations, reminders and replies (needs ONLINE_BOOKING).");
+
       // Comprobante no fiscal (tier Estándar): same flag as V97 (Flyway is disabled for `e2e`).
       seedFlag(
           "NON_FISCAL_RECEIPT",
