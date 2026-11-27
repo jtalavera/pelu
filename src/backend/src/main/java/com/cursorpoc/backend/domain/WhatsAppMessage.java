@@ -70,6 +70,13 @@ public class WhatsAppMessage {
   @Column(name = "fallback_email_sent_at")
   private Instant fallbackEmailSentAt;
 
+  /** Where the one-time email fallback goes (cleared by the retention job). */
+  @Column(name = "fallback_email", length = 320)
+  private String fallbackEmail;
+
+  @Column(name = "recipient_masked_at")
+  private Instant recipientMaskedAt;
+
   @Column(name = "queued_at", nullable = false)
   private Instant queuedAt;
 
@@ -239,5 +246,21 @@ public class WhatsAppMessage {
 
   public void setFailedAt(Instant failedAt) {
     this.failedAt = failedAt;
+  }
+
+  public String getFallbackEmail() {
+    return fallbackEmail;
+  }
+
+  public void setFallbackEmail(String fallbackEmail) {
+    this.fallbackEmail = fallbackEmail;
+  }
+
+  public Instant getRecipientMaskedAt() {
+    return recipientMaskedAt;
+  }
+
+  public void setRecipientMaskedAt(Instant recipientMaskedAt) {
+    this.recipientMaskedAt = recipientMaskedAt;
   }
 }

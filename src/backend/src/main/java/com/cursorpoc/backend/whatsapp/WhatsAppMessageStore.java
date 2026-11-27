@@ -34,6 +34,41 @@ public class WhatsAppMessageStore {
     m.setMetaMessageId(wamid);
     m.setSentAt(Instant.now());
     m.setErrorCode(null);
+    m.setNextAttemptAt(null);
+  }
+
+  /** A retryable failure: back to QUEUED, to be sent again at {@code nextAttemptAt}. */
+  @Transactional
+  public void scheduleRetry(long id, String errorCode, Instant nextAttemptAt) {
+    WhatsAppMessage m = repository.findById(id).orElseThrow();
+    m.setStatus(WhatsAppMessage.QUEUED);
+    m.setErrorCode(errorCode);
+    m.setNextAttemptAt(nextAttemptAt);
+  }
+
+  /** Not sent on purpose (consent withdrawn, phone opted out): no failure, no email. */
+  @Transactional
+  public void markCancelled(long id, String reason) {
+    WhatsAppMessage m = repository.findById(id).orElseThrow();
+    m.setStatus(WhatsAppMessage.CANCELLED);
+    m.setErrorCode(reason);
+    m.setNextAttemptAt(null);
+  }
+
+  @Transactional
+  public boolean claimFallback(long id) {
+    return repository.claimFallback(id, Instant.now()) == 1;
+  }
+
+  @Transactional
+  public void releaseFallback(long id) {
+    repository.releaseFallback(id);
+  }
+
+  @Transactional(readOnly = true)
+  public List<Long> fallbackPendingIds(Instant since) {
+    return repository.findFallbackPendingIds(
+        since, org.springframework.data.domain.PageRequest.of(0, 50));
   }
 
   @Transactional
@@ -42,6 +77,7 @@ public class WhatsAppMessageStore {
     m.setStatus(WhatsAppMessage.FAILED);
     m.setErrorCode(errorCode);
     m.setFailedAt(Instant.now());
+    m.setNextAttemptAt(null);
   }
 
   /** Records a send that already happened (or failed) synchronously, e.g. a verification code. */
@@ -76,12 +112,10 @@ public class WhatsAppMessageStore {
     repository.save(m);
   }
 
+  /** QUEUED messages to send now: lost wake-ups and retries whose wait is over. */
   @Transactional(readOnly = true)
-  public List<Long> staleQueuedIds(Instant queuedBefore) {
-    return repository
-        .findTop50ByStatusAndQueuedAtBeforeOrderByIdAsc(WhatsAppMessage.QUEUED, queuedBefore)
-        .stream()
-        .map(WhatsAppMessage::getId)
-        .toList();
+  public List<Long> dueIds(Instant now) {
+    return repository.findDueIds(
+        now.minusSeconds(30), now, org.springframework.data.domain.PageRequest.of(0, 50));
   }
 }

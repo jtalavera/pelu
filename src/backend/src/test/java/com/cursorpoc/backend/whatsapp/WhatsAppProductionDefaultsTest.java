@@ -40,6 +40,8 @@ class WhatsAppProductionDefaultsTest {
   void theFakeProviderAndTheTestSupportControllerDoNotExist() {
     assertThat(gateway).isInstanceOf(MetaCloudWhatsAppGateway.class);
     assertThat(context.getBeanNamesForType(FakeWhatsAppGateway.class)).isEmpty();
+    assertThat(context.getBeanNamesForType(FakeFallbackEmailSender.class)).isEmpty();
+    assertThat(context.getBean(FallbackEmailSender.class)).isInstanceOf(EmailFallbackSender.class);
     assertThat(context.getBeanNamesForType(WhatsAppTestSupportController.class)).isEmpty();
   }
 

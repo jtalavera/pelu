@@ -52,6 +52,7 @@ import { formatParaguayPhone, isCompleteParaguayPhone, toWhatsAppPhone } from ".
 import { buildWhatsAppUrl, isMobileDevice, WHATSAPP_WINDOW_NAME } from "../lib/whatsappShare";
 import { isValidEmail } from "../lib/validateEmail";
 import { validateRuc } from "../lib/validateRuc";
+import { WhatsAppConsentSwitch } from "../components/WhatsAppConsentSwitch";
 import { useFeatureFlag } from "../hooks/useFeatureFlags";
 import { useTour } from "../tour/useTour";
 import { clientDetailSteps } from "../tour/steps/clientDetail";
@@ -77,6 +78,8 @@ type Client = {
   birthdayYear?: number | null;
   acquisitionChannel?: string | null;
   acquisitionChannelOther?: string | null;
+  whatsappOptIn?: boolean;
+  whatsappOptInAt?: string | null;
 };
 
 const IDENTITY_DOCUMENT_TYPE_OPTIONS = [
@@ -1032,6 +1035,29 @@ export default function ClientDetailPage() {
                     </FieldValidationError>
                   </div>
                 </div>
+
+                {client ? (
+                  <WhatsAppConsentSwitch
+                    clientId={client.id}
+                    savedPhone={client.phone}
+                    phoneDirty={phone.trim() !== (client.phone ?? "").trim()}
+                    active={client.active}
+                    optIn={client.whatsappOptIn ?? false}
+                    optInAt={client.whatsappOptInAt}
+                    onChanged={(c) =>
+                      setClient((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              whatsappOptIn: c.whatsappOptIn,
+                              whatsappOptInAt: c.whatsappOptInAt,
+                            }
+                          : prev,
+                      )
+                    }
+                  />
+                ) : null}
+
               </div>
 
               <div>

@@ -9,9 +9,22 @@ plantillas para Meta: `requirements/user_stories/Plantillas_WhatsApp_para_Meta.m
 | Incremento | Estado |
 | ---------- | ------ |
 | **C0** HU-WAP-01 y HU-WAP-02 | Implementado. Falta la **prueba manual contra el número real** (Definición de terminado, punto 8) |
-| C1…C5 | Pendientes |
+| **C1** HU-WAP-03 y HU-WAP-07 | Implementado. Quedan criterios que dependen de otros incrementos (ver abajo) |
+| C2…C5 | Pendientes |
 
-## Piezas (`com.cursorpoc.backend.whatsapp`)
+## Piezas de C1
+
+| Pieza | Responsabilidad |
+| ----- | --------------- |
+| `WhatsAppConsentService` | Quién puede recibir: consentimiento de la clienta atado al celular para el que se dio, bajas y números sin WhatsApp **por celular** (valen para todos los salones) |
+| `WhatsAppDispatcher` | Reintentos con esperas de 1, 5 y 15 minutos (el primer envío más 3 reintentos), cancelación si se retiró el consentimiento, respaldo por email |
+| `WhatsAppDeliveryService` | Estados de Meta (`sent` → `delivered` → `read` o `failed`): solo avanzan, cada notificación se procesa una vez, el salón se deduce del `wamid` de **nuestro** registro |
+| `WhatsAppFallbackService` + `FallbackEmailSender` | Un único email con el mismo contenido (texto de la plantilla con sus variables más el enlace); se reclama una sola vez en la base y, si el email falla, se libera y el barrido lo reintenta |
+| `WhatsAppRetentionJob` | A los 90 días enmascara el celular, quita el email de respaldo y las variables |
+| `AppointmentMessagesController` | `GET /api/appointments/{id}/messages`: la administradora ve estado y celular; la profesional solo si hubo aviso |
+| `PUT /api/clients/{id}/whatsapp-consent` | Interruptor del salón (con ambos flags; la auditoría lo registra sola) |
+
+## Piezas de C0 (`com.cursorpoc.backend.whatsapp`)
 
 | Pieza | Responsabilidad |
 | ----- | --------------- |
@@ -45,6 +58,33 @@ plantillas para Meta: `requirements/user_stories/Plantillas_WhatsApp_para_Meta.m
 - **Sin reintentos todavía.** En C0 un envío fallido queda `FAILED` con un código tipificado; los reintentos con espera
   (1, 5 y 15 minutos) y el respaldo por email son HU-WAP-07 (C1). Hoy quien llama ve la categoría (`isRetryable`).
 
+## Decisiones tomadas al implementar C1
+
+- **Reintentos:** «hasta 3 intentos con esperas de 1, 5 y 15 minutos» se implementó como el primer envío más 3
+  reintentos (4 intentos en total). Solo se reintentan los errores transitorios y los límites de envío.
+- **Consentimiento retirado con un mensaje ya en cola:** el mensaje se cancela (`CANCELLED`, `NO_CONSENT` u
+  `OPTED_OUT`) y **no** se manda el email de respaldo: la clienta retiró el aviso por WhatsApp, no pidió otro canal.
+- **Qué cae a email:** confirmaciones y recordatorios (propósitos `BOOKING` y `REMINDER`) con falla definitiva,
+  «no entregado», número sin WhatsApp, plantilla pausada o canal apagado. El código de verificación nunca.
+- **Dirección del respaldo:** quien encola el mensaje la pasa (`fallbackEmail`): el email de la clienta o el contacto
+  propio del turno online (C2/C3). Sin dirección la falla solo queda registrada.
+- **Número sin WhatsApp:** se marca por celular (`whatsapp_unreachable`) y vale para todos los salones, porque el
+  número emisor es uno solo.
+- **Interruptor del salón:** es una acción inmediata (no espera a «Guardar»), guarda el celular **guardado**, y queda
+  bloqueado mientras el campo de celular tiene cambios sin guardar. La clienta genérica y las inactivas no lo admiten.
+- **Mensajes entrantes** (`BAJA`, `ALTA`, botones) siguen sin procesarse: son HU-WAP-06 (C4). La tabla de bajas y su
+  efecto ya existen; hasta C4 solo se llena desde el controlador de soporte de e2e.
+
+## Criterios que quedan pendientes de otros incrementos
+
+| Criterio | Depende de |
+| -------- | ---------- |
+| HU-WAP-03 (1): consentimiento propio de los turnos online | Columnas `contact_*` de `appointments` (A4) |
+| HU-WAP-03 (3): alta desde el email con enlace firmado | Secreto de enlaces y página pública (A0/A5) |
+| HU-WAP-03 (4): retiro respondiendo `BAJA` | Webhook de mensajes entrantes (C4) |
+| HU-WAP-07 (6) y parte de (7): «Requiere atención» cuando falló todo | Lista de solicitudes y «Requiere atención» (A6, RSV-07) |
+| HU-WAP-07 (3): la espera exacta de 1/5/15 minutos solo se verifica por el campo `next_attempt_at` | — (e2e usa `expedite` en lugar de esperar) |
+
 ## Lo que NO está verificado contra Meta
 
 La documentación de Meta no estaba accesible al implementar C0 (el dominio `developers.facebook.com` no resuelve desde el
@@ -54,6 +94,8 @@ con la documentación vigente **antes de habilitar un salón**:
 - Forma de los `components` de botones (`sub_type` `url` / `quick_reply`, `index` como texto, parámetro `payload`) y del
   botón «Copiar código» de la plantilla de autenticación (enviado como botón `url` con el código).
 - Clasificación de códigos de error de Meta (`MetaCloudWhatsAppGateway.classify`) y su carácter reintentable.
+- Forma de los estados de entrega (`statuses[]` con `id`, `status`, `timestamp`, `errors[].code`) y los códigos de
+  error de un «no entregado» (`131026`, `131049`…).
 - Campos de `GET /{waba-id}/message_templates` (`status`, `category`, `rejected_reason`) y de los avisos
   `message_template_status_update` / `message_template_quality_update` del webhook.
 - Que `v21.0` siga soportada.
@@ -72,6 +114,10 @@ variables `whatsapp_*` en `terraform.tfvars`, webhook en Meta con los campos `me
   coincide con `Plantillas_WhatsApp_para_Meta.md`), `WhatsAppTemplateVariablesTest`, `WhatsAppWebhookSignatureTest`,
   `WhatsAppSettingsTest`, `WhatsAppChannelIntegrationTest`, `WhatsAppProductionDefaultsTest`,
   `PhoneNumberNormalizerTest`, `WhatsAppWebhookControllerTest`.
-- Vitest: `PlatformWhatsAppPage.test.tsx`.
+- Vitest: `PlatformWhatsAppPage.test.tsx`, `WhatsAppConsentSwitch.test.tsx`, `AppointmentNoticeLine.test.tsx`.
+- C1: `WhatsAppDeliveryIntegrationTest`, `AppointmentMessagesControllerTest`, casos nuevos en `ClientServiceTest` y
+  `ProfessionalAccessPolicyTest`.
 - Playwright: `e2e/tests/hu-wap-01-canal-base.spec.ts` y `e2e/tests/hu-wap-02-catalogo-plantillas.spec.ts`
-  (con el proveedor falso; nada sale del proceso).
+  y, de C1, `hu-wap-03-consentimiento.spec.ts`, `hu-wap-07-seguimiento-entrega.spec.ts` y
+  `mt-isolation/mt-whatsapp.spec.ts` (con el proveedor falso; nada sale del proceso). El mundo `mt` tiene un tercer
+  salón suspendido a propósito, así que el caso de aislamiento usa solo los salones A y B.

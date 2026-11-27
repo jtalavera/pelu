@@ -27,7 +27,16 @@ public class WhatsAppDispatcher {
 
   private static final Logger log = LoggerFactory.getLogger(WhatsAppDispatcher.class);
 
+  /** HU-WAP-07 criterio 3: waits before each retry of a transient failure (up to 3 retries). */
+  static final java.time.Duration[] RETRY_DELAYS = {
+    java.time.Duration.ofMinutes(1),
+    java.time.Duration.ofMinutes(5),
+    java.time.Duration.ofMinutes(15)
+  };
+
   private final WhatsAppMessageStore store;
+  private final WhatsAppConsentService consent;
+  private final WhatsAppFallbackService fallback;
   private final WhatsAppGateway gateway;
   private final WhatsAppAccess access;
   private final WhatsAppTemplateStatusService templateStatus;
@@ -39,17 +48,21 @@ public class WhatsAppDispatcher {
   @Autowired
   public WhatsAppDispatcher(
       WhatsAppMessageStore store,
+      WhatsAppConsentService consent,
+      WhatsAppFallbackService fallback,
       WhatsAppGateway gateway,
       WhatsAppAccess access,
       WhatsAppTemplateStatusService templateStatus,
       WhatsAppSettings settings,
       ObjectMapper objectMapper) {
-    this(store, gateway, access, templateStatus, settings, objectMapper, null);
+    this(store, consent, fallback, gateway, access, templateStatus, settings, objectMapper, null);
   }
 
   /** Tests pass a direct executor ({@code Runnable::run}) to make the send synchronous. */
   WhatsAppDispatcher(
       WhatsAppMessageStore store,
+      WhatsAppConsentService consent,
+      WhatsAppFallbackService fallback,
       WhatsAppGateway gateway,
       WhatsAppAccess access,
       WhatsAppTemplateStatusService templateStatus,
@@ -57,6 +70,8 @@ public class WhatsAppDispatcher {
       ObjectMapper objectMapper,
       Executor executor) {
     this.store = store;
+    this.consent = consent;
+    this.fallback = fallback;
     this.gateway = gateway;
     this.access = access;
     this.templateStatus = templateStatus;
@@ -98,10 +113,17 @@ public class WhatsAppDispatcher {
     }
   }
 
+  /**
+   * Sends what is due (lost wake-ups, retries whose wait is over) and retries pending fallbacks.
+   */
   @Scheduled(fixedDelayString = "${app.femme.whatsapp.sweep-delay-ms:30000}")
-  void sweep() {
-    for (Long id : store.staleQueuedIds(Instant.now().minusSeconds(30))) {
+  public void sweep() {
+    Instant now = Instant.now();
+    for (Long id : store.dueIds(now)) {
       dispatchAsync(id);
+    }
+    for (Long id : store.fallbackPendingIds(now.minus(java.time.Duration.ofDays(1)))) {
+      fallback.sendIfEligible(id);
     }
   }
 
@@ -113,6 +135,24 @@ public class WhatsAppDispatcher {
       }
       WhatsAppMessage m = store.get(messageId);
       try {
+        if (!"OTP".equals(m.getPurpose())) {
+          WhatsAppConsentService.Block block =
+              consent.blockFor(m.getTenantId(), m.getClientId(), m.getRecipient()).orElse(null);
+          if (block == WhatsAppConsentService.Block.UNREACHABLE) {
+            throw new WhatsAppSendException(WhatsAppErrorCode.INVALID_RECIPIENT);
+          }
+          if (block != null) {
+            // Consent withdrawn or phone opted out since it was queued: not sent, no email either
+            // (RT-11). The client asked not to be told over WhatsApp.
+            store.markCancelled(messageId, block.name());
+            log.info(
+                "WHATSAPP message cancelled tenantId={} messageId={} reason={}",
+                m.getTenantId(),
+                messageId,
+                block);
+            return;
+          }
+        }
         access.requireAvailable(m.getTenantId());
         if (!templateStatus.isUsable(m.getTemplate(), WhatsAppTemplate.LANGUAGE)) {
           throw new WhatsAppSendException(WhatsAppErrorCode.TEMPLATE_UNAVAILABLE);
@@ -126,17 +166,44 @@ public class WhatsAppDispatcher {
             gateway.send(out, Duration.ofMillis(settings.getRequestTimeoutMs()));
         store.markSent(messageId, result.wamid());
       } catch (WhatsAppSendException ex) {
-        store.markFailed(messageId, ex.getCode().name());
-        log.error(
-            "WHATSAPP message failed tenantId={} messageId={} template={} error={}",
-            m.getTenantId(),
-            messageId,
-            m.getTemplate(),
-            ex.getCode());
+        handleFailure(m, ex);
       }
     } catch (RuntimeException ex) {
       // Even a bookkeeping failure must not escape into the executor thread silently.
       log.error("WHATSAPP dispatch error messageId={} error={}", messageId, ex.toString());
     }
+  }
+
+  /**
+   * HU-WAP-07: a transient failure is retried after 1, 5 and 15 minutes; anything else (or the last
+   * retry failing) is final and triggers the one-time email fallback. A number with no WhatsApp is
+   * remembered so it is not tried again.
+   */
+  private void handleFailure(WhatsAppMessage m, WhatsAppSendException ex) {
+    long id = m.getId();
+    if (ex.getCode() == WhatsAppErrorCode.INVALID_RECIPIENT) {
+      consent.markUnreachable(m.getRecipient(), "NO_WHATSAPP");
+    }
+    int attempts = m.getAttempts(); // already counts the try that just failed
+    if (ex.isRetryable() && attempts <= RETRY_DELAYS.length) {
+      Instant next = Instant.now().plus(RETRY_DELAYS[attempts - 1]);
+      store.scheduleRetry(id, ex.getCode().name(), next);
+      log.warn(
+          "WHATSAPP send will be retried tenantId={} messageId={} attempt={} error={}",
+          m.getTenantId(),
+          id,
+          attempts,
+          ex.getCode());
+      return;
+    }
+    store.markFailed(id, ex.getCode().name());
+    log.error(
+        "WHATSAPP message failed tenantId={} messageId={} template={} attempts={} error={}",
+        m.getTenantId(),
+        id,
+        m.getTemplate(),
+        attempts,
+        ex.getCode());
+    fallback.sendIfEligible(id);
   }
 }

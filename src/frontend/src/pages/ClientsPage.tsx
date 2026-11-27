@@ -54,6 +54,7 @@ type Client = {
   visitCount: number;
   lastVisitAt?: string | null;
   createdAt?: string | null;
+  whatsappOptIn?: boolean;
   address?: string | null;
   departmentCode?: string | null;
   departmentName?: string | null;
@@ -120,6 +121,8 @@ function exportCsv(clients: Client[]) {
 export default function ClientsPage() {
   const { t, i18n } = useTranslation();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
+  const whatsappChannel =
+    useFeatureFlag("WHATSAPP_REMINDERS") && useFeatureFlag("ONLINE_BOOKING");
   useTour("clients", clientsSteps, undefined, guidedTourEnabled);
   const navigate = useNavigate();
   const location = useLocation();
@@ -536,6 +539,9 @@ export default function ClientsPage() {
                         ? t("femme.clients.lastVisit", { date: fmtDate(client.lastVisitAt, locale) })
                         : t("femme.clients.noVisits"),
                       client.active ? null : t("femme.status.INACTIVE"),
+                      whatsappChannel && client.whatsappOptIn
+                        ? t("femme.clients.whatsappConsent.listBadge")
+                        : null,
                     ]
                       .filter(Boolean)
                       .join(" · ")}

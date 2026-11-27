@@ -49,6 +49,23 @@ public class WhatsAppOutbox {
       String purpose,
       WhatsAppOutboundMessage message,
       String dedupKey) {
+    return enqueue(tenantId, appointmentId, clientId, purpose, message, dedupKey, null);
+  }
+
+  /**
+   * As above, with the address of the one-time email fallback (HU-WAP-07 criterio 5): used if
+   * WhatsApp fails for good, the number is unreachable, or the template is not usable. Without an
+   * address a failure is only recorded.
+   */
+  @Transactional
+  public WhatsAppMessage enqueue(
+      long tenantId,
+      Long appointmentId,
+      Long clientId,
+      String purpose,
+      WhatsAppOutboundMessage message,
+      String dedupKey,
+      String fallbackEmail) {
     WhatsAppMessage existing =
         repository.findByTenantIdAndDedupKey(tenantId, dedupKey).orElse(null);
     if (existing != null) {
@@ -66,6 +83,8 @@ public class WhatsAppOutbox {
             new StoredPayload(
                 message.languageCode(), message.bodyParameters(), message.buttons())));
     m.setDedupKey(dedupKey);
+    m.setFallbackEmail(
+        fallbackEmail == null || fallbackEmail.isBlank() ? null : fallbackEmail.trim());
     m.setStatus(WhatsAppMessage.QUEUED);
     m.setQueuedAt(Instant.now());
     WhatsAppMessage saved = repository.saveAndFlush(m);

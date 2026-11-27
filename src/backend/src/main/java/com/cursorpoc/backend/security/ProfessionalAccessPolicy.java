@@ -41,6 +41,8 @@ public final class ProfessionalAccessPolicy
           // Calendar: see every appointment, create/edit only her own (checked in the controller).
           PATHS.matcher(HttpMethod.GET, "/api/appointments"),
           PATHS.matcher(HttpMethod.GET, "/api/appointments/{id:\\d+}"),
+          // HU-WAP-07: whether a notice went out (the controller hides the phone and the details).
+          PATHS.matcher(HttpMethod.GET, "/api/appointments/{id:\\d+}/messages"),
           PATHS.matcher(HttpMethod.POST, "/api/appointments"),
           PATHS.matcher(HttpMethod.PUT, "/api/appointments/{id:\\d+}"),
           PATHS.matcher(HttpMethod.PATCH, "/api/appointments/{id:\\d+}/status"),
@@ -77,6 +79,7 @@ public final class ProfessionalAccessPolicy
           PATHS.matcher(HttpMethod.GET, "/api/feature-flags"),
           PATHS.matcher(HttpMethod.GET, "/api/appointments"),
           PATHS.matcher(HttpMethod.GET, "/api/appointments/{id:\\d+}"),
+          PATHS.matcher(HttpMethod.GET, "/api/appointments/{id:\\d+}/messages"),
           PATHS.matcher(HttpMethod.POST, "/api/appointments"),
           PATHS.matcher(HttpMethod.PUT, "/api/appointments/{id:\\d+}"),
           PATHS.matcher(HttpMethod.PATCH, "/api/appointments/{id:\\d+}/status"),

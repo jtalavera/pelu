@@ -1,7 +1,13 @@
 import { createHmac } from "node:crypto";
 import { expect, type APIRequestContext } from "@playwright/test";
 
-import { API_BASE, authHeaders, loginAsDemoApi, loginPlatformAdminApi } from "./api";
+import {
+  API_BASE,
+  apiPostJson,
+  authHeaders,
+  loginAsDemoApi,
+  loginPlatformAdminApi,
+} from "./api";
 import { setGlobalFlag } from "./commissions";
 
 /**
@@ -47,7 +53,16 @@ export type WhatsAppLogRow = {
   status: string;
   errorCode: string;
   wamid: string;
+  attempts: number;
+  recipient: string;
+  fallbackEmailSent: boolean;
+  fallbackEmail: string;
+  nextAttemptAt: string;
+  masked: boolean;
+  payload: string;
 };
+
+export type FakeSentEmail = { to: string; subject: string; body: string; at: string };
 
 // The effective flag is global AND tier AND tenant and both are born OFF globally.
 export async function enableWhatsAppFlags(request: APIRequestContext) {
@@ -70,7 +85,8 @@ export async function sentMessages(
 
 /** Forgets the fake's sent messages, pending failures and template-status overrides. */
 export async function resetFake(request: APIRequestContext, token: string) {
-  const res = await request.delete(`${SUPPORT}/sent`, { headers: authHeaders(token) });
+  // Everything the fake keeps: sent messages and emails, opt-outs and unreachable numbers.
+  const res = await request.delete(`${SUPPORT}/state`, { headers: authHeaders(token) });
   expect(res.ok(), await res.text()).toBeTruthy();
 }
 
@@ -108,6 +124,11 @@ export type EnqueueBody = {
   buttons: Array<{ kind: "URL" | "QUICK_REPLY"; index: number; value: string }>;
   dedupKey: string;
   rollback?: boolean;
+  /** Where the one-time email fallback goes if WhatsApp fails (HU-WAP-07). */
+  fallbackEmail?: string;
+  clientId?: number;
+  appointmentId?: number;
+  purpose?: "BOOKING" | "REMINDER";
 };
 
 /** Queues a message for the caller's salon inside a transaction (the "appointment created" stand-in). */
@@ -209,3 +230,131 @@ export async function restoreCatalog(request: APIRequestContext) {
   await resetFake(request, await loginAsDemoApi(request));
   await refreshTemplatesApi(request);
 }
+
+// ── HU-WAP-03 / HU-WAP-07 ─────────────────────────────────────────────────────────────────────
+
+export async function sentEmails(request: APIRequestContext, token: string): Promise<FakeSentEmail[]> {
+  const res = await request.get(`${SUPPORT}/emails`, { headers: authHeaders(token) });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return (await res.json()) as FakeSentEmail[];
+}
+
+export async function failNextEmail(request: APIRequestContext, token: string, count = 1) {
+  const res = await request.post(`${SUPPORT}/emails/fail-next?count=${count}`, {
+    headers: authHeaders(token),
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+/** A phone asked to stop receiving notices (platform-wide), as a BAJA reply will do from HU-WAP-06. */
+export async function optOutPhone(request: APIRequestContext, token: string, phone: string) {
+  const res = await request.post(`${SUPPORT}/opt-outs`, {
+    headers: authHeaders(token),
+    data: { phone },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+/** Makes the waiting retries of the caller's salon due now and runs the sweep. */
+export async function expediteRetries(request: APIRequestContext, token: string) {
+  const res = await request.post(`${SUPPORT}/expedite`, { headers: authHeaders(token) });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+export async function ageMessages(request: APIRequestContext, token: string, days: number) {
+  const res = await request.post(`${SUPPORT}/age-messages?days=${days}`, {
+    headers: authHeaders(token),
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+export async function runRetention(request: APIRequestContext, token: string) {
+  const res = await request.post(`${SUPPORT}/retention`, { headers: authHeaders(token) });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+export async function genericClientId(request: APIRequestContext, token: string): Promise<number> {
+  const res = await request.get(`${SUPPORT}/generic-client`, { headers: authHeaders(token) });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return ((await res.json()) as { id: number }).id;
+}
+
+export type ClientDto = {
+  id: number;
+  fullName: string;
+  phone: string | null;
+  active: boolean;
+  whatsappOptIn: boolean;
+  whatsappOptInAt: string | null;
+  whatsappOptInSource: string | null;
+};
+
+export async function createClientApi(
+  request: APIRequestContext,
+  token: string,
+  fullName: string,
+  phone: string | null,
+): Promise<ClientDto> {
+  return apiPostJson<ClientDto>(request, token, "/api/clients", {
+    fullName,
+    phone,
+    email: null,
+    ruc: null,
+  });
+}
+
+export async function setConsentApi(
+  request: APIRequestContext,
+  token: string,
+  clientId: number,
+  optIn: boolean,
+) {
+  return request.put(`${API_BASE}/api/clients/${clientId}/whatsapp-consent`, {
+    headers: authHeaders(token),
+    data: { optIn },
+  });
+}
+
+export async function getClientApi(
+  request: APIRequestContext,
+  token: string,
+  clientId: number,
+): Promise<ClientDto> {
+  const res = await request.get(`${API_BASE}/api/clients/${clientId}`, {
+    headers: authHeaders(token),
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return (await res.json()) as ClientDto;
+}
+
+/** A Meta delivery status notification for a message we sent (statuses[] of the "messages" field). */
+export function messageStatusEvent(wamid: string, status: string, errorCode?: number) {
+  return {
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        id: "WABA",
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              statuses: [
+                {
+                  id: wamid,
+                  status,
+                  timestamp: String(Math.floor(Date.now() / 1000)),
+                  recipient_id: "595981123456",
+                  ...(errorCode ? { errors: [{ code: errorCode, title: "x" }] } : {}),
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+export const CONFIRMED_VARS = ["María", "Salón Bella", "Corte", "viernes 28/11", "15:30", "Laura"];
+export const CONFIRMED_LINK = { kind: "URL" as const, index: 0, value: "bella/turno/abc123" };

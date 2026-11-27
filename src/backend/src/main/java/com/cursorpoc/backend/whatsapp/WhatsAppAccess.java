@@ -28,6 +28,24 @@ public class WhatsAppAccess {
         && featureFlagService.isEnabled(BOOKING_FLAG, tenantId);
   }
 
+  /** Both flags on for the salon (no platform switch): what the consent UI and API need. */
+  public boolean areFlagsOn(long tenantId) {
+    return featureFlagService.isEnabled(FLAG, tenantId)
+        && featureFlagService.isEnabled(BOOKING_FLAG, tenantId);
+  }
+
+  /** RT-01: authenticated calls of the channel answer {@code 403 <FLAG>_DISABLED} when off. */
+  public void requireFlags(long tenantId) {
+    if (!featureFlagService.isEnabled(FLAG, tenantId)) {
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.FORBIDDEN, FLAG + "_DISABLED");
+    }
+    if (!featureFlagService.isEnabled(BOOKING_FLAG, tenantId)) {
+      throw new org.springframework.web.server.ResponseStatusException(
+          org.springframework.http.HttpStatus.FORBIDDEN, BOOKING_FLAG + "_DISABLED");
+    }
+  }
+
   public void requireAvailable(long tenantId) {
     if (!isChannelAvailable(tenantId)) {
       throw new WhatsAppSendException(WhatsAppErrorCode.CHANNEL_UNAVAILABLE);

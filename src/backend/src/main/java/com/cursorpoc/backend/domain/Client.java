@@ -132,6 +132,26 @@ public class Client {
   private String cityName;
 
   /** HU-68: ficha técnica — notas libres (una sola nota editable). */
+  /**
+   * HU-WAP-03: consent to receive WhatsApp notices. Bound to {@link #whatsappOptInPhone} (E.164): a
+   * phone change clears it. Existing clients have none.
+   */
+  @Column(name = "whatsapp_opt_in", nullable = false)
+  private boolean whatsappOptIn;
+
+  @Column(name = "whatsapp_opt_in_at")
+  private Instant whatsappOptInAt;
+
+  /** ONLINE_BOOKING, STAFF, EMAIL_LINK or REPLY. */
+  @Column(name = "whatsapp_opt_in_source", length = 16)
+  private String whatsappOptInSource;
+
+  @Column(name = "whatsapp_opt_in_phone", length = 32)
+  private String whatsappOptInPhone;
+
+  @Column(name = "whatsapp_opt_out_at")
+  private Instant whatsappOptOutAt;
+
   @Column(length = 2000)
   private String notes;
 
@@ -387,5 +407,45 @@ public class Client {
 
   public void setAcquisitionChannelOther(String acquisitionChannelOther) {
     this.acquisitionChannelOther = acquisitionChannelOther;
+  }
+
+  public boolean isWhatsappOptIn() {
+    return whatsappOptIn;
+  }
+
+  public void setWhatsappOptIn(boolean whatsappOptIn) {
+    this.whatsappOptIn = whatsappOptIn;
+  }
+
+  public Instant getWhatsappOptInAt() {
+    return whatsappOptInAt;
+  }
+
+  public void setWhatsappOptInAt(Instant whatsappOptInAt) {
+    this.whatsappOptInAt = whatsappOptInAt;
+  }
+
+  public String getWhatsappOptInSource() {
+    return whatsappOptInSource;
+  }
+
+  public void setWhatsappOptInSource(String whatsappOptInSource) {
+    this.whatsappOptInSource = whatsappOptInSource;
+  }
+
+  public String getWhatsappOptInPhone() {
+    return whatsappOptInPhone;
+  }
+
+  public void setWhatsappOptInPhone(String whatsappOptInPhone) {
+    this.whatsappOptInPhone = whatsappOptInPhone;
+  }
+
+  public Instant getWhatsappOptOutAt() {
+    return whatsappOptOutAt;
+  }
+
+  public void setWhatsappOptOutAt(Instant whatsappOptOutAt) {
+    this.whatsappOptOutAt = whatsappOptOutAt;
   }
 }

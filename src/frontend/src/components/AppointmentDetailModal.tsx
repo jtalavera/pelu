@@ -26,6 +26,7 @@ import { MoreActionsMenu } from "./MoreActionsMenu";
 import { ServiceRecordDetailModal } from "./ServiceRecordDetailModal";
 import { StatusBadge } from "./StatusBadge";
 import { ACTION_BUTTON } from "./actionButtons";
+import { AppointmentNoticeLine } from "./AppointmentNoticeLine";
 import { ActionIcon } from "./actionIcons";
 
 function formatDateTime(isoString: string, locale: string): string {
@@ -420,6 +421,8 @@ export function AppointmentDetailModal({
                 )}
               </div>
             </div>
+
+            <AppointmentNoticeLine appointmentId={appointment.id} />
 
             {/* What, when and with whom. */}
             <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">

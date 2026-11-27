@@ -2,13 +2,20 @@ package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.domain.WhatsAppMessage;
 import com.cursorpoc.backend.repository.WhatsAppMessageRepository;
+import com.cursorpoc.backend.repository.WhatsAppOptOutRepository;
+import com.cursorpoc.backend.repository.WhatsAppUnreachableRepository;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
+import com.cursorpoc.backend.service.ClientService;
 import com.cursorpoc.backend.util.PhoneNumberNormalizer;
+import com.cursorpoc.backend.whatsapp.FakeFallbackEmailSender;
 import com.cursorpoc.backend.whatsapp.FakeWhatsAppGateway;
 import com.cursorpoc.backend.whatsapp.WhatsAppButton;
+import com.cursorpoc.backend.whatsapp.WhatsAppConsentService;
+import com.cursorpoc.backend.whatsapp.WhatsAppDispatcher;
 import com.cursorpoc.backend.whatsapp.WhatsAppErrorCode;
 import com.cursorpoc.backend.whatsapp.WhatsAppOutboundMessage;
 import com.cursorpoc.backend.whatsapp.WhatsAppOutbox;
+import com.cursorpoc.backend.whatsapp.WhatsAppRetentionJob;
 import com.cursorpoc.backend.whatsapp.WhatsAppSendException;
 import com.cursorpoc.backend.whatsapp.WhatsAppSender;
 import com.cursorpoc.backend.whatsapp.WhatsAppTemplate;
@@ -28,6 +35,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -69,7 +77,13 @@ public class WhatsAppTestSupportController {
       List<String> variables,
       List<ButtonDto> buttons,
       String dedupKey,
-      Boolean rollback) {}
+      Boolean rollback,
+      String fallbackEmail,
+      Long clientId,
+      String purpose,
+      Long appointmentId) {}
+
+  public record PhoneRequest(String phone) {}
 
   public record SendCodeRequest(String to, String code) {}
 
@@ -78,13 +92,34 @@ public class WhatsAppTestSupportController {
   private final WhatsAppOutbox outbox;
   private final WhatsAppSender sender;
   private final TransactionTemplate tx;
+  private final FakeFallbackEmailSender emails;
+  private final WhatsAppConsentService consent;
+  private final WhatsAppOptOutRepository optOuts;
+  private final WhatsAppUnreachableRepository unreachable;
+  private final WhatsAppDispatcher dispatcher;
+  private final WhatsAppRetentionJob retention;
+  private final ClientService clientService;
 
   public WhatsAppTestSupportController(
       FakeWhatsAppGateway gateway,
       WhatsAppMessageRepository messages,
       WhatsAppOutbox outbox,
       WhatsAppSender sender,
-      PlatformTransactionManager transactionManager) {
+      PlatformTransactionManager transactionManager,
+      FakeFallbackEmailSender emails,
+      WhatsAppConsentService consent,
+      WhatsAppOptOutRepository optOuts,
+      WhatsAppUnreachableRepository unreachable,
+      WhatsAppDispatcher dispatcher,
+      WhatsAppRetentionJob retention,
+      ClientService clientService) {
+    this.clientService = clientService;
+    this.emails = emails;
+    this.consent = consent;
+    this.optOuts = optOuts;
+    this.unreachable = unreachable;
+    this.dispatcher = dispatcher;
+    this.retention = retention;
     this.gateway = gateway;
     this.messages = messages;
     this.outbox = outbox;
@@ -127,7 +162,13 @@ public class WhatsAppTestSupportController {
               status -> {
                 WhatsAppMessage m =
                     outbox.enqueue(
-                        p.getTenantId(), null, null, "BOOKING", message, body.dedupKey());
+                        p.getTenantId(),
+                        body.appointmentId(),
+                        body.clientId(),
+                        body.purpose() == null ? "BOOKING" : body.purpose(),
+                        message,
+                        body.dedupKey(),
+                        body.fallbackEmail());
                 if (rollback) {
                   throw new IllegalStateException("ROLLBACK_REQUESTED");
                 }
@@ -175,20 +216,138 @@ public class WhatsAppTestSupportController {
   /** The delivery log of the caller's salon (never another tenant's). */
   @GetMapping("/log")
   public List<Map<String, Object>> log(@AuthenticationPrincipal FemmeUserPrincipal p) {
-    require(p);
+    requireTenant(p);
     long tenantId = p.getTenantId();
     return messages.findAll().stream()
         .filter(m -> m.getTenantId() == tenantId)
         .map(
-            m ->
-                Map.<String, Object>of(
-                    "id", m.getId(),
-                    "purpose", m.getPurpose(),
-                    "template", m.getTemplate(),
-                    "status", m.getStatus(),
-                    "errorCode", m.getErrorCode() == null ? "" : m.getErrorCode(),
-                    "wamid", m.getMetaMessageId() == null ? "" : m.getMetaMessageId()))
+            m -> {
+              Map<String, Object> row = new java.util.LinkedHashMap<>();
+              row.put("id", m.getId());
+              row.put("purpose", m.getPurpose());
+              row.put("template", m.getTemplate());
+              row.put("status", m.getStatus());
+              row.put("errorCode", m.getErrorCode() == null ? "" : m.getErrorCode());
+              row.put("wamid", m.getMetaMessageId() == null ? "" : m.getMetaMessageId());
+              row.put("attempts", m.getAttempts());
+              row.put("recipient", m.getRecipient());
+              row.put("fallbackEmailSent", m.getFallbackEmailSentAt() != null);
+              row.put("fallbackEmail", m.getFallbackEmail() == null ? "" : m.getFallbackEmail());
+              row.put(
+                  "nextAttemptAt",
+                  m.getNextAttemptAt() == null ? "" : m.getNextAttemptAt().toString());
+              row.put("masked", m.getRecipientMaskedAt() != null);
+              row.put("payload", m.getPayload());
+              return row;
+            })
         .toList();
+  }
+
+  /** The id of the salon's generic "cliente ocasional" (created on first use). */
+  @GetMapping("/generic-client")
+  public Map<String, Long> genericClient(@AuthenticationPrincipal FemmeUserPrincipal p) {
+    requireTenant(p);
+    return Map.of("id", clientService.getOrCreateGenericClient(p.getTenantId()).getId());
+  }
+
+  /** The emails the fake fallback sender "sent". */
+  @GetMapping("/emails")
+  public List<FakeFallbackEmailSender.SentEmail> sentEmails(
+      @AuthenticationPrincipal FemmeUserPrincipal p) {
+    require(p);
+    return emails.sentEmails();
+  }
+
+  @PostMapping("/emails/fail-next")
+  public Map<String, Boolean> failNextEmail(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @RequestParam(name = "count", defaultValue = "1") int count) {
+    require(p);
+    emails.failNext(count);
+    return Map.of("ok", true);
+  }
+
+  /** Forgets everything the fake keeps: sent messages and emails, opt-outs, unreachable numbers. */
+  @DeleteMapping("/state")
+  public Map<String, Boolean> resetState(@AuthenticationPrincipal FemmeUserPrincipal p) {
+    require(p);
+    gateway.clear();
+    emails.clear();
+    optOuts.deleteAll();
+    unreachable.deleteAll();
+    return Map.of("ok", true);
+  }
+
+  /** A phone asked to stop receiving notices (what a BAJA reply will do from HU-WAP-06). */
+  @PostMapping("/opt-outs")
+  public Map<String, Boolean> optOut(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody PhoneRequest body) {
+    require(p);
+    String phone = PhoneNumberNormalizer.normalize(body.phone()).orElse(null);
+    if (phone == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TEST_REQUEST");
+    }
+    consent.optOut(phone, "REPLY");
+    return Map.of("ok", true);
+  }
+
+  /**
+   * Makes the retries of the caller's salon due now and runs the sweep (instead of waiting
+   * minutes).
+   */
+  @PostMapping("/expedite")
+  public Map<String, Integer> expedite(@AuthenticationPrincipal FemmeUserPrincipal p) {
+    requireTenant(p);
+    long tenantId = p.getTenantId();
+    Integer n =
+        tx.execute(
+            status -> {
+              int count = 0;
+              for (WhatsAppMessage m : messages.findAll()) {
+                if (m.getTenantId() == tenantId
+                    && WhatsAppMessage.QUEUED.equals(m.getStatus())
+                    && m.getNextAttemptAt() != null) {
+                  m.setNextAttemptAt(Instant.now().minusSeconds(1));
+                  messages.save(m);
+                  count++;
+                }
+              }
+              return count;
+            });
+    dispatcher.sweep();
+    return Map.of("expedited", n == null ? 0 : n);
+  }
+
+  /** Backdates the caller's finished messages so the retention period has passed. */
+  @PostMapping("/age-messages")
+  public Map<String, Integer> age(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @RequestParam("days") int days) {
+    requireTenant(p);
+    long tenantId = p.getTenantId();
+    Integer n =
+        tx.execute(
+            status -> {
+              int count = 0;
+              for (WhatsAppMessage m : messages.findAll()) {
+                if (m.getTenantId() == tenantId
+                    && !WhatsAppMessage.QUEUED.equals(m.getStatus())
+                    && !WhatsAppMessage.SENDING.equals(m.getStatus())) {
+                  m.setQueuedAt(Instant.now().minusSeconds(days * 86_400L));
+                  messages.save(m);
+                  count++;
+                }
+              }
+              return count;
+            });
+    return Map.of("aged", n == null ? 0 : n);
+  }
+
+  /** Runs the retention job now. */
+  @PostMapping("/retention")
+  public Map<String, Integer> runRetention(@AuthenticationPrincipal FemmeUserPrincipal p) {
+    require(p);
+    retention.run();
+    return Map.of("ok", 1);
   }
 
   @DeleteMapping("/sent")

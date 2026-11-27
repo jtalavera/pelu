@@ -3405,6 +3405,16 @@
       }
     },
     "clients": {
+      "whatsappConsent": {
+        "label": "Accepts WhatsApp notices",
+        "help": "Turn it on only if the client agreed.",
+        "needsPhone": "Enter a valid mobile number to turn it on. Example: 0981 123 456.",
+        "dirtyPhone": "Save the phone change first; the consent applies to the saved number.",
+        "inactive": "Reactivate the client to change this.",
+        "saveError": "Could not change the consent.",
+        "listBadge": "Accepts WhatsApp",
+        "since": "Recorded on {{date}}"
+      },
       "activeLabel": "Active",
       "inactiveLabel": "Inactive",
       "activeSwitchAria": "Client active: {{name}}",
@@ -4015,6 +4025,10 @@
       "SERVICE_RECORD_LIST_RANGE_TOO_OLD": "The start date cannot be more than 1 year in the past.",
       "STOCK_MODULE_DISABLED": "This salon does not have the Stock module enabled.",
       "STOCK_NOT_CONFIGURED": "The Stock integration is not configured yet. Contact support.",
+      "WHATSAPP_CLIENT_PHONE_INVALID": "The client needs a valid mobile number to turn WhatsApp on. Example: 0981 123 456.",
+      "WHATSAPP_PHONE_OPTED_OUT": "This number asked not to receive WhatsApp notices; only the client can turn them back on.",
+      "WHATSAPP_REMINDERS_DISABLED": "WhatsApp notices are not enabled for this salon.",
+      "ONLINE_BOOKING_DISABLED": "Online booking is not enabled for this salon.",
       "WHATSAPP_INVALID_RECIPIENT": "The phone number is not valid or has no WhatsApp. Example: 0981 123 456.",
       "WHATSAPP_TEMPLATE_UNAVAILABLE": "The template is not approved by Meta.",
       "WHATSAPP_RATE_LIMITED": "WhatsApp reached a sending limit. Try again later.",
@@ -4434,6 +4448,19 @@
         "NO_SHOW": "No show"
       },
       "detail": {
+        "notice": {
+          "title": "Notice to the client",
+          "sent": "Notice sent by WhatsApp",
+          "delivered": "Notice delivered by WhatsApp",
+          "read": "Notice read on WhatsApp",
+          "sending": "Sending the WhatsApp notice…",
+          "failed": "Not delivered by WhatsApp",
+          "failedEmail": "Not delivered by WhatsApp — sent by email instead",
+          "failedCall": "Not delivered — call the client at {{phone}}",
+          "failedCallNoPhone": "Not delivered — call the client",
+          "cancelled": "Notice not sent: the client does not accept WhatsApp",
+          "wentOut": "A notice was sent"
+        },
         "title": "Appointment detail",
         "client": "Client",
         "occasionalClient": "Occasional client",
