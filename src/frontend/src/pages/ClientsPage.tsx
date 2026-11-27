@@ -121,8 +121,10 @@ function exportCsv(clients: Client[]) {
 export default function ClientsPage() {
   const { t, i18n } = useTranslation();
   const guidedTourEnabled = useFeatureFlag("GUIDED_TOUR");
-  const whatsappChannel =
-    useFeatureFlag("WHATSAPP_REMINDERS") && useFeatureFlag("ONLINE_BOOKING");
+  // Both hooks are always called (a `&&` between them would call the second conditionally).
+  const whatsappFlag = useFeatureFlag("WHATSAPP_REMINDERS");
+  const bookingFlag = useFeatureFlag("ONLINE_BOOKING");
+  const whatsappChannel = whatsappFlag && bookingFlag;
   useTour("clients", clientsSteps, undefined, guidedTourEnabled);
   const navigate = useNavigate();
   const location = useLocation();
