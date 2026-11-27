@@ -1,14 +1,19 @@
 package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.domain.WhatsAppMessage;
+import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.repository.WhatsAppMessageRepository;
 import com.cursorpoc.backend.repository.WhatsAppOptOutRepository;
 import com.cursorpoc.backend.repository.WhatsAppUnreachableRepository;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
 import com.cursorpoc.backend.service.ClientService;
 import com.cursorpoc.backend.util.PhoneNumberNormalizer;
+import com.cursorpoc.backend.whatsapp.BookingContact;
+import com.cursorpoc.backend.whatsapp.BookingEvent;
+import com.cursorpoc.backend.whatsapp.BookingNotifier;
 import com.cursorpoc.backend.whatsapp.FakeFallbackEmailSender;
 import com.cursorpoc.backend.whatsapp.FakeWhatsAppGateway;
+import com.cursorpoc.backend.whatsapp.PropertyBookingMessagingSettings;
 import com.cursorpoc.backend.whatsapp.WhatsAppButton;
 import com.cursorpoc.backend.whatsapp.WhatsAppConsentService;
 import com.cursorpoc.backend.whatsapp.WhatsAppDispatcher;
@@ -85,6 +90,25 @@ public class WhatsAppTestSupportController {
 
   public record PhoneRequest(String phone) {}
 
+  /**
+   * Stands in for what A4/A5/A6 will do: tells the client about a booking event. {@code mode}
+   * {@code CLIENT} = a salon-made turno (the client's own phone, email and consent); {@code ONLINE}
+   * = the turno's own contact with the consent of the booking form. {@code rollback=true} fails the
+   * caller's transaction afterwards.
+   */
+  public record BookingNoticeRequest(
+      Long appointmentId,
+      String event,
+      String mode,
+      String fullName,
+      String phone,
+      String email,
+      Boolean optIn,
+      String linkSuffix,
+      Boolean rollback) {}
+
+  public record NoticesEnabledRequest(Boolean enabled) {}
+
   public record SendCodeRequest(String to, String code) {}
 
   private final FakeWhatsAppGateway gateway;
@@ -99,6 +123,9 @@ public class WhatsAppTestSupportController {
   private final WhatsAppDispatcher dispatcher;
   private final WhatsAppRetentionJob retention;
   private final ClientService clientService;
+  private final BookingNotifier bookingNotifier;
+  private final PropertyBookingMessagingSettings bookingSettings;
+  private final AppointmentRepository appointmentRepository;
 
   public WhatsAppTestSupportController(
       FakeWhatsAppGateway gateway,
@@ -112,7 +139,13 @@ public class WhatsAppTestSupportController {
       WhatsAppUnreachableRepository unreachable,
       WhatsAppDispatcher dispatcher,
       WhatsAppRetentionJob retention,
-      ClientService clientService) {
+      ClientService clientService,
+      BookingNotifier bookingNotifier,
+      PropertyBookingMessagingSettings bookingSettings,
+      AppointmentRepository appointmentRepository) {
+    this.bookingNotifier = bookingNotifier;
+    this.bookingSettings = bookingSettings;
+    this.appointmentRepository = appointmentRepository;
     this.clientService = clientService;
     this.emails = emails;
     this.consent = consent;
@@ -224,6 +257,8 @@ public class WhatsAppTestSupportController {
             m -> {
               Map<String, Object> row = new java.util.LinkedHashMap<>();
               row.put("id", m.getId());
+              row.put("appointmentId", m.getAppointmentId());
+              row.put("clientId", m.getClientId());
               row.put("purpose", m.getPurpose());
               row.put("template", m.getTemplate());
               row.put("status", m.getStatus());
@@ -241,6 +276,79 @@ public class WhatsAppTestSupportController {
               return row;
             })
         .toList();
+  }
+
+  /** Tells the client about a booking event of one of the caller's appointments (HU-WAP-04). */
+  @PostMapping("/booking-notice")
+  public Map<String, Object> bookingNotice(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody BookingNoticeRequest body) {
+    requireTenant(p);
+    BookingEvent event;
+    try {
+      event = BookingEvent.valueOf(body.event());
+    } catch (RuntimeException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "INVALID_TEST_REQUEST");
+    }
+    long tenantId = p.getTenantId();
+    boolean rollback = Boolean.TRUE.equals(body.rollback());
+    try {
+      BookingNotifier.Outcome outcome =
+          tx.execute(
+              status -> {
+                BookingContact contact;
+                if ("ONLINE".equals(body.mode())) {
+                  contact =
+                      BookingContact.online(
+                          body.fullName(),
+                          body.phone(),
+                          body.email(),
+                          Boolean.TRUE.equals(body.optIn()));
+                } else {
+                  var appt =
+                      appointmentRepository
+                          .findByIdAndTenant_Id(body.appointmentId(), tenantId)
+                          .orElseThrow(
+                              () ->
+                                  new ResponseStatusException(
+                                      HttpStatus.NOT_FOUND, "APPOINTMENT_NOT_FOUND"));
+                  if (appt.getClient() == null) {
+                    throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "INVALID_TEST_REQUEST");
+                  }
+                  contact = BookingContact.ofClient(appt.getClient());
+                }
+                BookingNotifier.Outcome o =
+                    bookingNotifier.notify(
+                        tenantId, body.appointmentId(), event, contact, body.linkSuffix());
+                if (rollback) {
+                  throw new IllegalStateException("ROLLBACK_REQUESTED");
+                }
+                return o;
+              });
+      Map<String, Object> out = new java.util.LinkedHashMap<>();
+      out.put("channel", outcome.channel().name());
+      out.put("reason", outcome.reason() == null ? "" : outcome.reason());
+      out.put("messageId", outcome.messageId());
+      out.put("rolledBack", false);
+      return out;
+    } catch (IllegalStateException ex) {
+      if ("ROLLBACK_REQUESTED".equals(ex.getMessage())) {
+        return Map.of("rolledBack", true);
+      }
+      throw ex;
+    }
+  }
+
+  /**
+   * Turns the salon's «Confirmaciones de reserva» switch on/off ({@code null}: back to the
+   * default).
+   */
+  @PostMapping("/booking-notices-enabled")
+  public Map<String, Boolean> bookingNoticesEnabled(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody NoticesEnabledRequest body) {
+    requireTenant(p);
+    bookingSettings.override(p.getTenantId(), body.enabled());
+    return Map.of("ok", true);
   }
 
   /** The id of the salon's generic "cliente ocasional" (created on first use). */
