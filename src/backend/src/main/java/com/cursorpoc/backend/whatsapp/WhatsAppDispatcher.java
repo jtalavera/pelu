@@ -116,7 +116,9 @@ public class WhatsAppDispatcher {
   /**
    * Sends what is due (lost wake-ups, retries whose wait is over) and retries pending fallbacks.
    */
-  @Scheduled(fixedDelayString = "${app.femme.whatsapp.sweep-delay-ms:30000}")
+  @Scheduled(
+      initialDelayString = "${app.femme.whatsapp.sweep-initial-delay-ms:30000}",
+      fixedDelayString = "${app.femme.whatsapp.sweep-delay-ms:30000}")
   public void sweep() {
     Instant now = Instant.now();
     for (Long id : store.dueIds(now)) {
