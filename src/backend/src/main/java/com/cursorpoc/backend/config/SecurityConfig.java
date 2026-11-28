@@ -106,6 +106,10 @@ public class SecurityConfig {
                     // gated by its own hub.verify_token check inside WhatsAppWebhookController.
                     .requestMatchers("/api/whatsapp/webhook")
                     .permitAll()
+                    // Online booking (RSV A0): the public page's API. The salon is resolved only by
+                    // the slug in the path; nothing here trusts a tenant from the caller (RT-02).
+                    .requestMatchers("/api/public/booking/**")
+                    .permitAll()
                     // Stock integration (HU-61): control-stock's technical user gets its token
                     // here; every other /api/integration/** route is guarded by
                     // IntegrationAuthenticationFilter (integration tokens only).

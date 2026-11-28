@@ -54,7 +54,9 @@ public class KeyVaultSecretsEnvironmentPostProcessor implements EnvironmentPostP
           // misconfigured (WhatsAppConfigCheck) instead of failing the boot.
           "app-femme-whatsapp-access-token", "app.femme.whatsapp.access-token",
           "app-femme-whatsapp-app-secret", "app.femme.whatsapp.app-secret",
-          "app-femme-whatsapp-webhook-verify-token", "app.femme.whatsapp.webhook-verify-token");
+          "app-femme-whatsapp-webhook-verify-token", "app.femme.whatsapp.webhook-verify-token",
+          // Online booking (RSV A0): signs the management links; absent = BOOKING_NOT_CONFIGURED.
+          "app-femme-booking-token-secret", "app.femme.booking.token-secret");
 
   /** Initial attempt plus 3 retries at 2s/4s/8s — mirrors spring.flyway.connect-retries' intent. */
   private static final int MAX_ATTEMPTS = 4;

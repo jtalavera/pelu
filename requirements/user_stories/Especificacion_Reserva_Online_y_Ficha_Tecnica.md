@@ -647,13 +647,15 @@ Texto base de ejemplo (`pelu_turno_confirmado`): «Hola {{1}}, tu turno en {{2}}
 | **V109** | `whatsapp_messages`, `whatsapp_template_status`, `whatsapp_processed_events`, `platform_alerts` — **hecho en C0** |
 | **V110** | `clients`: consentimiento (`whatsapp_opt_in` y fecha, origen, celular y baja); `whatsapp_opt_outs`, `whatsapp_unreachable` — **hecho en C1** |
 | **V111** | `whatsapp_messages`: `fallback_email`, `recipient_masked_at` — **hecho en C1** |
-| **V112** | `professional_time_off`, `salon_closures` |
-| **V113** | `booking_settings`, `bookable_online` en servicios y profesionales, `booking_professional_services` |
-| **V114** | `appointments`: `source`, `manage_token_version`, `contact_phone`, `contact_email`, `contact_whatsapp_opt_in`, `client_confirmed_at` |
-| **V115** | `booking_otp`, `booking_rate_events` |
+| **V112** | `appointments.client_confirmed_at`, `whatsapp_auto_replies` — **hecho en C4** |
+| **V113** | `booking_settings` (dirección y «Aceptar reservas») — **hecho en A0** |
+| **V114** | `professional_time_off`, `salon_closures` (A1) |
+| **V115** | `booking_settings` (resto de columnas), `bookable_online` en servicios y profesionales, `booking_professional_services` (A2) |
 | **V116** | Flag `TECHNICAL_RECORD` |
 | **V117** | `service_categories.technical_template`, `technical_entries` |
 | **V118** | `client_allergy_profile`, `client_patch_tests`, `salon_services.requires_patch_test`, `technical_settings` |
+| **V119** | `appointments`: `source`, `manage_token_version`, `contact_phone`, `contact_email`, `contact_whatsapp_opt_in` (A4; `client_confirmed_at` ya existe desde C4) |
+| **V120** | `booking_otp`, `booking_rate_events` (A4) |
 | **V123** | `whatsapp_usage_daily`, configuración de topes |
 | **V124** | Columnas de WhatsApp en `booking_settings` (`wa_booking_confirmations`, `wa_reminders`, `wa_reply_buttons`, `wa_show_salon_phone`) |
 
@@ -720,7 +722,7 @@ Tres pistas. A y B son **independientes** y pueden avanzar en paralelo; C es la 
 ### Pista A · Reserva online
 | Incremento | Contenido | Se puede demostrar |
 | ---------- | --------- | ------------------ |
-| **A0** | Flag, `BookingAccess`, `booking_settings`, matcher público, `publicBooking.ts` | Esqueleto detrás del flag |
+| **A0** | Flag, `BookingAccess`, `booking_settings`, matcher público, `publicBooking.ts` — **implementado** (ver `docs/online-booking.md`) | Esqueleto detrás del flag |
 | **A1** | HU-RSV-01 | Bloqueos y cierres en el calendario |
 | **A2** | HU-RSV-02 | Configuración completa |
 | **A3** | HU-RSV-03 y 04 | Página pública que **muestra** horarios reales (todavía no reserva) |
