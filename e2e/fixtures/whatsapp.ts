@@ -464,3 +464,69 @@ export function farFutureStart(hour: number): Date {
 }
 
 export const hoursBefore = (d: Date, h: number) => new Date(d.getTime() - h * 3_600_000);
+
+// ── HU-WAP-06 ─────────────────────────────────────────────────────────────────────────────────
+
+/** The salon's switch «Respuestas por botón» (null = back to the platform default). */
+export async function setButtonRepliesEnabled(
+  request: APIRequestContext,
+  token: string,
+  enabled: boolean | null,
+) {
+  const res = await request.post(`${SUPPORT}/button-replies-enabled`, {
+    headers: authHeaders(token),
+    data: { enabled },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+export type FakeReply = {
+  wamid: string;
+  to: string;
+  text: string;
+  buttons: Array<{ id: string; title: string }>;
+};
+
+/** The free-form replies the fake WhatsApp sent (answers to what clients wrote). */
+export async function sentReplies(request: APIRequestContext, token: string): Promise<FakeReply[]> {
+  const res = await request.get(`${SUPPORT}/replies`, { headers: authHeaders(token) });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return (await res.json()) as FakeReply[];
+}
+
+let inboundSeq = 0;
+const inboundId = () => `wamid.E2EIN${Date.now()}${++inboundSeq}`;
+
+function inboundEnvelope(message: Record<string, unknown>) {
+  return {
+    object: "whatsapp_business_account",
+    entry: [{ id: "WABA", changes: [{ field: "messages", value: { messages: [message] } }] }],
+  };
+}
+
+const digitsOf = (e164: string) => e164.replace(/^\+/, "");
+
+/** A text message from a client, as Meta delivers it. `id` repeats a notification (Meta re-sends). */
+export function inboundText(from: string, body: string, id = inboundId()) {
+  return inboundEnvelope({ id, from: digitsOf(from), type: "text", text: { body } });
+}
+
+/** A tap on a quick-reply button of a TEMPLATE (the reminder's «Confirmo» / «No puedo ir»). */
+export function inboundTemplateButton(from: string, payload: string, id = inboundId()) {
+  return inboundEnvelope({ id, from: digitsOf(from), type: "button", button: { payload, text: "x" } });
+}
+
+/** A tap on a reply button of a free-form message (the «Sí, cancelar» / «No, mantener» question). */
+export function inboundReplyButton(from: string, buttonId: string, id = inboundId()) {
+  return inboundEnvelope({
+    id,
+    from: digitsOf(from),
+    type: "interactive",
+    interactive: { type: "button_reply", button_reply: { id: buttonId, title: "x" } },
+  });
+}
+
+/** A kind of message the system does not read (audio, image, location…). */
+export function inboundOther(from: string, type = "audio") {
+  return inboundEnvelope({ id: inboundId(), from: digitsOf(from), type, [type]: { id: "123" } });
+}

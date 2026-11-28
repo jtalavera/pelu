@@ -47,6 +47,28 @@ public class FakeWhatsAppGateway implements WhatsAppGateway {
     return new WhatsAppSendResult(wamid);
   }
 
+  /** A free-form reply the fake "sent". */
+  public record SentSession(String wamid, Instant at, WhatsAppSessionMessage message) {}
+
+  private final List<SentSession> sentSessions = new CopyOnWriteArrayList<>();
+
+  @Override
+  public WhatsAppSendResult sendSession(WhatsAppSessionMessage message, Duration timeout) {
+    synchronized (pendingFailures) {
+      WhatsAppSendException failure = pendingFailures.pollFirst();
+      if (failure != null) {
+        throw failure;
+      }
+    }
+    String wamid = "wamid.FAKE" + sequence.incrementAndGet();
+    sentSessions.add(new SentSession(wamid, Instant.now(), message));
+    return new WhatsAppSendResult(wamid);
+  }
+
+  public List<SentSession> sentSessions() {
+    return List.copyOf(sentSessions);
+  }
+
   @Override
   public List<WhatsAppRemoteTemplate> listTemplates() {
     List<WhatsAppRemoteTemplate> out = new ArrayList<>();
@@ -71,6 +93,7 @@ public class FakeWhatsAppGateway implements WhatsAppGateway {
 
   public void clear() {
     sent.clear();
+    sentSessions.clear();
     synchronized (pendingFailures) {
       pendingFailures.clear();
     }

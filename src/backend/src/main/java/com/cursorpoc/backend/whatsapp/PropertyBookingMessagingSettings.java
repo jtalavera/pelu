@@ -17,10 +17,15 @@ public class PropertyBookingMessagingSettings implements BookingMessagingSetting
   private final boolean remindersDefaultEnabled;
   private final Map<Long, Boolean> overrides = new ConcurrentHashMap<>();
   private final Map<Long, Boolean> reminderOverrides = new ConcurrentHashMap<>();
+  private final boolean buttonRepliesDefaultEnabled;
+  private final Map<Long, Boolean> buttonOverrides = new ConcurrentHashMap<>();
 
   public PropertyBookingMessagingSettings(
       @Value("${app.femme.whatsapp.booking-notices-enabled:false}") boolean defaultEnabled,
-      @Value("${app.femme.whatsapp.reminders-enabled:false}") boolean remindersDefaultEnabled) {
+      @Value("${app.femme.whatsapp.reminders-enabled:false}") boolean remindersDefaultEnabled,
+      @Value("${app.femme.whatsapp.button-replies-enabled:false}")
+          boolean buttonRepliesDefaultEnabled) {
+    this.buttonRepliesDefaultEnabled = buttonRepliesDefaultEnabled;
     this.defaultEnabled = defaultEnabled;
     this.remindersDefaultEnabled = remindersDefaultEnabled;
   }
@@ -33,6 +38,20 @@ public class PropertyBookingMessagingSettings implements BookingMessagingSetting
   @Override
   public boolean remindersEnabled(long tenantId) {
     return reminderOverrides.getOrDefault(tenantId, remindersDefaultEnabled);
+  }
+
+  @Override
+  public boolean buttonRepliesEnabled(long tenantId) {
+    return buttonOverrides.getOrDefault(tenantId, buttonRepliesDefaultEnabled);
+  }
+
+  /** Test hook for the button replies switch: {@code null} removes the override. */
+  public void overrideButtonReplies(long tenantId, Boolean enabled) {
+    if (enabled == null) {
+      buttonOverrides.remove(tenantId);
+    } else {
+      buttonOverrides.put(tenantId, enabled);
+    }
   }
 
   /** Test hook: {@code null} removes the override. */
@@ -57,5 +76,6 @@ public class PropertyBookingMessagingSettings implements BookingMessagingSetting
   public void clearOverrides() {
     overrides.clear();
     reminderOverrides.clear();
+    buttonOverrides.clear();
   }
 }

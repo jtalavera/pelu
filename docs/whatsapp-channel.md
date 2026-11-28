@@ -12,7 +12,34 @@ plantillas para Meta: `requirements/user_stories/Plantillas_WhatsApp_para_Meta.m
 | **C1** HU-WAP-03 y HU-WAP-07 | Implementado. Quedan criterios que dependen de otros incrementos (ver abajo) |
 | **C2** HU-WAP-04 | Implementado el **motor** de mensajes de la reserva. Todavía no lo dispara ningún flujo real (depende de A4, A5 y A6) |
 | **C3** HU-WAP-05 | Implementado el recordatorio por WhatsApp para todos los turnos. **Inerte en producción** hasta que existan el enlace de gestión (A0/A5); mientras tanto el email sigue igual (ver «Piezas de C3») |
-| C4…C5 | Pendientes |
+| **C4** HU-WAP-06 | Implementadas las respuestas de la clienta (botones, baja/alta, mensajes libres). Mismas dependencias que C3: sin enlace de gestión (A0/A5) ningún recordatorio con botones sale en producción; BAJA/ALTA y el texto fijo sí funcionan hoy |
+| C5 | Pendiente |
+
+## Piezas de C4 (respuestas de la clienta)
+
+- `WhatsAppWebhookProcessor` separa **estados** y **mensajes** del campo `messages`. Cada mensaje entrante se atiende una sola vez
+  (su id queda en `whatsapp_processed_events` como `in:<id>`); si falla, el id queda guardado (Meta no reintenta) y se levanta la
+  alerta de plataforma `WHATSAPP_INBOUND_FAILED` **sin el contenido**. El reproceso es manual: no hay cola de reproceso.
+- `WhatsAppPayloads`: payload firmado `v1.<ACCIÓN>.<turno>.<firma>` (HMAC-SHA256 truncado) con la clave
+  `app.femme.whatsapp.payload-secret`; si no está, se deriva del secreto de la app (nunca se usa el secreto de la app tal cual).
+  Sin ninguna de las dos, los botones no se incluyen.
+- `WhatsAppInboundService`: botón firmado → acción; `BAJA`/`STOP`/`NO QUIERO` (sin mayúsculas ni tildes) → baja del celular;
+  `ALTA` → la revierte; todo lo demás (texto libre, audio, imagen, un botón no válido) → un texto fijo por celular cada 24 h
+  (`whatsapp_auto_replies`). Un botón solo actúa si viene del celular de la clienta del turno, el salón tiene «Respuestas por botón»
+  encendido y el canal está disponible; si no, se trata como mensaje libre.
+- «Confirmo»: registra `appointments.client_confirmed_at` (V112) y pasa un turno `PENDING` del salón a `CONFIRMED`; un turno online
+  sin aprobar (`AwaitingApprovalPolicy`, A4) no cambia de estado. «No puedo ir» responde con «Sí, cancelar» / «No, mantener»; solo el sí
+  cancela, según `CancellationPolicy`. Las acciones quedan en `audit_log` (`appointments`/`client-confirm|client-cancel`, `source=WHATSAPP`).
+- **Plazo de cancelación (RSV-02):** aún no existe por salón. `DeadlineCancellationPolicy` aplica un plazo de plataforma
+  (`app.femme.whatsapp.cancellation-deadline-hours`, 0 por defecto: cualquier turno que no empezó). A2/A3 lo reemplazan.
+- **Aviso al salón al cancelar:** no hay canal de notificación al salón; por ahora solo queda la auditoría y el estado `CANCELLED`.
+- **Atribución de mensajes libres:** el último aviso enviado a ese celular en 72 h; si hubo uno solo de un salón se nombra al salón y
+  su teléfono visible. El **enlace de gestión** no se agrega todavía: no hay una URL pública base (llega con A0/A5).
+- Interruptor «Respuestas por botón» (`BookingMessagingSettings.buttonRepliesEnabled`, propiedad
+  `app.femme.whatsapp.button-replies-enabled`, apagado por defecto): con él apagado el recordatorio solo lleva «Ver mi turno».
+- **Sin verificar contra Meta:** el formato de los mensajes de texto y con botones de respuesta (`type: interactive`) y el de las
+  notificaciones entrantes (`button.payload`, `interactive.button_reply.id`) están escritos de memoria; confirmarlos con la
+  documentación oficial y una prueba manual con el número real.
 
 ## Piezas de C3 (recordatorio de turnos)
 
@@ -30,8 +57,7 @@ plantillas para Meta: `requirements/user_stories/Plantillas_WhatsApp_para_Meta.m
 - **Enlace de gestión** (`ManageLinkProvider`): producción usa `NoManageLinkProvider` (nunca hay enlace hasta A0/A5), así que **hoy
   ningún recordatorio sale por WhatsApp en producción** y el email no cambia. El proveedor falso (e2e) devuelve un enlace inventado.
 - **Turnos online sin aprobar** (criterio 4): `AwaitingApprovalPolicy` (hoy `NeverAwaitingApprovalPolicy`) lo implementa A4.
-- **Botones**: solo se envía «Ver mi turno». Si la plantilla aprobada en Meta lleva «Confirmo» / «No puedo ir», esos botones aparecen en
-  el mensaje pero no hacen nada hasta HU-WAP-06 (C4): mantener apagado el interruptor en salones reales hasta entonces.
+- **Botones**: con C4, «Confirmo» / «No puedo ir» se incluyen si el salón tiene «Respuestas por botón» encendido; si no, solo «Ver mi turno».
 
 ## Piezas de C2 (mensajes de la reserva)
 

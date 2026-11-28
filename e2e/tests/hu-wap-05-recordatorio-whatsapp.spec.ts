@@ -47,7 +47,8 @@ import {
 //  3 cuándo se considera enviado .. se marca al encolar; si el mensaje falla, email de respaldo una sola vez
 //  4 reserva online sin aprobar ... PENDIENTE: depende de A4 (origen del turno); hoy ningún turno espera aprobación
 //  5 horas de silencio ............ 21:00–08:00: se pospone a las 08:00, salvo turno en menos de 12 h
-//  6 botones ...................... solo el enlace «Ver mi turno»; «Confirmo» / «No puedo ir» llegan con HU-WAP-06 (C4)
+//  6 botones ...................... «Ver mi turno»; con «Respuestas por botón» también «Confirmo» / «No puedo ir»
+//                                   (lo que pasa al tocarlos y el interruptor apagado: hu-wap-06-respuestas.spec.ts)
 //  7 reprogramación y cancelación . reprogramar da un recordatorio nuevo; un turno cancelado no recibe
 //  8 no duplicación ............... una segunda corrida del trabajo no repite el recordatorio
 //  9 compatibilidad ............... con el interruptor apagado todo sigue por email, como hoy
@@ -163,8 +164,13 @@ test.describe("HU-WAP-05 · Recordatorio por WhatsApp", () => {
     expect(sent[0].bodyParameters[2]).toBe(w.serviceName);
     expect(sent[0].bodyParameters[3]).toMatch(/^(lunes|martes|miércoles|jueves|viernes|sábado|domingo) \d{2}\/\d{2}$/);
     expect(sent[0].bodyParameters[4]).toBe("15:00");
-    expect(sent[0].buttons.map((b) => b.kind)).toEqual(["URL"]);
-    expect(sent[0].buttons[0].value).toContain("/turno/");
+    // «Confirmo» / «No puedo ir» (HU-WAP-06, con «Respuestas por botón» encendido) y «Ver mi turno».
+    expect(sent[0].buttons.map((b) => `${b.kind}:${b.index}`)).toEqual([
+      "QUICK_REPLY:0",
+      "QUICK_REPLY:1",
+      "URL:2",
+    ]);
+    expect(sent[0].buttons.find((b) => b.kind === "URL")?.value).toContain("/turno/");
     expect(rows[0].purpose).toBe("REMINDER");
   });
 

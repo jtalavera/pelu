@@ -16,4 +16,11 @@ public interface BookingMessagingSettings {
    * email.
    */
   boolean remindersEnabled(long tenantId);
+
+  /**
+   * The salon's switch «Respuestas por botón» (RSV-02, criterio 11), OFF by default: whether the
+   * «Confirmo» / «No puedo ir» buttons go in the reminder and are attended when tapped (HU-WAP-06,
+   * criterio 10). {@code BAJA} / {@code ALTA} are attended regardless.
+   */
+  boolean buttonRepliesEnabled(long tenantId);
 }
