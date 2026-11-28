@@ -416,3 +416,51 @@ export function uniqueRecipient() {
   const n = ++phoneSeq;
   return { phoneForm: `0981${n}`, phoneE164: `+595981${n}`, email: `ana${n}@example.com` };
 }
+
+// ── HU-WAP-05 ─────────────────────────────────────────────────────────────────────────────────
+
+/** The salon's switch «Recordatorios de turnos» (null = back to the platform default). */
+export async function setRemindersEnabled(
+  request: APIRequestContext,
+  token: string,
+  enabled: boolean | null,
+) {
+  const res = await request.post(`${SUPPORT}/reminders-enabled`, {
+    headers: authHeaders(token),
+    data: { enabled },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+/** Whether turnos have a link to manage them (the template's button). Until A5 only the fake has one. */
+export async function setManageLinks(request: APIRequestContext, token: string, available: boolean) {
+  const res = await request.post(`${SUPPORT}/manage-links`, {
+    headers: authHeaders(token),
+    data: { enabled: available },
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+/** Runs the hourly reminder job as if it were `now`. */
+export async function runReminders(request: APIRequestContext, token: string, now: Date) {
+  const res = await request.post(`${SUPPORT}/run-reminders?now=${encodeURIComponent(now.toISOString())}`, {
+    headers: authHeaders(token),
+  });
+  expect(res.ok(), await res.text()).toBeTruthy();
+}
+
+/** The salon's local time zone (UTC-3 all year, America/Asuncion). */
+const SALON_UTC_OFFSET_HOURS = 3;
+let farDay = 600 + (Math.floor(Date.now() / 1000) % 300);
+
+/**
+ * A turno time far from today (so running the reminder job "as of" a nearby instant touches only
+ * the turnos of THIS test) at `hour:00` salon time on a day no other test has used.
+ */
+export function farFutureStart(hour: number): Date {
+  const base = new Date();
+  base.setUTCDate(base.getUTCDate() + ++farDay);
+  return new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), hour + SALON_UTC_OFFSET_HOURS, 0, 0));
+}
+
+export const hoursBefore = (d: Date, h: number) => new Date(d.getTime() - h * 3_600_000);

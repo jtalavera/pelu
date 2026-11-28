@@ -23,6 +23,8 @@ import com.cursorpoc.backend.web.dto.AppointmentResponse;
 import com.cursorpoc.backend.web.dto.AppointmentStatusUpdateRequest;
 import com.cursorpoc.backend.web.dto.AppointmentUpdateRequest;
 import com.cursorpoc.backend.web.dto.PageResponse;
+import com.cursorpoc.backend.whatsapp.WhatsAppOutbox;
+import com.cursorpoc.backend.whatsapp.WhatsAppReminderNotifier;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -51,6 +53,7 @@ public class AppointmentService {
   private final BusinessMetrics businessMetrics;
   private final ServiceRecordRepository serviceRecordRepository;
   private final InvoiceRepository invoiceRepository;
+  private final WhatsAppOutbox whatsAppOutbox;
 
   private final FemmeTimeProperties timeProperties;
 
@@ -66,7 +69,9 @@ public class AppointmentService {
       BusinessMetrics businessMetrics,
       FemmeTimeProperties timeProperties,
       ServiceRecordRepository serviceRecordRepository,
-      InvoiceRepository invoiceRepository) {
+      InvoiceRepository invoiceRepository,
+      WhatsAppOutbox whatsAppOutbox) {
+    this.whatsAppOutbox = whatsAppOutbox;
     this.serviceRecordRepository = serviceRecordRepository;
     this.invoiceRepository = invoiceRepository;
     this.timeProperties = timeProperties;
@@ -173,10 +178,17 @@ public class AppointmentService {
     if (newStatus != previousStatus) {
       recordStatusTransition(tenantId, appointment, newStatus);
       if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.NO_SHOW) {
+        // HU-WAP-05: a reminder still waiting in the queue no longer applies.
+        cancelQueuedReminder(tenantId, appointmentId, "APPOINTMENT_CANCELLED");
         releaseOpenServiceRecord(appointment);
       }
     }
     return toResponse(appointment);
+  }
+
+  private void cancelQueuedReminder(long tenantId, long appointmentId, String reason) {
+    whatsAppOutbox.cancelQueued(
+        tenantId, appointmentId, List.of(WhatsAppReminderNotifier.PURPOSE), null, reason);
   }
 
   /**
@@ -238,6 +250,8 @@ public class AppointmentService {
     // same slot.
     if (!startAt.equals(appointment.getStartAt())) {
       appointment.setReminderSentAt(null);
+      // HU-WAP-05: a WhatsApp reminder still queued describes the old slot.
+      cancelQueuedReminder(tenantId, appointmentId, "SUPERSEDED");
     }
 
     appointment.setProfessional(professional);

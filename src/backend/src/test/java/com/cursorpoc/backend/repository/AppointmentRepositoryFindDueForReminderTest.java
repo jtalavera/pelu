@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Issue #218 follow-up: runs the real JPQL in {@link AppointmentRepository#findDueForReminder}
- * against the real JPA mapping + H2 schema, proving what {@code AppointmentReminderSchedulerTest}'s
+ * against the real JPA mapping + H2 schema, proving what {@code AppointmentReminderServiceTest}'s
  * mocked repository cannot — in particular that there's deliberately no lower bound, so a same-day
  * booking (or one a downtime window caused to be missed) still matches as long as it hasn't started
  * yet, while an already-started or already-reminded appointment does not.

@@ -18,6 +18,7 @@ import com.cursorpoc.backend.domain.Appointment;
 import com.cursorpoc.backend.domain.enums.AppointmentStatus;
 import com.cursorpoc.backend.repository.AppointmentRepository;
 import com.cursorpoc.backend.service.AppointmentReminderPersistenceService.ReminderContext;
+import com.cursorpoc.backend.whatsapp.WhatsAppReminderNotifier;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -40,14 +41,15 @@ import org.springframework.context.MessageSource;
  * it's {@code AppointmentService#update} that resets it.
  */
 @ExtendWith(MockitoExtension.class)
-class AppointmentReminderSchedulerTest {
+class AppointmentReminderServiceTest {
 
   @Mock private AppointmentRepository appointmentRepository;
   @Mock private AppointmentReminderPersistenceService persistenceService;
   @Mock private EmailService emailService;
+  @Mock private WhatsAppReminderNotifier whatsApp;
 
   private MessageSource messageSource;
-  private AppointmentReminderScheduler scheduler;
+  private AppointmentReminderService scheduler;
 
   @BeforeEach
   void setUp() {
@@ -55,13 +57,19 @@ class AppointmentReminderSchedulerTest {
     lenient()
         .when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
         .thenReturn("text");
+    lenient()
+        .when(whatsApp.tryWhatsApp(anyLong(), any()))
+        .thenReturn(
+            new WhatsAppReminderNotifier.Result(
+                WhatsAppReminderNotifier.Outcome.NOT_ELIGIBLE, "TEST"));
     scheduler =
-        new AppointmentReminderScheduler(
+        new AppointmentReminderService(
             appointmentRepository,
             persistenceService,
             emailService,
             messageSource,
-            new FemmeTimeProperties());
+            new FemmeTimeProperties(),
+            whatsApp);
   }
 
   private static Appointment appointmentStub(long id) {
@@ -154,5 +162,49 @@ class AppointmentReminderSchedulerTest {
     verify(persistenceService, never()).markReminded(eq(10L), any());
     verify(emailService).sendPlainTextEmail(eq("ok@example.com"), anyString(), anyString());
     verify(persistenceService).markReminded(eq(11L), any(Instant.class));
+  }
+
+  @Test
+  void whatsAppQueued_noEmailIsSent() {
+    when(appointmentRepository.findDueForReminder(any(), any(), any()))
+        .thenReturn(List.of(appointmentStub(20L)));
+    when(whatsApp.tryWhatsApp(eq(20L), any()))
+        .thenReturn(
+            new WhatsAppReminderNotifier.Result(WhatsAppReminderNotifier.Outcome.QUEUED, null));
+
+    scheduler.sendDueReminders();
+
+    verify(persistenceService, never()).resolveReminderContext(anyLong());
+    verify(emailService, never()).sendPlainTextEmail(any(), any(), any());
+  }
+
+  @Test
+  void whatsAppDeferredOrSkipped_noEmailAndNothingMarked() {
+    when(appointmentRepository.findDueForReminder(any(), any(), any()))
+        .thenReturn(List.of(appointmentStub(21L), appointmentStub(22L)));
+    when(whatsApp.tryWhatsApp(eq(21L), any()))
+        .thenReturn(
+            new WhatsAppReminderNotifier.Result(
+                WhatsAppReminderNotifier.Outcome.DEFERRED, "QUIET_HOURS"));
+    when(whatsApp.tryWhatsApp(eq(22L), any()))
+        .thenReturn(
+            new WhatsAppReminderNotifier.Result(
+                WhatsAppReminderNotifier.Outcome.SKIPPED, "AWAITING_APPROVAL"));
+
+    scheduler.sendDueReminders();
+
+    verify(emailService, never()).sendPlainTextEmail(any(), any(), any());
+    verify(persistenceService, never()).markReminded(anyLong(), any());
+  }
+
+  @Test
+  void simulatedClock_usesTheGivenInstantForTheWindow() {
+    when(appointmentRepository.findDueForReminder(any(), any(), any())).thenReturn(List.of());
+    Instant fake = Instant.parse("2031-01-01T10:00:00Z");
+
+    scheduler.sendDueReminders(fake);
+
+    verify(appointmentRepository)
+        .findDueForReminder(any(), eq(fake), eq(fake.plus(Duration.ofHours(25))));
   }
 }

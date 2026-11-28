@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -50,6 +51,7 @@ class AppointmentServiceTest {
   @Mock private ClientRepository clientRepository;
   @Mock private com.cursorpoc.backend.repository.ServiceRecordRepository serviceRecordRepository;
   @Mock private com.cursorpoc.backend.repository.InvoiceRepository invoiceRepository;
+  @Mock private com.cursorpoc.backend.whatsapp.WhatsAppOutbox whatsAppOutbox;
   @Spy private FemmeTimeProperties timeProperties = new FemmeTimeProperties();
 
   private final InMemoryTelemetry telemetry = new InMemoryTelemetry();
@@ -293,6 +295,10 @@ class AppointmentServiceTest {
 
     assertThat(res.status()).isEqualTo("CANCELLED");
     assertThat(res.cancelReason()).isEqualTo("Client requested");
+    // HU-WAP-05: cancelling voids a WhatsApp reminder still waiting in the queue.
+    verify(whatsAppOutbox)
+        .cancelQueued(
+            eq(TENANT_ID), eq(1L), eq(List.of("REMINDER")), isNull(), eq("APPOINTMENT_CANCELLED"));
     assertThat(telemetry.counterValue("femme.appointment.cancelled", appointmentAttributes()))
         .isEqualTo(1);
   }
@@ -392,6 +398,9 @@ class AppointmentServiceTest {
     service.update(TENANT_ID, 1L, req);
 
     assertThat(appointment.getReminderSentAt()).isNull();
+    // HU-WAP-05: the WhatsApp reminder still queued for the old slot is voided.
+    verify(whatsAppOutbox)
+        .cancelQueued(eq(TENANT_ID), eq(1L), eq(List.of("REMINDER")), isNull(), eq("SUPERSEDED"));
   }
 
   /**
