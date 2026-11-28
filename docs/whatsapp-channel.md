@@ -11,7 +11,27 @@ plantillas para Meta: `requirements/user_stories/Plantillas_WhatsApp_para_Meta.m
 | **C0** HU-WAP-01 y HU-WAP-02 | Implementado. Falta la **prueba manual contra el número real** (Definición de terminado, punto 8) |
 | **C1** HU-WAP-03 y HU-WAP-07 | Implementado. Quedan criterios que dependen de otros incrementos (ver abajo) |
 | **C2** HU-WAP-04 | Implementado el **motor** de mensajes de la reserva. Todavía no lo dispara ningún flujo real (depende de A4, A5 y A6) |
-| C3…C5 | Pendientes |
+| **C3** HU-WAP-05 | Implementado el recordatorio por WhatsApp para todos los turnos. **Inerte en producción** hasta que existan el enlace de gestión (A0/A5); mientras tanto el email sigue igual (ver «Piezas de C3») |
+| C4…C5 | Pendientes |
+
+## Piezas de C3 (recordatorio de turnos)
+
+- `AppointmentReminderScheduler` (hora a hora, solo con email habilitado) delega en `AppointmentReminderService`, que siempre
+  existe y acepta un `now` (las pruebas simulan el paso del tiempo). Para cada turno vencido consulta primero a
+  `WhatsAppReminderNotifier`; solo si responde `NOT_ELIGIBLE` sale el email de siempre. Nunca los dos.
+- Elegibilidad: interruptor «Recordatorios de turnos» del salón (`BookingMessagingSettings.remindersEnabled`, propiedad
+  `app.femme.whatsapp.reminders-enabled`, apagado por defecto), canal disponible, consentimiento vigente para su celular válido,
+  sin baja ni inalcanzable, enlace de gestión disponible y plantilla `pelu_recordatorio_turno` aprobada.
+- Se marca `reminder_sent_at` en la misma transacción que encola el mensaje (clave de deduplicación
+  `appt:<id>:REMINDER:<segundos del horario>`); si luego falla, rige el email de respaldo de HU-WAP-07.
+- Horas de silencio (`ReminderQuietHours`, propiedades `app.femme.whatsapp.quiet-hours-start|end|override-hours`, por defecto
+  21:00, 08:00 y 12 h): solo afectan a WhatsApp.
+- `AppointmentService.update` (cambio de horario) y `updateStatus` (cancelado / ausente) anulan el recordatorio en cola.
+- **Enlace de gestión** (`ManageLinkProvider`): producción usa `NoManageLinkProvider` (nunca hay enlace hasta A0/A5), así que **hoy
+  ningún recordatorio sale por WhatsApp en producción** y el email no cambia. El proveedor falso (e2e) devuelve un enlace inventado.
+- **Turnos online sin aprobar** (criterio 4): `AwaitingApprovalPolicy` (hoy `NeverAwaitingApprovalPolicy`) lo implementa A4.
+- **Botones**: solo se envía «Ver mi turno». Si la plantilla aprobada en Meta lleva «Confirmo» / «No puedo ir», esos botones aparecen en
+  el mensaje pero no hacen nada hasta HU-WAP-06 (C4): mantener apagado el interruptor en salones reales hasta entonces.
 
 ## Piezas de C2 (mensajes de la reserva)
 

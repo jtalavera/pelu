@@ -109,8 +109,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
   /**
    * Issue #218 (+ follow-up): appointments whose reminder hasn't been sent for their current {@code
    * startAt} slot yet, still in a remindable status, that haven't started yet ({@code from}, i.e.
-   * "now") and aren't more than {@code AppointmentReminderScheduler.MAX_LEAD_TIME} away ({@code
-   * to}) — deliberately no lower bound so a same-day booking or one a downtime window caused to be
+   * "now") and aren't more than {@code AppointmentReminderService.MAX_LEAD_TIME} away ({@code to})
+   * — deliberately no lower bound so a same-day booking or one a downtime window caused to be
    * missed still matches instead of being silently skipped forever.
    */
   @Query(

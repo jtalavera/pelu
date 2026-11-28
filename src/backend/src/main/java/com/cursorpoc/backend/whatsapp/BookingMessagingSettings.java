@@ -9,4 +9,11 @@ public interface BookingMessagingSettings {
 
   /** Whether this salon wants booking notices sent over WhatsApp (otherwise they go by email). */
   boolean bookingNoticesEnabled(long tenantId);
+
+  /**
+   * The salon's switch «Recordatorios de turnos» (RSV-02, criterio 11), OFF by default: whether the
+   * reminder of EVERY turno of the salon goes over WhatsApp (to clients who agreed) instead of
+   * email.
+   */
+  boolean remindersEnabled(long tenantId);
 }

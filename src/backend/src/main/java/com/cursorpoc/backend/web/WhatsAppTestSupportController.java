@@ -6,12 +6,14 @@ import com.cursorpoc.backend.repository.WhatsAppMessageRepository;
 import com.cursorpoc.backend.repository.WhatsAppOptOutRepository;
 import com.cursorpoc.backend.repository.WhatsAppUnreachableRepository;
 import com.cursorpoc.backend.security.FemmeUserPrincipal;
+import com.cursorpoc.backend.service.AppointmentReminderService;
 import com.cursorpoc.backend.service.ClientService;
 import com.cursorpoc.backend.util.PhoneNumberNormalizer;
 import com.cursorpoc.backend.whatsapp.BookingContact;
 import com.cursorpoc.backend.whatsapp.BookingEvent;
 import com.cursorpoc.backend.whatsapp.BookingNotifier;
 import com.cursorpoc.backend.whatsapp.FakeFallbackEmailSender;
+import com.cursorpoc.backend.whatsapp.FakeManageLinkProvider;
 import com.cursorpoc.backend.whatsapp.FakeWhatsAppGateway;
 import com.cursorpoc.backend.whatsapp.PropertyBookingMessagingSettings;
 import com.cursorpoc.backend.whatsapp.WhatsAppButton;
@@ -126,6 +128,8 @@ public class WhatsAppTestSupportController {
   private final BookingNotifier bookingNotifier;
   private final PropertyBookingMessagingSettings bookingSettings;
   private final AppointmentRepository appointmentRepository;
+  private final AppointmentReminderService reminderService;
+  private final FakeManageLinkProvider manageLinks;
 
   public WhatsAppTestSupportController(
       FakeWhatsAppGateway gateway,
@@ -142,7 +146,11 @@ public class WhatsAppTestSupportController {
       ClientService clientService,
       BookingNotifier bookingNotifier,
       PropertyBookingMessagingSettings bookingSettings,
-      AppointmentRepository appointmentRepository) {
+      AppointmentRepository appointmentRepository,
+      AppointmentReminderService reminderService,
+      FakeManageLinkProvider manageLinks) {
+    this.reminderService = reminderService;
+    this.manageLinks = manageLinks;
     this.bookingNotifier = bookingNotifier;
     this.bookingSettings = bookingSettings;
     this.appointmentRepository = appointmentRepository;
@@ -351,6 +359,39 @@ public class WhatsAppTestSupportController {
     return Map.of("ok", true);
   }
 
+  /** The salon's switch «Recordatorios de turnos» ({@code null}: back to the default). */
+  @PostMapping("/reminders-enabled")
+  public Map<String, Boolean> remindersEnabled(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody NoticesEnabledRequest body) {
+    requireTenant(p);
+    bookingSettings.overrideReminders(p.getTenantId(), body.enabled());
+    return Map.of("ok", true);
+  }
+
+  /**
+   * Whether turnos have a link to manage them (the template's button); off = no WhatsApp reminder.
+   */
+  @PostMapping("/manage-links")
+  public Map<String, Boolean> manageLinks(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody NoticesEnabledRequest body) {
+    requireTenant(p);
+    manageLinks.setAvailable(body.enabled() == null || body.enabled());
+    return Map.of("ok", true);
+  }
+
+  /**
+   * Runs the hourly reminder job as if it were {@code now} (ISO instant; default: the real clock).
+   * It covers every salon, like the real job.
+   */
+  @PostMapping("/run-reminders")
+  public Map<String, Boolean> runReminders(
+      @AuthenticationPrincipal FemmeUserPrincipal p,
+      @RequestParam(value = "now", required = false) String now) {
+    requireTenant(p);
+    reminderService.sendDueReminders(now == null ? Instant.now() : Instant.parse(now));
+    return Map.of("ok", true);
+  }
+
   /** The id of the salon's generic "cliente ocasional" (created on first use). */
   @GetMapping("/generic-client")
   public Map<String, Long> genericClient(@AuthenticationPrincipal FemmeUserPrincipal p) {
@@ -383,6 +424,8 @@ public class WhatsAppTestSupportController {
     emails.clear();
     optOuts.deleteAll();
     unreachable.deleteAll();
+    bookingSettings.clearOverrides();
+    manageLinks.setAvailable(true);
     return Map.of("ok", true);
   }
 

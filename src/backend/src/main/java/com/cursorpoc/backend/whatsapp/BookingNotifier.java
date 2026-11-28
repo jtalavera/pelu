@@ -4,7 +4,6 @@ import com.cursorpoc.backend.config.FemmeTimeProperties;
 import com.cursorpoc.backend.domain.Appointment;
 import com.cursorpoc.backend.domain.WhatsAppMessage;
 import com.cursorpoc.backend.repository.AppointmentRepository;
-import com.cursorpoc.backend.repository.BusinessProfileRepository;
 import com.cursorpoc.backend.util.PhoneNumberNormalizer;
 import java.time.ZoneId;
 import java.util.List;
@@ -66,7 +65,7 @@ public class BookingNotifier {
   public record Outcome(Channel channel, String reason, Long messageId) {}
 
   private final AppointmentRepository appointments;
-  private final BusinessProfileRepository businessProfiles;
+  private final SalonDisplayName salonNames;
   private final FemmeTimeProperties timeProperties;
   private final WhatsAppAccess access;
   private final WhatsAppConsentService consent;
@@ -75,14 +74,14 @@ public class BookingNotifier {
 
   public BookingNotifier(
       AppointmentRepository appointments,
-      BusinessProfileRepository businessProfiles,
+      SalonDisplayName salonNames,
       FemmeTimeProperties timeProperties,
       WhatsAppAccess access,
       WhatsAppConsentService consent,
       WhatsAppOutbox outbox,
       BookingMessagingSettings settings) {
     this.appointments = appointments;
-    this.businessProfiles = businessProfiles;
+    this.salonNames = salonNames;
     this.timeProperties = timeProperties;
     this.access = access;
     this.consent = consent;
@@ -220,12 +219,7 @@ public class BookingNotifier {
       String linkSuffix) {
     ZoneId zone = timeProperties.zoneId();
     String name = WhatsAppTemplateVariables.firstName(contact.fullName());
-    String salon =
-        businessProfiles
-            .findByTenantId(tenantId)
-            .map(p -> p.getBusinessName())
-            .filter(n -> n != null && !n.isBlank())
-            .orElseGet(() -> appt.getTenant().getName());
+    String salon = salonNames.of(tenantId, appt.getTenant());
     String service = appt.getSalonService().getName();
     String date = BookingNoticeFormatter.date(appt.getStartAt(), zone);
     String time = BookingNoticeFormatter.time(appt.getStartAt(), zone);
