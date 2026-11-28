@@ -51,6 +51,9 @@ public class AuditLogService {
           "/api/integration",
           "/api/admin/seed",
           "/api/whatsapp/webhook",
+          // Public booking: nobody is logged in; what changes a salon's data is recorded where it
+          // happens (the booking itself), not as an anonymous HTTP row.
+          "/api/public/",
           "/api/me/tour-state",
           "/api/sso/",
           // The assistant: chat traffic would be an audit row per message and carries no business

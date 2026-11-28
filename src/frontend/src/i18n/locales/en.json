@@ -24,6 +24,15 @@
     }
   },
   "femme": {
+    "publicBooking": {
+      "documentTitle": "Book an appointment",
+      "loading": "Loading…",
+      "unavailableTitle": "This link is not available",
+      "unavailableBody": "Check that the link is spelled correctly or contact the salon directly.",
+      "comingSoon": "Soon you will be able to book your appointment from here.",
+      "errorNetwork": "We could not load the page. Please try again in a few minutes.",
+      "retry": "Try again"
+    },
     "commissions": {
       "moreMenu": "More",
       "assignLine": {

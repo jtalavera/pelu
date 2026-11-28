@@ -24,6 +24,15 @@
     }
   },
   "femme": {
+    "publicBooking": {
+      "documentTitle": "Reservar turno",
+      "loading": "Cargando…",
+      "unavailableTitle": "Este enlace no está disponible",
+      "unavailableBody": "Revisá que el enlace esté bien escrito o consultá directamente con el salón.",
+      "comingSoon": "Muy pronto vas a poder reservar tu turno desde acá.",
+      "errorNetwork": "No pudimos cargar la página. Probá de nuevo en unos minutos.",
+      "retry": "Reintentar"
+    },
     "commissions": {
       "moreMenu": "Más",
       "assignLine": {

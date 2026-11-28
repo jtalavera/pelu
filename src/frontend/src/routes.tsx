@@ -40,6 +40,7 @@ import SettingsLayout from "./pages/settings/SettingsLayout";
 import AuditSettingsPage from "./pages/settings/AuditSettingsPage";
 import PlatformAuditPage from "./pages/PlatformAuditPage";
 import ActivatePage from "./pages/ActivatePage";
+import PublicBookingPage from "./pages/PublicBookingPage";
 import SharedDevicePage from "./pages/SharedDevicePage";
 import SharedDevicesSettingsPage from "./pages/settings/SharedDevicesSettingsPage";
 import { SHARED_DEVICE_PATH } from "./auth/sharedDevice";
@@ -65,6 +66,8 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/activate" element={<ActivatePage />} />
+      {/* RSV A0: a salon's public booking page. No login, outside ProtectedRoute. */}
+      <Route path="/r/:slug" element={<PublicBookingPage />} />
       <Route path={SHARED_DEVICE_PATH} element={<SharedDevicePage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/design-system" element={<DesignSystemShowcasePage />} />

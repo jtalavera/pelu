@@ -276,6 +276,20 @@ What Terraform does **not** manage, by design, per environment:
 4. **Flags**: `ONLINE_BOOKING` and `WHATSAPP_REMINDERS` start OFF globally; the channel only works for a
    salon with both on. Check the template statuses in Platform → WhatsApp before enabling any salon.
 
+## Online booking (public page)
+
+`requirements/user_stories/Especificacion_Reserva_Online_y_Ficha_Tecnica.md`, track A (RSV). Terraform
+adds nothing: the public page is served by the same SPA and API. The links it builds use the existing
+`app.frontend.url` / `APP_FRONTEND_PRIMARY_URL` (the environment's public address).
+
+Per environment, by hand (values never in Terraform), read at boot, so restart the revision afterwards:
+
+1. **Key Vault secret** `app-femme-booking-token-secret`: a random string of **at least 32 characters**
+   (e.g. `openssl rand -base64 48`). It signs the management links sent to clients (RSV-06). Without it a
+   salon cannot turn bookings on (`BOOKING_NOT_CONFIGURED`). Use a different value per environment, and do
+   not rotate it lightly: every link already sent stops working.
+2. **Flag** `ONLINE_BOOKING`: starts OFF globally; a Platform Admin enables it per tier or salon.
+
 ## Conversational assistant (Azure AI Foundry)
 
 `requirements/asistente/plan_asistente.md`, phase 0. Terraform creates, in `var.location`:
