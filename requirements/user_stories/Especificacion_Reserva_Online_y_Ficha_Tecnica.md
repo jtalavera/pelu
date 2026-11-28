@@ -714,7 +714,7 @@ Tres pistas. A y B son **independientes** y pueden avanzar en paralelo; C es la 
 | **C1** | HU-WAP-03 y HU-WAP-07 — **implementado, con criterios pendientes de A4/A5/A6/C4** (ver `docs/whatsapp-channel.md`) | Consentimiento en la ficha y seguimiento de entrega con respaldo por email |
 | **C2** | HU-WAP-04 — **motor implementado**, sin conectar a flujos reales hasta A4, A5 y A6 (ver `docs/whatsapp-channel.md`) | Mensajes de la reserva (requiere A4 y A6) |
 | **C3** | HU-WAP-05 — **implementado**, inerte en producción hasta A0/A5 (enlace de gestión); criterio 4 depende de A4 y los botones de respuesta de C4 (ver `docs/whatsapp-channel.md`) | Recordatorio por WhatsApp para todos los turnos, en un salón piloto |
-| **C4** | HU-WAP-06 | Botones «Confirmo» / «No puedo ir», baja y alta, con webhook firmado |
+| **C4** | HU-WAP-06 — **implementado**; criterio 4 (turno online sin aprobar) depende de A4, el enlace de gestión en la respuesta libre de A5 y el plazo por salón de RSV-02 (ver `docs/whatsapp-channel.md`) | Botones «Confirmo» / «No puedo ir», baja y alta, con webhook firmado |
 | **C5** | HU-WAP-08 | Topes, corte de emergencia, salud del número e informe de consumo |
 
 ### Pista A · Reserva online

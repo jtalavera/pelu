@@ -189,6 +189,40 @@ public class AuditLogService {
     }
   }
 
+  /** Source of the actions a client takes by replying over WhatsApp (HU-WAP-06). */
+  public static final String SOURCE_WHATSAPP = "WHATSAPP";
+
+  /**
+   * Records an action taken by someone who is not a logged-in user — the client answering a
+   * WhatsApp notice — against a salon's resource. Same guarantees as {@link #record}: never throws,
+   * own transaction.
+   */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void recordExternalAction(
+      long tenantId,
+      String actor,
+      String resource,
+      String operation,
+      String entityId,
+      String source) {
+    try {
+      AuditLog row = new AuditLog();
+      row.setTenantId(tenantId);
+      row.setUserEmail(truncate(actor, 255));
+      row.setHttpMethod("POST");
+      row.setResource(truncate(resource, 64));
+      row.setOperation(truncate(operation, 64));
+      row.setPathPattern(truncate("/api/" + resource + "/" + operation, 255));
+      row.setEntityId(truncate(entityId, 64));
+      row.setStatusCode(200);
+      row.setSource(truncate(source, 16));
+      row.setCreatedAt(Instant.now());
+      auditLogRepository.save(row);
+    } catch (RuntimeException e) {
+      log.error("audit: could not record {}/{} ({})", resource, operation, e.toString());
+    }
+  }
+
   @Transactional(readOnly = true)
   public PageResponse<AuditLogResponse> search(
       Long tenantId, String from, String to, String resource, String q, int page, int size) {

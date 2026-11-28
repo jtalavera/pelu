@@ -55,12 +55,21 @@ public class MetaCloudWhatsAppGateway implements WhatsAppGateway {
 
   @Override
   public WhatsAppSendResult send(WhatsAppOutboundMessage message, Duration timeout) {
+    return post(buildBody(message), timeout, message.templateName());
+  }
+
+  @Override
+  public WhatsAppSendResult sendSession(WhatsAppSessionMessage message, Duration timeout) {
+    return post(buildSessionBody(message), timeout, message.buttons().isEmpty() ? "text" : "reply");
+  }
+
+  private WhatsAppSendResult post(Map<String, Object> requestBody, Duration timeout, String label) {
     if (!settings.isOperational()) {
       throw new WhatsAppSendException(WhatsAppErrorCode.CHANNEL_UNAVAILABLE);
     }
     String json;
     try {
-      json = objectMapper.writeValueAsString(buildBody(message));
+      json = objectMapper.writeValueAsString(requestBody);
     } catch (RuntimeException ex) {
       throw new WhatsAppSendException(WhatsAppErrorCode.INVALID_REQUEST, null, ex);
     }
@@ -84,14 +93,13 @@ public class MetaCloudWhatsAppGateway implements WhatsAppGateway {
       WhatsAppSendException ex = toException(response);
       log.error(
           "WHATSAPP send failed template={} httpStatus={} error={}",
-          message.templateName(),
+          label,
           response.statusCode(),
           ex.getMessage());
       throw ex;
     }
     String wamid = readWamid(response.body());
-    log.info(
-        "WHATSAPP SENT template={} httpStatus={}", message.templateName(), response.statusCode());
+    log.info("WHATSAPP SENT template={} httpStatus={}", label, response.statusCode());
     return new WhatsAppSendResult(wamid);
   }
 
@@ -193,6 +201,42 @@ public class MetaCloudWhatsAppGateway implements WhatsAppGateway {
     body.put("to", m.to());
     body.put("type", "template");
     body.put("template", template);
+    return body;
+  }
+
+  /**
+   * The {@code messages} request body for a free-form reply: text, or an interactive message with
+   * reply buttons. NOT verified against Meta's documentation (see docs/whatsapp-channel.md).
+   */
+  static Map<String, Object> buildSessionBody(WhatsAppSessionMessage m) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("messaging_product", "whatsapp");
+    body.put("to", m.to());
+    if (m.buttons().isEmpty()) {
+      body.put("type", "text");
+      body.put("text", Map.of("body", m.text()));
+    } else {
+      body.put("type", "interactive");
+      body.put(
+          "interactive",
+          Map.of(
+              "type",
+              "button",
+              "body",
+              Map.of("text", m.text()),
+              "action",
+              Map.of(
+                  "buttons",
+                  m.buttons().stream()
+                      .map(
+                          b ->
+                              Map.of(
+                                  "type",
+                                  "reply",
+                                  "reply",
+                                  Map.of("id", b.id(), "title", b.title())))
+                      .toList())));
+    }
     return body;
   }
 

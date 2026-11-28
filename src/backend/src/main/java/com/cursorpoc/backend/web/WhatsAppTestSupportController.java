@@ -2,6 +2,7 @@ package com.cursorpoc.backend.web;
 
 import com.cursorpoc.backend.domain.WhatsAppMessage;
 import com.cursorpoc.backend.repository.AppointmentRepository;
+import com.cursorpoc.backend.repository.WhatsAppAutoReplyRepository;
 import com.cursorpoc.backend.repository.WhatsAppMessageRepository;
 import com.cursorpoc.backend.repository.WhatsAppOptOutRepository;
 import com.cursorpoc.backend.repository.WhatsAppUnreachableRepository;
@@ -129,6 +130,7 @@ public class WhatsAppTestSupportController {
   private final PropertyBookingMessagingSettings bookingSettings;
   private final AppointmentRepository appointmentRepository;
   private final AppointmentReminderService reminderService;
+  private final WhatsAppAutoReplyRepository autoReplies;
   private final FakeManageLinkProvider manageLinks;
 
   public WhatsAppTestSupportController(
@@ -148,8 +150,10 @@ public class WhatsAppTestSupportController {
       PropertyBookingMessagingSettings bookingSettings,
       AppointmentRepository appointmentRepository,
       AppointmentReminderService reminderService,
+      WhatsAppAutoReplyRepository autoReplies,
       FakeManageLinkProvider manageLinks) {
     this.reminderService = reminderService;
+    this.autoReplies = autoReplies;
     this.manageLinks = manageLinks;
     this.bookingNotifier = bookingNotifier;
     this.bookingSettings = bookingSettings;
@@ -359,6 +363,36 @@ public class WhatsAppTestSupportController {
     return Map.of("ok", true);
   }
 
+  /** The salon's switch «Respuestas por botón» ({@code null}: back to the default). */
+  @PostMapping("/button-replies-enabled")
+  public Map<String, Boolean> buttonRepliesEnabled(
+      @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody NoticesEnabledRequest body) {
+    requireTenant(p);
+    bookingSettings.overrideButtonReplies(p.getTenantId(), body.enabled());
+    return Map.of("ok", true);
+  }
+
+  /** The free-form replies the fake sent (answers to what clients wrote). */
+  @GetMapping("/replies")
+  public List<Map<String, Object>> replies(@AuthenticationPrincipal FemmeUserPrincipal p) {
+    require(p);
+    return gateway.sentSessions().stream()
+        .map(
+            r ->
+                Map.<String, Object>of(
+                    "wamid",
+                    r.wamid(),
+                    "to",
+                    r.message().to(),
+                    "text",
+                    r.message().text(),
+                    "buttons",
+                    r.message().buttons().stream()
+                        .map(b -> Map.of("id", b.id(), "title", b.title()))
+                        .toList()))
+        .toList();
+  }
+
   /** The salon's switch «Recordatorios de turnos» ({@code null}: back to the default). */
   @PostMapping("/reminders-enabled")
   public Map<String, Boolean> remindersEnabled(
@@ -425,11 +459,18 @@ public class WhatsAppTestSupportController {
     optOuts.deleteAll();
     unreachable.deleteAll();
     bookingSettings.clearOverrides();
+    autoReplies.deleteAll();
     manageLinks.setAvailable(true);
     return Map.of("ok", true);
   }
 
   /** A phone asked to stop receiving notices (what a BAJA reply will do from HU-WAP-06). */
+  @GetMapping("/opt-outs")
+  public List<String> optOutList(@AuthenticationPrincipal FemmeUserPrincipal p) {
+    require(p);
+    return optOuts.findAll().stream().map(o -> o.getPhone()).toList();
+  }
+
   @PostMapping("/opt-outs")
   public Map<String, Boolean> optOut(
       @AuthenticationPrincipal FemmeUserPrincipal p, @RequestBody PhoneRequest body) {

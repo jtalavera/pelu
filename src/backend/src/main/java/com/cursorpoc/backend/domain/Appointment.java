@@ -74,6 +74,13 @@ public class Appointment {
   @Column(name = "reminder_sent_at")
   private Instant reminderSentAt;
 
+  /**
+   * HU-WAP-06: when the client tapped «Confirmo» for the current slot (cleared on a reschedule).
+   */
+  @JdbcTypeCode(SqlTypes.TIMESTAMP)
+  @Column(name = "client_confirmed_at")
+  private Instant clientConfirmedAt;
+
   public Long getId() {
     return id;
   }
@@ -152,6 +159,14 @@ public class Appointment {
 
   public void setCancelReason(String cancelReason) {
     this.cancelReason = cancelReason;
+  }
+
+  public Instant getClientConfirmedAt() {
+    return clientConfirmedAt;
+  }
+
+  public void setClientConfirmedAt(Instant clientConfirmedAt) {
+    this.clientConfirmedAt = clientConfirmedAt;
   }
 
   public Instant getReminderSentAt() {

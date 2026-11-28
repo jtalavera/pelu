@@ -13,6 +13,12 @@ public interface WhatsAppGateway {
   /** Sends a template message. Throws {@link WhatsAppSendException} on any failure. */
   WhatsAppSendResult send(WhatsAppOutboundMessage message, Duration timeout);
 
+  /**
+   * Sends a free-form message (HU-WAP-06 replies), valid only inside the 24 h window opened by the
+   * client's own message. Throws {@link WhatsAppSendException} on any failure.
+   */
+  WhatsAppSendResult sendSession(WhatsAppSessionMessage message, Duration timeout);
+
   /** Lists the account's templates with their approval status. */
   List<WhatsAppRemoteTemplate> listTemplates();
 }

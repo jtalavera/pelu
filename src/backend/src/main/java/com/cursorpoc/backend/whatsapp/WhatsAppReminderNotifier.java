@@ -33,8 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
  * second run cannot send it twice; if the message later fails, the email fallback of HU-WAP-07 goes
  * out once.
  *
- * <p>Only the link button is sent: the «Confirmo» / «No puedo ir» buttons need signed payloads and
- * a webhook that answers them (HU-WAP-06, C4).
+ * <p>The «Confirmo» / «No puedo ir» buttons carry signed payloads that {@link
+ * WhatsAppInboundService} answers (HU-WAP-06); they are included only when the salon turned
+ * «Respuestas por botón» on.
  */
 @Service
 public class WhatsAppReminderNotifier {
@@ -71,6 +72,7 @@ public class WhatsAppReminderNotifier {
   private final SalonDisplayName salonNames;
   private final WhatsAppOutbox outbox;
   private final AwaitingApprovalPolicy approvalPolicy;
+  private final WhatsAppPayloads payloads;
 
   public WhatsAppReminderNotifier(
       AppointmentRepository appointments,
@@ -83,7 +85,9 @@ public class WhatsAppReminderNotifier {
       ReminderQuietHours quietHours,
       SalonDisplayName salonNames,
       WhatsAppOutbox outbox,
-      AwaitingApprovalPolicy approvalPolicy) {
+      AwaitingApprovalPolicy approvalPolicy,
+      WhatsAppPayloads payloads) {
+    this.payloads = payloads;
     this.appointments = appointments;
     this.timeProperties = timeProperties;
     this.settings = settings;
@@ -154,9 +158,19 @@ public class WhatsAppReminderNotifier {
             appt.getSalonService().getName(),
             BookingNoticeFormatter.date(appt.getStartAt(), zone),
             BookingNoticeFormatter.time(appt.getStartAt(), zone));
-    // Only the link button (index 2). The quick-reply buttons come with HU-WAP-06.
-    WhatsAppOutboundMessage message =
-        template.message(phone, variables, List.of(WhatsAppButton.url(2, link.get().trim())));
+    // «Ver mi turno» (index 2) always; «Confirmo» / «No puedo ir» (0, 1) only when the salon has
+    // «Respuestas por botón» on (HU-WAP-06 criterio 10) and the payloads can be signed.
+    List<WhatsAppButton> buttons = new java.util.ArrayList<>();
+    if (settings.buttonRepliesEnabled(tenantId) && payloads.isAvailable()) {
+      buttons.add(
+          WhatsAppButton.quickReply(
+              0, payloads.sign(WhatsAppPayloads.Action.CONFIRM, appointmentId)));
+      buttons.add(
+          WhatsAppButton.quickReply(
+              1, payloads.sign(WhatsAppPayloads.Action.CANT_GO, appointmentId)));
+    }
+    buttons.add(WhatsAppButton.url(2, link.get().trim()));
+    WhatsAppOutboundMessage message = template.message(phone, variables, buttons);
     String dedupKey = "appt:" + appointmentId + ":REMINDER:" + appt.getStartAt().getEpochSecond();
     outbox.enqueue(
         tenantId, appointmentId, client.getId(), PURPOSE, message, dedupKey, client.getEmail());

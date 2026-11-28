@@ -67,4 +67,13 @@ public interface WhatsAppMessageRepository extends JpaRepository<WhatsAppMessage
       "UPDATE WhatsAppMessage m SET m.status = 'SENDING', m.attempts = m.attempts + 1"
           + " WHERE m.id = :id AND m.status = 'QUEUED'")
   int claim(@Param("id") Long id);
+
+  /**
+   * The salons that sent something to this phone since {@code since} (HU-WAP-06 criterio 3: a free
+   * message is attributed to a salon only when exactly one qualifies).
+   */
+  @Query(
+      "SELECT DISTINCT m.tenantId FROM WhatsAppMessage m WHERE m.recipient = :phone"
+          + " AND m.sentAt >= :since AND m.status IN ('SENT', 'DELIVERED', 'READ')")
+  List<Long> findTenantIdsSentTo(@Param("phone") String phone, @Param("since") Instant since);
 }

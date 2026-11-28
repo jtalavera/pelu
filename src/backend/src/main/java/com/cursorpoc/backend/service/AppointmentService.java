@@ -250,6 +250,7 @@ public class AppointmentService {
     // same slot.
     if (!startAt.equals(appointment.getStartAt())) {
       appointment.setReminderSentAt(null);
+      appointment.setClientConfirmedAt(null);
       // HU-WAP-05: a WhatsApp reminder still queued describes the old slot.
       cancelQueuedReminder(tenantId, appointmentId, "SUPERSEDED");
     }

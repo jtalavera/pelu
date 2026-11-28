@@ -312,4 +312,25 @@ class MetaCloudWhatsAppGatewayTest {
     assertThat(received.get(0).path()).startsWith("/v21.0/WABA456/message_templates");
     assertThat(received.get(0).authorization()).isEqualTo("Bearer tok");
   }
+
+  @Test
+  void sessionBody_text_and_replyButtons() {
+    var text =
+        MetaCloudWhatsAppGateway.buildSessionBody(
+            WhatsAppSessionMessage.text("+595981000000", "Hola"));
+    assertThat(text).containsEntry("type", "text").containsEntry("to", "+595981000000");
+    assertThat(text.get("text")).isEqualTo(java.util.Map.of("body", "Hola"));
+
+    var buttons =
+        MetaCloudWhatsAppGateway.buildSessionBody(
+            new WhatsAppSessionMessage(
+                "+595981000000",
+                "¿Cancelar?",
+                java.util.List.of(
+                    new WhatsAppSessionMessage.ReplyButton("a", "Sí, cancelar"),
+                    new WhatsAppSessionMessage.ReplyButton("b", "No, mantener"))));
+    assertThat(buttons).containsEntry("type", "interactive");
+    String json = buttons.toString();
+    assertThat(json).contains("button").contains("reply").contains("Sí, cancelar").contains("id=a");
+  }
 }
